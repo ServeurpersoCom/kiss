@@ -1,0 +1,41 @@
+{
+	"name": "kiss",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"@modelcontextprotocol/server": "^2.3.0",
+		"@sveltejs/vite-plugin-svelte": "^6.0.0",
+		"happy-dom": "^20.14.5",
+		"prettier": "^3.4.0",
+		"prettier-plugin-svelte": "^3.3.0",
+		"svelte": "^5.38.0",
+		"svelte-check": "^4.0.0",
+		"typescript": "^5.8.0",
+		"vite": "^7.2.0",
+		"vitest": "^5.0.3"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/client": "^2.3.0",
+		"highlight.js": "^11.11.1",
+		"katex": "^0.16.22",
+		"rehype-highlight": "^7.0.2",
+		"rehype-katex": "^7.0.1",
+		"rehype-stringify": "^10.0.1",
+		"remark": "^15.0.1",
+		"remark-breaks": "^4.0.0",
+		"remark-gfm": "^4.0.1",
+		"remark-math": "^6.0.0",
+		"remark-rehype": "^11.1.2",
+		"vite-plugin-singlefile": "^2.3.2"
+	}
+}
