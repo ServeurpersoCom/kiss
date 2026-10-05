@@ -53,7 +53,7 @@
 	   given for light then dark, then the shape, the fonts and the widths */
 	:global(:root) {
 		color-scheme: light dark;
-		--accent: #c96442;
+		--accent: oklch(0.6 0.16 250);
 		--accent-text: light-dark(var(--accent), color-mix(in oklab, var(--accent) 75%, white));
 		/* black or white, whichever reads on the accent */
 		--on-accent: oklch(from var(--accent) clamp(0, (0.72 - l) * 1000, 1) 0 0);
