@@ -2,7 +2,8 @@
 	import type { Message } from '../lib/types.js';
 	import Round from './Round.svelte';
 
-	let { message }: { message: Message } = $props();
+	// live: the turn the model writes now
+	let { message, live = false }: { message: Message; live?: boolean } = $props();
 </script>
 
 {#if message.role === 'user'}
@@ -13,7 +14,7 @@
 {:else}
 	<div class="turn">
 		{#each message.rounds as round, i (i)}
-			<Round {round} />
+			<Round {round} live={live && i === message.rounds.length - 1} />
 		{/each}
 		{#if message.error}
 			<div class="error">{message.error}</div>

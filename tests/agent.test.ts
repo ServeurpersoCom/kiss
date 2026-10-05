@@ -76,6 +76,25 @@ beforeEach(() => {
 });
 
 describe('a turn', () => {
+	it('sends the parameters set for its model only, numbers as numbers', async () => {
+		const p = await page([stream([{ content: 'ok' }])]);
+		await p.engine.run(
+			'set models temperature m/x 0.5\nset models reasoning_effort m/x high\nset models top_k m/y 3',
+			'user'
+		);
+		await p.go();
+		expect(p.bodies[0]).toMatchObject({ temperature: 0.5, reasoning_effort: 'high' });
+		expect(p.bodies[0]).not.toHaveProperty('top_k');
+	});
+
+	it('stops after the rounds set', async () => {
+		const p = await page([stream([calls(['a', 'show version'])])]);
+		await p.engine.run('set tools rounds 1', 'user');
+		await p.go();
+		expect(p.bodies).toHaveLength(1);
+		expect(p.reply.error).toBe('stopped after 1 tool rounds');
+	});
+
 	it('sends every round as one assistant message and its results', async () => {
 		const p = await page([
 			stream([calls(['a', 'show version'])]),

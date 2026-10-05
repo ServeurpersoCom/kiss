@@ -1,11 +1,12 @@
 import type { ConfigReader } from './types.js';
 
-// an item of a collection module that names a remote server by a url and an
-// optional bearer key: endpoint and mcp
+// an item of a collection module that names a remote server by a url, an
+// optional bearer key and the seconds it has to answer: endpoints and mcp
 export interface Remote {
 	name: string;
 	url: string;
 	key: string;
+	timeout: number;
 }
 
 // every item of the module that has a url, sorted by name
@@ -16,7 +17,8 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 		.map((name) => ({
 			name,
 			url: String(config.get(`${module} url`, name)),
-			key: String(config.get(`${module} key`, name) ?? '')
+			key: String(config.get(`${module} key`, name) ?? ''),
+			timeout: Number(config.get(`${module} timeout`, name))
 		}));
 }
 

@@ -1,7 +1,7 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { ConfigReader, Image, Outcome, Tool } from './types.js';
-import { MCP_CALL_TIMEOUT_MS, MCP_CONNECT_TIMEOUT_MS, NAME } from './config.js';
+import { MCP_CONNECT_TIMEOUT_MS, NAME } from './config.js';
 import { bearer, remotes, type Remote } from './remote.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
@@ -65,7 +65,7 @@ function outcome(result: CallToolResult): Outcome {
 
 function connection(remote: Remote): Connection {
 	const held = connections.get(remote.name);
-	if (held && held.remote.url === remote.url && held.remote.key === remote.key) return held;
+	if (held && JSON.stringify(held.remote) === JSON.stringify(remote)) return held;
 	if (held) drop(remote.name);
 	const client = connect(remote);
 	const tools = client.then(async (c) => {
@@ -79,7 +79,7 @@ function connection(remote: Remote): Connection {
 					return outcome(
 						await c.callTool(
 							{ name: t.name, arguments: args },
-							{ signal: ctx.signal, timeout: MCP_CALL_TIMEOUT_MS }
+							{ signal: ctx.signal, timeout: remote.timeout * 1000 }
 						)
 					);
 				} catch (e) {

@@ -1,8 +1,8 @@
-// how the thread shows a turn: whether the thinking and the tool calls open
-// unfolded, from the display module, and the argument each tool shows folded,
-// by tool name, from the tool module
+// how the thread shows a turn: how the thinking and the tool calls fold, from
+// the display module, and the argument each tool shows folded, by tool name,
+// from the tools module
 export const display = $state({
-	thinking: false,
-	tools: false,
+	thinking: 'closed',
+	tools: 'closed',
 	preview: {} as Record<string, string>
 });

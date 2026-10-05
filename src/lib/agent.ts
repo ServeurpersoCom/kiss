@@ -1,9 +1,9 @@
 import type { Assistant, Call, Message, Outcome, Round, Tool, ToolContext } from './types.js';
-import { MAX_ROUNDS } from './config.js';
 import { chat, pick } from './api.js';
 import { aggregate } from './mcp.js';
 import prompts from './prompts.json';
 import { tools as own } from './tools.js';
+import models from '../modules/models.js';
 import { settings } from '../engine/run.js';
 
 // the chat history in OpenAI form: cli messages stay out, and every round of
@@ -79,8 +79,15 @@ export async function turn(
 	signal: AbortSignal
 ): Promise<void> {
 	const { endpoint, model } = await pick(settings, signal);
-	const { url, key } = endpoint;
 	const system = String(settings.get('chat system') ?? '');
+	const rounds = Number(settings.get('tools rounds'));
+	// the parameters set for this model, numbers as numbers
+	const parameters = Object.fromEntries(
+		Object.entries(models.keys).flatMap(([name, def]) => {
+			const value = settings.get(`models ${name}`, `${endpoint.name}/${model}`);
+			return value === undefined ? [] : [[name, def.kind === 'number' ? Number(value) : value]];
+		})
+	);
 	// the own tools of KiSS, then those of every MCP server, the same from turn to
 	// turn while the servers stay
 	const { tools, problems } = await aggregate(settings, own);
@@ -89,8 +96,9 @@ export async function turn(
 		function: { name: t.name, description: t.description, parameters: t.parameters }
 	}));
 	try {
-		for (let r = 0; r < MAX_ROUNDS; r++) {
+		for (let r = 0; r < rounds; r++) {
 			const body = {
+				...parameters,
 				model,
 				messages: [
 					...(system ? [{ role: 'system', content: system }] : []),
@@ -105,7 +113,7 @@ export async function turn(
 			const round = reply.rounds[reply.rounds.length - 1];
 			// the calls of the round by the index the stream gives them
 			const calls = new Map<number, Call>();
-			for await (const d of chat(url, key, body, signal)) {
+			for await (const d of chat(endpoint, body, signal)) {
 				if (d.reasoning) round.reasoning += d.reasoning;
 				if (d.content) round.text += d.content;
 				for (const c of d.calls ?? []) {
@@ -125,7 +133,7 @@ export async function turn(
 				await call(tools, ctx, c);
 			}
 		}
-		reply.error = `stopped after ${MAX_ROUNDS} tool rounds`;
+		reply.error = `stopped after ${rounds} tool rounds`;
 	} finally {
 		reply.rounds = settled(reply.rounds);
 	}

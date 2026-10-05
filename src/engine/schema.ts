@@ -6,7 +6,7 @@ import { didYouMean } from './near.js';
 const URL_PROTOCOLS = ['http:', 'https:'];
 // a value that reads back as one token without quotes, a pipe opening a filter
 const BARE_VALUE = /^[^\s"'|][^\s|]*$/;
-const WORD = /^[a-z][a-z0-9]*$/;
+const WORD = /^[a-z][a-z0-9_]*$/;
 
 // a stored key is the key, then the item name for a named key
 export function stored(key: string, name?: string): string {
@@ -35,6 +35,14 @@ function check(def: Key, raw: string): Value {
 		case 'secret':
 			if (!raw || raw === SECRET_SET) throw new Error('paste the real value');
 			return raw;
+		case 'number': {
+			const n = Number(raw);
+			if (!raw.trim() || !Number.isFinite(n)) throw new Error(`"${raw}" is not a number`);
+			if (def.integer && !Number.isInteger(n)) throw new Error(`${n} is not a whole number`);
+			if (def.min !== undefined && n < def.min) throw new Error(`${n} is below ${def.min}`);
+			if (def.max !== undefined && n > def.max) throw new Error(`${n} is above ${def.max}`);
+			return String(n);
+		}
 		case 'enum':
 			if (!def.values?.includes(raw)) {
 				throw new Error(`"${raw}" is not one of ${def.values?.join(' ')}`);

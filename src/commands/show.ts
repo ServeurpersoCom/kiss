@@ -47,7 +47,7 @@ export default {
 	// the items of a module that knows more than those set go by group, who
 	// knows them, the others last
 	async run(ctx, plan) {
-		const out = lines(ctx, plan, undefined);
+		const out = plan.name ? [] : lines(ctx, plan, undefined);
 		const set = ctx.config.names(plan.module);
 		const items = ctx.modules.find((m) => m.name === plan.module)!.items;
 		if (plan.name) out.push(...lines(ctx, plan, plan.name));
@@ -56,7 +56,12 @@ export default {
 			const groups = await items(ctx.config, ctx.signal);
 			const known = new Set(groups.flatMap((g) => g.names));
 			groups.push({ group: 'others', names: set.filter((n) => !known.has(n)) });
-			out.push(...grouped(groups, (n) => lines(ctx, plan, n)));
+			// an item without a setting shows by its name alone, unless a key is named
+			const body = (n: string) => {
+				const shown = lines(ctx, plan, n);
+				return shown.length || plan.key ? shown : [`! ${n}`];
+			};
+			out.push(...grouped(groups, body));
 		}
 		return out.join('\n') || `! no ${[plan.module, plan.name].filter((w) => w).join(' ')} yet`;
 	},

@@ -9,7 +9,9 @@ export default {
 		// a Streamable HTTP endpoint, the MCP url of the server
 		url: { kind: 'url', named: true },
 		// sent as a bearer token
-		key: { kind: 'secret', named: true }
+		key: { kind: 'secret', named: true },
+		// seconds a call of a tool may take, until the turn stops at the latest
+		timeout: { kind: 'number', min: 0.1, default: '300', named: true }
 	},
 	validate(config) {
 		return bare(config, 'mcp');

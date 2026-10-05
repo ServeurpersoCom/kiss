@@ -7,13 +7,17 @@ export type Role = 'user' | 'llm';
 
 export type Value = string;
 
-export type Kind = 'string' | 'enum' | 'url' | 'secret';
+export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret';
 
 export interface Key {
 	kind: Kind;
 	default?: Value;
 	// enum choices
 	values?: readonly string[];
+	// number bounds, both included, and whether it is whole
+	min?: number;
+	max?: number;
+	integer?: boolean;
 	// one value per item of a collection, the item named right before the value:
 	// set endpoints url prod https://example.com/v1
 	named?: boolean;

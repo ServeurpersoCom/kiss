@@ -6,7 +6,10 @@ export default {
 	name: 'endpoints',
 	keys: {
 		url: { kind: 'url', named: true },
-		key: { kind: 'secret', named: true }
+		key: { kind: 'secret', named: true },
+		// seconds the endpoint has to start answering: a model list, the start of
+		// a reply, which then streams until it ends or the turn stops
+		timeout: { kind: 'number', min: 0.1, default: '10', named: true }
 	},
 	validate(config) {
 		return bare(config, 'endpoints');
@@ -15,7 +18,7 @@ export default {
 	async check(config) {
 		const failures = await Promise.all(
 			remotes(config, 'endpoints').map((e) =>
-				listModels(e.url, e.key).then(
+				listModels(e).then(
 					() => null,
 					(err: Error) => `endpoints ${e.name}: ${err.message}`
 				)

@@ -27,7 +27,7 @@
 	<div class="content" bind:this={content}>
 		{#if app.current?.messages.length}
 			{#each app.current.messages as message, i (i)}
-				<Message {message} />
+				<Message {message} live={app.busy && i === app.current.messages.length - 1} />
 			{/each}
 		{:else}
 			<div class="empty">

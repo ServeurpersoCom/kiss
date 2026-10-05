@@ -5,7 +5,15 @@
 	import Icon from './Icon.svelte';
 	import { display } from '../lib/display.svelte.js';
 
-	let { round }: { round: Round } = $props();
+	// live: the round the model writes now
+	let { round, live = false }: { round: Round; live?: boolean } = $props();
+
+	// open, or under inference open while the model writes it only
+	function unfolded(mode: string, writing: boolean): boolean {
+		return mode === 'open' || (mode === 'inference' && writing);
+	}
+
+	const thinking = $derived(unfolded(display.thinking, live && !round.text && !round.calls.length));
 
 	// opens or folds a block each time its display setting changes, and only
 	// then: a click holds while the content of the block streams
@@ -42,7 +50,7 @@
 </script>
 
 {#if round.reasoning}
-	<details {@attach fold(() => display.thinking)}>
+	<details {@attach fold(() => thinking)}>
 		<summary><Icon name="chevron" /><span class="head">Thinking</span></summary>
 		<div class="body reasoning">{round.reasoning}</div>
 	</details>
@@ -52,11 +60,12 @@
 {/if}
 {#each round.calls as c, i (i)}
 	{@const all = args(c)}
+	{@const open = unfolded(display.tools, c.ok === undefined)}
 	<details
 		class="tool"
 		class:failed={c.ok === false}
 		class:pending={c.ok === undefined}
-		{@attach fold(() => display.tools)}
+		{@attach fold(() => open)}
 	>
 		<summary>
 			<Icon name="chevron" />

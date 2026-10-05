@@ -1,5 +1,4 @@
 import type { ConfigReader } from './types.js';
-import { MODELS_TIMEOUT_MS } from './config.js';
 import { bearer, remotes, type Remote } from './remote.js';
 
 // OpenAI compatible client: the model list and streamed chat completions
@@ -30,18 +29,33 @@ function notAnLlm(res: Response): Error {
 	return Object.assign(new Error(`${res.url} answers a web page, not an LLM`), { status: 404 });
 }
 
-// the models an endpoint serves, within MODELS_TIMEOUT_MS or sooner when the
-// signal of the caller aborts
-export async function listModels(
-	url: string,
-	key: string,
+// a request the endpoint starts answering within its timeout, or less when the
+// signal of the caller aborts; what follows streams on that signal alone
+async function request(
+	endpoint: Remote,
+	path: string,
+	init: RequestInit,
 	signal?: AbortSignal
-): Promise<string[]> {
-	const timeout = AbortSignal.timeout(MODELS_TIMEOUT_MS);
-	const res = await fetch(`${url}/models`, {
-		headers: bearer(key),
-		signal: signal ? AbortSignal.any([signal, timeout]) : timeout
-	});
+): Promise<Response> {
+	const start = new AbortController();
+	const timer = setTimeout(
+		() => start.abort(new Error(`${endpoint.name} does not answer within ${endpoint.timeout} s`)),
+		endpoint.timeout * 1000
+	);
+	try {
+		return await fetch(`${endpoint.url}${path}`, {
+			...init,
+			headers: { ...bearer(endpoint.key), ...init.headers },
+			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
+		});
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+// the models an endpoint serves
+export async function listModels(endpoint: Remote, signal?: AbortSignal): Promise<string[]> {
+	const res = await request(endpoint, '/models', {}, signal);
 	if (!res.ok) throw await failure(res);
 	if (!res.headers.get('content-type')?.includes('json')) throw notAnLlm(res);
 	const json = await res.json();
@@ -61,7 +75,7 @@ export async function pick(
 	}
 	const value = String(config.get('chat model') ?? '');
 	if (!value) {
-		const models = all.length === 1 ? await listModels(all[0].url, all[0].key, signal) : [];
+		const models = all.length === 1 ? await listModels(all[0], signal) : [];
 		if (models.length !== 1) {
 			throw new Error('chat model is not set: /set chat model <endpoint/model>, see /show models');
 		}
@@ -80,17 +94,16 @@ export async function pick(
 // one delta per server sent event, until [DONE]: a stream closed before it is
 // cut short, never a finished answer
 export async function* chat(
-	url: string,
-	key: string,
+	endpoint: Remote,
 	body: object,
 	signal: AbortSignal
 ): AsyncGenerator<Delta> {
-	const res = await fetch(`${url}/chat/completions`, {
+	const init = {
 		method: 'POST',
-		headers: { ...bearer(key), 'Content-Type': 'application/json' },
-		body: JSON.stringify({ ...body, stream: true }),
-		signal
-	});
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ ...body, stream: true })
+	};
+	const res = await request(endpoint, '/chat/completions', init, signal);
 	if (!res.ok || !res.body) throw await failure(res);
 	if (res.headers.get('content-type')?.includes('html')) throw notAnLlm(res);
 	const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();

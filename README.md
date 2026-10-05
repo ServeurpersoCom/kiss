@@ -17,7 +17,7 @@ line    = command { "|" filter }
 command = "set" key value
         | "no" key | "no" module item
         | "show" module [ word [ item ] ] | "show" module item
-        | "show" ( "running" | "models" | "style" | "saves" | "version" )
+        | "show" ( "running" | "style" | "saves" | "version" )
         | "show diff" save save              the word session names the running one
         | "load" save | "reset"
         | "save" save | "no save" save        user only, each alone on its line
@@ -87,11 +87,32 @@ show tools                               ! every tool, by who serves it
 set tools use str_replace off            ! the model never sees it
 set tools preview bash_tool description  ! what a folded call shows
 no tools bash_tool                       ! every setting of that tool, gone
+set tools rounds 25                      ! the tool rounds a turn takes at most
+set mcp timeout sandbox 300              ! the seconds a call may take
 ```
 
 The key goes as `Authorization: Bearer <token>`. A browser cannot set that header on a WebSocket,
 so WebSocket and stdio servers stay out of reach. A server must allow the origin of the page
-(CORS). A call runs until it answers, for five minutes at most, or until the turn is stopped.
+(CORS). A call runs until it answers, within the timeout of its server, or until the turn is
+stopped; connecting and listing the tools take five seconds at most.
+
+## Models
+
+Every model holds its own request parameters, sent under their OpenAI names and only when set;
+the model is named as `chat model` takes it, `endpoint/model`.
+
+```
+show models                              ! every model, by endpoint, with its settings
+set chat model prod/qwen3:8b
+set models temperature prod/qwen3:8b 0.6
+set models reasoning_effort prod/qwen3:8b high
+no models prod/qwen3:8b                  ! every setting of that model, gone
+set endpoints timeout prod 30            ! the seconds the endpoint has to start answering
+```
+
+The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `presence_penalty`,
+`frequency_penalty`, `seed` and `reasoning_effort`, the last one as the template of the model
+reads it. A reply streams until it ends or the turn is stopped.
 
 ## Build
 

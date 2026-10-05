@@ -292,6 +292,18 @@ describe('an MCP server', () => {
 		expect(p.bodies[0].tools.map((t) => t.function.name)).toEqual(['snap', 'fail', 'wait']);
 	});
 
+	it('fails a call past the timeout of its server', async () => {
+		const p = await page({ a: legacy(SHELL) }, [
+			stream([call('wait', { description: 'hold' })]),
+			stream([{ content: 'ok' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp\nset mcp timeout a 0.1', 'user');
+		const t = await p.go();
+		await t.done;
+		expect(t.reply.rounds[0].calls[0]).toMatchObject({ ok: false });
+		expect(t.reply.rounds[0].calls[0].result).toContain('mcp a');
+	});
+
 	it('runs no call past a stop', async () => {
 		const p = await page({ a: legacy(SHELL) }, [stream([call('wait', { description: 'hold' })])]);
 		await p.engine.run('set mcp url a http://a/mcp', 'user');

@@ -9,6 +9,8 @@ import { tools } from '../lib/tools.js';
 export default {
 	name: 'tools',
 	keys: {
+		// the rounds of tool calls a turn takes at most
+		rounds: { kind: 'number', min: 1, integer: true, default: '25' },
 		// off, the model never sees the tool
 		use: { kind: 'enum', values: ['on', 'off'], default: 'on', named: true },
 		// the argument a call of the tool shows folded; unset, its first one

@@ -92,7 +92,7 @@ describe('a batch', () => {
 		const set = k.run('set chat system blue', 'user');
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		h.release();
-		expect((await slow).text).toBe('! a\na/m');
+		expect((await slow).text).toBe('! endpoints a\n! a/m');
 		await set;
 		expect(k.settings.get('chat system')).toBe('blue');
 	});
@@ -114,18 +114,16 @@ describe('a model list', () => {
 		const r = k.run('show models', 'user');
 		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
 		release();
-		expect((await r).text).toBe('! a down\n! b\nb/m\nb/org/n');
+		expect((await r).text).toBe('! endpoints a down\n! endpoints b\n! b/m\n! b/org/n');
 	});
 
 	it('that never answers frees the queue after its timeout', async () => {
-		vi.doMock('../src/lib/config.js', async (original) => ({
-			...(await original<object>()),
-			MODELS_TIMEOUT_MS: 50
-		}));
 		const k = await page();
 		vi.stubGlobal('fetch', held().fetch);
-		await k.run('set endpoints url a http://a/v1', 'user');
-		expect((await k.run('show models', 'user')).text).toMatch(/^! a /);
+		await k.run('set endpoints url a http://a/v1\nset endpoints timeout a 0.1', 'user');
+		expect((await k.run('show models', 'user')).text).toBe(
+			'! endpoints a a does not answer within 0.1 s'
+		);
 		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
 	});
 });
@@ -232,7 +230,7 @@ describe('a collection', () => {
 	it('is named in the plural, its singular naming it too', async () => {
 		const k = await page();
 		await k.run('set endpoint url a http://a/v1', 'user');
-		expect((await k.run('show endpoint', 'user')).text).toBe('set endpoints url a http://a/v1');
+		expect((await k.run('show endpoint url', 'user')).text).toBe('set endpoints url a http://a/v1');
 		expect((await k.run('show save', 'user')).text).toBe('! nothing saved yet');
 	});
 });
@@ -268,6 +266,16 @@ describe('the archive', () => {
 		vi.unstubAllGlobals();
 		expect((await k.run('show saves', 'user')).text).not.toContain('two');
 		expect((await k.run('save three', 'user')).text).toBe('saved three');
+	});
+});
+
+describe('a model', () => {
+	it('takes the name a server gives it, and numbers within their bounds', async () => {
+		const k = await page();
+		expect((await k.run('set models temperature hf/org/m:tag 0.70', 'user')).ok).toBe(true);
+		expect(k.settings.get('models temperature', 'hf/org/m:tag')).toBe('0.7');
+		expect((await k.run('set models top_p a/b 2', 'user')).text).toContain('2 is above 1');
+		expect((await k.run('set models top_k a/b 1.5', 'user')).text).toContain('not a whole number');
 	});
 });
 
@@ -309,7 +317,13 @@ describe('show', () => {
 		await k.run('set endpoints url a http://a/v1\nset endpoints url b http://b/v1', 'user');
 		await k.run('set endpoints key a sk-a', 'user');
 		expect((await k.run('show endpoints', 'user')).text).toBe(
-			'! endpoints key a is set\nset endpoints url a http://a/v1\nset endpoints url b http://b/v1'
+			[
+				'! endpoints key a is set',
+				'set endpoints timeout a 10',
+				'set endpoints url a http://a/v1',
+				'set endpoints timeout b 10',
+				'set endpoints url b http://b/v1'
+			].join('\n')
 		);
 		expect((await k.run('show endpoints url', 'user')).text).toBe(
 			'set endpoints url a http://a/v1\nset endpoints url b http://b/v1'
@@ -319,7 +333,7 @@ describe('show', () => {
 		);
 		expect((await k.run('show endpoints key b', 'user')).text).toBe('! endpoints key b is not set');
 		expect((await k.run('show endpoints a', 'user')).text).toBe(
-			'! endpoints key a is set\nset endpoints url a http://a/v1'
+			'! endpoints key a is set\nset endpoints timeout a 10\nset endpoints url a http://a/v1'
 		);
 		expect((await k.run('show display zz', 'user')).text).toContain('unknown key');
 	});

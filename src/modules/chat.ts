@@ -12,7 +12,7 @@ export default {
 	async check(config) {
 		if (!config.get('chat model')) return null;
 		const { endpoint, model } = await pick(config);
-		const served = await listModels(endpoint.url, endpoint.key);
+		const served = await listModels(endpoint);
 		return served.includes(model)
 			? null
 			: `${endpoint.name} does not serve ${model}, see show models`;

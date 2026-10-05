@@ -1,10 +1,10 @@
 import type { Module } from '../lib/types.js';
 import { display } from '../lib/display.svelte.js';
 
-const FOLDS = ['closed', 'open'];
+// folded, unfolded, or unfolded while the model writes them only
+const FOLDS = ['closed', 'open', 'inference'];
 
-// how the thread shows a turn: whether its thinking and its tool calls open
-// unfolded
+// how the thread shows a turn: how its thinking and its tool calls fold
 export default {
 	name: 'display',
 	keys: {
@@ -12,7 +12,7 @@ export default {
 		tools: { kind: 'enum', values: FOLDS, default: 'closed' }
 	},
 	apply(config) {
-		display.thinking = config.get('display thinking') === 'open';
-		display.tools = config.get('display tools') === 'open';
+		display.thinking = String(config.get('display thinking'));
+		display.tools = String(config.get('display tools'));
 	}
 } satisfies Module;
