@@ -28,6 +28,7 @@
 		"@modelcontextprotocol/client": "^2.3.0",
 		"highlight.js": "^11.11.1",
 		"katex": "^0.16.22",
+		"lowlight": "^3.3.0",
 		"rehype-highlight": "^7.0.2",
 		"rehype-katex": "^7.0.1",
 		"rehype-stringify": "^10.0.1",

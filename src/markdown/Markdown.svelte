@@ -1,5 +1,6 @@
 <script lang="ts">
 	import 'katex/dist/katex.min.css';
+	import type { Attachment } from 'svelte/attachments';
 	import { Renderer, type View } from './render.js';
 
 	let { text }: { text: string } = $props();
@@ -19,9 +20,27 @@
 	});
 
 	$effect(() => () => cancelAnimationFrame(frame));
+
+	// how long a copy button shows its check
+	const COPIED_MS = 1500;
+
+	// a copy button puts the code of its block on the clipboard
+	const copy: Attachment<HTMLDivElement> = (node) => {
+		const onclick = (e: MouseEvent) => {
+			const button = (e.target as Element).closest('.copy');
+			if (!button) return;
+			void navigator.clipboard.writeText(
+				button.closest('.code')!.querySelector('pre')!.textContent ?? ''
+			);
+			button.classList.add('done');
+			setTimeout(() => button.classList.remove('done'), COPIED_MS);
+		};
+		node.addEventListener('click', onclick);
+		return () => node.removeEventListener('click', onclick);
+	};
 </script>
 
-<div class="markdown">
+<div class="markdown" {@attach copy}>
 	{#each view.blocks as block (block.key)}
 		{@html block.html}
 	{/each}
@@ -39,10 +58,44 @@
 	.markdown :global(:last-child) {
 		margin-bottom: 0;
 	}
-	.markdown :global(pre) {
+	.markdown :global(.code) {
+		margin: 1em 0;
 		background: var(--code-bg);
 		border-radius: calc(var(--radius) * 0.6);
-		padding: 0.8rem 1rem;
+	}
+	/* the language of a block, and its copy button showing a check once done */
+	.markdown :global(.head) {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.4rem 0.6rem 0 1rem;
+		font-family: var(--mono);
+		font-size: var(--font-small);
+		color: var(--fg-dim);
+	}
+	.markdown :global(.copy) {
+		display: flex;
+		padding: 0.2rem;
+		font: inherit;
+		color: inherit;
+		background: none;
+		border: none;
+		cursor: pointer;
+	}
+	.markdown :global(.copy:hover) {
+		color: var(--fg);
+	}
+	.markdown :global(.copy svg:last-child),
+	.markdown :global(.copy.done svg:first-child) {
+		display: none;
+	}
+	.markdown :global(.copy.done svg:last-child) {
+		display: block;
+		color: var(--ok);
+	}
+	.markdown :global(pre) {
+		margin: 0;
+		padding: 0.5rem 1rem 0.8rem;
 		overflow-x: auto;
 		font-family: var(--mono);
 		font-size: var(--font-small);
@@ -96,10 +149,12 @@
 	.markdown :global(a) {
 		color: var(--accent-text);
 	}
+	/* a wide table scrolls in its own box */
+	.markdown :global(.table) {
+		overflow-x: auto;
+	}
 	.markdown :global(table) {
 		border-collapse: collapse;
-		display: block;
-		overflow-x: auto;
 	}
 	.markdown :global(th),
 	.markdown :global(td) {
