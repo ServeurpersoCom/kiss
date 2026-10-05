@@ -1,12 +1,13 @@
 import type { Command } from '../lib/types.js';
 
-// the rules of the page style, one per line, the scoping classes of Svelte
-// left out as no selector needs them, the inlined fonts too
+// the rules of the page style, one per line, those of the libraries left out
+// as their own layer holds them, the scoping classes of Svelte too as no
+// selector needs them
 function rules(list: CSSRuleList, page: boolean): string[] {
 	return [...list].flatMap((rule) => {
 		if (rule instanceof CSSLayerBlockRule && rule.name === 'page')
 			return rules(rule.cssRules, true);
-		if (!page || rule instanceof CSSFontFaceRule) return [];
+		if (!page) return [];
 		return [rule.cssText.replace(/\.svelte-[a-z0-9]+/g, '').replace(/\s+/g, ' ')];
 	});
 }

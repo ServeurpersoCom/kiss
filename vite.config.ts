@@ -29,12 +29,15 @@ function katexWoff2Only() {
 	};
 }
 
-// every style of the page sits in one cascade layer, so theme css, outside any
-// layer, wins over it whatever the specificity of its selectors
-const pageLayer: CssPlugin = {
-	postcssPlugin: 'kiss-page-layer',
+// every style sits in a cascade layer by where it comes from: the libraries
+// of node_modules in lib, the page itself in page over them; css sheets,
+// outside any layer, win over both whatever the specificity of their selectors
+const layers: CssPlugin = {
+	postcssPlugin: 'kiss-layers',
 	Once(root, { AtRule }) {
-		root.append(new AtRule({ name: 'layer', params: 'page' }).append(root.nodes));
+		const name = root.source?.input.file?.includes('/node_modules/') ? 'lib' : 'page';
+		root.append(new AtRule({ name: 'layer', params: name }).append(root.nodes));
+		root.prepend(new AtRule({ name: 'layer', params: 'lib, page' }));
 	}
 };
 
@@ -42,7 +45,7 @@ export default defineConfig({
 	plugins: [svelte(), viteSingleFile(), katexWoff2Only()],
 
 	css: {
-		postcss: { plugins: [pageLayer] }
+		postcss: { plugins: [layers] }
 	},
 
 	define: {
