@@ -176,20 +176,39 @@ export interface Schema {
 }
 
 // what a batch acts on beyond the configuration: the conversation it was sent
-// in, none from the developer terminal, and the signal of the turn
+// in, none from the developer terminal, the conversations of the page, the
+// signal of the turn, and the questions it may ask the user
 export interface Scope {
 	// aborts the batch of a stopped model turn, and the requests it makes
 	signal?: AbortSignal;
 	conversation?: Titled;
+	conversations?: Library;
 	// asks the user to let the model make a change
 	grant?(request: Grant): Promise<Verdict>;
 	// asks the user for the value of a secret key, none when they give none
 	secret?(key: string): Promise<string | null>;
+	// offers the user a file to save, resolving to whether they saved it
+	offer?(name: string, text: string): Promise<boolean>;
+	// asks the user for a file, resolving to its text, none when they pick none
+	pick?(): Promise<string | null>;
 }
 
-// a conversation as a batch sees it: its title, and nothing of its messages
+// a conversation as a batch sees it: its id and its title, and nothing of its
+// entries
 export interface Titled {
+	readonly id: string;
 	title: string;
+}
+
+// the conversations of the page as a batch reaches them: listed, packed into a
+// file, and unpacked from one, which adds them; none is ever changed
+export interface Library {
+	// newest first
+	list(): readonly Conversation[];
+	pack(conversations: readonly Conversation[]): string;
+	// the file read whole, then those of its conversations whose id is new
+	// added, those already here skipped
+	unpack(text: string): Promise<{ added: Conversation[]; skipped: Conversation[] }>;
 }
 
 // what a command reaches; capabilities extend this interface by module

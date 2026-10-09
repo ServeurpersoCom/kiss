@@ -2,9 +2,22 @@
 	import type { Attachment } from 'svelte/attachments';
 	import type { Verdict } from '../lib/types.js';
 	import { VERDICTS } from '../lib/types.js';
-	import { app } from '../lib/state.svelte.js';
+	import { app, choose, deliver } from '../lib/state.svelte.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };
+	const KIB = 1024;
+
+	// the size of a file as it reads, in kilobytes or megabytes
+	function size(text: string): string {
+		const kib = new Blob([text]).size / KIB;
+		return kib < KIB ? `${kib.toFixed(1)} KB` : `${(kib / KIB).toFixed(1)} MB`;
+	}
+
+	// the picker opens on the click itself; a picker closed on nothing keeps the
+	// question, which Cancel answers
+	function open(settle: (text: string | null) => void) {
+		void choose().then((text) => text !== null && settle(text));
+	}
 
 	let value = $state('');
 
@@ -33,12 +46,28 @@
 				<div class="head">Allow this change?</div>
 				<pre>{ask.request.lines.join('\n')}</pre>
 			{/if}
-			<div class="verdicts">
+			<div class="answers">
 				{#each VERDICTS as verdict, i (verdict)}
 					<button {@attach i === 0 && focused} onclick={() => ask.settle(verdict)}>
 						{LABELS[verdict]}
 					</button>
 				{/each}
+			</div>
+		{:else if app.ask.kind === 'offer'}
+			{@const ask = app.ask}
+			<div class="head">Save {ask.name}, {size(ask.text)}?</div>
+			<div class="answers">
+				<button {@attach focused} onclick={() => (deliver(ask.name, ask.text), ask.settle(true))}>
+					Save
+				</button>
+				<button onclick={() => ask.settle(false)}>Cancel</button>
+			</div>
+		{:else if app.ask.kind === 'pick'}
+			{@const ask = app.ask}
+			<div class="head">Import conversations from a file?</div>
+			<div class="answers">
+				<button {@attach focused} onclick={() => open(ask.settle)}>Choose file</button>
+				<button onclick={() => ask.settle(null)}>Cancel</button>
 			</div>
 		{:else}
 			<div class="head">Value of {app.ask.key}</div>
@@ -74,7 +103,7 @@
 		overflow-wrap: anywhere;
 		font: inherit;
 	}
-	.verdicts {
+	.answers {
 		display: flex;
 		gap: 0.35rem;
 	}

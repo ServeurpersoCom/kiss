@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, Entry } from '../src/lib/types.js';
-import { append, forks, latest, parse, path, serialize, source } from '../src/lib/conversation.js';
+import {
+	append,
+	forks,
+	fresh,
+	latest,
+	parse,
+	path,
+	serialize,
+	source
+} from '../src/lib/conversation.js';
 
 // a conversation holding one turn of each kind, a call left without its outcome
 function demo(): Conversation {
@@ -78,48 +87,66 @@ describe('an edit', () => {
 });
 
 describe('a conversation file', () => {
-	it('reads back to the tree as it settled, under a new id', () => {
+	it('reads back to every conversation as it settled, ids and branches kept', () => {
 		const c = demo();
 		const edited = append(c, null, { role: 'user', text: 'bonjour' });
-		const back = parse(serialize(c));
-		expect(back).not.toHaveProperty('id');
-		expect(back.title).toBe('Demo');
-		expect(back.updated).toBe(c.updated);
-		expect(back.leaf).toBe(edited.id);
-		expect(back.entries.map((e) => e.id)).toEqual(c.entries.map((e) => e.id));
-		const assistant = back.entries[1];
+		const other: Conversation = { id: 'o', title: 'Other', updated: 1, entries: [], leaf: null };
+		const back = parse(serialize([c, other]));
+		expect(back.map((x) => x.id)).toEqual(['c', 'o']);
+		expect(back[0].title).toBe('Demo');
+		expect(back[0].updated).toBe(c.updated);
+		expect(back[0].leaf).toBe(edited.id);
+		expect(back[0].entries.map((e) => e.id)).toEqual(c.entries.map((e) => e.id));
+		const assistant = back[0].entries[1];
 		expect(assistant.role === 'assistant' && assistant.rounds[0].calls.map((x) => x.id)).toEqual([
 			'a'
 		]);
-		expect(parse(serialize({ id: 'd', ...back }))).toEqual(back);
+		expect(parse(serialize(back))).toEqual(back);
 	});
 
 	it('imports nothing when it does not read whole, and says where', () => {
-		const file = JSON.parse(serialize(demo()));
+		const file = JSON.parse(serialize([demo()]));
 		const altered = (change: (f: typeof file) => void) => {
 			const copy = structuredClone(file);
 			change(copy);
 			return () => parse(JSON.stringify(copy));
 		};
+		const at = 'file.conversations[0]';
 		expect(() => parse('{')).toThrow('not JSON');
-		expect(altered((f) => (f.kiss = 'save'))).toThrow('file.kiss: not conversation');
-		expect(altered((f) => delete f.title)).toThrow('file.title: missing');
+		expect(altered((f) => (f.kiss = 'save'))).toThrow('file.kiss: not conversations');
 		expect(altered((f) => (f.extra = 1))).toThrow('file.extra: unknown');
-		expect(altered((f) => (f.entries[0].role = 'system'))).toThrow(
-			'file.entries[0].role: not one of user assistant cli'
+		expect(altered((f) => delete f.conversations[0].title)).toThrow(`${at}.title: missing`);
+		expect(altered((f) => f.conversations.push(f.conversations[0]))).toThrow(
+			'file.conversations[1].id: used twice'
 		);
-		expect(altered((f) => delete f.entries[1].rounds[0].calls[0].ok)).toThrow(
-			'file.entries[1].rounds[0].calls[0].ok: missing'
+		expect(altered((f) => (f.conversations[0].entries[0].role = 'system'))).toThrow(
+			`${at}.entries[0].role: not one of user assistant cli`
 		);
-		expect(altered((f) => (f.entries[2].ok = 'yes'))).toThrow('file.entries[2].ok: not a boolean');
-		expect(altered((f) => (f.entries[1].id = f.entries[0].id))).toThrow(
-			'file.entries[1].id: used twice'
+		expect(altered((f) => delete f.conversations[0].entries[1].rounds[0].calls[0].ok)).toThrow(
+			`${at}.entries[1].rounds[0].calls[0].ok: missing`
 		);
-		expect(altered((f) => (f.entries[0].parent = f.entries[2].id))).toThrow(
-			'file.entries[0].parent: names no entry before it'
+		expect(altered((f) => (f.conversations[0].entries[2].ok = 'yes'))).toThrow(
+			`${at}.entries[2].ok: not a boolean`
 		);
-		expect(altered((f) => (f.leaf = 'gone'))).toThrow('file.leaf: names no entry');
-		expect(altered((f) => (f.leaf = f.entries[0].id))).toThrow('file.leaf: ends no branch');
-		expect(altered((f) => (f.leaf = null))).toThrow('file.leaf: names no entry');
+		const entries = (f: typeof file) => f.conversations[0].entries;
+		expect(altered((f) => (entries(f)[1].id = entries(f)[0].id))).toThrow(
+			`${at}.entries[1].id: used twice`
+		);
+		expect(altered((f) => (entries(f)[0].parent = entries(f)[2].id))).toThrow(
+			`${at}.entries[0].parent: names no entry before it`
+		);
+		expect(altered((f) => (f.conversations[0].leaf = 'gone'))).toThrow(
+			`${at}.leaf: names no entry`
+		);
+		expect(altered((f) => (f.conversations[0].leaf = entries(f)[0].id))).toThrow(
+			`${at}.leaf: ends no branch`
+		);
+		expect(altered((f) => (f.conversations[0].leaf = null))).toThrow(`${at}.leaf: names no entry`);
+	});
+
+	it('adds only the conversations whose id is new', () => {
+		const here: Conversation = { id: 'h', title: 'Here', updated: 2, entries: [], leaf: null };
+		const other: Conversation = { id: 'o', title: 'Other', updated: 1, entries: [], leaf: null };
+		expect(fresh([here, other], [here])).toEqual({ added: [other], skipped: [here] });
 	});
 });

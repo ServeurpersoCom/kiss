@@ -90,9 +90,12 @@ command = "set" key [ value ]                a secret left out is asked
         | "no" key | "no" module item
         | "show" module [ word [ item ] ] | "show" module item
         | "show" ( "running" | "style" | "saves" | "version" | "title" )
+        | "show conversations"
         | "show diff" save save              the word session names the running one
         | "load" save | "reset"
         | "title" value                      the title of this conversation
+        | "export" [ "all" | id ]            alone on its line
+        | "import"                           alone on its line
         | "save" save | "no save" save        user only, each alone on its line
 key     = module word [ item ]               an item names one of a collection
 save    = name                               a save of the same name gives way
@@ -101,7 +104,8 @@ filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
 ```
 
 One write verb per store, one read verb for all: `set` and `no` write the configuration, `save`
-and `no save` the archive, `title` the conversation, and `show` reads every one of them.
+and `no save` the archive, `title` the conversation, `import` the conversations, and `show` reads
+every one of them.
 
 | Module      | Keys                                                          |
 | ----------- | ------------------------------------------------------------- |
@@ -159,8 +163,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
   history the model reads are the path up from the leaf; a version comes back as it was last
   written in.
-- A conversation file reads back to the tree as it settled, under a new id, or imports nothing
-  and says where it goes wrong.
+- A conversation file reads back to every conversation as it settled, ids and branches kept, or
+  imports nothing and says where it goes wrong; an import adds only the conversations whose id is
+  new, and neither `export` nor `import` changes a conversation.
 - Every MCP server serves its tools under their own names, after those of KiSS; a tool turned off
   is never seen by the model; a server that does not answer serves nothing, and a name already
   served stays with the first: the model is told, the save warns of it, nothing ever stops.
@@ -241,9 +246,27 @@ very prefix the edited one had; the branch edited stays whole. Arrows under a me
 versions go from one to the next, each coming back as it was last written in. The configuration
 belongs to no branch: a command of one branch stays applied when another shows.
 
-A conversation exports as a JSON file, marked `kiss` and without its id, every branch in it, and
-imports from the sidebar as a new one, read whole or refused with where it goes wrong: every id
-once, every parent before its child, a leaf that ends a branch.
+Files go through the CLI, so the model handles them as well as the user. `show conversations`
+lists them by id, the one the batch was sent in marked. `export` offers a file of this
+conversation, of another by a prefix of its id, or of all of them, in a card the user saves from:
+a browser saves a file on a click only, so the model never puts one on the disk by itself.
+`import` asks for a file in a card the user picks from, then adds its conversations whose id is
+new, the others skipped and told. Neither changes a conversation, the one shown included: an
+export reads the conversations as they settled, without the call that exports them, and an import
+only adds. To keep an export out of the context, edit the message that asked for it.
+
+```
+show conversations
+export                                   ! this conversation
+export 3f2a                              ! another, by a prefix of its id
+export all
+import
+```
+
+One file format holds one conversation or many, marked `kiss`, every branch and every id in it,
+read whole or refused with where it goes wrong: every conversation once, every entry id once,
+every parent before its child, a leaf that ends a branch. The sidebar lists the conversations and
+deletes one, nothing more.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.

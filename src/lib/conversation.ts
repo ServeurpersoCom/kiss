@@ -1,9 +1,9 @@
 import type { Conversation, Entry, Message, Round } from './types.js';
 
-// a conversation as a file: a marker naming what it holds, then the
-// conversation as the browser stores it, without its id
+// conversations as a file: a marker naming what it holds, then the
+// conversations as the browser stores them, ids included
 const MARK = 'kiss';
-const KIND = 'conversation';
+const KIND = 'conversations';
 const INDENT = '\t';
 // the root of a place named in an error
 const ROOT = 'file';
@@ -83,15 +83,28 @@ export function latest(c: Conversation, id: string): string {
 	return [...c.entries].reverse().find(under)!.id;
 }
 
-export function serialize(c: Conversation): string {
+// one conversation or many, as they settled
+export function serialize(conversations: readonly Conversation[]): string {
 	const file = {
 		[MARK]: KIND,
-		title: c.title,
-		updated: c.updated,
-		leaf: c.leaf,
-		entries: stored(c.entries)
+		conversations: conversations.map((c) => ({
+			id: c.id,
+			title: c.title,
+			updated: c.updated,
+			leaf: c.leaf,
+			entries: stored(c.entries)
+		}))
 	};
 	return JSON.stringify(file, null, INDENT) + '\n';
+}
+
+// the conversations of a file whose id is new, and those already here
+export function fresh(
+	file: readonly Conversation[],
+	present: readonly Conversation[]
+): { added: Conversation[]; skipped: Conversation[] } {
+	const ids = new Set(present.map((c) => c.id));
+	return { added: file.filter((c) => !ids.has(c.id)), skipped: file.filter((c) => ids.has(c.id)) };
 }
 
 // a check of one value, throwing where it goes wrong
@@ -160,32 +173,33 @@ const MESSAGES: Record<string, Check> = {
 	),
 	cli: object({ ...link, role: constant('cli'), input: string, output: string, ok: boolean })
 };
-const file = object({
-	[MARK]: constant(KIND),
+const conversation = object({
+	id: string,
 	title: string,
 	updated: number,
 	leaf: parent,
 	entries: array(entry)
 });
+const file = object({ [MARK]: constant(KIND), conversations: array(conversation) });
 
 // a tree: every id once, every parent an entry before its child, so no cycle,
 // and a leaf that ends a branch, none only when there is no entry
-function tree({ entries, leaf }: Pick<Conversation, 'entries' | 'leaf'>): void {
+function tree({ entries, leaf }: Conversation, at: string): void {
 	const seen = new Set<string>();
 	entries.forEach((e, i) => {
-		const at = `${ROOT}.entries[${i}]`;
-		if (seen.has(e.id)) fail(`${at}.id`, 'used twice');
-		if (e.parent !== null && !seen.has(e.parent)) fail(`${at}.parent`, 'names no entry before it');
+		const where = `${at}.entries[${i}]`;
+		if (seen.has(e.id)) fail(`${where}.id`, 'used twice');
+		if (e.parent !== null && !seen.has(e.parent))
+			fail(`${where}.parent`, 'names no entry before it');
 		seen.add(e.id);
 	});
-	if (leaf === null ? entries.length : !seen.has(leaf)) fail(`${ROOT}.leaf`, 'names no entry');
-	if (leaf !== null && entries.some((e) => e.parent === leaf))
-		fail(`${ROOT}.leaf`, 'ends no branch');
+	if (leaf === null ? entries.length : !seen.has(leaf)) fail(`${at}.leaf`, 'names no entry');
+	if (leaf !== null && entries.some((e) => e.parent === leaf)) fail(`${at}.leaf`, 'ends no branch');
 }
 
-// a conversation file as written by serialize, whole or refused with where it
-// goes wrong; the conversation takes a new id
-export function parse(text: string): Omit<Conversation, 'id'> {
+// a file as written by serialize, whole or refused with where it goes wrong:
+// every conversation once, each a tree
+export function parse(text: string): Conversation[] {
 	let json: unknown;
 	try {
 		json = JSON.parse(text);
@@ -193,7 +207,13 @@ export function parse(text: string): Omit<Conversation, 'id'> {
 		throw new Error('not JSON');
 	}
 	file(json, ROOT);
-	const { title, updated, leaf, entries } = json as Conversation;
-	tree({ entries, leaf });
-	return { title, updated, leaf, entries };
+	const { conversations } = json as { conversations: Conversation[] };
+	const seen = new Set<string>();
+	conversations.forEach((c, i) => {
+		const at = `${ROOT}.conversations[${i}]`;
+		if (seen.has(c.id)) fail(`${at}.id`, 'used twice');
+		seen.add(c.id);
+		tree(c, at);
+	});
+	return conversations;
 }

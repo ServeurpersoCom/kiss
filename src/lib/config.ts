@@ -36,6 +36,24 @@ export const TITLE_LENGTH = 60;
 // page: how long a copy button shows its check
 export const COPIED_MS = 1500;
 
+const two = (n: number) => String(n).padStart(2, '0');
+
+// a date to the minute, in the time of the browser
+export function localTime(date: string | number): string {
+	const d = new Date(date);
+	const day = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+	return `${day} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+// conversations: the word naming every one of them, and their files, named
+// after a title without the characters a file name cannot hold
+export const ALL = 'all';
+// the length an id shows, unique among a few thousand conversations
+export const ID_SHOWN = 8;
+export const FILE_EXTENSION = '.json';
+const UNSAFE_NAME = /[\\/:*?"<>|]/g;
+export const fileName = (title: string): string => title.replace(UNSAFE_NAME, '_') + FILE_EXTENSION;
+
 // storage
 export const DB_NAME = 'kiss';
 export const DB_VERSION = 1;

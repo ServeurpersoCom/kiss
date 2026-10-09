@@ -3,8 +3,6 @@
 export const PATHS = {
 	send: 'M12 19V5M5 12l7-7 7 7',
 	stop: 'M8 8h8v8H8z',
-	download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
-	upload: 'M12 20V9M7 14l5-5 5 5M5 4h14',
 	close: 'M6 6l12 12M18 6L6 18',
 	menu: 'M4 6h16M4 12h16M4 18h16',
 	chevron: 'M9 6l6 6-6 6',

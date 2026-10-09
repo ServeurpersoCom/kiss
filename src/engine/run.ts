@@ -111,18 +111,17 @@ export function run(text: string, role: Role, scope: Scope = {}): Promise<Outcom
 }
 
 async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
-	const { signal, conversation, secret } = scope;
+	const { signal, conversation } = scope;
 	signal?.throwIfAborted();
 	const lines = splitLines(text);
 	if (!lines.length) lines.push('');
 	const alone = lines.length === 1;
 	const draft = running.clone(role);
-	const titled = conversation && { title: conversation.title };
+	const titled = conversation && { id: conversation.id, title: conversation.title };
 	const ctx: Context = {
+		...scope,
 		role,
-		signal,
 		conversation: titled,
-		secret,
 		config: draft,
 		archive,
 		schema,

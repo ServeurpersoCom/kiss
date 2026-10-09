@@ -1,17 +1,20 @@
-import type { Assistant, Conversation, Grant, Verdict } from './types.js';
+import type { Assistant, Conversation, Grant, Library, Verdict } from './types.js';
 import { REFUSE } from './types.js';
-import { SLASH, TITLE_LENGTH } from './config.js';
-import { deleteConversation, listConversations, putConversation } from './db.js';
+import { FILE_EXTENSION, SLASH, TITLE_LENGTH } from './config.js';
+import { deleteConversation, listConversations, putConversations } from './db.js';
 import { turn } from './agent.js';
-import { append, latest, parse, path, serialize, stored } from './conversation.js';
+import { append, fresh, latest, parse, path, serialize, stored } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
 // what the page asks the user, and how the answer settles it: a change or a
-// call the model asks for, or the value of a secret key
+// call the model asks for, the value of a secret key, a file to save, or a
+// file to read
 export type Asking =
 	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
-	| { kind: 'secret'; key: string; settle(value: string | null): void };
+	| { kind: 'secret'; key: string; settle(value: string | null): void }
+	| { kind: 'offer'; name: string; text: string; settle(saved: boolean): void }
+	| { kind: 'pick'; settle(text: string | null): void };
 
 export const app = $state({
 	conversations: [] as Conversation[],
@@ -36,7 +39,7 @@ async function save(conversation: Conversation): Promise<void> {
 	if (!app.conversations.some((c) => c.id === conversation.id)) return;
 	conversation.updated = Date.now();
 	const snapshot = $state.snapshot(conversation) as Conversation;
-	await putConversation({ ...snapshot, entries: stored(snapshot.entries) });
+	await putConversations([{ ...snapshot, entries: stored(snapshot.entries) }]);
 }
 
 // the conversation named by the URL hash, or none
@@ -71,29 +74,51 @@ export async function remove(id: string): Promise<void> {
 	await deleteConversation(id);
 }
 
-// the characters a file name cannot hold, and the type of a conversation file
-const UNSAFE_NAME = /[\\/:*?"<>|]/g;
+// the type of a conversation file
 const FILE_TYPE = 'application/json';
-export const FILE_EXTENSION = '.json';
 
-// the browser saves a conversation as a file named after its title
-export function download(c: Conversation): void {
-	const url = URL.createObjectURL(new Blob([serialize(c)], { type: FILE_TYPE }));
+// the browser saves a file; it does so on a gesture of the user only
+export function deliver(name: string, text: string): void {
+	const url = URL.createObjectURL(new Blob([text], { type: FILE_TYPE }));
 	const a = document.createElement('a');
 	a.href = url;
-	a.download = c.title.replace(UNSAFE_NAME, '_') + FILE_EXTENSION;
+	a.download = name;
 	a.click();
 	URL.revokeObjectURL(url);
 }
 
-// a conversation file becomes a conversation of its own, opened; a file that
-// does not read imports nothing and throws where it goes wrong
-export async function upload(file: File): Promise<void> {
-	const conversation: Conversation = { id: crypto.randomUUID(), ...parse(await file.text()) };
-	app.conversations.unshift(conversation);
-	await putConversation(conversation);
-	open(conversation.id);
+// the text of a file the user picks, none when they pick none; the browser
+// opens its picker on a gesture of the user only
+export function choose(): Promise<string | null> {
+	return new Promise((resolve) => {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = FILE_EXTENSION;
+		input.onchange = () => {
+			const file = input.files?.[0];
+			if (file) file.text().then(resolve, () => resolve(null));
+			else resolve(null);
+		};
+		input.oncancel = () => resolve(null);
+		input.click();
+	});
 }
+
+// the conversations of the page as a batch reaches them; a file unpacks whole,
+// those of its conversations already here are skipped, the others written in
+// one transaction, never opened: the conversation shown stays as it is
+export const library: Library = {
+	list: () => app.conversations,
+	pack: serialize,
+	async unpack(text) {
+		const found = fresh(parse(text), app.conversations);
+		await putConversations(found.added);
+		app.conversations = [...found.added, ...app.conversations].sort(
+			(a, b) => b.updated - a.updated
+		);
+		return found;
+	}
+};
 
 // the open conversation, created on the first message
 function current(title: string): Conversation {
@@ -150,7 +175,7 @@ async function enter(
 ): Promise<void> {
 	if (text.startsWith(SLASH)) {
 		const input = text.slice(SLASH.length);
-		const result = await run(input, 'user', { conversation, secret });
+		const result = await run(input, 'user', { ...reach, conversation });
 		append(conversation, parent, {
 			role: 'cli',
 			input: redact(input),
@@ -173,7 +198,7 @@ async function enter(
 	const { signal } = controller;
 	const tools = {
 		signal,
-		cli: (lines: string) => run(lines, 'llm', { signal, conversation, grant, secret }),
+		cli: (lines: string) => run(lines, 'llm', { ...reach, signal, conversation, grant }),
 		redact,
 		grant
 	};
@@ -204,9 +229,29 @@ function secret(key: string): Promise<string | null> {
 	});
 }
 
+// whether the user saves the file offered
+function offer(name: string, text: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		app.ask = { kind: 'offer', name, text, settle: (saved) => ((app.ask = null), resolve(saved)) };
+	});
+}
+
+// the text of the file the user picks, none when they pick none
+function pick(): Promise<string | null> {
+	return new Promise((resolve) => {
+		app.ask = { kind: 'pick', settle: (text) => ((app.ask = null), resolve(text)) };
+	});
+}
+
+// what a batch of the page reaches: the conversations, and the questions it
+// may ask the user
+const reach = { conversations: library, secret, offer, pick };
+
 // the turn aborts, and a question it asks is answered no
 export function stop(): void {
 	controller?.abort();
-	if (app.ask?.kind === 'grant') app.ask.settle(REFUSE);
-	else app.ask?.settle(null);
+	const ask = app.ask;
+	if (ask?.kind === 'grant') ask.settle(REFUSE);
+	else if (ask?.kind === 'offer') ask.settle(false);
+	else ask?.settle(null);
 }

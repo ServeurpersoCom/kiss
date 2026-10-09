@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Grant, Verdict } from '../src/lib/types.js';
+import type { Conversation, Grant, Library, Verdict } from '../src/lib/types.js';
+import { append, fresh, parse, serialize } from '../src/lib/conversation.js';
+import { localTime } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 
 type Engine = typeof import('../src/engine/run.js');
@@ -278,7 +280,7 @@ describe('a tool', () => {
 describe('a title', () => {
 	it('renames the conversation of the batch with the batch, and no save keeps it', async () => {
 		const k = await page();
-		const c = { title: 'hello' };
+		const c = { id: 'c', title: 'hello' };
 		expect((await k.run('title "Bonjour le monde"', 'llm', { conversation: c })).text).toBe(
 			'- title hello\n+ title "Bonjour le monde"'
 		);
@@ -418,6 +420,88 @@ describe('the firewall', () => {
 			'% no value given for mcp key a'
 		);
 		expect((await k.run('set mcp key a', 'llm')).text).toBe('% nobody is here to give mcp key a');
+	});
+});
+
+// the conversations of a page, packed and unpacked for real, and a user who
+// saves every file offered and picks the file given
+function shelf(list: Conversation[], picked: string | null = null) {
+	const offered: { name: string; text: string }[] = [];
+	const conversations: Library = {
+		list: () => list,
+		pack: serialize,
+		async unpack(text) {
+			const found = fresh(parse(text), list);
+			list.unshift(...found.added);
+			return found;
+		}
+	};
+	return {
+		offered,
+		conversations,
+		offer: async (name: string, text: string) => (offered.push({ name, text }), true),
+		pick: async () => picked
+	};
+}
+
+// a conversation titled, holding one message
+function talk(id: string, title: string, updated: number): Conversation {
+	const c: Conversation = { id, title, updated, entries: [], leaf: null };
+	append(c, null, { role: 'user', text: title });
+	return c;
+}
+
+describe('the conversations', () => {
+	it('list newest first, the one the batch was sent in marked', async () => {
+		const k = await page();
+		const list = [talk('bbbbbbbb-2', 'Two words', 2), talk('aaaaaaaa-1', 'one', 1)];
+		const r = await k.run('show conversations', 'llm', { ...shelf(list), conversation: list[1] });
+		expect(r.text).toBe(
+			[`  bbbbbbbb ${localTime(2)} "Two words"`, `* aaaaaaaa ${localTime(1)} one`].join('\n')
+		);
+		expect((await k.run('show conversations', 'llm', shelf([]))).text).toBe(
+			'! no conversation yet'
+		);
+	});
+
+	it('export the one the batch was sent in, another by a prefix of its id, or all', async () => {
+		const k = await page();
+		const list = [talk('ab12-2', 'Two', 2), talk('ab34-1', 'One', 1)];
+		const s = shelf(list);
+		expect((await k.run('export', 'llm', { ...s, conversation: list[1] })).text).toBe(
+			'exported 1 to One.json'
+		);
+		expect((await k.run('export ab1', 'llm', s)).text).toBe('exported 1 to Two.json');
+		expect((await k.run('export all', 'llm', s)).text).toMatch(
+			/^exported 2 to kiss \d{4}-\d\d-\d\d\.json$/
+		);
+		expect(s.offered.map((o) => parse(o.text).map((c) => c.id))).toEqual([
+			['ab34-1'],
+			['ab12-2'],
+			['ab12-2', 'ab34-1']
+		]);
+		expect((await k.run('export ab', 'llm', s)).text).toBe('% ambiguous "ab": ab12-2 ab34-1');
+		expect((await k.run('export zz', 'llm', s)).text).toBe('% no conversation zz');
+		expect((await k.run('export', 'llm', s)).text).toBe('% no conversation here');
+		expect((await k.run('export all\nshow title', 'llm', s)).text).toContain('runs alone');
+		const refused = { ...s, offer: async () => false };
+		expect((await k.run('export all', 'llm', refused)).text).toBe('% the user saved no file');
+	});
+
+	it('import a file whole beside the others, those already here skipped', async () => {
+		const k = await page();
+		const here = talk('aaaaaaaa-1', 'Here', 1);
+		const file = serialize([talk('bbbbbbbb-2', 'New', 2), here]);
+		const list = [here];
+		expect((await k.run('import', 'llm', shelf(list, file))).text).toBe(
+			['+ bbbbbbbb New', '! aaaaaaaa Here is already here'].join('\n')
+		);
+		expect(list.map((c) => c.id)).toEqual(['bbbbbbbb-2', 'aaaaaaaa-1']);
+		expect((await k.run('import', 'llm', shelf(list, '{"kiss":"save"}'))).text).toBe(
+			'% file.kiss: not conversations'
+		);
+		expect(list).toHaveLength(2);
+		expect((await k.run('import', 'llm', shelf(list))).text).toBe('% the user picked no file');
 	});
 });
 

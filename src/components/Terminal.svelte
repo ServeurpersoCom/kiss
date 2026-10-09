@@ -3,7 +3,7 @@
 	import { REFUSE, VERDICTS } from '../lib/types.js';
 	import { run, suggest } from '../engine/run.js';
 	import { extend } from '../engine/complete.js';
-	import { app } from '../lib/state.svelte.js';
+	import { app, choose, deliver, library } from '../lib/state.svelte.js';
 	import { NAME } from '../lib/config.js';
 
 	interface Line {
@@ -53,6 +53,27 @@
 
 	const secret = (key: string) => ask(`${key}: `, true);
 
+	const [YES, NO] = ['yes', 'no'];
+
+	// whether the developer saves the file, a word or its start answering,
+	// asked again until one does; the file goes on the key that answers
+	async function offer(name: string, text: string): Promise<boolean> {
+		for (;;) {
+			const line = await ask(`save ${name}? ${YES} or ${NO} `, false);
+			if (line === null) return false;
+			const word = line.trim().toLowerCase();
+			if (word && YES.startsWith(word)) return (deliver(name, text), true);
+			if (word && NO.startsWith(word)) return false;
+		}
+	}
+
+	// the text of the file the developer picks, the picker opening on the key
+	// that answers
+	async function pick(): Promise<string | null> {
+		const line = await ask('Enter picks a file ', false);
+		return line === null ? null : choose();
+	}
+
 	$effect(() => () => question?.settle(null));
 
 	// the log follows every new line
@@ -74,7 +95,7 @@
 		if (!text.trim()) return;
 		past.push(text);
 		back = 0;
-		const result = await run(text, 'llm', { grant, secret });
+		const result = await run(text, 'llm', { conversations: library, grant, secret, offer, pick });
 		if (result.text) print(result.text, result.ok ? 'output' : 'error');
 	}
 
