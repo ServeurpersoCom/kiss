@@ -20,7 +20,7 @@ import { redact, run } from '../engine/run.js';
 // what the page asks the user, and how the answer settles it: a change or a
 // call the model asks for, the value of a secret key, a file to save, or a
 // file to read
-export type Asking =
+type Asking =
 	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
 	| { kind: 'secret'; key: string; settle(value: string | null): void }
 	| { kind: 'offer'; name: string; text: string; settle(saved: boolean): void }
@@ -125,7 +125,7 @@ export function choose(): Promise<string | null> {
 // the conversations of the page as a batch reaches them; a file unpacks whole,
 // those of its conversations already here are skipped, the others written in
 // one transaction, never opened: the conversation shown stays as it is
-export const library: Library = {
+const library: Library = {
 	list: () => app.conversations,
 	pack: serialize,
 	async unpack(text) {

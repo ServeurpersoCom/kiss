@@ -1,4 +1,4 @@
-import type { Assistant, Call, Message, Outcome, Round, Tool, ToolContext } from './types.js';
+import type { Assistant, Call, Message, Outcome, Tool, ToolContext } from './types.js';
 import { ALWAYS, REFUSE } from './types.js';
 import { chat, pick } from './api.js';
 import { aggregate } from './mcp.js';

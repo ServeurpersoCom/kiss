@@ -2,6 +2,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import type { Call, Round } from '../lib/types.js';
 	import Markdown from '../markdown/Markdown.svelte';
+	import { partial } from '../lib/partial.js';
 	import Icon from './Icon.svelte';
 	import { INFERENCE, MARKDOWN, OPEN, display, type Fold } from '../lib/display.svelte.js';
 
@@ -21,19 +22,6 @@
 		return (node) => {
 			node.open = open();
 		};
-	}
-
-	// the arguments of a call, in the order the model wrote them; none while
-	// they stream or when they are not a JSON object
-	function args(c: Call): [string, unknown][] {
-		try {
-			const parsed: unknown = JSON.parse(c.args);
-			return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-				? Object.entries(parsed)
-				: [];
-		} catch {
-			return [];
-		}
 	}
 
 	// an argument as it reads: a string as is, anything else as JSON
@@ -69,7 +57,7 @@
 	{/if}
 {/if}
 {#each round.calls as c, i (i)}
-	{@const all = args(c)}
+	{@const all = partial(c.args)}
 	{@const open = unfolded(display.tools, c.ok === undefined)}
 	<details
 		class="tool"

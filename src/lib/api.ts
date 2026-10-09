@@ -10,7 +10,7 @@ const NOT_FOUND = 404;
 const KEY_FIX = `${SLASH}set endpoints key <name> <key>`;
 const URL_FIX = `${SLASH}set endpoints url <name> <url>`;
 
-export interface Delta {
+interface Delta {
 	content?: string;
 	reasoning?: string;
 	calls?: { index: number; id?: string; name?: string; args?: string }[];
