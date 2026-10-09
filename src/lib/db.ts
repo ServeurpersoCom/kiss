@@ -42,19 +42,23 @@ export async function listConversations(): Promise<Conversation[]> {
 	return all.sort((a, b) => b.updated - a.updated);
 }
 
-// every conversation written in one transaction: all of them or none
-export function putConversations(conversations: readonly Conversation[]): Promise<void> {
+// writes in one transaction: all of them or none
+function write(each: (store: IDBObjectStore) => void): Promise<void> {
 	return open().then(
 		(db) =>
 			new Promise((resolve, reject) => {
 				const t = db.transaction(DB_STORE, 'readwrite');
-				for (const c of conversations) t.objectStore(DB_STORE).put(c);
+				each(t.objectStore(DB_STORE));
 				t.oncomplete = () => resolve();
 				t.onerror = t.onabort = () => reject(t.error);
 			})
 	);
 }
 
-export function deleteConversation(id: string): Promise<undefined> {
-	return tx('readwrite', (s) => s.delete(id));
+export function putConversations(conversations: readonly Conversation[]): Promise<void> {
+	return write((s) => conversations.forEach((c) => s.put(c)));
+}
+
+export function deleteConversations(ids: readonly string[]): Promise<void> {
+	return write((s) => ids.forEach((id) => s.delete(id)));
 }

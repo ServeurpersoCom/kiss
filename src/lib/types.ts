@@ -3,7 +3,7 @@
 // is where the configuration meets the page, it imports what it drives in lib/
 
 // the user types slash commands in the composer; the model calls its config
-// tool, and the developer terminal runs with exactly the same rights
+// tool
 export type Role = 'user' | 'llm';
 
 export type Value = string;
@@ -187,8 +187,8 @@ export interface Schema {
 }
 
 // what a batch acts on beyond the configuration: the conversation it was sent
-// in, none from the developer terminal, the conversations of the page, the
-// signal of the turn, and the questions it may ask the user
+// in, the conversations of the page, the signal of the turn, and the questions
+// it may ask the user
 export interface Scope {
 	// aborts the batch of a stopped model turn, and the requests it makes
 	signal?: AbortSignal;
@@ -198,6 +198,8 @@ export interface Scope {
 	grant?(request: Grant): Promise<Verdict>;
 	// asks the user for the value of a secret key, none when they give none
 	secret?(key: string): Promise<string | null>;
+	// asks the user to confirm what a command is about to do
+	confirm?(question: string): Promise<boolean>;
 	// offers the user a file to save, resolving to whether they saved it
 	offer?(name: string, text: string): Promise<boolean>;
 	// asks the user for a file, resolving to its text, none when they pick none
@@ -220,6 +222,10 @@ export interface Library {
 	// the file read whole, then those of its conversations whose id is new
 	// added, those already here skipped
 	unpack(text: string): Promise<{ added: Conversation[]; skipped: Conversation[] }>;
+	// the one conversation a prefix of its id names
+	find(prefix: string): Conversation;
+	// those conversations deleted, all of them in one write
+	remove(ids: readonly string[]): Promise<void>;
 }
 
 // what a command reaches; capabilities extend this interface by module

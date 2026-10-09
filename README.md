@@ -31,7 +31,6 @@ all of it through one tool, and so do you, after a `/`.
 - Any unambiguous prefix works, `sh run`; an ambiguous one says so, the way IOS does.
 - `show running`, `show diff`, named saves, `| include`, `| count`, tab completion.
 - A batch applies whole or not at all, and answers with the exact change, `-` then `+`.
-- The developer terminal, Ctrl+`, runs the CLI with the rights of the model.
 
 ```
 /sh run | include endpoints

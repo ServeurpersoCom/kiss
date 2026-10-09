@@ -108,6 +108,16 @@ export function serialize(conversations: readonly Conversation[]): string {
 	return JSON.stringify(file, null, INDENT) + '\n';
 }
 
+// the one conversation a prefix of its id names
+export function named(conversations: readonly Conversation[], prefix: string): Conversation {
+	const hits = conversations.filter((c) => c.id.startsWith(prefix));
+	if (hits.length > 1) {
+		throw new Error(`ambiguous conversation "${prefix}": ${hits.map((c) => c.id).join(' ')}`);
+	}
+	if (!hits.length) throw new Error(`unknown conversation "${prefix}"`);
+	return hits[0];
+}
+
 // the conversations of a file whose id is new, and those already here
 export function fresh(
 	file: readonly Conversation[],

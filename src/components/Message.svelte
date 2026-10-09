@@ -192,7 +192,6 @@
 	.command {
 		background: var(--user-bg);
 		border-radius: calc(var(--radius) * 0.6);
-		font-family: var(--mono);
 		font-size: var(--size-secondary);
 		color: var(--fg-dim);
 	}
@@ -225,7 +224,6 @@
 	.error {
 		padding: 0.4rem 0 0.4rem 0.9rem;
 		border-left: 2px solid var(--danger);
-		font-family: var(--mono);
 		font-size: var(--size-secondary);
 		color: var(--danger);
 		white-space: pre-wrap;

@@ -14,7 +14,7 @@ src/commands/    one file per command, registered by existing
 src/modules/     one file per module: its keys, rules, checks, how it applies to the page
 src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
 src/lib/         the page side: agent, api, mcp, state, conversation, db
-src/components/  thread, message, round, ask, composer, sidebar, terminal
+src/components/  thread, message, round, ask, dialog, composer, sidebar
 src/markdown/    the remark and rehype stack and its incremental renderer
 tests/           the laws, under vitest and happy-dom
 ```
@@ -36,7 +36,7 @@ checked by the schema before anything runs.
 
 ### A batch
 
-One batch runs at a time, whoever sends it: the user, the model or the developer terminal.
+One batch runs at a time, whoever sends it: the user or the model.
 
 1. Every line compiles before the first one runs: the command resolves, its rights and whether it
    runs alone are checked, its arguments parse against the schema, its filters compile.
@@ -87,9 +87,7 @@ value goes to the draft and never enters the conversation.
 
 ## The CLI
 
-The user types it after a `/`, the model sends it through its tool, and the developer terminal
-(Ctrl+`) runs it with the rights of the model, asking on its own line what the model would ask
-the user.
+The user types it after a `/`, and the model sends it through its tool.
 
 ```
 batch   = line { newline line }              a line opening with ! is a comment
@@ -104,6 +102,7 @@ command = "set" key [ value ]                a secret left out is asked
         | "title" value                      the title of this conversation
         | "export" [ "all" | id ]            alone on its line
         | "import"                           alone on its line
+        | "delete" ( "all" | id )            alone, once the user confirms it
         | "save" save | "no save" save        user only, each alone on its line
 key     = module word [ item ]               an item names one of a collection
 save    = name                               a save of the same name gives way
@@ -159,7 +158,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuse. The tools of KiSS are on.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
-  configuration: no save keeps it, no `load` moves it, the developer terminal has none.
+  configuration: no save keeps it, no `load` moves it.
+- `delete` deletes nothing before the user confirms it, whoever asks, then every conversation it
+  names in one write; `delete all` keeps the pinned ones, which go only when named.
 - The latest save is the configuration the next page load starts with, and the archive changes
   only once the browser stores it.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
@@ -215,8 +216,11 @@ A fix follows an arrow: `no endpoint yet -> /set endpoints url <name> <url>`.
 The question shows in the conversation, in a card marked by the accent: the change the model asks
 for, or the call with its real arguments, with Once, Always and Refuse, and what Always gives,
 `Always allows chat` or `Always turns echo on`; a change of privilege alone takes Once and Refuse
-only. A secret takes a masked field, an export Save or Cancel, an import Choose file or Cancel.
-One question shows at a time, as batches and calls run one at a time, and Stop answers no.
+only. A secret takes a masked field with OK and Cancel, an export Save or Cancel, an import Choose
+file or Cancel, a delete OK or Cancel; Enter and Escape answer too, never alone. One question shows
+at a time, as batches and calls run one at a time, and Stop answers no. Monospace is for what a
+machine wrote: the calls of tools and their outputs, code, and a block rendered plain; the cards,
+the commands and the errors read in the font of the page.
 
 ```
 show privilege                           ! every guarded module and how far the model goes
@@ -315,6 +319,8 @@ export                                   ! this conversation
 export 3f2a                              ! another, by a prefix of its id
 export all
 import
+delete 3f2a                              ! once the user confirms it
+delete all                               ! all but the pinned ones
 ```
 
 One file format holds one conversation or many, marked `kiss`, every branch, every id and every pin

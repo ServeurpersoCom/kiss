@@ -24,14 +24,16 @@
 	// the first way to answer takes the keyboard as the question shows
 	const focused: Attachment<HTMLElement> = (node) => node.focus();
 
+	// a secret given by OK or Enter once typed, none by Cancel or Escape
+	function give(typed: string | null) {
+		if (app.ask?.kind !== 'secret' || typed === '') return;
+		value = '';
+		app.ask.settle(typed);
+	}
+
 	function onkeydown(e: KeyboardEvent) {
-		if (app.ask?.kind !== 'secret') return;
-		if (e.key === 'Escape') app.ask.settle(null);
-		else if (e.key === 'Enter' && value) {
-			const typed = value;
-			value = '';
-			app.ask.settle(typed);
-		}
+		if (e.key === 'Escape') give(null);
+		else if (e.key === 'Enter') give(value);
 	}
 </script>
 
@@ -73,6 +75,13 @@
 				<button {@attach focused} onclick={() => open(ask.settle)}>Choose file</button>
 				<button onclick={() => ask.settle(null)}>Cancel</button>
 			</div>
+		{:else if app.ask.kind === 'confirm'}
+			{@const ask = app.ask}
+			<div class="head">{ask.question}</div>
+			<div class="answers">
+				<button {@attach focused} onclick={() => ask.settle(true)}>OK</button>
+				<button onclick={() => ask.settle(false)}>Cancel</button>
+			</div>
 		{:else}
 			<div class="head">Value of {app.ask.key}</div>
 			<input
@@ -83,19 +92,22 @@
 				autocomplete="off"
 				spellcheck="false"
 			/>
+			<div class="answers">
+				<button onclick={() => give(value)} disabled={!value}>OK</button>
+				<button onclick={() => give(null)}>Cancel</button>
+			</div>
 		{/if}
 	</div>
 {/if}
 
 <style>
-	/* a question to the user: read like the CLI, marked by the accent */
+	/* a question to the user, marked by the accent */
 	.ask {
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
 		padding: 0.4rem 0 0.4rem 0.9rem;
 		border-left: 2px solid var(--accent);
-		font-family: var(--mono);
 		font-size: var(--size-secondary);
 	}
 	.head {

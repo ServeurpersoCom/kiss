@@ -14,11 +14,7 @@ function chosen(ctx: Context, plan: Plan): readonly Conversation[] {
 		if (!here) throw new Error('no conversation here');
 		return [here];
 	}
-	const hits = all.filter((c) => c.id.startsWith(plan.prefix));
-	if (hits.length > 1)
-		throw new Error(`ambiguous conversation "${plan.prefix}": ${hits.map((c) => c.id).join(' ')}`);
-	if (!hits.length) throw new Error(`unknown conversation "${plan.prefix}"`);
-	return hits;
+	return [ctx.conversations!.find(plan.prefix)];
 }
 
 export default {

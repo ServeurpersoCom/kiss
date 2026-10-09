@@ -2,7 +2,6 @@
 	import Sidebar from './components/Sidebar.svelte';
 	import Thread from './components/Thread.svelte';
 	import Composer from './components/Composer.svelte';
-	import Terminal from './components/Terminal.svelte';
 	import Splitter from './components/Splitter.svelte';
 	import Icon from './components/Icon.svelte';
 	import { app } from './lib/state.svelte.js';
@@ -11,17 +10,7 @@
 	// the width of the sidebar the user dragged, 0 when closed, none before a
 	// drag
 	let width: number | null = $state(null);
-
-	// the developer terminal has no visible way in, only this key
-	function onkeydown(e: KeyboardEvent) {
-		if (e.ctrlKey && e.code === 'Backquote') {
-			e.preventDefault();
-			app.terminal = !app.terminal;
-		}
-	}
 </script>
-
-<svelte:window {onkeydown} />
 
 <main
 	class:drawer={app.sidebar}
@@ -43,10 +32,6 @@
 		<div class="composer"><Composer /></div>
 	</section>
 </main>
-
-{#if app.terminal}
-	<Terminal />
-{/if}
 
 <style>
 	/* the tokens of the page: three colors, every other color derived from

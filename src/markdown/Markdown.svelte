@@ -67,7 +67,6 @@
 		justify-content: space-between;
 		align-items: center;
 		padding: 0.4rem 0.6rem 0 1rem;
-		font-family: var(--mono);
 		font-size: var(--size-secondary);
 		color: var(--fg-dim);
 	}

@@ -95,7 +95,7 @@ export function start(): void {
 	for (const m of modules) m.apply?.(running);
 }
 
-// one batch at a time, whoever sends it: the user, the model or the terminal
+// one batch at a time, whoever sends it: the user or the model
 let queue: Promise<unknown> = Promise.resolve();
 
 // every line compiles before the first one runs, then runs on a copy of the

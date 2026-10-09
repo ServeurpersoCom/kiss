@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Conversation, Grant, Library, Verdict } from '../src/lib/types.js';
-import { append, fresh, parse, serialize } from '../src/lib/conversation.js';
+import { append, fresh, named, parse, serialize } from '../src/lib/conversation.js';
 import { localTime } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/lib/types.js';
 
@@ -546,9 +546,11 @@ describe('the firewall', () => {
 });
 
 // the conversations of a page, packed and unpacked for real, and a user who
-// saves every file offered and picks the file given
-function shelf(list: Conversation[], picked: string | null = null) {
+// saves every file offered, picks the file given and answers every question
+// to confirm alike, the questions kept
+function shelf(list: Conversation[], picked: string | null = null, yes = true) {
 	const offered: { name: string; text: string }[] = [];
+	const asked: string[] = [];
 	const conversations: Library = {
 		list: () => list,
 		pack: serialize,
@@ -556,13 +558,19 @@ function shelf(list: Conversation[], picked: string | null = null) {
 			const found = fresh(parse(text), list);
 			list.unshift(...found.added);
 			return found;
+		},
+		find: (prefix) => named(list, prefix),
+		async remove(ids) {
+			list.splice(0, list.length, ...list.filter((c) => !ids.includes(c.id)));
 		}
 	};
 	return {
 		offered,
+		asked,
 		conversations,
 		offer: async (name: string, text: string) => (offered.push({ name, text }), true),
-		pick: async () => picked
+		pick: async () => picked,
+		confirm: async (question: string) => (asked.push(question), yes)
 	};
 }
 
@@ -572,6 +580,32 @@ function talk(id: string, title: string, updated: number): Conversation {
 	append(c, null, { role: 'user', text: title });
 	return c;
 }
+
+describe('a delete', () => {
+	it('goes once the user confirms it, all at once, the pinned kept unless named', async () => {
+		const k = await page();
+		const list = () => [
+			talk('ab12-1', 'one', 3),
+			{ ...talk('ab34-2', 'kept', 2), pinned: true as const },
+			talk('cd56-3', 'three', 1)
+		];
+		const all = shelf(list());
+		expect((await k.run('delete all', 'llm', all)).text).toBe('- ab12-1 one\n- cd56-3 three');
+		expect(all.asked).toEqual(['Delete 2 conversations?']);
+		expect(all.conversations.list().map((c) => c.id)).toEqual(['ab34-2']);
+		const pinned = shelf(list());
+		expect((await k.run('delete ab3', 'user', pinned)).text).toBe('- ab34-2 kept');
+		expect(pinned.asked).toEqual(['Delete kept?']);
+		const kept = shelf(list(), null, false);
+		expect((await k.run('delete all', 'llm', kept)).text).toBe('% the user deleted nothing');
+		expect(kept.conversations.list()).toHaveLength(3);
+		expect((await k.run('delete ab', 'user', shelf(list()))).text).toBe(
+			'% ambiguous conversation "ab": ab12-1 ab34-2'
+		);
+		expect((await k.run('delete all', 'user', shelf([]))).text).toBe('% no conversation to delete');
+		expect((await k.run('delete all', 'user')).text).toBe('% nobody is here to confirm the delete');
+	});
+});
 
 describe('the conversations', () => {
 	it('list newest first, the one the batch was sent in marked', async () => {

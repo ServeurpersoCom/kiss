@@ -70,7 +70,6 @@
 	<textarea
 		bind:this={field}
 		bind:value={text}
-		class:cli={text.startsWith(SLASH)}
 		oninput={resize}
 		{onkeydown}
 		placeholder="Message, or {SLASH} for the CLI"
@@ -92,7 +91,6 @@
 		max-height: 7.5rem;
 		overflow-y: auto;
 		margin: 0 auto 0.5rem;
-		font-family: var(--mono);
 		font-size: var(--size-secondary);
 	}
 	.hints button {
@@ -137,9 +135,6 @@
 		line-height: 1.5;
 		max-height: 40vh;
 		padding: 0.35rem 0;
-	}
-	textarea.cli {
-		font-family: var(--mono);
 	}
 	button {
 		flex: none;

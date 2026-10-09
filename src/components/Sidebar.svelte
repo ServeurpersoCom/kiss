@@ -54,7 +54,7 @@
 <Dialog
 	bind:open={() => doomed !== null, (open) => !open && (doomed = null)}
 	title="Delete this conversation?"
-	onconfirm={() => remove(doomed!.id)}
+	onconfirm={() => remove([doomed!.id])}
 />
 
 <style>

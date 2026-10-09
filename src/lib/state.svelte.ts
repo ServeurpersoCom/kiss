@@ -1,9 +1,19 @@
 import type { Assistant, Conversation, Grant, Library, Verdict } from './types.js';
 import { REFUSE } from './types.js';
 import { FILE_EXTENSION, SLASH, TITLE_LENGTH } from './config.js';
-import { deleteConversation, listConversations, putConversations } from './db.js';
+import { deleteConversations, listConversations, putConversations } from './db.js';
 import { turn } from './agent.js';
-import { append, drop, fresh, latest, parse, path, serialize, stored } from './conversation.js';
+import {
+	append,
+	drop,
+	fresh,
+	latest,
+	named,
+	parse,
+	path,
+	serialize,
+	stored
+} from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
@@ -14,7 +24,8 @@ export type Asking =
 	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
 	| { kind: 'secret'; key: string; settle(value: string | null): void }
 	| { kind: 'offer'; name: string; text: string; settle(saved: boolean): void }
-	| { kind: 'pick'; settle(text: string | null): void };
+	| { kind: 'pick'; settle(text: string | null): void }
+	| { kind: 'confirm'; question: string; settle(yes: boolean): void };
 
 export const app = $state({
 	conversations: [] as Conversation[],
@@ -23,7 +34,6 @@ export const app = $state({
 	reply: null as Assistant | null,
 	// one question at a time, as batches and calls run one at a time
 	ask: null as Asking | null,
-	terminal: false,
 	// the conversation list, open over the thread on a narrow screen
 	sidebar: false
 });
@@ -75,11 +85,11 @@ export async function pin(id: string): Promise<void> {
 }
 
 // out of the list first: no save reaches the database after the delete
-export async function remove(id: string): Promise<void> {
-	if (id === answering) stop();
-	app.conversations = app.conversations.filter((c) => c.id !== id);
-	if (app.current?.id === id) newChat();
-	await deleteConversation(id);
+export async function remove(ids: readonly string[]): Promise<void> {
+	if (ids.includes(answering)) stop();
+	app.conversations = app.conversations.filter((c) => !ids.includes(c.id));
+	if (app.current && ids.includes(app.current.id)) newChat();
+	await deleteConversations(ids);
 }
 
 // the type of a conversation file
@@ -125,7 +135,9 @@ export const library: Library = {
 			(a, b) => b.updated - a.updated
 		);
 		return found;
-	}
+	},
+	find: (prefix) => named(app.conversations, prefix),
+	remove
 };
 
 // the open conversation, created on the first message
@@ -182,7 +194,7 @@ export async function dismiss(id: string): Promise<void> {
 	if (!app.current || entry?.role !== 'cli' || app.reply) return;
 	drop(app.current, id);
 	if (app.current.entries.length) await save(app.current);
-	else await remove(app.current.id);
+	else await remove([app.current.id]);
 }
 
 // another version shows, as it was last written in
@@ -230,8 +242,8 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	app.reply = reply;
 	controller = new AbortController();
 	answering = conversation.id;
-	// the model calls the CLI with the rights of the developer terminal, its
-	// batches aborted with the turn and titling the conversation it answers in
+	// the model calls the CLI with its own rights, its batches aborted with the
+	// turn and titling the conversation it answers in
 	const { signal } = controller;
 	const tools = {
 		signal,
@@ -280,15 +292,22 @@ function pick(): Promise<string | null> {
 	});
 }
 
+// whether the user confirms what a command is about to do
+function confirm(question: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		app.ask = { kind: 'confirm', question, settle: (yes) => ((app.ask = null), resolve(yes)) };
+	});
+}
+
 // what a batch of the page reaches: the conversations, and the questions it
 // may ask the user
-const reach = { conversations: library, secret, offer, pick };
+const reach = { conversations: library, secret, offer, pick, confirm };
 
 // the turn aborts, and a question it asks is answered no
 export function stop(): void {
 	controller?.abort();
 	const ask = app.ask;
 	if (ask?.kind === 'grant') ask.settle(REFUSE);
-	else if (ask?.kind === 'offer') ask.settle(false);
+	else if (ask?.kind === 'offer' || ask?.kind === 'confirm') ask.settle(false);
 	else ask?.settle(null);
 }
