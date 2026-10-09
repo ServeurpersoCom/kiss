@@ -77,19 +77,13 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 	c.ok = result.ok;
 }
 
-// one assistant turn: rounds streamed into reply as they arrive, until a round
-// calls nothing; reply belongs to the page state, so the round and its calls
-// are read back from it once added; after a stop no call runs, and the reply
-// keeps what settled before it
-export async function turn(
-	messages: readonly Message[],
-	reply: Assistant,
-	ctx: ToolContext,
-	signal: AbortSignal
-): Promise<void> {
+// what one round sends and may call, read from the running configuration as
+// it stands: the model, its parameters, the system prompt, and the own tools
+// of KiSS then those of every MCP server, the same from round to round while
+// the configuration and the servers stay
+async function setup(messages: readonly Message[], signal: AbortSignal) {
 	const { endpoint, model } = await pick(settings, signal);
 	const system = String(settings.get('chat system') ?? '');
-	const rounds = Number(settings.get('tools rounds'));
 	// the parameters set for this model, numbers as numbers
 	const parameters = Object.fromEntries(
 		Object.entries(models.keys).flatMap(([name, def]) => {
@@ -97,27 +91,40 @@ export async function turn(
 			return value === undefined ? [] : [[name, def.kind === 'number' ? Number(value) : value]];
 		})
 	);
-	// the own tools of KiSS, then those of every MCP server, the same from turn to
-	// turn while the servers stay
 	const { tools, problems } = await aggregate(settings, own);
-	const specs = tools.map((t) => ({
-		type: 'function',
-		function: { name: t.name, description: t.description, parameters: t.parameters }
-	}));
+	const body = {
+		...parameters,
+		model,
+		messages: [
+			...(system ? [{ role: 'system', content: system }] : []),
+			...(problems.length
+				? [{ role: 'system', content: [prompts.problems, ...problems].join('\n') }]
+				: []),
+			...history(messages)
+		],
+		tools: tools.map((t) => ({
+			type: 'function',
+			function: { name: t.name, description: t.description, parameters: t.parameters }
+		}))
+	};
+	return { endpoint, body, tools };
+}
+
+// one assistant turn: rounds streamed into reply as they arrive, until a round
+// calls nothing; every round reads the configuration as it stands, so what a
+// call changes holds from the next round on; reply belongs to the page state,
+// so the round and its calls are read back from it once added; after a stop no
+// call runs, and the reply keeps what settled before it
+export async function turn(
+	messages: readonly Message[],
+	reply: Assistant,
+	ctx: ToolContext,
+	signal: AbortSignal
+): Promise<void> {
+	let r = 0;
 	try {
-		for (let r = 0; r < rounds; r++) {
-			const body = {
-				...parameters,
-				model,
-				messages: [
-					...(system ? [{ role: 'system', content: system }] : []),
-					...(problems.length
-						? [{ role: 'system', content: [prompts.problems, ...problems].join('\n') }]
-						: []),
-					...history([...messages, reply])
-				],
-				tools: specs
-			};
+		for (; r < Number(settings.get('tools rounds')); r++) {
+			const { endpoint, body, tools } = await setup([...messages, reply], signal);
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
 			const round = reply.rounds[reply.rounds.length - 1];
 			// the calls of the round by the index the stream gives them
@@ -142,7 +149,7 @@ export async function turn(
 				await call(tools, ctx, c);
 			}
 		}
-		reply.error = `stopped after ${rounds} tool rounds`;
+		reply.error = `stopped after ${r} tool rounds`;
 	} finally {
 		reply.rounds = settled(reply.rounds);
 	}

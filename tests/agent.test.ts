@@ -3,6 +3,7 @@ import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib
 import { ONCE } from '../src/lib/types.js';
 
 interface Body {
+	tools: { function: { name: string } }[];
 	messages: { role: string; content?: string; reasoning_content?: string; tool_calls?: object[] }[];
 }
 
@@ -94,6 +95,33 @@ describe('a turn', () => {
 		await p.go();
 		expect(p.bodies[0]).toMatchObject({ temperature: 0.5, reasoning_effort: 'high' });
 		expect(p.bodies[0]).not.toHaveProperty('top_k');
+	});
+
+	it('reads the configuration as it stands every round', async () => {
+		const p = await page([
+			stream([calls(['a', 'set models temperature m/x 0.3\nset tools rounds 2'])]),
+			stream([calls(['b', 'set tools use config off'])]),
+			stream([calls(['c', 'show version'])])
+		]);
+		await p.engine.run('set tools rounds 3', 'user');
+		await p.go();
+		expect(p.bodies[0]).not.toHaveProperty('temperature');
+		expect(p.bodies[1]).toMatchObject({ temperature: 0.3 });
+		expect(p.bodies).toHaveLength(2);
+		expect(p.reply.error).toBe('stopped after 2 tool rounds');
+	});
+
+	it('hides a tool turned off from the next round, and refuses its calls', async () => {
+		const p = await page([
+			stream([calls(['a', 'set tools use config off'])]),
+			stream([calls(['b', 'show version'])]),
+			stream([{ content: 'done' }])
+		]);
+		await p.go();
+		const names = (i: number) => p.bodies[i].tools.map((t) => t.function.name);
+		expect(names(0)).toContain('config');
+		expect(names(1)).not.toContain('config');
+		expect(p.reply.rounds[1].calls[0]).toMatchObject({ result: 'unknown tool config', ok: false });
 	});
 
 	it('stops after the rounds set', async () => {

@@ -108,8 +108,18 @@
 			></textarea>
 		{/if}
 	{:else if message.role === 'cli'}
-		<pre class="command" class:failed={!message.ok}><span>{SLASH}{message.input}</span
-			>{#if message.output}<br />{message.output}{/if}</pre>
+		<!-- a command reads like a block of code: a head naming the CLI, closed
+		     from its corner, then the line typed and its output -->
+		<div class="command">
+			<div class="head">
+				cli
+				<button onclick={() => dismiss(message.id)} disabled={!!app.reply} aria-label="Close">
+					<Icon name="close" />
+				</button>
+			</div>
+			<pre class:failed={!message.ok}><span>{SLASH}{message.input}</span>{#if message.output}<br
+					/>{message.output}{/if}</pre>
+		</div>
 	{:else}
 		<div class="turn">
 			{#each message.rounds as round, i (i)}
@@ -140,9 +150,6 @@
 				{@render when()}
 			{:else}
 				{@render clip()}
-				<button onclick={() => dismiss(message.id)} disabled={!!app.reply} aria-label="Close">
-					<Icon name="close" />
-				</button>
 				{@render when()}
 			{/if}
 		</div>
@@ -181,20 +188,29 @@
 		line-height: 1.5;
 	}
 	.command {
-		font-family: var(--mono);
-		font-size: var(--size-secondary);
-		margin: 0;
-		padding: 0.5rem 0.8rem;
 		background: var(--code-bg);
 		border-radius: calc(var(--radius) * 0.6);
+		font-family: var(--mono);
+		font-size: var(--size-secondary);
+		color: var(--fg-dim);
+	}
+	.command .head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.4rem 0.6rem 0 1rem;
+	}
+	.command pre {
+		margin: 0;
+		padding: 0.5rem 1rem 0.8rem;
+		font: inherit;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
-		color: var(--fg-dim);
 	}
 	.command span {
 		color: var(--accent-text);
 	}
-	.command.failed {
+	.command pre.failed {
 		color: var(--danger);
 	}
 	.turn {
@@ -243,7 +259,8 @@
 		color: var(--fg-dim);
 		font-variant-numeric: tabular-nums;
 	}
-	.actions button {
+	.actions button,
+	.command button {
 		display: flex;
 		padding: 0.2rem;
 		color: var(--fg-dim);
@@ -251,13 +268,15 @@
 		border: none;
 		cursor: pointer;
 	}
-	.actions button:hover {
+	.actions button:hover,
+	.command button:hover {
 		color: var(--fg);
 	}
 	.actions button.copied {
 		color: var(--ok);
 	}
-	.actions button:disabled {
+	.actions button:disabled,
+	.command button:disabled {
 		opacity: 0.35;
 		cursor: default;
 	}

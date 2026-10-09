@@ -169,6 +169,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The sheets of `css` apply by name over every style of the page, whatever their selectors.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>`
   alone when the source fails: `show models` by endpoint, `show tools` by who serves it.
+- Every round of a turn reads the configuration as it stands: what a call changes holds from the
+  next round on.
 - A turn keeps, on the page and in the browser, what settled: what streamed and the calls that
   ended before a stop, never one that did not.
 - A message copied gives its source: the text typed, the answer without its thinking or calls,
@@ -210,10 +212,11 @@ set mcp key sandbox                      ! no value: a masked field asks for it
 A turn picks the endpoint and the model `chat model` names, `endpoint/model`; left empty, it takes
 the one model of the one endpoint, any other choice being the user's, since a router loads whatever
 model it is asked for. The tools the model sees are those of KiSS, then those of every MCP server,
-those turned off left out; a server that fails, or a name served twice, becomes a system note to
-the model. Each round streams its thinking, its text and its calls; a round that calls nothing ends
-the turn, at most `tools rounds` of them. A tool in `consent` asks before its call, and a turn
-stopped keeps what settled.
+those turned off left out; a server that fails, or a name served twice, becomes a system note to the
+model. Each round streams its thinking, its text and its calls; a round that calls nothing ends the
+turn, at most `tools rounds` of them. Every round reads the configuration as it stands, so a tool a
+call turns on is offered from the next round on, as is a model, a system prompt or a parameter a
+call changes. A tool in `consent` asks before its call, and a turn stopped keeps what settled.
 
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 
@@ -264,7 +267,8 @@ it.
 Under every message, shown while it is hovered, always where nothing hovers, how long ago it
 entered, its moment in full under the pointer, in the language of the browser, and its copy button
 on the outer edge: under a message of the user, retry, edit and copy; under an answer, copy and
-retry; under a command, copy and close, the versions and the time on the inner side. Retry, from a
+retry; under a command, copy, the versions and the time on the inner side. A command reads like a
+block of code, a head naming the CLI, `cli`, with its close button in the corner. Retry, from a
 message of the user or from an answer to it, enters a new answer beside those it had, from the very
 prefix they were given. The model never reads a command, so closing one clears the thread and leaves
 its history whole. What stops a turn shows under it in a card marked by the danger color, like a
