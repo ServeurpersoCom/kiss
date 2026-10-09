@@ -53,9 +53,9 @@
 	   them, then the shape, the fonts, the sizes and the widths; a sheet sets
 	   the three for a whole theme, or any derived one alone */
 	:global(:root) {
-		--bg: #262624;
-		--fg: #faf9f5;
-		--accent: oklch(0.6 0.16 250);
+		--bg: oklch(0.17 0.005 260);
+		--fg: #f2f1ef;
+		--accent: oklch(0.68 0.18 250);
 		/* shades of the background: darker for the sidebar and what the user
 		   writes, lighter for what holds a field */
 		--sidebar: oklch(from var(--bg) calc(l - 0.032) c h);
@@ -73,13 +73,14 @@
 		   on the accent */
 		--accent-text: color-mix(in oklab, var(--accent) 75%, var(--fg));
 		--on-accent: oklch(from var(--accent) clamp(0, (0.72 - l) * 1000, 1) 0 0);
-		/* colors with a meaning: a hue at a lightness that follows the text, so
-		   it reads on a dark background as on a light one */
-		--ok: oklch(from var(--fg) calc(l * 0.37 + 0.45) 0.17 130);
-		--danger: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.18 25);
+		/* colors with a meaning: a hue as vivid as the screen shows, at one
+		   lightness that follows the text, so it reads on a dark background as
+		   on a light one */
+		--ok: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 145);
+		--danger: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 25);
 		--code-string: var(--ok);
-		--code-number: oklch(from var(--fg) calc(l * 0.37 + 0.45) 0.13 60);
-		--code-title: oklch(from var(--fg) calc(l * 0.37 + 0.43) 0.13 255);
+		--code-number: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 60);
+		--code-title: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 255);
 		--radius: 12px;
 		--font: system-ui, sans-serif;
 		--mono: ui-monospace, monospace;

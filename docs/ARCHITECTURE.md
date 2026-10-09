@@ -316,15 +316,16 @@ every block but the last renders once and is kept, and the page renders at most 
 
 The page style is plain CSS, its tokens on `:root`, one theme and no other: three colors, `--bg`,
 `--fg` and `--accent`, every other color derived from them, shades of the background, shares of the
-text, the accent drawn toward the text, and hues whose lightness follows the text, so a sheet
-setting the three sets a whole theme, dark or light alike, and a sheet setting a derived color sets
-it alone; `--radius`, `--font`, `--mono`, `--size-primary` for the chat and `--size-secondary` for
-everything around it, the only two sizes of text but `--size-title`, the title of the page,
-`--size-icon`, every icon, the primary size, `--width`, `--bubble-width`, `--sidebar-width` within
-`--sidebar-min` and `--sidebar-max`. `show style` lists it, one rule per line; named sheets restyle
-anything over it. The sidebar follows its edge for the whole drag, within those bounds, it closes
-once the pointer goes below half the least width, and opens again once it reaches that width, from
-the left of the page too; the browser keeps both, the width and whether it is closed.
+text, the accent drawn toward the text, and hues as vivid as the screen shows, at one lightness that
+follows the text, so a sheet setting the three sets a whole theme, dark or light alike, and a sheet
+setting a derived color sets it alone; `--radius`, `--font`, `--mono`, `--size-primary` for the chat
+and `--size-secondary` for everything around it, the only two sizes of text but `--size-title`, the
+title of the page, `--size-icon`, every icon, the primary size, `--width`, `--bubble-width`,
+`--sidebar-width` within `--sidebar-min` and `--sidebar-max`. `show style` lists it, one rule per
+line; named sheets restyle anything over it. The sidebar follows its edge for the whole drag, within
+those bounds, it closes once the pointer goes below half the least width, and opens again once it
+reaches that width, from the left of the page too; the browser keeps both, the width and whether it
+is closed.
 
 ```
 show style | include :root              ! the tokens and their defaults
