@@ -152,7 +152,7 @@
 		color: var(--danger);
 		font-size: var(--font-small);
 	}
-	/* the icons under a message, as the copy button of a code block */
+	/* the icons under a message, at the size of the chat as those of the sidebar */
 	.actions {
 		display: flex;
 		gap: 0.2rem;
@@ -160,7 +160,7 @@
 	.actions button {
 		display: flex;
 		padding: 0.2rem;
-		font-size: var(--font-small);
+		font-size: var(--font-large);
 		color: var(--fg-dim);
 		background: none;
 		border: none;
