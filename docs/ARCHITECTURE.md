@@ -294,16 +294,17 @@ it.
 
 Under every message, shown while it is hovered, always where nothing hovers, how long ago it
 entered, its moment in full under the pointer, in the language of the browser, and its copy button
-on the outer edge: under a message of the user, retry, edit and copy; under an answer, copy and
-retry; under a command, copy, the versions and the time on the inner side. A command reads like a
-block of code, a head naming the CLI, `cli`, with its close button in the corner. Retry, from a
-message of the user or from an answer to it, enters a new answer beside those it had, from the very
-prefix they were given. The model never reads a command, so closing one clears the thread and leaves
-its history whole. What stops a turn shows under it in a card marked by the danger color, like a
-question to the user. An edit enters the new text as a version beside the message it edits, and the
-model answers it from the very prefix the edited one had; the branch edited stays whole. Arrows
-under a message with versions go from one to the next, each coming back as it was last written in.
-The configuration belongs to no branch: a command of one branch stays applied when another shows.
+on the outer edge, the versions and the time on the inner side: under a message of the user, retry,
+edit and copy; under an answer, copy and retry; under a command, copy and the time, no versions. A
+command reads like a block of code, a head naming the CLI, `cli`, with its close button in the
+corner. Retry, from a message of the user or from an answer to it, enters a new answer beside those
+it had, from the very prefix they were given. The model never reads a command, so closing one clears
+the thread and leaves its history whole. What stops a turn shows under it in a card marked by the
+danger color, like a question to the user. An edit enters the new text as a version beside the
+message it edits, and the model answers it from the very prefix the edited one had; the branch
+edited stays whole. Arrows under a message with versions go from one to the next, each coming back
+as it was last written in. The configuration belongs to no branch: a command of one branch stays
+applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations`
 lists them by id, the one the batch was sent in marked. `export` offers a file of this
@@ -326,14 +327,14 @@ delete all                               ! all but the pinned ones
 
 One file format holds one conversation or many, marked `kiss`, every branch, every id and every pin
 in it, read whole or refused with where it goes wrong: every conversation once, every entry id once,
-every parent before its child, a leaf that ends a branch. The sidebar lists New chat first, lit while no conversation is open and staying at the top while the
-list scrolls, then the conversations, the last answered first: the pinned ones under Pinned, the
-others under the day of their last answer, today, yesterday, then their date, in the language of the
-browser. Beside each, a pin pins it or puts it back under its day, and a cross deletes it once the
-user confirms, Enter or OK, Escape or a click elsewhere cancelling. Every item runs from the left
-edge of the page to the scrollbar, and a title too long fades out rather than losing letters to an
-ellipsis. A conversation dates from its last answer: a command, a version shown, a pin or a title
-dates nothing.
+every parent before its child, a leaf that ends a branch. The sidebar lists New chat first, lit
+while no conversation is open and staying at the top while the list scrolls, then the conversations,
+the last answered first: the pinned ones under Pinned, the others under the day of their last
+answer, today, yesterday, then their date, in the language of the browser. Beside each, a pin pins
+it or puts it back under its day, and a cross deletes it once the user confirms, Enter or OK, Escape
+or a click elsewhere cancelling. Every item runs from the left edge of the page to the scrollbar,
+and a title too long fades out rather than losing letters to an ellipsis. A conversation dates from
+its last answer: a command, a version shown, a pin or a title dates nothing.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.
