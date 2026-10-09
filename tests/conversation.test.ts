@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, Entry } from '../src/lib/types.js';
-import { ago, stamp } from '../src/lib/config.js';
+import { ago, dayName, stamp } from '../src/lib/config.js';
 import {
 	append,
 	drop,
@@ -111,6 +111,19 @@ describe('a message', () => {
 		expect(back(400 * 86400)).toBe('last year');
 		expect(ago(now - 6 * 3600 * 1000, now, 'fr')).toBe('il y a 6 heures');
 		expect(stamp(now, 'fr')).toBe('9 oct. 2026, 14:37');
+		const early = new Date(2026, 9, 9, 1, 0).getTime();
+		expect(ago(early - 23 * 3600 * 1000, early, 'en')).toBe('23 hours ago');
+		expect(ago(early - 26 * 3600 * 1000, early, 'en')).toBe('2 days ago');
+	});
+
+	it('falls under the name of its day: today, yesterday, else its date', () => {
+		const now = new Date(2026, 9, 9, 1, 0).getTime();
+		const at = (...date: [number, number, number, number]) => new Date(...date).getTime();
+		expect(dayName(at(2026, 9, 9, 0), now, 'fr')).toBe('aujourd’hui');
+		expect(dayName(at(2026, 9, 8, 23), now, 'fr')).toBe('hier');
+		expect(dayName(at(2026, 9, 7, 12), now, 'fr')).toBe('7 oct.');
+		expect(dayName(at(2025, 11, 31, 12), now, 'fr')).toBe('31 déc. 2025');
+		expect(dayName(at(2026, 9, 8, 2), now, 'en')).toBe('yesterday');
 	});
 });
 

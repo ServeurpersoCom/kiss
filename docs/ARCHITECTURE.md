@@ -181,7 +181,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - An answer again enters beside the answers of its message, from the very prefix, every branch
   kept.
 - A message enters with the moment it entered, and reads how long ago that was in the language
-  of the browser.
+  of the browser, past a day in days of the calendar, so yesterday is the day the sidebar names so.
 - A command closed leaves the tree, what followed it following the entry before it, the versions
   and the history the model reads as they were.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
@@ -313,10 +313,11 @@ export all
 import
 ```
 
-One file format holds one conversation or many, marked `kiss`, every branch and every id in it,
-read whole or refused with where it goes wrong: every conversation once, every entry id once,
-every parent before its child, a leaf that ends a branch. The sidebar lists the conversations and
-deletes one, nothing more.
+One file format holds one conversation or many, marked `kiss`, every branch and every id in it, read
+whole or refused with where it goes wrong: every conversation once, every entry id once, every
+parent before its child, a leaf that ends a branch. The sidebar lists the conversations, the last
+changed first, under the day they last changed: today, yesterday, then their date, in the language
+of the browser; it deletes one, nothing more.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.

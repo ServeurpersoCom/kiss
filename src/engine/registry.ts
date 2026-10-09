@@ -93,10 +93,19 @@ export function resolve(words: readonly string[]): { command: Command<unknown>; 
 	if (w.ambiguous) {
 		throw new Error(`ambiguous word "${w.ambiguous.word}": ${w.ambiguous.names.join(' ')}`);
 	}
-	if (w.command) return { command: w.command, args: words.slice(w.depth) };
 	const names = [...new Set(w.pool.map((c) => c.path[w.consumed]).filter((n) => n))];
 	const word = words[w.consumed];
 	const head = words.slice(0, w.consumed).join(' ');
+	// after a command naming a module, a word that is neither a module nor a
+	// longer command is a typo of either
+	if (w.command?.module && w.depth === w.consumed && names.length && word !== undefined) {
+		const typed = word.toLowerCase();
+		if (!moduleNames.some((n) => n.startsWith(typed))) {
+			const all = [...names, ...moduleNames];
+			throw new Error(`unknown word "${word}" after ${head}${didYouMean(word, all)}`);
+		}
+	}
+	if (w.command) return { command: w.command, args: words.slice(w.depth) };
 	if (word === undefined) throw new Incomplete();
 	const what = w.consumed ? `word "${word}" after ${head}` : `command "${word}"`;
 	throw new Error(`unknown ${what}${didYouMean(word, names)}`);

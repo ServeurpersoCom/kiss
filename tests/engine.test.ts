@@ -278,6 +278,22 @@ describe('the display', () => {
 	});
 });
 
+describe('a typo', () => {
+	it('gets the word it misses, a letter off or two letters swapped', async () => {
+		const k = await page();
+		const error = async (line: string) => (await k.run(line, 'user')).text;
+		expect(await error('sow running')).toBe('% unknown command "sow", did you mean show');
+		expect(await error('set chat modle x')).toBe(
+			'% unknown key "chat modle", did you mean chat model'
+		);
+		expect(await error('set chta model x')).toBe('% unknown key "chta", did you mean chat');
+		expect(await error('show runnign')).toBe(
+			'% unknown word "runnign" after show, did you mean running'
+		);
+		expect(await error('set chat zzzzz x')).toBe('% unknown key "chat zzzzz"');
+	});
+});
+
 describe('a collection', () => {
 	it('is named in the plural, its singular naming it too', async () => {
 		const k = await page();

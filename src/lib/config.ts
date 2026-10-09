@@ -45,23 +45,50 @@ export function localTime(date: string | number): string {
 	return `${day} ${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
-// how long ago a moment was, in the language of the browser: now, then the
-// largest unit it counts whole, yesterday and last week included
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-	['year', 31536000],
-	['month', 2592000],
-	['week', 604800],
-	['day', 86400],
+// the day of a moment on the calendar of the browser, as a count of days
+const DAY_MS = 86400000;
+export function day(time: number): number {
+	const d = new Date(time);
+	return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS;
+}
+
+// how long ago a moment was, in the language of the browser: now, minutes and
+// hours as they pass, then days on the calendar, so yesterday is the day
+// before today, then weeks, months and years of them
+const PASSING: [Intl.RelativeTimeFormatUnit, number][] = [
 	['hour', 3600],
 	['minute', 60]
 ];
+const CALENDAR: [Intl.RelativeTimeFormatUnit, number][] = [
+	['year', 365],
+	['month', 30],
+	['week', 7],
+	['day', 1]
+];
 export function ago(time: number, now: number, locale?: string): string {
-	const seconds = (now - time) / 1000;
 	const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-	for (const [unit, size] of UNITS) {
-		if (seconds >= size) return format.format(-Math.floor(seconds / size), unit);
+	if (now - time >= DAY_MS) {
+		const days = day(now) - day(time);
+		const [unit, size] = CALENDAR.find(([, size]) => days >= size)!;
+		return format.format(-Math.floor(days / size), unit);
 	}
-	return format.format(0, 'second');
+	const seconds = (now - time) / 1000;
+	const passed = PASSING.find(([, size]) => seconds >= size);
+	return passed
+		? format.format(-Math.floor(seconds / passed[1]), passed[0])
+		: format.format(0, 'second');
+}
+
+// the name of the day of a moment, seen from now: today, yesterday, else its
+// date, with its year when that is not this year
+export function dayName(time: number, now: number, locale?: string): string {
+	const days = day(now) - day(time);
+	if (days < 2) {
+		return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(-days, 'day');
+	}
+	const thisYear = new Date(time).getFullYear() === new Date(now).getFullYear();
+	const year = thisYear ? undefined : 'numeric';
+	return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year }).format(time);
 }
 
 // a moment in full, to the minute, in the language of the browser

@@ -1,7 +1,20 @@
 <script lang="ts">
 	import { app, newChat, open, remove } from '../lib/state.svelte.js';
-	import { NAME } from '../lib/config.js';
+	import type { Conversation } from '../lib/types.js';
+	import { NAME, dayName } from '../lib/config.js';
+	import { clock } from '../lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
+
+	// the conversations, the last changed first, by the day they last changed
+	const days = $derived.by(() => {
+		const out: { name: string; conversations: Conversation[] }[] = [];
+		for (const c of [...app.conversations].sort((a, b) => b.updated - a.updated)) {
+			const name = dayName(c.updated, clock.now);
+			if (out.at(-1)?.name === name) out.at(-1)!.conversations.push(c);
+			else out.push({ name, conversations: [c] });
+		}
+		return out;
+	});
 </script>
 
 <aside>
@@ -10,13 +23,16 @@
 		<button class="new" onclick={newChat}>New chat</button>
 	</header>
 	<nav>
-		{#each app.conversations as c (c.id)}
-			<div class="item" class:active={app.current?.id === c.id}>
-				<button class="title" onclick={() => open(c.id)} title={c.title}>{c.title}</button>
-				<button class="act" onclick={() => remove(c.id)} aria-label="Delete">
-					<Icon name="close" />
-				</button>
-			</div>
+		{#each days as d (d.name)}
+			<div class="day">{d.name}</div>
+			{#each d.conversations as c (c.id)}
+				<div class="item" class:active={app.current?.id === c.id}>
+					<button class="title" onclick={() => open(c.id)} title={c.title}>{c.title}</button>
+					<button class="act" onclick={() => remove(c.id)} aria-label="Delete">
+						<Icon name="close" />
+					</button>
+				</div>
+			{/each}
 		{/each}
 	</nav>
 </aside>
@@ -63,6 +79,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+	}
+	/* the name of a day over its conversations, its first letter capital */
+	.day {
+		padding: 0.9rem 0.6rem 0.3rem;
+		font-size: var(--size-secondary);
+		color: var(--fg-dim);
+	}
+	.day:first-child {
+		padding-top: 0;
+	}
+	.day::first-letter {
+		text-transform: uppercase;
 	}
 	.item {
 		display: flex;

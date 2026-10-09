@@ -149,7 +149,9 @@ export class KeySchema implements Schema {
 		const keyWord = this.key(module, words[1]);
 		if (!keyWord) {
 			const keys = Object.keys(this.modules.get(module) ?? {});
-			throw new Error(`unknown key "${module} ${words[1]}"` + didYouMean(words[1], keys));
+			throw new Error(
+				`unknown key "${module} ${words[1]}"` + didYouMean(words[1], keys, `${module} `)
+			);
 		}
 		const key = `${module} ${keyWord}`;
 		const def = this.find(key)!;
