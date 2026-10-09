@@ -315,11 +315,13 @@ import
 
 One file format holds one conversation or many, marked `kiss`, every branch, every id and every pin
 in it, read whole or refused with where it goes wrong: every conversation once, every entry id once,
-every parent before its child, a leaf that ends a branch. The sidebar lists the conversations, the
-last changed first: the pinned ones under Pinned, the others under the day they last changed, today,
-yesterday, then their date, in the language of the browser. Beside each, a pin pins it or puts it
-back under its day, its moment of change kept, and a cross deletes it once the user confirms, Enter
-or OK, Escape or a click elsewhere cancelling.
+every parent before its child, a leaf that ends a branch. The sidebar lists New chat first, lit while no conversation is open and staying at the top while the
+list scrolls, then the conversations, the last changed first: the pinned ones under Pinned, the
+others under the day they last changed, today, yesterday, then their date, in the language of the
+browser. Beside each, a pin pins it or puts it back under its day, its moment of change kept, and a
+cross deletes it once the user confirms, Enter or OK, Escape or a click elsewhere cancelling. Every
+item runs from the left edge of the page to the scrollbar, and a title too long fades out rather
+than losing letters to an ellipsis.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.

@@ -27,11 +27,13 @@
 </script>
 
 <aside>
-	<header>
-		<span class="logo">{NAME}</span>
-		<button class="new" onclick={newChat}>New chat</button>
-	</header>
+	<header>{NAME}</header>
 	<nav>
+		<div class="top">
+			<div class="item" class:active={!app.current}>
+				<button class="title new" onclick={newChat}><Icon name="plus" />New chat</button>
+			</div>
+		</div>
 		{#each groups as g (g.name)}
 			<div class="group">{g.name}</div>
 			{#each g.conversations as c (c.id)}
@@ -65,21 +67,14 @@
 		background: var(--sidebar);
 		border-right: 1px solid var(--line);
 		padding-top: 0.75rem;
-		gap: 0.75rem;
+		gap: 0.5rem;
 	}
-	/* the head and the list keep the gutter inside them, so the scrollbar of
-	   the list runs against the border, down to the bottom of the page */
+	/* every text of the sidebar starts at one inset from its left edge */
 	header {
 		padding: 0 0.75rem;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-	.logo {
 		font-weight: 700;
 		font-size: var(--size-title);
 		color: var(--accent-text);
-		padding-left: 0.4rem;
 	}
 	button {
 		font: inherit;
@@ -88,24 +83,27 @@
 		border: none;
 		cursor: pointer;
 	}
-	.new {
-		background: var(--accent);
-		color: var(--on-accent);
-		padding: 0.4rem 0.9rem;
-		border-radius: 999px;
-		font-size: var(--size-secondary);
-	}
+	/* the list runs from the left edge of the page to its own scrollbar, against
+	   the border, and down to the bottom of the page */
 	nav {
-		padding: 0 0.75rem 0.75rem;
+		padding-bottom: 0.75rem;
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 	}
+	/* New chat stays at the top of the list while it scrolls, over what passes
+	   under it */
+	.top {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		background: var(--sidebar);
+	}
 	/* the name of a group over its conversations, pinned or of a day, its
 	   first letter capital */
 	.group {
-		padding: 0.9rem 0.6rem 0.3rem;
+		padding: 0.9rem 0.75rem 0.3rem;
 		font-size: var(--size-secondary);
 		color: var(--fg-dim);
 	}
@@ -123,15 +121,21 @@
 	.item.active {
 		background: var(--hover-strong);
 	}
+	/* a title too long fades out instead of losing letters to an ellipsis */
 	.title {
 		flex: 1;
 		min-width: 0;
 		text-align: left;
-		padding: 0.5rem 0.6rem;
+		padding: 0.5rem 0 0.5rem 0.75rem;
 		white-space: nowrap;
 		overflow: hidden;
-		text-overflow: ellipsis;
+		mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
 		font-size: var(--size-secondary);
+	}
+	.new {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
 	/* the pin and the cross show while the item is hovered, the title taking
 	   the whole width otherwise; always where nothing hovers */
@@ -143,7 +147,7 @@
 		color: var(--fg-dim);
 	}
 	.act:last-child {
-		padding-right: 0.6rem;
+		padding-right: 0.75rem;
 	}
 	.item:hover .act {
 		display: flex;

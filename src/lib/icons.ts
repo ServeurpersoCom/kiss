@@ -11,7 +11,8 @@ export const PATHS = {
 	check: 'M5 12l5 5 9-10',
 	edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
 	retry: 'M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5',
-	pin: 'M12 16v6M8 3h8M9 3v7l-3 3v3h12v-3l-3-3V3'
+	pin: 'M12 16v6M8 3h8M9 3v7l-3 3v3h12v-3l-3-3V3',
+	plus: 'M12 5v14M5 12h14'
 };
 
 export type IconName = keyof typeof PATHS;
