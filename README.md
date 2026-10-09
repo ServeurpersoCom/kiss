@@ -63,7 +63,8 @@ The model configures the page, so KiSS guards what it can reach.
   asking: `/export all`.
 - **MCP over Streamable HTTP** with the official SDK, 2025 and 2026 protocols alike.
 - **Per model parameters**, sent only when set, under their OpenAI names.
-- **Rendering that holds up**: Markdown, LaTeX, code highlighted in 192 languages.
+- **Rendering that holds up**: Markdown, LaTeX, code highlighted in 192 languages, for the
+  thinking as for the reply, or either plain in monospace.
 - **Restyle anything** with named CSS sheets, just by asking.
 
 ## Quick start

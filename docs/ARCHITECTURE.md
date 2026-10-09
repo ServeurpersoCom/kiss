@@ -119,7 +119,7 @@ every one of them.
 | ----------- | ------------------------------------------------------------- |
 | `chat`      | `model`, `system`, both guarded                               |
 | `css`       | `sheet <name>`                                                |
-| `display`   | `thinking`, `tools`                                           |
+| `display`   | `thinking`, `tools`, `render <thinking or reply>`             |
 | `endpoints` | `url <name>` guarded, `key <name>` secret, `timeout <name>`   |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `timeout <name>`   |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`          |
@@ -151,6 +151,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   command spells the change: `deny` refuses, `ask` asks the user, `allow` lets it; closing never
   asks, and a change of `privilege` asks every time.
 - A question offers always only when it gives something, and says what.
+- The thinking and the reply render as Markdown unless set `plain`; `render` takes these two
+  blocks only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
   from the page itself, checked in Chromium.
 - A tool in `consent` asks the user before each call: once, always, which turns it on, or
@@ -285,11 +287,13 @@ under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.
 
 ## Rendering
 
-A reply renders with remark and rehype: GitHub flavored Markdown, LaTeX through KaTeX, code
-highlighted in every language lowlight knows, under a head naming it with a copy button. Raw HTML
-shows as the text it is, a link to anything but a web page or a mail address keeps its text only,
-and a wide table scrolls in its own box. While a reply streams, every block but the last renders
-once and is kept, and the page renders at most once per frame.
+The thinking and the reply render as Markdown, each plain on demand, `set display render reply
+plain`: a plain block reads as written, in monospace. The thinking keeps its small size and the font
+of the page, its headings at its size. Markdown renders with remark and rehype: GitHub flavored
+Markdown, LaTeX through KaTeX, code highlighted in every language lowlight knows, under a head
+naming it with a copy button. Raw HTML shows as the text it is, a link to anything but a web page or
+a mail address keeps its text only, and a wide table scrolls in its own box. While a reply streams,
+every block but the last renders once and is kept, and the page renders at most once per frame.
 
 ## Style
 

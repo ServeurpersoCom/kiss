@@ -3,7 +3,7 @@
 	import type { Call, Round } from '../lib/types.js';
 	import Markdown from '../markdown/Markdown.svelte';
 	import Icon from './Icon.svelte';
-	import { INFERENCE, OPEN, display, type Fold } from '../lib/display.svelte.js';
+	import { INFERENCE, MARKDOWN, OPEN, display, type Fold } from '../lib/display.svelte.js';
 
 	// live: the round the model writes now
 	let { round, live = false }: { round: Round; live?: boolean } = $props();
@@ -52,11 +52,21 @@
 {#if round.reasoning}
 	<details {@attach fold(() => thinking)}>
 		<summary><Icon name="chevron" /><span class="head">Thinking</span></summary>
-		<div class="body reasoning">{round.reasoning}</div>
+		<div class="body">
+			{#if display.render.thinking === MARKDOWN}
+				<Markdown text={round.reasoning} />
+			{:else}
+				<div class="plain">{round.reasoning}</div>
+			{/if}
+		</div>
 	</details>
 {/if}
 {#if round.text}
-	<Markdown text={round.text} />
+	{#if display.render.reply === MARKDOWN}
+		<Markdown text={round.text} />
+	{:else}
+		<div class="plain">{round.text}</div>
+	{/if}
 {/if}
 {#each round.calls as c, i (i)}
 	{@const all = args(c)}
@@ -136,8 +146,19 @@
 		border-left: 2px solid var(--line);
 		margin-top: 0.3rem;
 	}
-	.reasoning {
+	/* a block of text rendered plain reads as written, in monospace */
+	.plain {
 		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-family: var(--mono);
+	}
+	/* the thinking rendered as markdown reads in the font of the page, small,
+	   its headings at the size of the block */
+	.body > :global(.markdown) {
+		font-family: var(--font);
+	}
+	.body > :global(.markdown :is(h1, h2, h3, h4, h5, h6)) {
+		font-size: inherit;
 	}
 	pre {
 		margin: 0 0 0.4rem;

@@ -248,6 +248,28 @@ describe('the display', () => {
 		);
 		expect((await k.run('set display tools open', 'user')).ok).toBe(true);
 	});
+
+	it('renders the thinking and the reply as markdown by default, each plain on demand', async () => {
+		const k = await page();
+		expect(k.settings.get('display render', 'thinking')).toBe('markdown');
+		expect(k.settings.get('display render', 'reply')).toBe('markdown');
+		expect((await k.run('show display render', 'user')).text).toBe(
+			[
+				'! blocks',
+				'set display render thinking markdown',
+				'set display render reply markdown'
+			].join('\n')
+		);
+		expect((await k.run('set display render tools plain', 'user')).text).toContain(
+			'tools is not a block of text'
+		);
+		expect((await k.run('set display render reply rich', 'user')).text).toContain(
+			'not one of markdown plain'
+		);
+		expect((await k.run('set display render reply plain', 'user')).ok).toBe(true);
+		const { display } = await import('../src/lib/display.svelte.js');
+		expect(display.render).toEqual({ thinking: 'markdown', reply: 'plain' });
+	});
 });
 
 describe('a collection', () => {
@@ -653,7 +675,7 @@ describe('show', () => {
 		expect((await k.run('show endpoints a', 'user')).text).toBe(
 			'! endpoints key a is set\nset endpoints timeout a 10\nset endpoints url a http://a/v1'
 		);
-		expect((await k.run('show display zz', 'user')).text).toContain('unknown key');
+		expect((await k.run('show chat zz', 'user')).text).toContain('unknown key');
 	});
 });
 
