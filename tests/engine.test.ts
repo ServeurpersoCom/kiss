@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Conversation, Grant, Library, Verdict } from '../src/lib/types.js';
 import { append, fresh, parse, serialize } from '../src/lib/conversation.js';
 import { localTime } from '../src/lib/config.js';
-import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
+import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/lib/types.js';
 
 type Engine = typeof import('../src/engine/run.js');
 
@@ -326,7 +326,11 @@ describe('the firewall', () => {
 		const once = user(ONCE);
 		expect((await k.run('set chat system theirs', 'llm', once)).ok).toBe(true);
 		expect(once.asked).toEqual([
-			{ kind: 'change', lines: ['- set chat system mine', '+ set chat system theirs'] }
+			{
+				kind: 'change',
+				lines: ['- set chat system mine', '+ set chat system theirs'],
+				allows: ['chat']
+			}
 		]);
 		const refuse = user(REFUSE);
 		expect((await k.run('reset', 'llm', refuse)).text).toBe('% the user refused the change');
@@ -351,7 +355,7 @@ describe('the firewall', () => {
 		expect((await k.run('set tools use t consent', 'llm', refuse)).ok).toBe(false);
 	});
 
-	it('goes as far as the privilege of the module, which only the user sets', async () => {
+	it('goes as far as the privilege of the module, a privilege changing on a yes every time', async () => {
 		const k = await page();
 		const once = user(ONCE);
 		await k.run('set privilege level chat deny', 'user');
@@ -361,22 +365,50 @@ describe('the firewall', () => {
 		await k.run('set privilege level chat allow', 'user');
 		expect((await k.run('set chat system x', 'llm', once)).ok).toBe(true);
 		expect(once.asked).toEqual([]);
-		expect((await k.run('set privilege level chat ask', 'llm', once)).text).toBe(
-			"% privilege is the user's"
+		const refuse = user(REFUSE);
+		expect((await k.run('set privilege level chat ask', 'llm', refuse)).text).toBe(
+			'% the user refused the change'
 		);
-		expect((await k.run('reset', 'llm', once)).text).toBe("% privilege is the user's");
+		expect((await k.run('reset', 'llm', refuse)).text).toBe('% the user refused the change');
+		expect(refuse.asked).toEqual([
+			{
+				kind: 'change',
+				lines: ['- set privilege level chat allow', '+ set privilege level chat ask'],
+				allows: []
+			},
+			{
+				kind: 'change',
+				lines: ['- set privilege level chat allow', '+ set privilege level chat ask'],
+				allows: []
+			}
+		]);
+		expect((await k.run('set privilege level chat ask', 'llm', user(ALWAYS))).ok).toBe(true);
+		expect(k.settings.get('privilege level', 'chat')).toBe('ask');
+		expect(k.settings.names('privilege')).toEqual(['chat']);
+		expect((await k.run('set privilege level privilege allow', 'user')).text).toContain(
+			'privilege takes no privilege'
+		);
 		expect((await k.run('set privilege level css allow', 'user')).text).toContain(
-			'css guards no key'
+			'css takes no privilege'
 		);
 		expect((await k.run('show privilege', 'user')).text).toBe(
 			[
 				'! modules',
-				'set privilege level chat allow',
+				'set privilege level chat ask',
 				'set privilege level endpoints ask',
 				'set privilege level mcp ask',
 				'set privilege level tools ask'
 			].join('\n')
 		);
+	});
+
+	it('offers always only when it grants something, and says what', () => {
+		const call: Grant = { kind: 'call', tool: 'echo', args: '{}' };
+		const change: Grant = { kind: 'change', lines: [], allows: ['chat', 'mcp'] };
+		const privilege: Grant = { kind: 'change', lines: [], allows: [] };
+		expect([always(call), answers(call)]).toEqual(['turns echo on', [ONCE, ALWAYS, REFUSE]]);
+		expect([always(change), answers(change)]).toEqual(['allows chat, mcp', [ONCE, ALWAYS, REFUSE]]);
+		expect([always(privilege), answers(privilege)]).toEqual([null, [ONCE, REFUSE]]);
 	});
 
 	it('takes always as the allow privilege of the modules asked', async () => {

@@ -63,9 +63,8 @@ The model changes the page itself, so the engine guards the effect of its batche
 words. Between the rules and the commit, the resolved change of a batch of the model is read key by
 key:
 
-- a key of a module of the user's, `privilege`, stops the batch;
 - a key declared `change` is guarded on any change: the url of an endpoint or an MCP server,
-  `chat model`, `chat system`;
+  `chat model`, `chat system`, and `privilege level` itself;
 - a key declared `opening` is guarded on a change toward a more open value of its enum only:
   `tools use` goes `off`, `consent`, `on`, so closing never asks.
 
@@ -73,6 +72,15 @@ A guarded change goes as far as `privilege level <module>`: `deny` stops the bat
 lines to the user, `allow` lets it. Since `set`, `no`, `reset` and `load` all end as a change of
 resolved values, they are guarded alike. The answer takes once, always or refuse; always gives the
 modules asked the `allow` privilege, in the same batch.
+
+No privilege rules `privilege`: the registry refuses `privilege level privilege`, so a change of a
+privilege by the model stays at the `ask` of its default, every time, and always gives it nothing.
+The question says what always gives, and offers no always when it gives nothing.
+
+The page loads its images, fonts, media and styles from itself only, a Content-Security-Policy in
+`index.html` saying so; requests go anywhere, to the endpoints and the MCP servers the
+configuration names. So neither an image in a reply nor a `url()` in a `css` sheet ever carries
+anything out of the page.
 
 A `set` line that leaves out the value of a secret asks the user for it in a masked field; the
 value goes to the draft and never enters the conversation.
@@ -115,7 +123,7 @@ every one of them.
 | `endpoints` | `url <name>` guarded, `key <name>` secret, `timeout <name>`   |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `timeout <name>`   |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`          |
-| `privilege` | `level <module>`, the user's alone                            |
+| `privilege` | `level <module>` guarded, every change asking                 |
 | `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>` |
 
 ### Laws
@@ -141,7 +149,10 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   or the site chose, never to one the model chose.
 - The model changes a guarded key only as far as the privilege of its module goes, whatever
   command spells the change: `deny` refuses, `ask` asks the user, `allow` lets it; closing never
-  asks, and `privilege` is the user's alone.
+  asks, and a change of `privilege` asks every time.
+- A question offers always only when it gives something, and says what.
+- No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
+  from the page itself, checked in Chromium.
 - A tool in `consent` asks the user before each call: once, always, which turns it on, or
   refuse. The tools of KiSS are on.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation.
@@ -173,9 +184,10 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 ## Consent
 
 The question shows in the conversation, in a card marked by the accent: the change the model asks
-for, or the call with its real arguments, with three buttons, Once, Always and Refuse; or the masked
-field of a secret. One question shows at a time, as batches and calls run one at a time, and Stop
-answers no.
+for, or the call with its real arguments, with Once, Always and Refuse, and what Always gives,
+`Always allows chat` or `Always turns echo on`; a change of privilege alone takes Once and Refuse
+only. A secret takes a masked field, an export Save or Cancel, an import Choose file or Cancel.
+One question shows at a time, as batches and calls run one at a time, and Stop answers no.
 
 ```
 show privilege                           ! every guarded module and how far the model goes

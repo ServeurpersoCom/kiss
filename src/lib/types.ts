@@ -27,10 +27,23 @@ export const VERDICTS = ['once', 'always', 'refuse'] as const;
 export type Verdict = (typeof VERDICTS)[number];
 export const [ONCE, ALWAYS, REFUSE] = VERDICTS;
 
-// what the model asks the user to let it do: the lines of a change, or a call
-// of a tool with its arguments
+// what an answer of always does to a request, none when it grants nothing,
+// and the answers the request takes
+export function always(request: Grant): string | null {
+	if (request.kind === 'call') return `turns ${request.tool} on`;
+	return request.allows.length ? `allows ${request.allows.join(', ')}` : null;
+}
+
+export function answers(request: Grant): readonly Verdict[] {
+	return always(request) ? VERDICTS : VERDICTS.filter((v) => v !== ALWAYS);
+}
+
+// what the model asks the user to let it do: the lines of a change with the
+// modules an answer of always allows, none for a change of privilege alone, or
+// a call of a tool with its arguments
 export type Grant =
-	{ kind: 'change'; lines: string[] } | { kind: 'call'; tool: string; args: string };
+	| { kind: 'change'; lines: string[]; allows: string[] }
+	| { kind: 'call'; tool: string; args: string };
 
 export interface Key {
 	kind: Kind;
@@ -54,8 +67,6 @@ export interface Key {
 export interface Module {
 	name: string;
 	keys: Record<string, Key>;
-	// only the user changes its keys, whatever command spells the change
-	user?: true;
 	// rule across keys, checked on every change, returns a reason when broken
 	validate?(config: ConfigReader, modules: readonly Module[]): string | null;
 	// live verification run on every save, resolves to what to warn of, never

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
 	import type { Verdict } from '../lib/types.js';
-	import { VERDICTS } from '../lib/types.js';
+	import { always, answers } from '../lib/types.js';
 	import { app, choose, deliver } from '../lib/state.svelte.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };
@@ -39,6 +39,7 @@
 	<div class="ask">
 		{#if app.ask.kind === 'grant'}
 			{@const ask = app.ask}
+			{@const grants = always(ask.request)}
 			{#if ask.request.kind === 'call'}
 				<div class="head">Allow this call of {ask.request.tool}?</div>
 				<pre>{ask.request.args}</pre>
@@ -46,8 +47,11 @@
 				<div class="head">Allow this change?</div>
 				<pre>{ask.request.lines.join('\n')}</pre>
 			{/if}
+			{#if grants}
+				<div class="note">Always {grants}</div>
+			{/if}
 			<div class="answers">
-				{#each VERDICTS as verdict, i (verdict)}
+				{#each answers(ask.request) as verdict, i (verdict)}
 					<button {@attach i === 0 && focused} onclick={() => ask.settle(verdict)}>
 						{LABELS[verdict]}
 					</button>
@@ -96,6 +100,9 @@
 	}
 	.head {
 		color: var(--accent-text);
+	}
+	.note {
+		color: var(--fg-dim);
 	}
 	pre {
 		margin: 0;

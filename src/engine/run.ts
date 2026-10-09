@@ -197,10 +197,11 @@ function opens(def: Key, from: Value | undefined, to: Value | undefined): boolea
 	return values.indexOf(to ?? '') > values.indexOf(from ?? '');
 }
 
-// what the model may change: no key of a module of the user's, and a guarded
-// key only as far as the privilege of its module goes, the user asked when it
-// says ask, an answer of always giving those modules allow; returns why the
-// batch stops, if it does
+// what the model may change: a guarded key only as far as the privilege of its
+// module goes, the user asked when it says ask, an answer of always giving
+// those modules allow; privilege, which no privilege rules, stays at the ask of
+// its default, and always gives it nothing; returns why the batch stops, if it
+// does
 async function guard(draft: Values, scope: Scope): Promise<string | null> {
 	const [before, after] = resolved(draft);
 	const asked = new Set<string>();
@@ -210,7 +211,6 @@ async function guard(draft: Values, scope: Scope): Promise<string | null> {
 		if (before[k] === after[k]) continue;
 		const [key] = schema.unstore(k);
 		const module = key.split(' ')[0];
-		if (modules.find((m) => m.name === module)?.user) return `${module} is the user's`;
 		const def = schema.find(key);
 		if (!def?.guard || (def.guard === 'opening' && !opens(def, before[k], after[k]))) continue;
 		const level = running.get(`${PRIVILEGE} level`, module);
@@ -222,10 +222,11 @@ async function guard(draft: Values, scope: Scope): Promise<string | null> {
 	}
 	if (!asked.size) return null;
 	if (!scope.grant) return 'nobody is here to agree to the change';
-	const verdict = await scope.grant({ kind: 'change', lines: schema.diff(from, to) });
+	const allows = [...asked].filter((m) => m !== PRIVILEGE);
+	const verdict = await scope.grant({ kind: 'change', lines: schema.diff(from, to), allows });
 	scope.signal?.throwIfAborted();
 	if (verdict === REFUSE) return 'the user refused the change';
-	if (verdict === ALWAYS) for (const m of asked) draft.set(`${PRIVILEGE} level`, ALLOW, m);
+	if (verdict === ALWAYS) for (const m of allows) draft.set(`${PRIVILEGE} level`, ALLOW, m);
 	return null;
 }
 

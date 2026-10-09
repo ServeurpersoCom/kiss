@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Grant, Verdict } from '../lib/types.js';
-	import { REFUSE, VERDICTS } from '../lib/types.js';
+	import { REFUSE, always, answers } from '../lib/types.js';
 	import { run, suggest } from '../engine/run.js';
 	import { extend } from '../engine/complete.js';
 	import { app, choose, deliver, library } from '../lib/state.svelte.js';
@@ -42,11 +42,14 @@
 			request.kind === 'call' ? `${request.tool} ${request.args}` : request.lines.join('\n'),
 			'output'
 		);
+		const grants = always(request);
+		if (grants) print(`always ${grants}`, 'output');
+		const verdicts = answers(request);
 		for (;;) {
-			const line = await ask(`${VERDICTS.join(', ')}? `, false);
+			const line = await ask(`${verdicts.join(', ')}? `, false);
 			if (line === null) return REFUSE;
 			const word = line.trim().toLowerCase();
-			const verdict = word && VERDICTS.find((v) => v.startsWith(word));
+			const verdict = word && verdicts.find((v) => v.startsWith(word));
 			if (verdict) return verdict;
 		}
 	}

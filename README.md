@@ -46,7 +46,10 @@ The model configures the page, so KiSS guards what it can reach.
 
 - **The firewall reads the effect, not the command.** `set`, `no`, `reset` or `load`: whatever
   spells a change, the resolved diff decides.
-- **Privilege per module**, `deny`, `ask` or `allow`, and only you set it.
+- **Privilege per module**, `deny`, `ask` or `allow`; the model changes it only on your yes,
+  every time.
+- **Nothing leaks through the page.** No image in a reply and no style ever loads from another
+  host, so nothing rides out on them.
 - **Every MCP tool starts in consent.** Each call shows its real arguments: once, always, or
   refuse.
 - **Secrets never pass through the model.** It leaves the value out; a masked field asks you.
