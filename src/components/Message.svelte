@@ -131,8 +131,8 @@
 		</div>
 	{/if}
 	{#if !live && draft === null}
-		<!-- copy holds the outer edge: last under a message of the user, on the
-		     right, first under the others; the versions and the time sit on the
+		<!-- copy holds the outer edge: last under what the user writes, on the
+		     right, first under an answer; the versions and the time sit on the
 		     inner side -->
 		<div class="actions">
 			{#if message.role === 'user'}
@@ -149,8 +149,8 @@
 				{@render switcher()}
 				{@render when()}
 			{:else}
-				{@render clip()}
 				{@render when()}
+				{@render clip()}
 			{/if}
 		</div>
 	{/if}
@@ -162,8 +162,10 @@
 		flex-direction: column;
 		gap: 0.3rem;
 	}
-	/* the user writes on the right, in a bubble */
-	.user {
+	/* what the user writes and the commands they type stand on the right, on
+	   the background of the user */
+	.user,
+	.cli {
 		align-self: flex-end;
 		align-items: flex-end;
 		max-width: var(--bubble-width);
@@ -171,7 +173,7 @@
 	.bubble {
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
-		background: var(--bubble);
+		background: var(--user-bg);
 		padding: 0.6rem 1rem;
 		border-radius: var(--radius);
 	}
@@ -188,7 +190,7 @@
 		line-height: 1.5;
 	}
 	.command {
-		background: var(--code-bg);
+		background: var(--user-bg);
 		border-radius: calc(var(--radius) * 0.6);
 		font-family: var(--mono);
 		font-size: var(--size-secondary);

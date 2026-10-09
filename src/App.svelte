@@ -49,30 +49,37 @@
 {/if}
 
 <style>
-	/* the tokens of the page: plain neutral grays around the accent, each color
-	   given for light then dark, then the shape, the fonts and the widths */
+	/* the tokens of the page: three colors, every other color derived from
+	   them, then the shape, the fonts, the sizes and the widths; a sheet sets
+	   the three for a whole theme, or any derived one alone */
 	:global(:root) {
-		color-scheme: light dark;
+		--bg: #262624;
+		--fg: #faf9f5;
 		--accent: oklch(0.6 0.16 250);
-		--accent-text: light-dark(var(--accent), color-mix(in oklab, var(--accent) 75%, white));
-		/* black or white, whichever reads on the accent */
+		/* shades of the background: darker for the sidebar and what the user
+		   writes, lighter for what holds a field */
+		--sidebar: oklch(from var(--bg) calc(l - 0.032) c h);
+		--user-bg: oklch(from var(--bg) calc(l - 0.077) c h);
+		--surface: oklch(from var(--bg) calc(l + 0.04) c h);
+		/* shares of the text over the background */
+		--fg-dim: color-mix(in oklab, var(--fg) 58%, var(--bg));
+		--line: color-mix(in oklab, var(--fg) 13%, transparent);
+		--hover: color-mix(in oklab, var(--fg) 5%, transparent);
+		--hover-strong: color-mix(in oklab, var(--fg) 9%, transparent);
+		--code-bg: color-mix(in oklab, var(--fg) 6%, transparent);
+		/* black, the lighter the background the fainter */
+		--shadow: oklch(from var(--bg) 0 0 0 / calc(0.3 - l * 0.25));
+		/* the accent drawn toward the text, and black or white, whichever reads
+		   on the accent */
+		--accent-text: color-mix(in oklab, var(--accent) 75%, var(--fg));
 		--on-accent: oklch(from var(--accent) clamp(0, (0.72 - l) * 1000, 1) 0 0);
-		--base: light-dark(#faf9f5, #262624);
-		--sidebar: light-dark(#f5f4ed, #1f1e1d);
-		--surface: light-dark(#ffffff, #30302e);
-		--bubble: light-dark(#f0eee6, #141413);
-		--fg: light-dark(#141413, #faf9f5);
-		--fg-dim: light-dark(#73726c, #9c9a92);
-		--line: light-dark(rgb(31 30 29 / 0.15), rgb(250 249 245 / 0.12));
-		--hover: light-dark(rgb(31 30 29 / 0.05), rgb(250 249 245 / 0.05));
-		--hover-strong: light-dark(rgb(31 30 29 / 0.09), rgb(250 249 245 / 0.09));
-		--shadow: light-dark(rgb(31 30 29 / 0.06), rgb(0 0 0 / 0.25));
-		--code-bg: light-dark(rgb(31 30 29 / 0.05), rgb(250 249 245 / 0.06));
-		--code-string: light-dark(#4d7c0f, #a3e635);
-		--code-number: light-dark(#b45309, #fdba74);
-		--code-title: light-dark(#1d4ed8, #93c5fd);
-		--ok: light-dark(#4d7c0f, #a3e635);
-		--danger: light-dark(#b91c1c, #f87171);
+		/* colors with a meaning: a hue at a lightness that follows the text, so
+		   it reads on a dark background as on a light one */
+		--ok: oklch(from var(--fg) calc(l * 0.37 + 0.45) 0.17 130);
+		--danger: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.18 25);
+		--code-string: var(--ok);
+		--code-number: oklch(from var(--fg) calc(l * 0.37 + 0.45) 0.13 60);
+		--code-title: oklch(from var(--fg) calc(l * 0.37 + 0.43) 0.13 255);
 		--radius: 12px;
 		--font: system-ui, sans-serif;
 		--mono: ui-monospace, monospace;
@@ -103,7 +110,11 @@
 		font-family: var(--font);
 		font-size: var(--size-primary);
 		color: var(--fg);
-		background: var(--base);
+		background: var(--bg);
+		scrollbar-color: var(--line) transparent;
+	}
+	:global(::placeholder) {
+		color: var(--fg-dim);
 	}
 	/* the sidebar, its edge, the thread; the width a drag sets stays within the
 	   bounds of the style */

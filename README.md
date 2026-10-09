@@ -3,7 +3,7 @@
 **The chat UI with no settings panel. You talk; the model sets up the page.**
 
 Point KiSS at any OpenAI compatible endpoint and just say what you want: use the Qwen on my box,
-plug in my MCP sandbox, go dark with a purple accent. The model types the configuration itself, in
+plug in my MCP sandbox, go light with a purple accent. The model types the configuration itself, in
 a real CLI modeled on Cisco IOS, and anything that widens its reach waits for your yes.
 
 One HTML file. No backend, no account, no settings page. Ever.
@@ -11,11 +11,11 @@ One HTML file. No backend, no account, no settings page. Ever.
 ## You talk, it configures itself
 
 ```
-you     use the qwen on http://pod:8080/v1 and go dark
+you     use the qwen on http://pod:8080/v1 and go light
 
 KiSS    set endpoints url pod http://pod:8080/v1
         set chat model pod/qwen3:8b
-        set css sheet dark ':root { color-scheme: dark }'
+        set css sheet theme ':root { --bg: #faf9f5; --fg: #141413 }'
 
         Allow this change?
         + set chat model pod/qwen3:8b

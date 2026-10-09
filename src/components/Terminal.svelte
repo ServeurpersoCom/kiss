@@ -155,8 +155,8 @@
 		height: 45vh;
 		display: flex;
 		flex-direction: column;
-		background: #15141a;
-		color: #fbfbfe;
+		background: var(--user-bg);
+		color: var(--fg);
 		border-radius: var(--radius);
 		box-shadow: 0 12px 40px var(--shadow);
 		font-family: var(--mono);
@@ -176,10 +176,10 @@
 		font-family: inherit;
 	}
 	.input {
-		color: #a8a8b3;
+		color: var(--fg-dim);
 	}
 	.error {
-		color: #ff848b;
+		color: var(--danger);
 	}
 	label {
 		display: flex;
