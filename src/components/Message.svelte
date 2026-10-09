@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Message } from '../lib/types.js';
 	import Round from './Round.svelte';
+	import { SLASH } from '../lib/config.js';
 
 	// live: the turn the model writes now
 	let { message, live = false }: { message: Message; live?: boolean } = $props();
@@ -9,8 +10,8 @@
 {#if message.role === 'user'}
 	<div class="user">{message.text}</div>
 {:else if message.role === 'cli'}
-	<pre class="cli" class:failed={!message.ok}><span>/{message.input}</span>{#if message.output}<br
-			/>{message.output}{/if}</pre>
+	<pre class="cli" class:failed={!message.ok}><span>{SLASH}{message.input}</span
+		>{#if message.output}<br />{message.output}{/if}</pre>
 {:else}
 	<div class="turn">
 		{#each message.rounds as round, i (i)}

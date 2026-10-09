@@ -1,4 +1,5 @@
 import type { Command } from '../lib/types.js';
+import { comment } from '../lib/config.js';
 
 const two = (n: number) => String(n).padStart(2, '0');
 
@@ -15,7 +16,7 @@ export default {
 	// oldest first, the latest save last: the one the next page load starts with
 	run(ctx) {
 		const saves = ctx.archive.list();
-		if (!saves.length) return '! nothing saved yet';
+		if (!saves.length) return comment('nothing saved yet');
 		return saves.map((s) => `${s.name} ${local(s.date)}`).join('\n');
 	}
 } satisfies Command;

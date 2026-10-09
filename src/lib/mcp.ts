@@ -1,8 +1,9 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { ConfigReader, Image, Outcome, Tool } from './types.js';
-import { MCP_CONNECT_TIMEOUT_MS, NAME } from './config.js';
+import { MCP_CONNECT_TIMEOUT_MS, NAME, comment } from './config.js';
 import { bearer, remotes, type Remote } from './remote.js';
+import { OFF } from './tools.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
 // server, kept while its url and key stay, with the tool list it served once
@@ -18,7 +19,7 @@ interface Connection {
 const connections = new Map<string, Connection>();
 
 // what the server answered, or did not
-export interface Served {
+interface Served {
 	server: string;
 	tools?: Tool[];
 	error?: string;
@@ -57,8 +58,8 @@ function outcome(result: CallToolResult): Outcome {
 		if (block.type === 'text') lines.push(block.text);
 		else if (block.type === 'image') {
 			images.push({ mime: block.mimeType, data: block.data });
-			lines.push(`! image ${block.mimeType}, ${bytes(block.data)} bytes`);
-		} else lines.push(`! ${block.type} content`);
+			lines.push(comment(`image ${block.mimeType}, ${bytes(block.data)} bytes`));
+		} else lines.push(comment(`${block.type} content`));
 	}
 	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
 }
@@ -119,7 +120,7 @@ export async function aggregate(
 	config: ConfigReader,
 	own: readonly Tool[]
 ): Promise<{ tools: Tool[]; problems: string[] }> {
-	const on = (t: Tool) => config.get('tools use', t.name) !== 'off';
+	const on = (t: Tool) => config.get('tools use', t.name) !== OFF;
 	const owner = new Map(own.filter(on).map((t) => [t.name, NAME]));
 	const tools = own.filter(on);
 	const problems: string[] = [];

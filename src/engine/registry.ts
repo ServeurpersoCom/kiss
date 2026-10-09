@@ -42,7 +42,7 @@ function audit(): string[] {
 const problems = audit();
 if (problems.length) throw new Error(['bad plugins', ...problems].join('\n'));
 
-export interface Walk {
+interface Walk {
 	// the deepest command whose whole path the words spell
 	command?: Command<unknown>;
 	// words consumed by that command's path

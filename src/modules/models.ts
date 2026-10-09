@@ -1,6 +1,7 @@
 import type { Module } from '../lib/types.js';
 import { listModels } from '../lib/api.js';
 import { remotes } from '../lib/remote.js';
+import { MODEL_SEPARATOR } from '../lib/config.js';
 
 // every setting of a model, the model named as the item endpoint/model as chat
 // model takes it: the parameters of an OpenAI compatible request under their
@@ -24,7 +25,10 @@ export default {
 		return Promise.all(
 			remotes(config, 'endpoints').map((e) =>
 				listModels(e, signal).then(
-					(ids) => ({ group: `endpoints ${e.name}`, names: ids.map((id) => `${e.name}/${id}`) }),
+					(ids) => ({
+						group: `endpoints ${e.name}`,
+						names: ids.map((id) => e.name + MODEL_SEPARATOR + id)
+					}),
 					(err: Error) => ({ group: `endpoints ${e.name}`, names: [], error: err.message })
 				)
 			)

@@ -3,14 +3,14 @@
 	import type { Call, Round } from '../lib/types.js';
 	import Markdown from '../markdown/Markdown.svelte';
 	import Icon from './Icon.svelte';
-	import { display } from '../lib/display.svelte.js';
+	import { INFERENCE, OPEN, display, type Fold } from '../lib/display.svelte.js';
 
 	// live: the round the model writes now
 	let { round, live = false }: { round: Round; live?: boolean } = $props();
 
 	// open, or under inference open while the model writes it only
-	function unfolded(mode: string, writing: boolean): boolean {
-		return mode === 'open' || (mode === 'inference' && writing);
+	function unfolded(mode: Fold, writing: boolean): boolean {
+		return mode === OPEN || (mode === INFERENCE && writing);
 	}
 
 	const thinking = $derived(unfolded(display.thinking, live && !round.text && !round.calls.length));

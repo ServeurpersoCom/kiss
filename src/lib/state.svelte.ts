@@ -1,13 +1,15 @@
 import type { Assistant, Conversation, Message } from './types.js';
-import { NAME, TITLE_LENGTH } from './config.js';
+import { SLASH, TITLE_LENGTH } from './config.js';
 import { deleteConversation, listConversations, putConversation } from './db.js';
 import { settled, turn } from './agent.js';
+import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
 export const app = $state({
 	conversations: [] as Conversation[],
 	current: null as Conversation | null,
-	busy: false,
+	// the turn the model writes now, none while it is idle
+	reply: null as Assistant | null,
 	terminal: false,
 	// the conversation list, open over the thread on a narrow screen
 	sidebar: false
@@ -80,23 +82,19 @@ function current(title: string): Conversation {
 }
 
 // what went wrong, with the command that fixes it when the endpoint is the cause
-function explain(error: Error & { status?: number }): string {
+function explain(error: Error): string {
 	if (error.name === 'AbortError') return 'stopped';
-	if (error.status === 401 || error.status === 403) {
-		return `${error.message}. Give ${NAME} the key: /set endpoints key <name> <key>`;
-	}
-	if (error instanceof TypeError || error.status === 404) {
-		return `${error.message}. Point ${NAME} at an LLM: /set endpoints url <name> <url>`;
-	}
+	if (error instanceof EndpointError && error.fix) return `${error.message}. ${error.fix}`;
 	return error.message;
 }
 
 // a line starting with / runs on the CLI as the user, anything else goes to the
 // model; the conversation is saved before the model answers and once it is done
 export async function send(text: string): Promise<void> {
-	const conversation = current(text.startsWith('/') ? '/' + redact(text.slice(1)) : text);
-	if (text.startsWith('/')) {
-		const input = text.slice(1);
+	const cli = text.startsWith(SLASH);
+	const conversation = current(cli ? SLASH + redact(text.slice(SLASH.length)) : text);
+	if (cli) {
+		const input = text.slice(SLASH.length);
 		const result = await run(input, 'user');
 		conversation.messages.push({
 			role: 'cli',
@@ -108,11 +106,11 @@ export async function send(text: string): Promise<void> {
 		return;
 	}
 	// a conversation opened by a slash command takes its title from the first message
-	if (conversation.title.startsWith('/')) conversation.title = text.slice(0, TITLE_LENGTH);
+	if (conversation.title.startsWith(SLASH)) conversation.title = text.slice(0, TITLE_LENGTH);
 	const before: Message[] = [...conversation.messages, { role: 'user', text }];
 	conversation.messages.push(before[before.length - 1], { role: 'assistant', rounds: [] });
 	const reply = conversation.messages[conversation.messages.length - 1] as Assistant;
-	app.busy = true;
+	app.reply = reply;
 	controller = new AbortController();
 	answering = conversation.id;
 	// the model calls the CLI with the rights of the developer terminal, its
@@ -123,9 +121,9 @@ export async function send(text: string): Promise<void> {
 		await save(conversation);
 		await turn(before, reply, tools, signal);
 	} catch (e) {
-		reply.error = explain(e as Error & { status?: number });
+		reply.error = explain(e as Error);
 	} finally {
-		app.busy = false;
+		app.reply = null;
 		controller = null;
 		answering = '';
 		await save(conversation);

@@ -15,7 +15,7 @@ function distance(a: string, b: string): number {
 }
 
 // the candidate closest to the word, when close enough to be a typo of it
-export function nearest(word: string, candidates: readonly string[]): string | undefined {
+function nearest(word: string, candidates: readonly string[]): string | undefined {
 	const max = Math.max(1, Math.floor(word.length / TYPO_LETTERS_PER_EDIT));
 	let best: string | undefined;
 	let bestDistance = max + 1;

@@ -27,6 +27,17 @@ const PHRASING = new Set([
 const BR = /<br\s*\/?\s*>|\n/i;
 const LIST = /^<ul>([\s\S]*)<\/ul>$/i;
 const ITEM = /<li>([\s\S]*?)<\/li>/gi;
+// the class a code block names its language with, and the name shown without one
+const LANGUAGE_PREFIX = 'language-';
+const PLAIN = 'text';
+// the classes of the blocks the page styles and the copy button acts on
+export const CLASS = {
+	code: 'code',
+	head: 'head',
+	copy: 'copy',
+	done: 'done',
+	table: 'table'
+} as const;
 // code spans and fenced blocks, where LaTeX delimiters stay as written
 const CODE = /(^ {0,3}(`{3,}|~{3,})[\s\S]*?(?:^ {0,3}\2[ \t]*$|$(?![\s\S]))|`[^`\n]*`)/gm;
 
@@ -163,19 +174,21 @@ function rehypeBlocks() {
 		if (!('children' in node)) return;
 		node.children = node.children.map((child) => {
 			if (child.type !== 'element') return child;
-			if (child.tagName === 'table') return element('div', [child], 'table');
+			if (child.tagName === 'table') return element('div', [child], CLASS.table);
 			if (child.tagName === 'pre') {
 				const code = child.children[0] as Element | undefined;
 				const classes = (code?.properties.className ?? []) as string[];
-				const lang = classes.find((c) => c.startsWith('language-'))?.slice(9) ?? 'text';
+				const lang =
+					classes.find((c) => c.startsWith(LANGUAGE_PREFIX))?.slice(LANGUAGE_PREFIX.length) ??
+					PLAIN;
 				const copy: Element = {
 					type: 'element',
 					tagName: 'button',
-					properties: { type: 'button', className: ['copy'], ariaLabel: 'Copy' },
+					properties: { type: 'button', className: [CLASS.copy], ariaLabel: 'Copy' },
 					children: [icon('copy'), icon('check')]
 				};
-				const head = element('div', [{ type: 'text', value: lang }, copy], 'head');
-				return element('div', [head, child], 'code');
+				const head = element('div', [{ type: 'text', value: lang }, copy], CLASS.head);
+				return element('div', [head, child], CLASS.code);
 			}
 			walk(child);
 			return child;
@@ -259,9 +272,9 @@ function openFence(markdown: string): { start: number; lang: string; code: strin
 
 // incremental rendering of a growing text: every top level block but the last
 // is cached by its source span and the link definitions of the text while the
-// text only grows, each block rendering with those definitions; the last block
-// renders again on each call and an open code fence shows as the block it
-// becomes; a text
+// text only grows, each block rendering with those definitions, the cache
+// holding the blocks of the last call only; the last block renders again on
+// each call and an open code fence shows as the block it becomes; a text
 // holding footnotes renders whole, its notes numbered across all of it
 export class Renderer {
 	private previous = '';
@@ -280,15 +293,14 @@ export class Renderer {
 		const definitions = nodes.filter((n) => n.type === 'definition');
 		const context = definitions.map(span).join(' ');
 		const stable = open ? nodes.length : Math.max(nodes.length - 1, 0);
+		const cache = new Map<string, string>();
 		const blocks = nodes.slice(0, stable).map((node) => {
 			const key = `${span(node)} ${context}`;
-			let cached = this.cache.get(key);
-			if (cached === undefined) {
-				cached = html([node, ...definitions]);
-				this.cache.set(key, cached);
-			}
-			return { key, html: cached };
+			const block = this.cache.get(key) ?? html([node, ...definitions]);
+			cache.set(key, block);
+			return { key, html: block };
 		});
+		this.cache = cache;
 		const tail = fence || (nodes.length > stable ? html([nodes[stable], ...definitions]) : '');
 		return { blocks, tail };
 	}

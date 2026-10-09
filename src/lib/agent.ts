@@ -2,6 +2,7 @@ import type { Assistant, Call, Message, Outcome, Round, Tool, ToolContext } from
 import { chat, pick } from './api.js';
 import { aggregate } from './mcp.js';
 import prompts from './prompts.json';
+import { MODEL_SEPARATOR } from './config.js';
 import { tools as own } from './tools.js';
 import models from '../modules/models.js';
 import { settings } from '../engine/run.js';
@@ -57,12 +58,11 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 		c.ok = false;
 		return;
 	}
-	const result: Outcome & { args?: object } = await tool.run(ctx, args).catch((e: Error) => {
-		if (e.name === 'AbortError') throw e;
-		return { ok: false, text: e.message };
-	});
+	const result: Outcome & { args?: object } = await tool
+		.run(ctx, args)
+		.catch((e: Error) => ({ ok: false, text: e.message }));
 	ctx.signal.throwIfAborted();
-	if ('args' in result && result.args) c.args = JSON.stringify(result.args);
+	if (result.args) c.args = JSON.stringify(result.args);
 	if (result.images) c.images = result.images;
 	c.result = result.text;
 	c.ok = result.ok;
@@ -84,7 +84,7 @@ export async function turn(
 	// the parameters set for this model, numbers as numbers
 	const parameters = Object.fromEntries(
 		Object.entries(models.keys).flatMap(([name, def]) => {
-			const value = settings.get(`models ${name}`, `${endpoint.name}/${model}`);
+			const value = settings.get(`models ${name}`, endpoint.name + MODEL_SEPARATOR + model);
 			return value === undefined ? [] : [[name, def.kind === 'number' ? Number(value) : value]];
 		})
 	);

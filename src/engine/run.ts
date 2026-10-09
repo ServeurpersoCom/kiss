@@ -1,6 +1,6 @@
-import type { ConfigReader, Context, Role, Value } from '../lib/types.js';
+import type { ConfigReader, Context, Outcome, Role, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { ERROR_PREFIX, OUTPUT_MAX_LINES } from '../lib/config.js';
+import { ERROR_PREFIX, OUTPUT_MAX_LINES, comment } from '../lib/config.js';
 import { splitLines, splitPipes, tokenize } from './parse.js';
 import { compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
@@ -9,16 +9,15 @@ import { Values } from './values.js';
 import { SaveArchive } from './archive.js';
 import { complete, partialWord } from './complete.js';
 
-export interface Result {
-	ok: boolean;
-	text: string;
-}
-
 const schema = new KeySchema(modules);
 // what the site configuration gives, below every save
 const site = new Map<string, Value>();
 const running = new Values(schema, site);
 const archive = new SaveArchive(modules);
+
+// what replaces a value that must not be kept, and where a value may open
+const MASK = '****';
+const QUOTE = /["']/;
 
 // the running configuration, read only, for the rest of the page
 export const settings: ConfigReader = running;
@@ -29,9 +28,8 @@ function budget(text: string): string {
 	const lines = text.split('\n');
 	if (lines.length <= OUTPUT_MAX_LINES) return text;
 	const more = lines.length - OUTPUT_MAX_LINES;
-	return [...lines.slice(0, OUTPUT_MAX_LINES), `! ${more} more lines, narrow with | include`].join(
-		'\n'
-	);
+	const note = comment(`${more} more lines, narrow with | include`);
+	return [...lines.slice(0, OUTPUT_MAX_LINES), note].join('\n');
 }
 
 // one compiled line: what runs on the draft, then the filters of its output
@@ -68,7 +66,8 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 }
 
 // the site configuration: set lines whose values sit between the defaults and
-// every save; returns the lines it refuses
+// every save, applied whole or not at all like a batch, the rules of every
+// module holding; returns what it refuses
 export function defaults(text: string): string[] {
 	const problems: string[] = [];
 	for (const line of splitLines(text)) {
@@ -82,6 +81,11 @@ export function defaults(text: string): string[] {
 			problems.push(`${line}: ${(e as Error).message}`);
 		}
 	}
+	for (const m of modules) {
+		const reason = m.validate?.(running);
+		if (reason) problems.push(`${m.name}: ${reason}`);
+	}
+	if (problems.length) site.clear();
 	return problems;
 }
 
@@ -99,13 +103,13 @@ let queue: Promise<unknown> = Promise.resolve();
 // batch applies whole or not at all, and answers with what it changed; a
 // command that writes the archive runs alone; once the signal aborts, the
 // batch neither starts, nor runs another line, nor replaces anything
-export function run(text: string, role: Role, signal?: AbortSignal): Promise<Result> {
+export function run(text: string, role: Role, signal?: AbortSignal): Promise<Outcome> {
 	const result = queue.then(() => batch(text, role, signal));
 	queue = result.catch(() => undefined);
 	return result;
 }
 
-async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Result> {
+async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Outcome> {
 	signal?.throwIfAborted();
 	const lines = splitLines(text);
 	if (!lines.length) lines.push('');
@@ -120,7 +124,7 @@ async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Re
 		modules,
 		commands: commands.filter((c) => c.roles.includes(role))
 	};
-	const fail = (i: number | null, message: string): Result => {
+	const fail = (i: number | null, message: string): Outcome => {
 		const where = i === null || alone ? '' : `line ${i + 1}: `;
 		const out = [ERROR_PREFIX + where + message.replaceAll('\n', '\n' + ERROR_PREFIX)];
 		if (!alone) out.push(ERROR_PREFIX + 'nothing applied');
@@ -145,7 +149,7 @@ async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Re
 		}
 		signal?.throwIfAborted();
 		for (const f of step.filters) text = f(text);
-		if (step.filters.length && !text) text = '! no line matches';
+		if (step.filters.length && !text) text = comment('no line matches');
 		if (text) out.push(role === 'llm' ? budget(text) : text);
 	}
 	const broken: string[] = [];
@@ -167,16 +171,24 @@ async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Re
 	return { ok: true, text: [...out, ...diff].join('\n') };
 }
 
-// the lines as written, the value of every secret set by them masked
+// the lines as written, the value of every secret set by them masked; a line
+// that does not read keeps what comes before its first quote, where a value
+// may open
 export function redact(text: string): string {
 	return text
 		.split('\n')
 		.map((l) => {
+			let words: string[];
 			try {
-				const { command, args } = resolve(tokenize(splitPipes(l)[0]));
+				words = tokenize(splitPipes(l)[0]);
+			} catch {
+				return l.split(QUOTE)[0] + MASK;
+			}
+			try {
+				const { command, args } = resolve(words);
 				if (command.path.join(' ') !== 'set') return l;
 				const { key, def, name } = schema.read(args);
-				return def.kind === 'secret' ? `set ${stored(key, name)} ****` : l;
+				return def.kind === 'secret' ? `set ${stored(key, name)} ${MASK}` : l;
 			} catch {
 				return l;
 			}

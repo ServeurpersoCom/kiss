@@ -126,6 +126,22 @@ describe('a model list', () => {
 		);
 		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
 	});
+
+	it('whose body never ends frees the queue after its timeout', async () => {
+		const k = await page();
+		const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+			const body = new ReadableStream({
+				start(c) {
+					init?.signal?.addEventListener('abort', () => c.error(init.signal!.reason));
+				}
+			});
+			return new Response(body, { headers: { 'content-type': 'application/json' } });
+		});
+		vi.stubGlobal('fetch', fetch);
+		await k.run('set endpoints url a http://a/v1\nset endpoints timeout a 0.1', 'user');
+		expect((await k.run('show models', 'user')).text).toContain('a does not answer within 0.1 s');
+		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
+	});
 });
 
 describe('after a stop', () => {
@@ -187,6 +203,7 @@ describe('a secret', () => {
 		expect(shown).toContain('! endpoints key u is set');
 		expect(shown).not.toContain('sk-user');
 		expect(k.redact('set endpoints key u sk-user')).toBe('set endpoints key u ****');
+		expect(k.redact('set endpoints key u "sk-user')).toBe('set endpoints key u ****');
 	});
 });
 
@@ -253,6 +270,22 @@ describe('a tool', () => {
 	});
 });
 
+describe('kiss.conf', () => {
+	it('applies whole or not at all, the rules of every module holding', async () => {
+		vi.resetModules();
+		const k = await import('../src/engine/run.js');
+		expect(k.defaults('set chat system red\nset endpoints key s sk-site')).toEqual([
+			'endpoints: endpoints s has no url'
+		]);
+		expect(k.defaults('set chat system red\nshow running')).toEqual([
+			'show running: only set lines'
+		]);
+		k.start();
+		expect(k.settings.get('chat system')).toBe('');
+		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
+	});
+});
+
 describe('the archive', () => {
 	it('stays as it was when the browser refuses to store it', async () => {
 		const k = await page();
@@ -280,6 +313,24 @@ describe('a model', () => {
 });
 
 describe('a save', () => {
+	it('warns when no model answers the chat', async () => {
+		const k = await page();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => models(['m']))
+		);
+		await k.run('set endpoints url a http://a/v1\nset endpoints url b http://b/v1', 'user');
+		expect((await k.run('save a', 'user')).text).toBe(
+			'saved a\n! chat model is not set: /set chat model <endpoint/model>, see /show models'
+		);
+		await k.run('set chat model b/x', 'user');
+		expect((await k.run('save a', 'user')).text).toBe(
+			'saved a\n! b does not serve x, see show models'
+		);
+		await k.run('set chat model b/m', 'user');
+		expect((await k.run('save a', 'user')).text).toBe('saved a');
+	});
+
 	it('takes one name, never session, and a save of the same name gives way', async () => {
 		const k = await page();
 		expect((await k.run('save', 'user')).text).toBe('<name>');

@@ -1,5 +1,6 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
+import { comment } from '../lib/config.js';
 
 export default {
 	path: ['load'],
@@ -12,7 +13,7 @@ export default {
 	// a save becomes what the session sets
 	run(ctx, name) {
 		const dropped = ctx.config.load(ctx.archive.find(name).values);
-		return dropped.length ? `! dropped unknown keys: ${dropped.join(' ')}` : '';
+		return dropped.length ? comment(`dropped unknown keys: ${dropped.join(' ')}`) : '';
 	},
 	complete(ctx, args) {
 		return args.length ? [] : ctx.archive.list().map((s) => s.name);

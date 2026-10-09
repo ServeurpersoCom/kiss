@@ -1,6 +1,6 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { NAME_PATTERN, SESSION } from '../lib/config.js';
+import { NAME_PATTERN, SESSION, comment } from '../lib/config.js';
 
 export default {
 	path: ['save'],
@@ -18,7 +18,7 @@ export default {
 	// the next page load starts with, what the checks find told after it
 	async run(ctx, name) {
 		const warnings = await ctx.archive.save(ctx.config, name);
-		return [`saved ${name}`, ...warnings.map((w) => `! ${w}`)].join('\n');
+		return [`saved ${name}`, ...warnings.map(comment)].join('\n');
 	},
 	complete(ctx, args) {
 		return args.length ? [] : [...ctx.archive.list().map((s) => s.name), '<name>'];

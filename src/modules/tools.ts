@@ -2,7 +2,7 @@ import type { Module } from '../lib/types.js';
 import { NAME } from '../lib/config.js';
 import { display } from '../lib/display.svelte.js';
 import { served } from '../lib/mcp.js';
-import { tools } from '../lib/tools.js';
+import { ON, USES, tools } from '../lib/tools.js';
 
 // every setting of a tool, the tool named as the item: one of KiSS or of an
 // MCP server
@@ -12,7 +12,7 @@ export default {
 		// the rounds of tool calls a turn takes at most
 		rounds: { kind: 'number', min: 1, integer: true, default: '25' },
 		// off, the model never sees the tool
-		use: { kind: 'enum', values: ['on', 'off'], default: 'on', named: true },
+		use: { kind: 'enum', values: USES, default: ON, named: true },
 		// the argument a call of the tool shows folded; unset, its first one
 		preview: { kind: 'string', named: true }
 	},

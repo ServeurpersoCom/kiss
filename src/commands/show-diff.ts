@@ -1,6 +1,6 @@
 import type { Command, Context, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { SESSION } from '../lib/config.js';
+import { SESSION, comment } from '../lib/config.js';
 
 // the values of a save, or of the running configuration for session
 function values(ctx: Context, name: string): Record<string, Value> {
@@ -18,7 +18,7 @@ export default {
 	// from one save to another, session naming the running configuration
 	run(ctx, [from, to]) {
 		const lines = ctx.schema.diff(values(ctx, from), values(ctx, to));
-		return lines.length ? lines.join('\n') : '! no difference';
+		return lines.length ? lines.join('\n') : comment('no difference');
 	},
 	complete(ctx, args) {
 		return args.length < 2 ? [...ctx.archive.list().map((s) => s.name), SESSION] : [];

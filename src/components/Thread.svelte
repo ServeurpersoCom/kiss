@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { NAME } from '../lib/config.js';
+	import { NAME, SLASH } from '../lib/config.js';
 	import Message from './Message.svelte';
 	import { app } from '../lib/state.svelte.js';
 
@@ -27,12 +27,12 @@
 	<div class="content" bind:this={content}>
 		{#if app.current?.messages.length}
 			{#each app.current.messages as message, i (i)}
-				<Message {message} live={app.busy && i === app.current.messages.length - 1} />
+				<Message {message} live={message === app.reply} />
 			{/each}
 		{:else}
 			<div class="empty">
 				<h1>{NAME}</h1>
-				<p>Point it at an LLM and just talk. A line starting with / runs the CLI.</p>
+				<p>Point it at an LLM and just talk. A line starting with {SLASH} runs the CLI.</p>
 			</div>
 		{/if}
 	</div>

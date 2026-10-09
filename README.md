@@ -3,8 +3,8 @@
 Point it at an LLM and just talk.
 
 KiSS is a chat UI with no settings panel. The model configures everything through one
-built-in tool: a CLI with one running configuration and as many dated saved configurations
-as you want; a configuration that fails its checks is never saved.
+built-in tool: a CLI with one running configuration and as many named saves as you want; a
+save always goes through and warns of what its checks find.
 
 ## The CLI
 
@@ -37,15 +37,19 @@ Its laws, each one held by a test in `tests/`:
 - One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model
   neither starts, nor runs another line, nor replaces anything.
 - A value resolves from what the session sets, over `kiss.conf`, over the default of its key;
-  `reset` drops what the session sets, `load` puts back the save it names.
+  `reset` drops what the session sets, `load` puts back the save it names. `kiss.conf` applies
+  whole or not at all, like a batch.
+- A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
 - On an item holding a secret, the model sets the secret only: a secret goes to a URL the user
   or the site chose, never to one the model chose.
 - The latest save is the configuration the next page load starts with, and the archive changes
   only once the browser stores it.
-- A model list answers within its timeout, so no endpoint holds the queue; every endpoint lists
-  at once, one that fails beside the others.
+- A model list answers within its timeout, its body included, so no endpoint holds the queue;
+  every endpoint lists at once, one that fails beside the others.
+- A save warns when no model answers the chat: `chat model` empty with more than one endpoint,
+  or naming a model its endpoint does not serve.
 - The sheets of `css` apply by name over every style of the page, whatever their selectors.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>`
   alone when the source fails: `show models` by endpoint, `show tools` by who serves it.

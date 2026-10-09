@@ -1,7 +1,7 @@
 <script lang="ts">
 	import 'katex/dist/katex.min.css';
 	import type { Attachment } from 'svelte/attachments';
-	import { Renderer, type View } from './render.js';
+	import { CLASS, Renderer, type View } from './render.js';
 
 	let { text }: { text: string } = $props();
 
@@ -27,13 +27,13 @@
 	// a copy button puts the code of its block on the clipboard
 	const copy: Attachment<HTMLDivElement> = (node) => {
 		const onclick = (e: MouseEvent) => {
-			const button = (e.target as Element).closest('.copy');
+			const button = (e.target as Element).closest(`.${CLASS.copy}`);
 			if (!button) return;
 			void navigator.clipboard.writeText(
-				button.closest('.code')!.querySelector('pre')!.textContent ?? ''
+				button.closest(`.${CLASS.code}`)!.querySelector('pre')!.textContent ?? ''
 			);
-			button.classList.add('done');
-			setTimeout(() => button.classList.remove('done'), COPIED_MS);
+			button.classList.add(CLASS.done);
+			setTimeout(() => button.classList.remove(CLASS.done), COPIED_MS);
 		};
 		node.addEventListener('click', onclick);
 		return () => node.removeEventListener('click', onclick);

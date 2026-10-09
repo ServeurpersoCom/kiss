@@ -1,6 +1,6 @@
-import type { Command, Context } from '../lib/types.js';
+import type { Command, Context, Group } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { grouped } from '../lib/group.js';
+import { comment } from '../lib/config.js';
 
 // show chat, show tools use, show tools use bash_tool, and show tools bash_tool:
 // the word after a collection names a key when it names one, else an item
@@ -20,9 +20,19 @@ function lines(ctx: Context, plan: Plan, name: string | undefined): string[] {
 		const head = name ? `${key} ${name}` : key;
 		const value = ctx.config.get(key, name);
 		if (value !== undefined) out.push(ctx.schema.line(head, value));
-		else if (plan.key && (plan.name || !def.named)) out.push(`! ${head} is not set`);
+		else if (plan.key && (plan.name || !def.named)) out.push(comment(`${head} is not set`));
 	}
 	return out;
+}
+
+// the lines of groups, each body under its header: a failed group holds its
+// error on the header, an empty one shows nothing
+function grouped(groups: Group[], body: (name: string) => string[]): string[] {
+	return groups.flatMap((g) => {
+		if (g.error) return [comment(`${g.group} ${g.error}`)];
+		const lines = g.names.flatMap(body);
+		return lines.length ? [comment(g.group), ...lines] : [];
+	});
 }
 
 export default {
@@ -59,11 +69,13 @@ export default {
 			// an item without a setting shows by its name alone, unless a key is named
 			const body = (n: string) => {
 				const shown = lines(ctx, plan, n);
-				return shown.length || plan.key ? shown : [`! ${n}`];
+				return shown.length || plan.key ? shown : [comment(n)];
 			};
 			out.push(...grouped(groups, body));
 		}
-		return out.join('\n') || `! no ${[plan.module, plan.name].filter((w) => w).join(' ')} yet`;
+		return (
+			out.join('\n') || comment(`no ${[plan.module, plan.name].filter((w) => w).join(' ')} yet`)
+		);
 	},
 	complete(ctx, args) {
 		return ctx.schema.next(ctx.config, args, false, true);

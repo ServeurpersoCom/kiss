@@ -1,5 +1,6 @@
-// contracts between the engine and its plugins: a plugin imports this file and
-// lib/config.ts, everything else reaches it through Context
+// contracts between the engine and its plugins: a command imports this file and
+// lib/config.ts and reaches everything else through Context; a module or a tool
+// is where the configuration meets the page, it imports what it drives in lib/
 
 // the user types slash commands in the composer; the model calls its config
 // tool, and the developer terminal runs with exactly the same rights

@@ -1,6 +1,6 @@
 import type { ConfigReader, Key, KeyWords, Module, Schema, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { NAME_PATTERN, SECRET_SET } from '../lib/config.js';
+import { NAME_PATTERN, SECRET_SET, comment } from '../lib/config.js';
 import { didYouMean } from './near.js';
 
 const URL_PROTOCOLS = ['http:', 'https:'];
@@ -197,7 +197,7 @@ export class KeySchema implements Schema {
 	line(stored: string, value: Value): string {
 		const [key, name] = unstore(stored);
 		const head = name ? `${key} ${name}` : key;
-		if (this.find(key)?.kind === 'secret') return `! ${head} is set`;
+		if (this.find(key)?.kind === 'secret') return comment(`${head} is set`);
 		return `set ${head} ${this.format(key, value)}`;
 	}
 }
