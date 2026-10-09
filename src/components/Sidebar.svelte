@@ -31,7 +31,7 @@
 	<nav>
 		<div class="top">
 			<div class="item" class:active={!app.current}>
-				<button class="title new" onclick={newChat}><Icon name="plus" />New chat</button>
+				<button class="new" onclick={newChat}><Icon name="plus" />New chat</button>
 			</div>
 		</div>
 		{#each groups as g (g.name)}
@@ -121,16 +121,23 @@
 	.item.active {
 		background: var(--hover-strong);
 	}
-	/* a title too long fades out instead of losing letters to an ellipsis */
-	.title {
+	.title,
+	.new {
 		flex: 1;
 		min-width: 0;
 		text-align: left;
 		padding: 0.5rem 0 0.5rem 0.75rem;
 		white-space: nowrap;
 		overflow: hidden;
-		mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
 		font-size: var(--size-secondary);
+	}
+	/* a title too long fades out instead of losing letters to an ellipsis: its
+	   letters drawn in a gradient of the text color, an ordinary paint that
+	   follows every change of width */
+	.title {
+		color: transparent;
+		background: linear-gradient(to right, var(--fg) calc(100% - 1.5rem), transparent);
+		background-clip: text;
 	}
 	.new {
 		display: flex;
