@@ -183,7 +183,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A message enters with the moment it entered, and reads how long ago that was in the language
   of the browser, past a day in days of the calendar, so yesterday is the day the sidebar names so.
 - A command closed leaves the tree, what followed it following the entry before it, the versions
-  and the history the model reads as they were.
+  and the history the model reads as they were; a conversation it leaves empty goes with it.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
   imports nothing and says where it goes wrong; an import adds only the conversations whose id is
   new, and neither `export` nor `import` changes a conversation.

@@ -176,12 +176,13 @@ export async function retry(id: string): Promise<void> {
 }
 
 // a slash command leaves the open conversation: the model never reads one, so
-// its history stays as it was
+// its history stays as it was; a conversation left with no entry goes with it
 export async function dismiss(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || entry?.role !== 'cli' || app.reply) return;
 	drop(app.current, id);
-	await save(app.current);
+	if (app.current.entries.length) await save(app.current);
+	else await remove(app.current.id);
 }
 
 // another version shows, as it was last written in
