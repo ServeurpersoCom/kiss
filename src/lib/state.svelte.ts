@@ -1,9 +1,9 @@
-import type { Assistant, Conversation, Grant, Message, Verdict } from './types.js';
+import type { Assistant, Conversation, Grant, Verdict } from './types.js';
 import { REFUSE } from './types.js';
 import { SLASH, TITLE_LENGTH } from './config.js';
 import { deleteConversation, listConversations, putConversation } from './db.js';
 import { turn } from './agent.js';
-import { parse, serialize, stored } from './conversation.js';
+import { append, latest, parse, path, serialize, stored } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
@@ -36,7 +36,7 @@ async function save(conversation: Conversation): Promise<void> {
 	if (!app.conversations.some((c) => c.id === conversation.id)) return;
 	conversation.updated = Date.now();
 	const snapshot = $state.snapshot(conversation) as Conversation;
-	await putConversation({ ...snapshot, messages: stored(snapshot.messages) });
+	await putConversation({ ...snapshot, entries: stored(snapshot.entries) });
 }
 
 // the conversation named by the URL hash, or none
@@ -102,7 +102,8 @@ function current(title: string): Conversation {
 		id: crypto.randomUUID(),
 		title: title.slice(0, TITLE_LENGTH),
 		updated: Date.now(),
-		messages: []
+		entries: [],
+		leaf: null
 	});
 	const conversation = app.conversations[0];
 	app.current = conversation;
@@ -117,15 +118,40 @@ function explain(error: Error): string {
 	return error.message;
 }
 
-// a line starting with / runs on the CLI as the user, anything else goes to the
-// model; the conversation is saved before the model answers and once it is done
+// a line typed in the open conversation, after the entry the thread ends on
 export async function send(text: string): Promise<void> {
 	const cli = text.startsWith(SLASH);
 	const conversation = current(cli ? SLASH + redact(text.slice(SLASH.length)) : text);
-	if (cli) {
+	await enter(conversation, conversation.leaf, text);
+}
+
+// an entry of the user edited: the line enters as a new version beside it, so
+// the model starts over from the very prefix it had, the branch edited kept
+export async function edit(id: string, text: string): Promise<void> {
+	const entry = app.current?.entries.find((e) => e.id === id);
+	if (!app.current || !entry || app.reply) return;
+	await enter(app.current, entry.parent, text);
+}
+
+// another version shows, as it was last written in
+export async function browse(id: string): Promise<void> {
+	if (!app.current || app.reply) return;
+	app.current.leaf = latest(app.current, id);
+	await save(app.current);
+}
+
+// a line entering a conversation after an entry: a line starting with / runs
+// on the CLI as the user, anything else goes to the model; the conversation is
+// saved before the model answers and once it is done
+async function enter(
+	conversation: Conversation,
+	parent: string | null,
+	text: string
+): Promise<void> {
+	if (text.startsWith(SLASH)) {
 		const input = text.slice(SLASH.length);
 		const result = await run(input, 'user', { conversation, secret });
-		conversation.messages.push({
+		append(conversation, parent, {
 			role: 'cli',
 			input: redact(input),
 			output: result.text,
@@ -136,9 +162,9 @@ export async function send(text: string): Promise<void> {
 	}
 	// a conversation opened by a slash command takes its title from the first message
 	if (conversation.title.startsWith(SLASH)) conversation.title = text.slice(0, TITLE_LENGTH);
-	const before: Message[] = [...conversation.messages, { role: 'user', text }];
-	conversation.messages.push(before[before.length - 1], { role: 'assistant', rounds: [] });
-	const reply = conversation.messages[conversation.messages.length - 1] as Assistant;
+	const user = append(conversation, parent, { role: 'user', text });
+	const before = path(conversation);
+	const reply = append(conversation, user.id, { role: 'assistant', rounds: [] }) as Assistant;
 	app.reply = reply;
 	controller = new AbortController();
 	answering = conversation.id;
@@ -176,14 +202,6 @@ function secret(key: string): Promise<string | null> {
 	return new Promise((resolve) => {
 		app.ask = { kind: 'secret', key, settle: (value) => ((app.ask = null), resolve(value)) };
 	});
-}
-
-// the open conversation cut at a message of the user, then that message sent
-// again as written now: the model starts over from the same prefix
-export async function edit(index: number, text: string): Promise<void> {
-	if (!app.current || app.reply) return;
-	app.current.messages.splice(index);
-	await send(text);
 }
 
 // the turn aborts, and a question it asks is answered no

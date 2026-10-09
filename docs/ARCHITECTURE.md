@@ -156,8 +156,11 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   ended before a stop, never one that did not.
 - A message copied gives its source: the text typed, the answer without its thinking or calls,
   the output of a command.
-- A conversation file reads back to the conversation as it settled, under a new id, or imports
-  nothing and says where it goes wrong.
+- An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
+  history the model reads are the path up from the leaf; a version comes back as it was last
+  written in.
+- A conversation file reads back to the tree as it settled, under a new id, or imports nothing
+  and says where it goes wrong.
 - Every MCP server serves its tools under their own names, after those of KiSS; a tool turned off
   is never seen by the model; a server that does not answer serves nothing, and a name already
   served stays with the first: the model is told, the save warns of it, nothing ever stops.
@@ -228,11 +231,19 @@ stopped; connecting and listing the tools take five seconds at most.
 
 ## Conversations
 
+A conversation is a tree, kept flat: every entry holds its id and the entry it follows, and the
+conversation holds its leaf, the entry the thread ends on. The thread is the path up from the
+leaf, and so is the history the model reads, so the server reuses its cache along it.
+
 Under every message, its copy button; under a message of the user, its edit button too. An edit
-cuts the conversation at that message and sends it again as written now, so the model starts over
-from the very prefix it had and the server reuses its cache up to there; the commands cut with it
-leave the configuration as it is. A conversation exports as a JSON file, marked `kiss` and without
-its id, and imports from the sidebar as a new one, read whole or refused with where it goes wrong.
+enters the new text as a version beside the message it edits, and the model answers it from the
+very prefix the edited one had; the branch edited stays whole. Arrows under a message with
+versions go from one to the next, each coming back as it was last written in. The configuration
+belongs to no branch: a command of one branch stays applied when another shows.
+
+A conversation exports as a JSON file, marked `kiss` and without its id, every branch in it, and
+imports from the sidebar as a new one, read whole or refused with where it goes wrong: every id
+once, every parent before its child, a leaf that ends a branch.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.

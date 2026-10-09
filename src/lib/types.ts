@@ -238,11 +238,24 @@ export type Message =
 
 export type Assistant = Extract<Message, { role: 'assistant' }>;
 
+// where a message sits in the tree of its conversation: its own id, and the
+// entry it follows, none for a first one
+export interface Link {
+	id: string;
+	parent: string | null;
+}
+
+export type Entry = Message & Link;
+
+// a tree of entries, an edit opening a branch beside the entry it edits; the
+// path up from the leaf is the thread, and the history the model reads
 export interface Conversation {
 	id: string;
 	title: string;
 	updated: number;
-	messages: Message[];
+	entries: Entry[];
+	// the entry the thread ends on, none while the conversation is empty
+	leaf: string | null;
 }
 
 export interface Outcome {

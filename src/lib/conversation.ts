@@ -1,4 +1,4 @@
-import type { Conversation, Message, Round } from './types.js';
+import type { Conversation, Entry, Message, Round } from './types.js';
 
 // a conversation as a file: a marker naming what it holds, then the
 // conversation as the browser stores it, without its id
@@ -33,13 +33,64 @@ export function settled(rounds: readonly Round[]): Round[] {
 		.filter((r) => r.reasoning || r.text || r.calls.length);
 }
 
-// the messages as they settled, even while the model answers
-export function stored(messages: readonly Message[]): Message[] {
-	return messages.map((m) => (m.role === 'assistant' ? { ...m, rounds: settled(m.rounds) } : m));
+// the entries as they settled, even while the model answers
+export function stored(entries: readonly Entry[]): Entry[] {
+	return entries.map((e) => (e.role === 'assistant' ? { ...e, rounds: settled(e.rounds) } : e));
+}
+
+// the entries by their id
+function index(c: Conversation): Map<string, Entry> {
+	return new Map(c.entries.map((e) => [e.id, e]));
+}
+
+// a message entering the conversation after an entry, none for a first one; the
+// leaf moves to it; returns the entry as the conversation holds it
+export function append(c: Conversation, parent: string | null, message: Message): Entry {
+	c.entries.push({ ...message, id: crypto.randomUUID(), parent });
+	const entry = c.entries[c.entries.length - 1];
+	c.leaf = entry.id;
+	return entry;
+}
+
+// the entries from the first one to the leaf: the thread, and the history the
+// model reads
+export function path(c: Conversation): Entry[] {
+	const byId = index(c);
+	const out: Entry[] = [];
+	for (let id = c.leaf; id !== null;) {
+		const entry = byId.get(id)!;
+		out.push(entry);
+		id = entry.parent;
+	}
+	return out.reverse();
+}
+
+// the versions of every entry, by the entry they follow, oldest first
+export function forks(c: Conversation): Map<string | null, Entry[]> {
+	const out = new Map<string | null, Entry[]>();
+	for (const e of c.entries) out.set(e.parent, [...(out.get(e.parent) ?? []), e]);
+	return out;
+}
+
+// the last entry written under an entry, itself included: a branch comes back
+// as it was last written in
+export function latest(c: Conversation, id: string): string {
+	const byId = index(c);
+	const under = (e: Entry | undefined): boolean => {
+		for (; e; e = e.parent === null ? undefined : byId.get(e.parent)) if (e.id === id) return true;
+		return false;
+	};
+	return [...c.entries].reverse().find(under)!.id;
 }
 
 export function serialize(c: Conversation): string {
-	const file = { [MARK]: KIND, title: c.title, updated: c.updated, messages: stored(c.messages) };
+	const file = {
+		[MARK]: KIND,
+		title: c.title,
+		updated: c.updated,
+		leaf: c.leaf,
+		entries: stored(c.entries)
+	};
 	return JSON.stringify(file, null, INDENT) + '\n';
 }
 
@@ -53,6 +104,8 @@ function fail(at: string, what: string): never {
 const string: Check = (v, at) => typeof v === 'string' || fail(at, 'not a string');
 const boolean: Check = (v, at) => typeof v === 'boolean' || fail(at, 'not a boolean');
 const number: Check = (v, at) => Number.isFinite(v) || fail(at, 'not a number');
+const parent: Check = (v, at) =>
+	v === null || typeof v === 'string' || fail(at, 'not an id or null');
 const constant =
 	(value: string): Check =>
 	(v, at) =>
@@ -83,8 +136,8 @@ function array(check: Check): Check {
 	};
 }
 
-// a message by its role, each role its own fields
-function message(v: unknown, at: string): void {
+// an entry by its role, each role its own fields beside the link of the entry
+function entry(v: unknown, at: string): void {
 	const role = (v as { role?: unknown } | null)?.role;
 	const variant = MESSAGES[String(role)];
 	if (!variant) fail(`${at}.role`, `not one of ${Object.keys(MESSAGES).join(' ')}`);
@@ -98,17 +151,37 @@ const call = object(
 	{ images: array(image) }
 );
 const round = object({ reasoning: string, text: string, calls: array(call) });
+const link = { id: string, parent };
 const MESSAGES: Record<string, Check> = {
-	user: object({ role: constant('user'), text: string }),
-	assistant: object({ role: constant('assistant'), rounds: array(round) }, { error: string }),
-	cli: object({ role: constant('cli'), input: string, output: string, ok: boolean })
+	user: object({ ...link, role: constant('user'), text: string }),
+	assistant: object(
+		{ ...link, role: constant('assistant'), rounds: array(round) },
+		{ error: string }
+	),
+	cli: object({ ...link, role: constant('cli'), input: string, output: string, ok: boolean })
 };
 const file = object({
 	[MARK]: constant(KIND),
 	title: string,
 	updated: number,
-	messages: array(message)
+	leaf: parent,
+	entries: array(entry)
 });
+
+// a tree: every id once, every parent an entry before its child, so no cycle,
+// and a leaf that ends a branch, none only when there is no entry
+function tree({ entries, leaf }: Pick<Conversation, 'entries' | 'leaf'>): void {
+	const seen = new Set<string>();
+	entries.forEach((e, i) => {
+		const at = `${ROOT}.entries[${i}]`;
+		if (seen.has(e.id)) fail(`${at}.id`, 'used twice');
+		if (e.parent !== null && !seen.has(e.parent)) fail(`${at}.parent`, 'names no entry before it');
+		seen.add(e.id);
+	});
+	if (leaf === null ? entries.length : !seen.has(leaf)) fail(`${ROOT}.leaf`, 'names no entry');
+	if (leaf !== null && entries.some((e) => e.parent === leaf))
+		fail(`${ROOT}.leaf`, 'ends no branch');
+}
 
 // a conversation file as written by serialize, whole or refused with where it
 // goes wrong; the conversation takes a new id
@@ -120,6 +193,7 @@ export function parse(text: string): Omit<Conversation, 'id'> {
 		throw new Error('not JSON');
 	}
 	file(json, ROOT);
-	const { title, updated, messages } = json as Conversation;
-	return { title, updated, messages };
+	const { title, updated, leaf, entries } = json as Conversation;
+	tree({ entries, leaf });
+	return { title, updated, leaf, entries };
 }

@@ -8,6 +8,7 @@ export const PATHS = {
 	close: 'M6 6l12 12M18 6L6 18',
 	menu: 'M4 6h16M4 12h16M4 18h16',
 	chevron: 'M9 6l6 6-6 6',
+	previous: 'M15 6l-6 6 6 6',
 	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 	check: 'M5 12l5 5 9-10',
 	edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4'

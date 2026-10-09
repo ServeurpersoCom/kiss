@@ -1,18 +1,20 @@
 <script lang="ts">
-	import type { Message } from '../lib/types.js';
+	import type { Entry } from '../lib/types.js';
 	import Round from './Round.svelte';
 	import Icon from './Icon.svelte';
 	import { COPIED_MS, SLASH } from '../lib/config.js';
 	import { source } from '../lib/conversation.js';
-	import { app, edit } from '../lib/state.svelte.js';
+	import { app, browse, edit } from '../lib/state.svelte.js';
 
-	// index: where the message sits in its conversation; live: the turn the
-	// model writes now
+	// versions: the entries beside this one, itself among them, oldest first;
+	// live: the turn the model writes now
 	let {
-		message,
-		index,
+		entry: message,
+		versions,
 		live = false
-	}: { message: Message; index: number; live?: boolean } = $props();
+	}: { entry: Entry; versions: Entry[]; live?: boolean } = $props();
+
+	const at = $derived(versions.findIndex((v) => v.id === message.id));
 
 	let copied = $state(false);
 	// the text being edited, none while the message shows as sent
@@ -49,7 +51,7 @@
 			const text = draft?.trim();
 			if (!text || app.reply) return;
 			draft = null;
-			void edit(index, text);
+			void edit(message.id, text);
 		}
 	}
 </script>
@@ -83,6 +85,23 @@
 	{/if}
 	{#if !live && draft === null}
 		<div class="actions">
+			{#if versions.length > 1}
+				<button
+					onclick={() => browse(versions[at - 1].id)}
+					disabled={at === 0 || !!app.reply}
+					aria-label="Previous version"
+				>
+					<Icon name="previous" />
+				</button>
+				<span class="version">{at + 1}/{versions.length}</span>
+				<button
+					onclick={() => browse(versions[at + 1].id)}
+					disabled={at === versions.length - 1 || !!app.reply}
+					aria-label="Next version"
+				>
+					<Icon name="chevron" />
+				</button>
+			{/if}
 			<button onclick={copy} class:copied aria-label="Copy">
 				<Icon name={copied ? 'check' : 'copy'} />
 			</button>
@@ -155,7 +174,13 @@
 	/* the icons under a message, at the size of the chat as those of the sidebar */
 	.actions {
 		display: flex;
+		align-items: center;
 		gap: 0.2rem;
+	}
+	.version {
+		font-size: var(--font-small);
+		color: var(--fg-dim);
+		font-variant-numeric: tabular-nums;
 	}
 	.actions button {
 		display: flex;

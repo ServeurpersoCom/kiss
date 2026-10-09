@@ -3,6 +3,8 @@
 	import Message from './Message.svelte';
 	import Ask from './Ask.svelte';
 	import { app } from '../lib/state.svelte.js';
+	import { forks, path } from '../lib/conversation.js';
+	import type { Entry } from '../lib/types.js';
 
 	// distance from the bottom under which the thread follows new content
 	const FOLLOW_PX = 48;
@@ -10,6 +12,10 @@
 	let box: HTMLElement;
 	let content: HTMLElement;
 	let follow = true;
+
+	// the path up from the leaf, and the versions of each entry along it
+	const thread = $derived(app.current ? path(app.current) : []);
+	const versions = $derived(app.current ? forks(app.current) : new Map<string | null, Entry[]>());
 
 	function onscroll() {
 		follow = box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_PX;
@@ -26,9 +32,13 @@
 
 <div class="thread" bind:this={box} {onscroll}>
 	<div class="content" bind:this={content}>
-		{#if app.current?.messages.length}
-			{#each app.current.messages as message, i (i)}
-				<Message {message} index={i} live={message === app.reply} />
+		{#if thread.length}
+			{#each thread as entry (entry.id)}
+				<Message
+					{entry}
+					versions={versions.get(entry.parent) ?? [entry]}
+					live={entry === app.reply}
+				/>
 			{/each}
 		{:else}
 			<div class="empty">
