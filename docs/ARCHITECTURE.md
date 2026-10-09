@@ -63,8 +63,8 @@ The model changes the page itself, so the engine guards the effect of its batche
 words. Between the rules and the commit, the resolved change of a batch of the model is read key by
 key:
 
-- a key declared `change` is guarded on any change: the url of an endpoint or an MCP server,
-  `chat model`, `chat system`, and `privilege level` itself;
+- a key declared `change` is guarded on any change: the url or the headers of an endpoint or an
+  MCP server, `chat model`, `chat system`, and `privilege level` itself;
 - a key declared `opening` is guarded on a change toward a more open value of its enum only:
   `tools use` goes `off`, `consent`, `on`, so closing never asks.
 
@@ -115,16 +115,16 @@ One write verb per store, one read verb for all: `set` and `no` write the config
 and `no save` the archive, `title` the conversation, `import` the conversations, and `show` reads
 every one of them.
 
-| Module      | Keys                                                          |
-| ----------- | ------------------------------------------------------------- |
-| `chat`      | `model`, `system`, both guarded                               |
-| `css`       | `sheet <name>`                                                |
-| `display`   | `thinking`, `tools`, `render <thinking or reply>`             |
-| `endpoints` | `url <name>` guarded, `key <name>` secret, `timeout <name>`   |
-| `mcp`       | `url <name>` guarded, `key <name>` secret, `timeout <name>`   |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`          |
-| `privilege` | `level <module>` guarded, every change asking                 |
-| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>` |
+| Module      | Keys                                                                             |
+| ----------- | -------------------------------------------------------------------------------- |
+| `chat`      | `model`, `system`, both guarded                                                  |
+| `css`       | `sheet <name>`                                                                   |
+| `display`   | `thinking`, `tools`, `render <thinking or reply>`                                |
+| `endpoints` | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
+| `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                             |
+| `privilege` | `level <module>` guarded, every change asking                                    |
+| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                    |
 
 ### Laws
 
@@ -237,6 +237,10 @@ turn, at most `tools rounds` of them. Every round reads the configuration as it 
 call turns on is offered from the next round on, as is a model, a system prompt or a parameter a
 call changes. A tool in `consent` asks before its call, and a turn stopped keeps what settled.
 
+Every endpoint and every MCP server sends its key as a bearer token, and the headers it is given
+besides, `Name: value` pairs split by `;`, to it alone: an API that answers a page only once it
+names itself, such as the Claude API, takes `anthropic-dangerous-direct-browser-access: true`.
+
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 
 ```
@@ -256,9 +260,9 @@ reads it. A reply streams until it ends or the turn is stopped.
 
 KiSS calls the tools of any MCP server over Streamable HTTP, with the official TypeScript SDK. A
 server speaking the 2026 protocol is talked to in it, an older one through the `initialize`
-handshake. One client per server lives while its url, key and timeout stay, with the tool list it
-served once connected, so the tools the model sees stay the same from turn to turn; a request that
-fails drops the client, and the next use connects again.
+handshake. One client per server lives while its url, key, headers and timeout stay, with the tool
+list it served once connected, so the tools the model sees stay the same from turn to turn; a
+request that fails drops the client, and the next use connects again.
 
 ```
 set mcp url sandbox https://example.com/mcp

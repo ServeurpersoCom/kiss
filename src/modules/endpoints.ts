@@ -1,18 +1,20 @@
 import type { Module } from '../lib/types.js';
 import { listModels } from '../lib/api.js';
-import { bare, remotes } from '../lib/remote.js';
+import { remotes, rules } from '../lib/remote.js';
 
 export default {
 	name: 'endpoints',
 	keys: {
 		url: { kind: 'url', named: true, guard: 'change' },
 		key: { kind: 'secret', named: true },
+		// sent with every request, Name: value pairs split by ;
+		headers: { kind: 'string', named: true, guard: 'change' },
 		// seconds the endpoint has to start answering: a model list, the start of
 		// a reply, which then streams until it ends or the turn stops
 		timeout: { kind: 'number', min: 0.1, default: '10', named: true }
 	},
 	validate(config) {
-		return bare(config, 'endpoints');
+		return rules(config, 'endpoints');
 	},
 	// every endpoint lists its models
 	async check(config) {

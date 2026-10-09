@@ -1,6 +1,6 @@
 import type { ConfigReader } from './types.js';
 import { MODEL_SEPARATOR, SLASH } from './config.js';
-import { bearer, remotes, type Remote } from './remote.js';
+import { headers, remotes, type Remote } from './remote.js';
 
 // OpenAI compatible client: the model list and streamed chat completions
 
@@ -68,7 +68,7 @@ async function request<T>(
 	try {
 		const res = await fetch(`${endpoint.url}${path}`, {
 			...init,
-			headers: { ...bearer(endpoint.key), ...init.headers },
+			headers: { ...headers(endpoint), ...init.headers },
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
 			// a network or CORS failure: nothing answers at that URL

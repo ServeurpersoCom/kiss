@@ -2,7 +2,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { ConfigReader, Image, Outcome, Tool } from './types.js';
 import { MCP_CONNECT_TIMEOUT_MS, NAME, comment } from './config.js';
-import { bearer, remotes, type Remote } from './remote.js';
+import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
@@ -38,7 +38,7 @@ function connect(remote: Remote): Promise<Client> {
 		{ versionNegotiation: { mode: 'auto' } }
 	);
 	const transport = new StreamableHTTPClientTransport(new URL(remote.url), {
-		requestInit: { headers: bearer(remote.key) }
+		requestInit: { headers: headers(remote) }
 	});
 	return client.connect(transport, { timeout: MCP_CONNECT_TIMEOUT_MS }).then(() => client);
 }

@@ -278,6 +278,52 @@ describe('the display', () => {
 	});
 });
 
+describe('the headers of a server', () => {
+	it('go with every request to it alone, after its key, as Name: value pairs', async () => {
+		const k = await page();
+		const sent: Record<string, Record<string, string>> = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init: RequestInit) => {
+				sent[url] = init.headers as Record<string, string>;
+				return models(['m']);
+			})
+		);
+		await k.run(
+			[
+				'set endpoints url a http://a/v1',
+				'set endpoints url b http://b/v1',
+				'set endpoints key a sk-a',
+				"set endpoints headers a 'anthropic-dangerous-direct-browser-access: true; x-id: 7'"
+			].join('\n'),
+			'user'
+		);
+		await k.run('show models', 'user');
+		expect(sent['http://a/v1/models']).toEqual({
+			Authorization: 'Bearer sk-a',
+			'anthropic-dangerous-direct-browser-access': 'true',
+			'x-id': '7'
+		});
+		expect(sent['http://b/v1/models']).toEqual({});
+		expect((await k.run("set endpoints headers b 'no colon'", 'user')).text).toContain(
+			'endpoints headers b: "no colon" is not Name: value'
+		);
+		expect((await k.run("set endpoints headers b 'a name: 1'", 'user')).text).toContain(
+			'endpoints headers b: "a name: 1" is not Name: value'
+		);
+		expect((await k.run("set mcp headers m 'x: 1'\nset mcp url m http://m/mcp", 'user')).ok).toBe(
+			true
+		);
+		const asked = user(REFUSE);
+		const r = await k.run("set endpoints headers b 'x: 2'", 'llm', { grant: asked.grant });
+		expect(r.text).toContain('the user refused the change');
+		expect(asked.asked).toHaveLength(1);
+		expect((await k.run("set endpoints headers a 'x: 2'", 'llm', { grant })).text).toContain(
+			'endpoints a holds a secret, only the user changes it'
+		);
+	});
+});
+
 describe('a typo', () => {
 	it('gets the word it misses, a letter off or two letters swapped', async () => {
 		const k = await page();
