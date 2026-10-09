@@ -178,6 +178,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   written in.
 - An answer again enters beside the answers of its message, from the very prefix, every branch
   kept.
+- A message enters with the moment it entered, and reads how long ago that was in the language
+  of the browser.
 - A command closed leaves the tree, what followed it following the entry before it, the versions
   and the history the model reads as they were.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
@@ -254,20 +256,22 @@ stopped; connecting and listing the tools take five seconds at most.
 
 ## Conversations
 
-A conversation is a tree, kept flat: every entry holds its id and the entry it follows, and the
-conversation holds its leaf, the entry the thread ends on. The thread is the path up from the
-leaf, and so is the history the model reads, so the server reuses its cache along it.
+A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment
+it entered, and the conversation holds its leaf, the entry the thread ends on. The thread is the
+path up from the leaf, and so is the history the model reads, so the server reuses its cache along
+it.
 
-Under every message, its copy button on the outer edge: under a message of the user, retry, edit and
-copy; under an answer, copy and retry; under a command, copy and close, the versions on the inner
-side. Retry, from a message of the user or from an answer to it, enters a new answer beside those it
-had, from the very prefix they were given. The model never reads a command, so closing one clears
-the thread and leaves its history whole. What stops a turn shows under it in a card marked by the
-danger color, like a question to the user. An edit enters the new text as a version beside the
-message it edits, and the model answers it from the very prefix the edited one had; the branch
-edited stays whole. Arrows under a message with versions go from one to the next, each coming back
-as it was last written in. The configuration belongs to no branch: a command of one branch stays
-applied when another shows.
+Under every message, shown while it is hovered, always where nothing hovers, how long ago it
+entered, its moment in full under the pointer, in the language of the browser, and its copy button
+on the outer edge: under a message of the user, retry, edit and copy; under an answer, copy and
+retry; under a command, copy and close, the versions and the time on the inner side. Retry, from a
+message of the user or from an answer to it, enters a new answer beside those it had, from the very
+prefix they were given. The model never reads a command, so closing one clears the thread and leaves
+its history whole. What stops a turn shows under it in a card marked by the danger color, like a
+question to the user. An edit enters the new text as a version beside the message it edits, and the
+model answers it from the very prefix the edited one had; the branch edited stays whole. Arrows
+under a message with versions go from one to the next, each coming back as it was last written in.
+The configuration belongs to no branch: a command of one branch stays applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations`
 lists them by id, the one the batch was sent in marked. `export` offers a file of this

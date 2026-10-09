@@ -268,11 +268,12 @@ export type Message =
 
 export type Assistant = Extract<Message, { role: 'assistant' }>;
 
-// where a message sits in the tree of its conversation: its own id, and the
-// entry it follows, none for a first one
+// where a message sits in the tree of its conversation: its own id, the
+// entry it follows, none for a first one, and when it entered, in milliseconds
 export interface Link {
 	id: string;
 	parent: string | null;
+	time: number;
 }
 
 export type Entry = Message & Link;

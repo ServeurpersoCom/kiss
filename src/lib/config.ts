@@ -45,6 +45,30 @@ export function localTime(date: string | number): string {
 	return `${day} ${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
+// how long ago a moment was, in the language of the browser: now, then the
+// largest unit it counts whole, yesterday and last week included
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+	['year', 31536000],
+	['month', 2592000],
+	['week', 604800],
+	['day', 86400],
+	['hour', 3600],
+	['minute', 60]
+];
+export function ago(time: number, now: number, locale?: string): string {
+	const seconds = (now - time) / 1000;
+	const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+	for (const [unit, size] of UNITS) {
+		if (seconds >= size) return format.format(-Math.floor(seconds / size), unit);
+	}
+	return format.format(0, 'second');
+}
+
+// a moment in full, to the minute, in the language of the browser
+export function stamp(time: number, locale?: string): string {
+	return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(time);
+}
+
 // conversations: the word naming every one of them, and their files, named
 // after a title without the characters a file name cannot hold
 export const ALL = 'all';

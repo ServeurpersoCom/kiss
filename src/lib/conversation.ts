@@ -46,7 +46,7 @@ function index(c: Conversation): Map<string, Entry> {
 // a message entering the conversation after an entry, none for a first one; the
 // leaf moves to it; returns the entry as the conversation holds it
 export function append(c: Conversation, parent: string | null, message: Message): Entry {
-	c.entries.push({ ...message, id: crypto.randomUUID(), parent });
+	c.entries.push({ ...message, id: crypto.randomUUID(), parent, time: Date.now() });
 	const entry = c.entries[c.entries.length - 1];
 	c.leaf = entry.id;
 	return entry;
@@ -173,7 +173,7 @@ const call = object(
 	{ images: array(image) }
 );
 const round = object({ reasoning: string, text: string, calls: array(call) });
-const link = { id: string, parent };
+const link = { id: string, parent, time: number };
 const MESSAGES: Record<string, Check> = {
 	user: object({ ...link, role: constant('user'), text: string }),
 	assistant: object(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, Entry } from '../src/lib/types.js';
+import { ago, stamp } from '../src/lib/config.js';
 import {
 	append,
 	drop,
@@ -87,6 +88,32 @@ describe('an edit', () => {
 	});
 });
 
+describe('a message', () => {
+	it('enters with the moment it entered', () => {
+		const c: Conversation = { id: 'c', title: 't', updated: 0, entries: [], leaf: null };
+		const before = Date.now();
+		const one = append(c, null, { role: 'user', text: 'one' });
+		expect(one.time).toBeGreaterThanOrEqual(before);
+		expect(one.time).toBeLessThanOrEqual(Date.now());
+	});
+
+	it('reads how long ago it entered in the language of the browser, its moment in full', () => {
+		const now = new Date(2026, 9, 9, 14, 37).getTime();
+		const back = (seconds: number) => ago(now - seconds * 1000, now, 'en');
+		expect(back(20)).toBe('now');
+		expect(back(60)).toBe('1 minute ago');
+		expect(back(5 * 60 + 59)).toBe('5 minutes ago');
+		expect(back(6 * 3600)).toBe('6 hours ago');
+		expect(back(30 * 3600)).toBe('yesterday');
+		expect(back(3 * 86400)).toBe('3 days ago');
+		expect(back(8 * 86400)).toBe('last week');
+		expect(back(65 * 86400)).toBe('2 months ago');
+		expect(back(400 * 86400)).toBe('last year');
+		expect(ago(now - 6 * 3600 * 1000, now, 'fr')).toBe('il y a 6 heures');
+		expect(stamp(now, 'fr')).toBe('9 oct. 2026, 14:37');
+	});
+});
+
 describe('an answer again', () => {
 	it('enters beside the answers of its message, from the very prefix, every branch kept', () => {
 		const c: Conversation = { id: 'c', title: 't', updated: 0, entries: [], leaf: null };
@@ -153,6 +180,9 @@ describe('a conversation file', () => {
 		expect(altered((f) => (f.kiss = 'save'))).toThrow('file.kiss: not conversations');
 		expect(altered((f) => (f.extra = 1))).toThrow('file.extra: unknown');
 		expect(altered((f) => delete f.conversations[0].title)).toThrow(`${at}.title: missing`);
+		expect(altered((f) => delete f.conversations[0].entries[0].time)).toThrow(
+			`${at}.entries[0].time: missing`
+		);
 		expect(altered((f) => f.conversations.push(f.conversations[0]))).toThrow(
 			'file.conversations[1].id: used twice'
 		);

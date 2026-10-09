@@ -2,7 +2,8 @@
 	import type { Entry } from '../lib/types.js';
 	import Round from './Round.svelte';
 	import Icon from './Icon.svelte';
-	import { COPIED_MS, SLASH } from '../lib/config.js';
+	import { COPIED_MS, SLASH, ago, stamp } from '../lib/config.js';
+	import { clock } from '../lib/clock.svelte.js';
 	import { source } from '../lib/conversation.js';
 	import { app, browse, dismiss, edit, retry } from '../lib/state.svelte.js';
 
@@ -68,6 +69,10 @@
 	</button>
 {/snippet}
 
+{#snippet when()}
+	<span class="time" title={stamp(message.time)}>{ago(message.time, clock.now)}</span>
+{/snippet}
+
 {#snippet switcher()}
 	{#if versions.length > 1}
 		<button
@@ -117,9 +122,11 @@
 	{/if}
 	{#if !live && draft === null}
 		<!-- copy holds the outer edge: last under a message of the user, on the
-		     right, first under the others; the versions sit on the inner side -->
+		     right, first under the others; the versions and the time sit on the
+		     inner side -->
 		<div class="actions">
 			{#if message.role === 'user'}
+				{@render when()}
 				{@render switcher()}
 				{@render again()}
 				<button onclick={begin} disabled={!!app.reply} aria-label="Edit">
@@ -130,11 +137,13 @@
 				{@render clip()}
 				{@render again()}
 				{@render switcher()}
+				{@render when()}
 			{:else}
 				{@render clip()}
 				<button onclick={() => dismiss(message.id)} disabled={!!app.reply} aria-label="Close">
 					<Icon name="close" />
 				</button>
+				{@render when()}
 			{/if}
 		</div>
 	{/if}
@@ -207,11 +216,27 @@
 	.error::first-letter {
 		text-transform: uppercase;
 	}
-	/* the icons under a message */
+	/* the icons under a message, shown while the message is hovered or holds
+	   the focus, their place kept; always shown where nothing hovers */
 	.actions {
 		display: flex;
 		align-items: center;
 		gap: 0.2rem;
+		visibility: hidden;
+	}
+	.message:hover .actions,
+	.message:focus-within .actions {
+		visibility: visible;
+	}
+	@media (hover: none) {
+		.actions {
+			visibility: visible;
+		}
+	}
+	.time {
+		padding: 0 0.4rem;
+		font-size: var(--size-secondary);
+		color: var(--fg-dim);
 	}
 	.version {
 		font-size: var(--size-secondary);
