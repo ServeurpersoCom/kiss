@@ -50,7 +50,7 @@ async function allowed(ctx: ToolContext, c: Call): Promise<boolean> {
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
 	const tool = tools.find((t) => t.name === c.name);
 	if (!tool) {
-		c.result = `unknown tool ${c.name}`;
+		c.result = `unknown tool "${c.name}"`;
 		c.ok = false;
 		return;
 	}

@@ -121,7 +121,10 @@ describe('a turn', () => {
 		const names = (i: number) => p.bodies[i].tools.map((t) => t.function.name);
 		expect(names(0)).toContain('config');
 		expect(names(1)).not.toContain('config');
-		expect(p.reply.rounds[1].calls[0]).toMatchObject({ result: 'unknown tool config', ok: false });
+		expect(p.reply.rounds[1].calls[0]).toMatchObject({
+			result: 'unknown tool "config"',
+			ok: false
+		});
 	});
 
 	it('stops after the rounds set', async () => {

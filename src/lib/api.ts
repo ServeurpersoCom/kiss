@@ -1,5 +1,5 @@
 import type { ConfigReader } from './types.js';
-import { MODEL_SEPARATOR, NAME, SLASH } from './config.js';
+import { MODEL_SEPARATOR, SLASH } from './config.js';
 import { bearer, remotes, type Remote } from './remote.js';
 
 // OpenAI compatible client: the model list and streamed chat completions
@@ -7,8 +7,8 @@ import { bearer, remotes, type Remote } from './remote.js';
 const UNAUTHORIZED = [401, 403];
 const NOT_FOUND = 404;
 // the commands that fix an endpoint which refuses the key, or is no LLM
-const KEY_FIX = `Give ${NAME} the key: ${SLASH}set endpoints key <name> <key>`;
-const URL_FIX = `Point ${NAME} at an LLM: ${SLASH}set endpoints url <name> <url>`;
+const KEY_FIX = `${SLASH}set endpoints key <name> <key>`;
+const URL_FIX = `${SLASH}set endpoints url <name> <url>`;
 
 export interface Delta {
 	content?: string;
@@ -62,7 +62,7 @@ async function request<T>(
 ): Promise<T> {
 	const start = new AbortController();
 	const timer = setTimeout(
-		() => start.abort(new Error(`${endpoint.name} does not answer within ${endpoint.timeout} s`)),
+		() => start.abort(new Error(`${endpoint.url} does not answer within ${endpoint.timeout} s`)),
 		endpoint.timeout * 1000
 	);
 	try {
@@ -72,7 +72,9 @@ async function request<T>(
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
 			// a network or CORS failure: nothing answers at that URL
-			throw e instanceof TypeError ? new EndpointError(e.message, URL_FIX) : e;
+			throw e instanceof TypeError
+				? new EndpointError(`${endpoint.url} does not answer`, URL_FIX)
+				: e;
 		});
 		return await read(res);
 	} finally {
@@ -106,7 +108,7 @@ export async function pick(
 		const models = all.length === 1 ? await listModels(all[0], signal) : [];
 		if (models.length !== 1) {
 			throw new Error(
-				`chat model is not set: ${SLASH}set chat model <endpoint/model>, see ${SLASH}show models`
+				`chat model is not set -> ${SLASH}show models, then ${SLASH}set chat model <endpoint/model>`
 			);
 		}
 		return { endpoint: all[0], model: models[0] };
@@ -115,7 +117,7 @@ export async function pick(
 	const endpoint = all.find((e) => e.name === value.slice(0, cut));
 	if (cut < 0 || !endpoint) {
 		throw new Error(
-			`chat model ${value} names no endpoint: write it endpoint/model, as show models lists it`
+			`chat model ${value} names no endpoint -> ${SLASH}show models lists every endpoint/model`
 		);
 	}
 	return { endpoint, model: value.slice(cut + MODEL_SEPARATOR.length) };
@@ -152,7 +154,7 @@ export async function* chat(
 			const data = line.slice(5).trim();
 			if (data === '[DONE]') return;
 			const json = JSON.parse(data);
-			if (json.error) throw new Error(json.error.message ?? 'stream error');
+			if (json.error) throw new Error(json.error.message ?? `${endpoint.url} broke the stream`);
 			const delta = json.choices?.[0]?.delta;
 			if (!delta) continue;
 			yield {

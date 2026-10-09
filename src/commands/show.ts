@@ -1,6 +1,6 @@
 import type { Command, Context, Group } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { comment } from '../lib/config.js';
+import { beyond, comment } from '../lib/config.js';
 
 // show chat, show tools use, show tools use bash_tool, and show tools bash_tool:
 // the word after a collection names a key when it names one, else an item
@@ -46,12 +46,13 @@ export default {
 		const word = schema.key(module, args[1]);
 		if (!word) {
 			if (!schema.collection(module)) throw new Error(`unknown key "${module} ${args[1]}"`);
-			if (args.length > 2) throw new Error(`nothing goes after: ${args.slice(2).join(' ')}`);
+			if (args.length > 2) throw beyond(['show', module, args[1]], args.slice(2));
 			return { module, name: args[1] };
 		}
 		const key = `${module} ${word}`;
 		const words = schema.find(key)!.named ? 3 : 2;
-		if (args.length > words) throw new Error(`nothing goes after: ${args.slice(words).join(' ')}`);
+		if (args.length > words)
+			throw beyond(['show', key, ...args.slice(2, words)], args.slice(words));
 		return { module, key, name: args[2] };
 	},
 	// the values the words name, defaults included, as set lines to paste back;

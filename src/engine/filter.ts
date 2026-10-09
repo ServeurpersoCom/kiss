@@ -34,7 +34,7 @@ export function compileFilter(spec: string): (text: string) => string {
 		try {
 			re = new RegExp(rest.join(' '), 'i');
 		} catch {
-			throw new Error(`bad pattern ${rest.join(' ')}`);
+			throw new Error(`"${rest.join(' ')}" is not a pattern`);
 		}
 		lines = PATTERNED[name](re);
 	}

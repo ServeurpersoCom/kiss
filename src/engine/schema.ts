@@ -33,14 +33,15 @@ function check(def: Key, raw: string): Value {
 		case 'string':
 			return raw;
 		case 'secret':
-			if (!raw || raw === SECRET_SET) throw new Error('paste the real value');
+			if (!raw || raw === SECRET_SET)
+				throw new Error(`"${SECRET_SET}" marks a secret set, it is no value`);
 			return raw;
 		case 'number': {
 			const n = Number(raw);
 			if (!raw.trim() || !Number.isFinite(n)) throw new Error(`"${raw}" is not a number`);
-			if (def.integer && !Number.isInteger(n)) throw new Error(`${n} is not a whole number`);
-			if (def.min !== undefined && n < def.min) throw new Error(`${n} is below ${def.min}`);
-			if (def.max !== undefined && n > def.max) throw new Error(`${n} is above ${def.max}`);
+			if (def.integer && !Number.isInteger(n)) throw new Error(`"${raw}" is not a whole number`);
+			if (def.min !== undefined && n < def.min) throw new Error(`"${raw}" is below ${def.min}`);
+			if (def.max !== undefined && n > def.max) throw new Error(`"${raw}" is above ${def.max}`);
 			return String(n);
 		}
 		case 'enum':
@@ -55,8 +56,7 @@ function check(def: Key, raw: string): Value {
 			} catch {
 				throw new Error(`"${raw}" is not a URL`);
 			}
-			if (!URL_PROTOCOLS.includes(url.protocol))
-				throw new Error(`${url.protocol} is not http or https`);
+			if (!URL_PROTOCOLS.includes(url.protocol)) throw new Error(`"${raw}" is not http or https`);
 			return raw.replace(/\/+$/, '');
 		}
 	}
@@ -108,7 +108,7 @@ export class KeySchema implements Schema {
 
 	parse(key: string, raw: string): Value {
 		const def = this.find(key);
-		if (!def) throw new Error(`unknown key ${key}`);
+		if (!def) throw new Error(`unknown key "${key}"`);
 		try {
 			return check(def, raw);
 		} catch (e) {
@@ -128,7 +128,7 @@ export class KeySchema implements Schema {
 		const names = [...this.modules.keys()].sort();
 		const module = pick(word, names, 'key');
 		if (word.includes('.')) {
-			throw new Error(`"${word}": a key is words, not dots: ${word.split('.').join(' ')}`);
+			throw new Error(`unknown key "${word}", did you mean ${word.split('.').join(' ')}`);
 		}
 		if (!module) throw new Error(`unknown key "${word}"` + didYouMean(word, names));
 		return module;

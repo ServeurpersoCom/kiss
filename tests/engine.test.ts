@@ -74,8 +74,12 @@ describe('a batch', () => {
 
 	it('takes no word its command does not read', async () => {
 		const k = await page();
-		expect((await k.run('show running now', 'user')).text).toContain('nothing goes after');
-		expect((await k.run('show chat system now', 'user')).text).toContain('nothing goes after');
+		expect((await k.run('show running now', 'user')).text).toBe(
+			'% nothing goes after show running: now'
+		);
+		expect((await k.run('show chat system now', 'user')).text).toBe(
+			'% nothing goes after show chat system: now'
+		);
 	});
 
 	it('answers with the change of the resolved values, secrets masked', async () => {
@@ -129,7 +133,7 @@ describe('a model list', () => {
 		vi.stubGlobal('fetch', held().fetch);
 		await k.run('set endpoints url a http://a/v1\nset endpoints timeout a 0.1', 'user');
 		expect((await k.run('show models', 'user')).text).toBe(
-			'! endpoints a a does not answer within 0.1 s'
+			'! endpoints a http://a/v1 does not answer within 0.1 s'
 		);
 		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
 	});
@@ -146,7 +150,9 @@ describe('a model list', () => {
 		});
 		vi.stubGlobal('fetch', fetch);
 		await k.run('set endpoints url a http://a/v1\nset endpoints timeout a 0.1', 'user');
-		expect((await k.run('show models', 'user')).text).toContain('a does not answer within 0.1 s');
+		expect((await k.run('show models', 'user')).text).toContain(
+			'http://a/v1 does not answer within 0.1 s'
+		);
 		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
 	});
 });
@@ -326,8 +332,8 @@ describe('a title', () => {
 describe('a word after set, no or show', () => {
 	it('competes with the modules, a prefix of both being ambiguous', async () => {
 		const k = await page();
-		expect((await k.run('show d', 'user')).text).toBe('% ambiguous "d": diff display');
-		expect((await k.run('show t', 'user')).text).toBe('% ambiguous "t": title tools');
+		expect((await k.run('show d', 'user')).text).toBe('% ambiguous word "d": diff display');
+		expect((await k.run('show t', 'user')).text).toBe('% ambiguous word "t": title tools');
 		expect((await k.run('show dis', 'user')).text).toContain('set display thinking closed');
 		expect((await k.run('show tool', 'user')).ok).toBe(true);
 		expect((await k.run('show ti', 'user')).text).toContain('no conversation here');
@@ -534,8 +540,10 @@ describe('the conversations', () => {
 			['ab12-2'],
 			['ab12-2', 'ab34-1']
 		]);
-		expect((await k.run('export ab', 'llm', s)).text).toBe('% ambiguous "ab": ab12-2 ab34-1');
-		expect((await k.run('export zz', 'llm', s)).text).toBe('% no conversation zz');
+		expect((await k.run('export ab', 'llm', s)).text).toBe(
+			'% ambiguous conversation "ab": ab12-2 ab34-1'
+		);
+		expect((await k.run('export zz', 'llm', s)).text).toBe('% unknown conversation "zz"');
 		expect((await k.run('export', 'llm', s)).text).toBe('% no conversation here');
 		expect((await k.run('export all\nshow title', 'llm', s)).text).toContain('runs alone');
 		const refused = { ...s, offer: async () => false };
@@ -567,7 +575,7 @@ describe('kiss.conf', () => {
 			'endpoints: endpoints s has no url'
 		]);
 		expect(k.defaults('set chat system red\nshow running')).toEqual([
-			'show running: only set lines'
+			'show running: kiss.conf holds set lines only'
 		]);
 		k.start();
 		expect(k.settings.get('chat system')).toBe('');
@@ -596,7 +604,7 @@ describe('a model', () => {
 		const k = await page();
 		expect((await k.run('set models temperature hf/org/m:tag 0.70', 'user')).ok).toBe(true);
 		expect(k.settings.get('models temperature', 'hf/org/m:tag')).toBe('0.7');
-		expect((await k.run('set models top_p a/b 2', 'user')).text).toContain('2 is above 1');
+		expect((await k.run('set models top_p a/b 2', 'user')).text).toContain('"2" is above 1');
 		expect((await k.run('set models top_k a/b 1.5', 'user')).text).toContain('not a whole number');
 	});
 });
@@ -610,7 +618,7 @@ describe('a save', () => {
 		);
 		await k.run('set endpoints url a http://a/v1\nset endpoints url b http://b/v1', 'user');
 		expect((await k.run('save a', 'user')).text).toBe(
-			'saved a\n! chat model is not set: /set chat model <endpoint/model>, see /show models'
+			'saved a\n! chat model is not set -> /show models, then /set chat model <endpoint/model>'
 		);
 		await k.run('set chat model b/x', 'user');
 		expect((await k.run('save a', 'user')).text).toBe(
@@ -624,7 +632,7 @@ describe('a save', () => {
 		const k = await page();
 		expect((await k.run('save', 'user')).text).toBe('<name>');
 		expect((await k.run('save session', 'user')).text).toContain('is not a save name');
-		expect((await k.run('save a b', 'user')).text).toContain('nothing goes after');
+		expect((await k.run('save a b', 'user')).text).toBe('% nothing goes after save a: b');
 		vi.useFakeTimers({ now: new Date('2026-10-05T09:17:00Z'), toFake: ['Date'] });
 		await k.run('set chat system blue', 'user');
 		await k.run('save a', 'user');
@@ -693,7 +701,7 @@ describe('css', () => {
 describe('reset and load', () => {
 	it('reset drops what the session sets, load puts back the save it names', async () => {
 		const k = await page('set display tools open');
-		expect((await k.run('load first', 'user')).text).toContain('no save first');
+		expect((await k.run('load first', 'user')).text).toContain('unknown save "first"');
 		await k.run('set chat system blue', 'user');
 		await k.run('save first', 'user');
 		await k.run('set chat system green', 'user');

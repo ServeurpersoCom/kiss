@@ -33,7 +33,7 @@ export class SaveArchive implements Archive {
 
 	find(name: string): Save {
 		const save = this.saves.find((s) => s.name === name);
-		if (!save) throw new Error(`no save ${name}`);
+		if (!save) throw new Error(`unknown save "${name}"`);
 		return save;
 	}
 

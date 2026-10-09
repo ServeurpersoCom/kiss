@@ -91,7 +91,7 @@ export function walk(words: readonly string[], all: readonly Command<unknown>[])
 export function resolve(words: readonly string[]): { command: Command<unknown>; args: string[] } {
 	const w = walk(words, commands);
 	if (w.ambiguous) {
-		throw new Error(`ambiguous "${w.ambiguous.word}": ${w.ambiguous.names.join(' ')}`);
+		throw new Error(`ambiguous word "${w.ambiguous.word}": ${w.ambiguous.names.join(' ')}`);
 	}
 	if (w.command) return { command: w.command, args: words.slice(w.depth) };
 	const names = [...new Set(w.pool.map((c) => c.path[w.consumed]).filter((n) => n))];

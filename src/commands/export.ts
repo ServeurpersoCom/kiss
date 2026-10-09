@@ -1,5 +1,5 @@
 import type { Command, Context, Conversation } from '../lib/types.js';
-import { ALL, fileName, localTime } from '../lib/config.js';
+import { ALL, beyond, fileName, localTime } from '../lib/config.js';
 
 // what export names: every conversation, one by a prefix of its id, or the one
 // the batch was sent in
@@ -16,8 +16,8 @@ function chosen(ctx: Context, plan: Plan): readonly Conversation[] {
 	}
 	const hits = all.filter((c) => c.id.startsWith(plan.prefix));
 	if (hits.length > 1)
-		throw new Error(`ambiguous "${plan.prefix}": ${hits.map((c) => c.id).join(' ')}`);
-	if (!hits.length) throw new Error(`no conversation ${plan.prefix}`);
+		throw new Error(`ambiguous conversation "${plan.prefix}": ${hits.map((c) => c.id).join(' ')}`);
+	if (!hits.length) throw new Error(`unknown conversation "${plan.prefix}"`);
 	return hits;
 }
 
@@ -26,7 +26,7 @@ export default {
 	roles: ['user', 'llm'],
 	alone: true,
 	parse(_schema, args) {
-		if (args.length > 1) throw new Error(`nothing goes after: ${args.slice(1).join(' ')}`);
+		if (args.length > 1) throw beyond(['export', args[0]], args.slice(1));
 		if (!args.length) return null;
 		return args[0] === ALL ? ALL : { prefix: args[0].toLowerCase() };
 	},

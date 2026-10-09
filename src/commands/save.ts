@@ -1,6 +1,6 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { NAME_PATTERN, SESSION, comment } from '../lib/config.js';
+import { NAME_PATTERN, SESSION, beyond, comment } from '../lib/config.js';
 
 export default {
 	path: ['save'],
@@ -8,7 +8,7 @@ export default {
 	alone: true,
 	parse(_schema, args) {
 		if (!args.length) throw new Incomplete();
-		if (args.length > 1) throw new Error(`nothing goes after: ${args.slice(1).join(' ')}`);
+		if (args.length > 1) throw beyond(['save', args[0]], args.slice(1));
 		if (!NAME_PATTERN.test(args[0]) || args[0] === SESSION) {
 			throw new Error(`"${args[0]}" is not a save name`);
 		}

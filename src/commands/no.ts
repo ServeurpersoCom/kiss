@@ -1,4 +1,5 @@
 import type { Command } from '../lib/types.js';
+import { beyond } from '../lib/config.js';
 
 // no endpoints prod names an item of a collection, no chat model a key
 type Plan = { module: string; item: string } | { key: string; name?: string };
@@ -15,13 +16,13 @@ export default {
 			}
 		}
 		const { key, name, rest } = schema.read(args);
-		if (rest.length) throw new Error(`nothing goes after the key: ${rest.join(' ')}`);
+		if (rest.length) throw beyond(['no', key, ...(name ? [name] : [])], rest);
 		return { key, name };
 	},
 	run(ctx, plan) {
 		if ('item' in plan) {
 			if (!ctx.config.names(plan.module).includes(plan.item)) {
-				throw new Error(`no ${plan.module} ${plan.item}`);
+				throw new Error(`unknown ${plan.module} "${plan.item}"`);
 			}
 			ctx.config.drop(plan.module, plan.item);
 		} else {

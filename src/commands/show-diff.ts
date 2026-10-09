@@ -1,6 +1,6 @@
 import type { Command, Context, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { SESSION, comment } from '../lib/config.js';
+import { SESSION, beyond, comment } from '../lib/config.js';
 
 // the values of a save, or of the running configuration for session
 function values(ctx: Context, name: string): Record<string, Value> {
@@ -12,7 +12,7 @@ export default {
 	roles: ['user', 'llm'],
 	parse(_schema, args) {
 		if (args.length < 2) throw new Incomplete();
-		if (args.length > 2) throw new Error(`nothing goes after: ${args.slice(2).join(' ')}`);
+		if (args.length > 2) throw beyond(['show', 'diff', ...args.slice(0, 2)], args.slice(2));
 		return args;
 	},
 	// from one save to another, session naming the running configuration

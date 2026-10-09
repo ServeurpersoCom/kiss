@@ -139,7 +139,7 @@ function current(title: string): Conversation {
 // what went wrong, with the command that fixes it when the endpoint is the cause
 function explain(error: Error): string {
 	if (error.name === 'AbortError') return 'stopped';
-	if (error instanceof EndpointError && error.fix) return `${error.message}. ${error.fix}`;
+	if (error instanceof EndpointError && error.fix) return `${error.message} -> ${error.fix}`;
 	return error.message;
 }
 

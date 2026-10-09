@@ -1,5 +1,6 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
+import { beyond } from '../lib/config.js';
 
 export default {
 	path: ['no', 'save'],
@@ -7,7 +8,7 @@ export default {
 	alone: true,
 	parse(_schema, args) {
 		if (!args.length) throw new Incomplete();
-		if (args.length > 1) throw new Error(`nothing goes after: ${args.slice(1).join(' ')}`);
+		if (args.length > 1) throw beyond(['no', 'save', args[0]], args.slice(1));
 		return args[0];
 	},
 	run(ctx, name) {

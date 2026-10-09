@@ -1,6 +1,6 @@
 import type { ConfigReader, Context, Key, Outcome, Role, Scope, Value } from '../lib/types.js';
 import { ALLOW, ALWAYS, ASK, DENY, Incomplete, REFUSE } from '../lib/types.js';
-import { ERROR_PREFIX, OUTPUT_MAX_LINES, PRIVILEGE, comment } from '../lib/config.js';
+import { ERROR_PREFIX, OUTPUT_MAX_LINES, PRIVILEGE, beyond, comment } from '../lib/config.js';
 import { splitLines, splitPipes, tokenize } from './parse.js';
 import { compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
@@ -53,7 +53,7 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 		}
 		if (command.alone && !alone) throw new Error(`${path} runs alone, on a line of its own`);
 		if (!command.parse && args.length) {
-			throw new Error(`nothing goes after ${path}: ${args.join(' ')}`);
+			throw beyond([path], args);
 		}
 		const plan = command.parse?.(schema, args);
 		return { run: (c) => command.run(c, plan), filters };
@@ -73,9 +73,9 @@ export function defaults(text: string): string[] {
 	for (const line of splitLines(text)) {
 		try {
 			const { command, args } = resolve(tokenize(line));
-			if (command.path.join(' ') !== 'set') throw new Error('only set lines');
+			if (command.path.join(' ') !== 'set') throw new Error('kiss.conf holds set lines only');
 			const { key, name, rest } = schema.read(args);
-			if (!rest.length) throw new Error('no value');
+			if (!rest.length) throw new Error(`${key} misses its value`);
 			site.set(stored(key, name), schema.parse(key, rest.join(' ')));
 		} catch (e) {
 			problems.push(`${line}: ${(e as Error).message}`);

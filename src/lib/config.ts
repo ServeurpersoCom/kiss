@@ -69,6 +69,11 @@ export function stamp(time: number, locale?: string): string {
 	return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(time);
 }
 
+// the words a line holds past its end: what they follow, then themselves
+export function beyond(head: readonly string[], rest: readonly string[]): Error {
+	return new Error(`nothing goes after ${head.join(' ')}: ${rest.join(' ')}`);
+}
+
 // conversations: the word naming every one of them, and their files, named
 // after a title without the characters a file name cannot hold
 export const ALL = 'all';

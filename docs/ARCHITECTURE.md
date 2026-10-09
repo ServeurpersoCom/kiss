@@ -191,6 +191,25 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   is never seen by the model; a server that does not answer serves nothing, and a name already
   served stays with the first: the model is told, the save warns of it, nothing ever stops.
 
+### Messages
+
+Every message reads alike for a person and for a model: one line, in lower case, with no final
+period. What was typed stands in double quotes, what KiSS names stands bare. An error starts with
+`%`, a note with `!`; in a batch an error names its line, and the batch ends on
+`% nothing applied`. Each kind of message has one form:
+
+```
+% unknown command "sow", did you mean show
+% ambiguous word "d": diff display
+% nothing goes after save a: b
+% "2" is above 1
+% nobody is here to pick a file
+% the user refused the change
+! no line matches
+```
+
+A fix follows an arrow: `no endpoint yet -> /set endpoints url <name> <url>`.
+
 ## Consent
 
 The question shows in the conversation, in a card marked by the accent: the change the model asks
