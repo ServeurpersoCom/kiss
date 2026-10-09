@@ -9,12 +9,13 @@ save always goes through and warns of what its checks find.
 ## The CLI
 
 The user types it after a `/`, the model sends it through its tool, and the developer terminal
-(Ctrl+`) runs it with the rights of the model.
+(Ctrl+`) runs it with the rights of the model, asking on its own line what the model would ask
+the user.
 
 ```
 batch   = line { newline line }              a line opening with ! is a comment
 line    = command { "|" filter }
-command = "set" key value
+command = "set" key [ value ]                a secret left out is asked
         | "no" key | "no" module item
         | "show" module [ word [ item ] ] | "show" module item
         | "show" ( "running" | "style" | "saves" | "version" | "title" )
@@ -122,7 +123,7 @@ handshake.
 
 ```
 set mcp url sandbox https://example.com/mcp
-set mcp key sandbox <token>
+set mcp key sandbox                      ! a masked field asks for the token
 show tools                               ! every tool, by who serves it
 set tools use str_replace off            ! the model never sees it
 set tools preview bash_tool description  ! what a folded call shows
