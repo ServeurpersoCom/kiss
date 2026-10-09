@@ -7,7 +7,7 @@ export default {
 	name: 'mcp',
 	keys: {
 		// a Streamable HTTP endpoint, the MCP url of the server
-		url: { kind: 'url', named: true },
+		url: { kind: 'url', named: true, guard: 'change' },
 		// sent as a bearer token
 		key: { kind: 'secret', named: true },
 		// seconds a call of a tool may take, until the turn stops at the latest

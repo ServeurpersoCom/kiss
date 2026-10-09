@@ -22,7 +22,8 @@ export class Values implements Config {
 		const k = stored(key, name);
 		if (this.map.has(k)) return this.map.get(k);
 		if (this.site.has(k)) return this.site.get(k);
-		return this.schema.find(key)?.default;
+		const def = this.schema.find(key);
+		return (name !== undefined ? def?.defaults?.[name] : undefined) ?? def?.default;
 	}
 
 	names(module: string): string[] {

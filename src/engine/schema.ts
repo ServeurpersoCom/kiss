@@ -66,11 +66,14 @@ function check(def: Key, raw: string): Value {
 function audit(key: string, def: Key): string | null {
 	if (!key.split(' ').every((w) => WORD.test(w))) return `"${key}": bad key name`;
 	if (def.kind === 'enum' && !def.values?.length) return `${key}: enum without values`;
-	if (def.default === undefined) return null;
-	try {
-		check(def, def.default);
-	} catch (e) {
-		return `${key}: bad default, ${(e as Error).message}`;
+	if (def.guard === 'opening' && def.kind !== 'enum') return `${key}: opening guard on no enum`;
+	for (const value of [def.default, ...Object.values(def.defaults ?? {})]) {
+		if (value === undefined) continue;
+		try {
+			check(def, value);
+		} catch (e) {
+			return `${key}: bad default, ${(e as Error).message}`;
+		}
 	}
 	return null;
 }

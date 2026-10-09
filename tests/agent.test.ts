@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Assistant, Message, ToolContext } from '../src/lib/types.js';
+import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
+import { ONCE } from '../src/lib/types.js';
 
 interface Body {
 	messages: { role: string; content?: string; reasoning_content?: string; tool_calls?: object[] }[];
@@ -53,10 +54,15 @@ async function page(replies: Reply[]) {
 	const { turn } = await import('../src/lib/agent.js');
 	const { settled } = await import('../src/lib/conversation.js');
 	const stop = new AbortController();
+	// what the model asked the user, answered by the verdicts in order, once past them
+	const asked: Grant[] = [];
+	const verdicts: Verdict[] = [];
+	const grant = async (request: Grant) => (asked.push(request), verdicts.shift() ?? ONCE);
 	const tools: ToolContext = {
 		signal: stop.signal,
-		cli: (l) => engine.run(l, 'llm', { signal: stop.signal }),
-		redact: engine.redact
+		cli: (l) => engine.run(l, 'llm', { signal: stop.signal, grant }),
+		redact: engine.redact,
+		grant
 	};
 	const reply: Assistant = { role: 'assistant', rounds: [] };
 	const user: Message[] = [{ role: 'user', text: 'go' }];
@@ -66,6 +72,8 @@ async function page(replies: Reply[]) {
 		stop,
 		tools,
 		reply,
+		asked,
+		verdicts,
 		settled,
 		go: () => turn(user, reply, tools, stop.signal)
 	};

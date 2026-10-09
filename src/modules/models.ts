@@ -21,10 +21,10 @@ export default {
 		reasoning_effort: { kind: 'string', named: true }
 	},
 	// the models of every endpoint at once, by endpoint
-	async items(config, signal) {
+	async items(ctx) {
 		return Promise.all(
-			remotes(config, 'endpoints').map((e) =>
-				listModels(e, signal).then(
+			remotes(ctx.config, 'endpoints').map((e) =>
+				listModels(e, ctx.signal).then(
 					(ids) => ({
 						group: `endpoints ${e.name}`,
 						names: ids.map((id) => e.name + MODEL_SEPARATOR + id)

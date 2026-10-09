@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Grant, Verdict } from '../lib/types.js';
+	import { REFUSE, VERDICTS } from '../lib/types.js';
 	import { run, suggest } from '../engine/run.js';
 	import { extend } from '../engine/complete.js';
 	import { app } from '../lib/state.svelte.js';
@@ -22,6 +24,37 @@
 		lines.push({ text, kind });
 	}
 
+	// the question the next line answers: its prompt, whether the line is
+	// masked, and how the line settles it, none when the terminal closes
+	let question: { prompt: string; masked: boolean; settle(line: string | null): void } | null =
+		$state(null);
+
+	function ask(prompt: string, masked: boolean): Promise<string | null> {
+		return new Promise((resolve) => {
+			question = { prompt, masked, settle: (line) => ((question = null), resolve(line)) };
+		});
+	}
+
+	// the user lets the model make a change, a word or its start naming the
+	// verdict, asked again until one does
+	async function grant(request: Grant): Promise<Verdict> {
+		print(
+			request.kind === 'call' ? `${request.tool} ${request.args}` : request.lines.join('\n'),
+			'output'
+		);
+		for (;;) {
+			const line = await ask(`${VERDICTS.join(', ')}? `, false);
+			if (line === null) return REFUSE;
+			const word = line.trim().toLowerCase();
+			const verdict = word && VERDICTS.find((v) => v.startsWith(word));
+			if (verdict) return verdict;
+		}
+	}
+
+	const secret = (key: string) => ask(`${key}: `, true);
+
+	$effect(() => () => question?.settle(null));
+
 	// the log follows every new line
 	$effect(() => {
 		void lines.length;
@@ -32,11 +65,16 @@
 	async function enter() {
 		const text = input;
 		input = '';
+		if (question) {
+			print(question.prompt + (question.masked ? '' : text), 'input');
+			question.settle(text);
+			return;
+		}
 		print(PROMPT + text, 'input');
 		if (!text.trim()) return;
 		past.push(text);
 		back = 0;
-		const result = await run(text, 'llm');
+		const result = await run(text, 'llm', { grant, secret });
 		if (result.text) print(result.text, result.ok ? 'output' : 'error');
 	}
 
@@ -72,8 +110,15 @@
 		{/each}
 	</div>
 	<label>
-		<span>{PROMPT}</span>
-		<input bind:this={field} bind:value={input} {onkeydown} spellcheck="false" autocomplete="off" />
+		<span>{question?.prompt ?? PROMPT}</span>
+		<input
+			bind:this={field}
+			bind:value={input}
+			{onkeydown}
+			type={question?.masked ? 'password' : 'text'}
+			spellcheck="false"
+			autocomplete="off"
+		/>
 	</label>
 </div>
 

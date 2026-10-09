@@ -2,7 +2,7 @@ import type { Module } from '../lib/types.js';
 import { NAME } from '../lib/config.js';
 import { display } from '../lib/display.svelte.js';
 import { served } from '../lib/mcp.js';
-import { ON, USES, tools } from '../lib/tools.js';
+import { CONSENT, ON, USES, tools } from '../lib/tools.js';
 
 // every setting of a tool, the tool named as the item: one of KiSS or of an
 // MCP server
@@ -11,8 +11,16 @@ export default {
 	keys: {
 		// the rounds of tool calls a turn takes at most
 		rounds: { kind: 'number', min: 1, integer: true, default: '25' },
-		// off, the model never sees the tool
-		use: { kind: 'enum', values: USES, default: ON, named: true },
+		// off, the model never sees the tool; consent, each call asks the user,
+		// always turning it on; the tools of KiSS are on, their changes ask
+		use: {
+			kind: 'enum',
+			values: USES,
+			default: CONSENT,
+			defaults: Object.fromEntries(tools.map((t) => [t.name, ON])),
+			named: true,
+			guard: 'opening'
+		},
 		// the argument a call of the tool shows folded; unset, its first one
 		preview: { kind: 'string', named: true }
 	},
@@ -25,8 +33,8 @@ export default {
 		);
 	},
 	// the tools of KiSS, then those of every MCP server
-	async items(config) {
-		const mcp = await served(config);
+	async items(ctx) {
+		const mcp = await served(ctx.config);
 		return [
 			{ group: NAME, names: tools.map((t) => t.name) },
 			...mcp.map((s) => ({

@@ -4,7 +4,8 @@ import {
 	WebStandardStreamableHTTPServerTransport,
 	createMcpHandler
 } from '@modelcontextprotocol/server';
-import type { Assistant, Message, ToolContext } from '../src/lib/types.js';
+import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
+import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 
 interface Body {
 	messages: { role: string; content: string }[];
@@ -134,16 +135,21 @@ async function page(
 	const { turn } = await import('../src/lib/agent.js');
 	const go = async () => {
 		const stop = new AbortController();
+		const grant = async (request: Grant) => (asked.push(request), verdicts.shift() ?? ONCE);
 		const tools: ToolContext = {
 			signal: stop.signal,
-			cli: (l) => engine.run(l, 'llm', { signal: stop.signal }),
-			redact: engine.redact
+			cli: (l) => engine.run(l, 'llm', { signal: stop.signal, grant }),
+			redact: engine.redact,
+			grant
 		};
 		const reply: Assistant = { role: 'assistant', rounds: [] };
 		const user: Message[] = [{ role: 'user', text: 'go' }];
 		return { reply, stop, done: turn(user, reply, tools, stop.signal) };
 	};
-	return { engine, bodies, auth, methods, go };
+	// what the model asked the user, answered by the verdicts in order, once past them
+	const asked: Grant[] = [];
+	const verdicts: Verdict[] = [];
+	return { engine, bodies, auth, methods, asked, verdicts, go };
 }
 
 beforeEach(() => {
@@ -186,7 +192,7 @@ describe('an MCP server', () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
 		expect((await p.engine.run('show tools', 'user')).text).toContain(
-			'! mcp a\nset tools use bash_tool on'
+			'! mcp a\nset tools use bash_tool consent'
 		);
 		expect(p.auth.length).toBeGreaterThan(0);
 		expect(p.auth.every((a) => a === 'Bearer sk-mcp')).toBe(true);
@@ -270,12 +276,12 @@ describe('an MCP server', () => {
 				'! KiSS',
 				'set tools use config on',
 				'! mcp a',
-				'set tools use bash_tool on',
+				'set tools use bash_tool consent',
 				'set tools use snap off',
-				'set tools use fail on',
-				'set tools use wait on',
+				'set tools use fail consent',
+				'set tools use wait consent',
 				'! others',
-				'set tools use old on'
+				'set tools use old consent'
 			].join('\n')
 		);
 	});
@@ -313,6 +319,33 @@ describe('an MCP server', () => {
 		t.stop.abort();
 		await expect(t.done).rejects.toThrow();
 		expect(t.reply.rounds).toEqual([]);
+	});
+
+	it('in consent asks before each call: once lets it, always turns it on, refuse fails it', async () => {
+		const p = await page({ a: legacy(SHELL) }, [
+			stream([call('bash_tool', { description: 'a', text: 'one' })]),
+			stream([call('bash_tool', { description: 'b', text: 'two' })]),
+			stream([call('bash_tool', { description: 'c', text: 'three' })]),
+			stream([call('bash_tool', { description: 'd', text: 'four' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		p.verdicts.push(REFUSE, ONCE, ALWAYS);
+		const t = await p.go();
+		await t.done;
+		expect(t.reply.rounds.flatMap((r) => r.calls).map((c) => c.result)).toEqual([
+			'the user refused the call',
+			'ran two',
+			'ran three',
+			'ran four'
+		]);
+		expect(p.asked).toHaveLength(3);
+		expect(p.asked[0]).toEqual({
+			kind: 'call',
+			tool: 'bash_tool',
+			args: JSON.stringify({ description: 'a', text: 'one' })
+		});
+		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('on');
 	});
 
 	it('holding a key is never moved by the model', async () => {

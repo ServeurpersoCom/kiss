@@ -64,7 +64,7 @@ export default {
 		if (plan.name) out.push(...lines(ctx, plan, plan.name));
 		else if (!items) out.push(...set.flatMap((n) => lines(ctx, plan, n)));
 		else {
-			const groups = await items(ctx.config, ctx.signal);
+			const groups = await items(ctx);
 			const known = new Set(groups.flatMap((g) => g.names));
 			groups.push({ group: 'others', names: set.filter((n) => !known.has(n)) });
 			// an item without a setting shows by its name alone, unless a key is named

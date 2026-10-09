@@ -8,6 +8,8 @@ export const ARCHIVE_STORAGE_KEY = 'kiss.saves';
 export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
 // between the endpoint and the model id in the name of a model: prod/qwen3:8b
 export const MODEL_SEPARATOR = '/';
+// the module holding how far the model changes each module
+export const PRIVILEGE = 'privilege';
 // the word show diff reads as the running configuration, never a save name
 export const SESSION = 'session';
 export const ERROR_PREFIX = '% ';

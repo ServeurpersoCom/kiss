@@ -5,7 +5,7 @@ import { bare, remotes } from '../lib/remote.js';
 export default {
 	name: 'endpoints',
 	keys: {
-		url: { kind: 'url', named: true },
+		url: { kind: 'url', named: true, guard: 'change' },
 		key: { kind: 'secret', named: true },
 		// seconds the endpoint has to start answering: a model list, the start of
 		// a reply, which then streams until it ends or the turn stops

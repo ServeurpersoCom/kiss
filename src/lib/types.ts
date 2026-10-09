@@ -10,9 +10,33 @@ export type Value = string;
 
 export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret';
 
+// what a change of a key by the model needs from the privilege of its module:
+// change, any change; opening, a change toward a later value of an enum whose
+// values go from the most closed to the most open
+export type Guard = 'change' | 'opening';
+
+// how far the model changes the guarded keys of a module: never, once the user
+// agrees, or freely
+export const LEVELS = ['deny', 'ask', 'allow'] as const;
+export type Level = (typeof LEVELS)[number];
+export const [DENY, ASK, ALLOW] = LEVELS;
+
+// what the user answers when the model asks for a change or a call: this time,
+// from now on, or not
+export const VERDICTS = ['once', 'always', 'refuse'] as const;
+export type Verdict = (typeof VERDICTS)[number];
+export const [ONCE, ALWAYS, REFUSE] = VERDICTS;
+
+// what the model asks the user to let it do: the lines of a change, or a call
+// of a tool with its arguments
+export type Grant =
+	{ kind: 'change'; lines: string[] } | { kind: 'call'; tool: string; args: string };
+
 export interface Key {
 	kind: Kind;
 	default?: Value;
+	// the defaults of some items of a collection, over the default of the key
+	defaults?: Record<string, Value>;
 	// enum choices
 	values?: readonly string[];
 	// number bounds, both included, and whether it is whole
@@ -22,6 +46,7 @@ export interface Key {
 	// one value per item of a collection, the item named right before the value:
 	// set endpoints url prod https://example.com/v1
 	named?: boolean;
+	guard?: Guard;
 }
 
 // a module owns the keys spelled after its name: "chat" owns "chat model";
@@ -29,8 +54,10 @@ export interface Key {
 export interface Module {
 	name: string;
 	keys: Record<string, Key>;
+	// only the user changes its keys, whatever command spells the change
+	user?: true;
 	// rule across keys, checked on every change, returns a reason when broken
-	validate?(config: ConfigReader): string | null;
+	validate?(config: ConfigReader, modules: readonly Module[]): string | null;
 	// live verification run on every save, resolves to what to warn of, never
 	// stopping the save
 	check?(config: ConfigReader): Promise<string | null>;
@@ -38,7 +65,7 @@ export interface Module {
 	apply?(config: ConfigReader): void;
 	// the items of a collection the module knows beyond those set, by
 	// group: who knows them, and why it knows none when it failed
-	items?(config: ConfigReader, signal?: AbortSignal): Promise<Group[]>;
+	items?(ctx: Context): Promise<Group[]>;
 }
 
 export interface Group {
@@ -154,6 +181,10 @@ export interface Scope {
 	// aborts the batch of a stopped model turn, and the requests it makes
 	signal?: AbortSignal;
 	conversation?: Titled;
+	// asks the user to let the model make a change
+	grant?(request: Grant): Promise<Verdict>;
+	// asks the user for the value of a secret key, none when they give none
+	secret?(key: string): Promise<string | null>;
 }
 
 // a conversation as a batch sees it: its title, and nothing of its messages
@@ -226,6 +257,8 @@ export interface ToolContext {
 	signal: AbortSignal;
 	// runs CLI lines with the rights of the model, aborted with the turn
 	cli(text: string): Promise<Outcome>;
+	// asks the user to let the model make a call
+	grant(request: Grant): Promise<Verdict>;
 	// the lines with every secret value masked
 	redact(text: string): string;
 }

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Grant, Verdict } from '../src/lib/types.js';
+import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 
 type Engine = typeof import('../src/engine/run.js');
 
@@ -30,6 +32,9 @@ function held() {
 	);
 	return { fetch, release: () => release() };
 }
+
+// the user lets every change the model asks for, once
+const grant = async () => ONCE;
 
 beforeEach(() => {
 	localStorage.clear();
@@ -192,7 +197,7 @@ describe('a secret', () => {
 			expect(r.text).toContain(`endpoints ${item} holds a secret`);
 		}
 		expect((await k.run('set endpoints key u sk-model', 'llm')).ok).toBe(true);
-		expect((await k.run('set endpoints url fresh http://f/v1', 'llm')).ok).toBe(true);
+		expect((await k.run('set endpoints url fresh http://f/v1', 'llm', { grant })).ok).toBe(true);
 		expect((await k.run('set endpoints url u http://u2/v1', 'user')).ok).toBe(true);
 	});
 
@@ -255,7 +260,7 @@ describe('a collection', () => {
 describe('a tool', () => {
 	it('holds every setting of its own under its name, a dotted one too', async () => {
 		const k = await page();
-		expect(k.settings.get('tools use', 'repo.search')).toBe('on');
+		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
 		const r = await k.run(
 			'set tools preview repo.search query\nset tools use repo.search off',
 			'user'
@@ -266,7 +271,7 @@ describe('a tool', () => {
 		);
 		expect((await k.run('no tools repo.search', 'user')).ok).toBe(true);
 		expect(k.settings.get('tools preview', 'repo.search')).toBeUndefined();
-		expect(k.settings.get('tools use', 'repo.search')).toBe('on');
+		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
 	});
 });
 
@@ -302,6 +307,117 @@ describe('a word after set, no or show', () => {
 		expect((await k.run('show dis', 'user')).text).toContain('set display thinking closed');
 		expect((await k.run('show tool', 'user')).ok).toBe(true);
 		expect((await k.run('show ti', 'user')).text).toContain('no conversation here');
+	});
+});
+
+// a user answering every change the model asks for with one verdict, the
+// questions kept
+function user(verdict: Verdict) {
+	const asked: Grant[] = [];
+	return { asked, grant: async (request: Grant) => (asked.push(request), verdict) };
+}
+
+describe('the firewall', () => {
+	it('asks the user before the model changes a guarded key, whatever spells it', async () => {
+		const k = await page();
+		await k.run('set tools use t off\nset chat system mine', 'user');
+		const once = user(ONCE);
+		expect((await k.run('set chat system theirs', 'llm', once)).ok).toBe(true);
+		expect(once.asked).toEqual([
+			{ kind: 'change', lines: ['- set chat system mine', '+ set chat system theirs'] }
+		]);
+		const refuse = user(REFUSE);
+		expect((await k.run('reset', 'llm', refuse)).text).toBe('% the user refused the change');
+		expect((await k.run('no tools t', 'llm', refuse)).text).toBe('% the user refused the change');
+		expect(refuse.asked.map((a) => a.kind === 'change' && a.lines)).toEqual([
+			[
+				'- set chat system theirs',
+				'+ set chat system ""',
+				'- set tools use t off',
+				'+ set tools use t consent'
+			],
+			['- set tools use t off', '+ set tools use t consent']
+		]);
+		expect(k.settings.get('tools use', 't')).toBe('off');
+	});
+
+	it('never asks when the model closes', async () => {
+		const k = await page();
+		const refuse = user(REFUSE);
+		expect((await k.run('set tools use t off', 'llm', refuse)).ok).toBe(true);
+		expect(refuse.asked).toEqual([]);
+		expect((await k.run('set tools use t consent', 'llm', refuse)).ok).toBe(false);
+	});
+
+	it('goes as far as the privilege of the module, which only the user sets', async () => {
+		const k = await page();
+		const once = user(ONCE);
+		await k.run('set privilege level chat deny', 'user');
+		expect((await k.run('set chat system x', 'llm', once)).text).toBe(
+			'% the privilege of chat denies the change'
+		);
+		await k.run('set privilege level chat allow', 'user');
+		expect((await k.run('set chat system x', 'llm', once)).ok).toBe(true);
+		expect(once.asked).toEqual([]);
+		expect((await k.run('set privilege level chat ask', 'llm', once)).text).toBe(
+			"% privilege is the user's"
+		);
+		expect((await k.run('reset', 'llm', once)).text).toBe("% privilege is the user's");
+		expect((await k.run('set privilege level css allow', 'user')).text).toContain(
+			'css guards no key'
+		);
+		expect((await k.run('show privilege', 'user')).text).toBe(
+			[
+				'! modules',
+				'set privilege level chat allow',
+				'set privilege level endpoints ask',
+				'set privilege level mcp ask',
+				'set privilege level tools ask'
+			].join('\n')
+		);
+	});
+
+	it('takes always as the allow privilege of the modules asked', async () => {
+		const k = await page();
+		expect((await k.run('set chat model a/b', 'llm', user(ALWAYS))).text).toBe(
+			[
+				'- set chat model ""',
+				'+ set chat model a/b',
+				'- set privilege level chat ask',
+				'+ set privilege level chat allow'
+			].join('\n')
+		);
+		expect((await k.run('set chat system y', 'llm', user(REFUSE))).ok).toBe(true);
+	});
+
+	it('refuses when nobody is here, and a stop while it asks applies nothing', async () => {
+		const k = await page();
+		expect((await k.run('set chat system x', 'llm')).text).toBe(
+			'% nobody is here to agree to the change'
+		);
+		const stop = new AbortController();
+		let answer: ((v: Verdict) => void) | undefined;
+		const grant = () => new Promise<Verdict>((resolve) => (answer = resolve));
+		const r = k.run('set chat system x', 'llm', { signal: stop.signal, grant });
+		await vi.waitFor(() => expect(answer).toBeDefined());
+		stop.abort();
+		answer!(ONCE);
+		await expect(r).rejects.toThrow();
+		expect(k.settings.get('chat system')).toBe('');
+	});
+
+	it('asks the value of a secret left out, which never shows', async () => {
+		const k = await page();
+		await k.run('set mcp url a http://a/mcp', 'user');
+		const asked: string[] = [];
+		const secret = async (key: string) => (asked.push(key), 'sk-typed');
+		expect((await k.run('set mcp key a', 'llm', { secret })).text).toBe('+ ! mcp key a is set');
+		expect(asked).toEqual(['mcp key a']);
+		expect(k.settings.get('mcp key', 'a')).toBe('sk-typed');
+		expect((await k.run('set mcp key a', 'llm', { secret: async () => null })).text).toBe(
+			'% no value given for mcp key a'
+		);
+		expect((await k.run('set mcp key a', 'llm')).text).toBe('% nobody is here to give mcp key a');
 	});
 });
 

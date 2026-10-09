@@ -1,6 +1,6 @@
-import type { ConfigReader, Context, Outcome, Role, Scope, Value } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import { ERROR_PREFIX, OUTPUT_MAX_LINES, comment } from '../lib/config.js';
+import type { ConfigReader, Context, Key, Outcome, Role, Scope, Value } from '../lib/types.js';
+import { ALLOW, ALWAYS, ASK, DENY, Incomplete, REFUSE } from '../lib/types.js';
+import { ERROR_PREFIX, OUTPUT_MAX_LINES, PRIVILEGE, comment } from '../lib/config.js';
 import { splitLines, splitPipes, tokenize } from './parse.js';
 import { compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
@@ -82,7 +82,7 @@ export function defaults(text: string): string[] {
 		}
 	}
 	for (const m of modules) {
-		const reason = m.validate?.(running);
+		const reason = m.validate?.(running, modules);
 		if (reason) problems.push(`${m.name}: ${reason}`);
 	}
 	if (problems.length) site.clear();
@@ -111,7 +111,7 @@ export function run(text: string, role: Role, scope: Scope = {}): Promise<Outcom
 }
 
 async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
-	const { signal, conversation } = scope;
+	const { signal, conversation, secret } = scope;
 	signal?.throwIfAborted();
 	const lines = splitLines(text);
 	if (!lines.length) lines.push('');
@@ -122,6 +122,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		role,
 		signal,
 		conversation: titled,
+		secret,
 		config: draft,
 		archive,
 		schema,
@@ -158,15 +159,16 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	}
 	const broken: string[] = [];
 	for (const m of modules) {
-		const reason = m.validate?.(draft);
+		const reason = m.validate?.(draft, modules);
 		if (reason) broken.push(`${m.name}: ${reason}`);
 	}
 	if (broken.length) return fail(null, broken.join('\n'));
-	// the change as the page sees it: every value resolved through the layers
-	const keys = [...new Set([...running.stored(), ...draft.stored()])];
-	const resolved = (c: Values) =>
-		Object.fromEntries(keys.map((k) => [k, c.get(...schema.unstore(k))]));
-	const diff = schema.diff(resolved(running), resolved(draft));
+	if (role === 'llm') {
+		const refused = await guard(draft, scope);
+		if (refused) return fail(null, refused);
+	}
+	const [before, after] = resolved(draft);
+	const diff = schema.diff(before, after);
 	if (conversation && titled && titled.title !== conversation.title) {
 		diff.push(`- title ${schema.quote(conversation.title)}`);
 		diff.push(`+ title ${schema.quote(titled.title)}`);
@@ -178,6 +180,54 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		if (changed.some((k) => k.startsWith(m.name + ' '))) m.apply?.(running);
 	}
 	return { ok: true, text: [...out, ...diff].join('\n') };
+}
+
+// the change as the page sees it: every value resolved through the layers,
+// before the batch then after it
+function resolved(
+	draft: Values
+): [Record<string, Value | undefined>, Record<string, Value | undefined>] {
+	const keys = [...new Set([...running.stored(), ...draft.stored()])];
+	const of = (c: Values) => Object.fromEntries(keys.map((k) => [k, c.get(...schema.unstore(k))]));
+	return [of(running), of(draft)];
+}
+
+// whether a change moves an enum toward its more open values
+function opens(def: Key, from: Value | undefined, to: Value | undefined): boolean {
+	const values = def.values ?? [];
+	return values.indexOf(to ?? '') > values.indexOf(from ?? '');
+}
+
+// what the model may change: no key of a module of the user's, and a guarded
+// key only as far as the privilege of its module goes, the user asked when it
+// says ask, an answer of always giving those modules allow; returns why the
+// batch stops, if it does
+async function guard(draft: Values, scope: Scope): Promise<string | null> {
+	const [before, after] = resolved(draft);
+	const asked = new Set<string>();
+	const from: Record<string, Value | undefined> = {};
+	const to: Record<string, Value | undefined> = {};
+	for (const k of Object.keys(after)) {
+		if (before[k] === after[k]) continue;
+		const [key] = schema.unstore(k);
+		const module = key.split(' ')[0];
+		if (modules.find((m) => m.name === module)?.user) return `${module} is the user's`;
+		const def = schema.find(key);
+		if (!def?.guard || (def.guard === 'opening' && !opens(def, before[k], after[k]))) continue;
+		const level = running.get(`${PRIVILEGE} level`, module);
+		if (level === DENY) return `the privilege of ${module} denies the change`;
+		if (level !== ASK) continue;
+		asked.add(module);
+		from[k] = before[k];
+		to[k] = after[k];
+	}
+	if (!asked.size) return null;
+	if (!scope.grant) return 'nobody is here to agree to the change';
+	const verdict = await scope.grant({ kind: 'change', lines: schema.diff(from, to) });
+	scope.signal?.throwIfAborted();
+	if (verdict === REFUSE) return 'the user refused the change';
+	if (verdict === ALWAYS) for (const m of asked) draft.set(`${PRIVILEGE} level`, ALLOW, m);
+	return null;
 }
 
 // the lines as written, the value of every secret set by them masked; a line

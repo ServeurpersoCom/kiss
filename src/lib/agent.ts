@@ -1,12 +1,13 @@
 import type { Assistant, Call, Message, Outcome, Round, Tool, ToolContext } from './types.js';
+import { ALWAYS, REFUSE } from './types.js';
 import { chat, pick } from './api.js';
 import { aggregate } from './mcp.js';
 import prompts from './prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
-import { tools as own } from './tools.js';
+import { CONSENT, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
-import { settings } from '../engine/run.js';
+import { run, settings } from '../engine/run.js';
 
 // the chat history in OpenAI form: cli messages stay out, and every round of
 // an assistant turn becomes one assistant message followed by its results
@@ -34,6 +35,16 @@ function history(messages: readonly Message[]): object[] {
 	});
 }
 
+// whether the user lets the model make this call: a tool in consent asks, and
+// always turns it on, as the user
+async function allowed(ctx: ToolContext, c: Call): Promise<boolean> {
+	if (settings.get('tools use', c.name) !== CONSENT) return true;
+	const verdict = await ctx.grant({ kind: 'call', tool: c.name, args: c.args });
+	ctx.signal.throwIfAborted();
+	if (verdict === ALWAYS) await run(`set tools use ${JSON.stringify(c.name)} ${ON}`, 'user');
+	return verdict !== REFUSE;
+}
+
 // runs one call and writes its outcome into it; a call the turn stops before
 // it ends keeps no outcome, whatever the tool answers
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
@@ -48,6 +59,11 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 		args = c.args ? JSON.parse(c.args) : {};
 	} catch {
 		c.result = 'the arguments are not JSON';
+		c.ok = false;
+		return;
+	}
+	if (!(await allowed(ctx, c))) {
+		c.result = 'the user refused the call';
 		c.ok = false;
 		return;
 	}

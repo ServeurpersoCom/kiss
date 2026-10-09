@@ -46,6 +46,12 @@ Its laws, each one held by a test in `tests/`:
   alike.
 - On an item holding a secret, the model sets the secret only: a secret goes to a URL the user
   or the site chose, never to one the model chose.
+- The model changes a guarded key only as far as the privilege of its module goes, whatever
+  command spells the change: `deny` refuses, `ask` asks the user, `allow` lets it; closing never
+  asks, and `privilege` is the user's alone.
+- A tool in `consent` asks the user before each call: once, always, which turns it on, or
+  refuse. The tools of KiSS are on.
+- A secret a `set` line leaves out is asked of the user, and never enters the conversation.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `load` moves it, the developer terminal has none.
 - The latest save is the configuration the next page load starts with, and the archive changes
@@ -73,6 +79,21 @@ Under every message, its copy button; under a message of the user, its edit butt
 cuts the conversation at that message and sends it again as written now, so the model starts over
 from the very prefix it had: the commands cut with it leave the configuration as it is. A
 conversation exports as a JSON file and imports from the sidebar as a new one.
+
+## Consent
+
+The model sets up the page itself, so what could widen its reach waits for the user: the url of
+an endpoint or an MCP server, `chat model`, `chat system`, and opening a tool. The question shows
+in the conversation with the change it asks for, or the call with its arguments, and takes once,
+always or refuse; always gives the module the `allow` privilege, or turns the tool on.
+
+```
+show privilege                           ! every guarded module and how far the model goes
+set privilege level chat allow           ! the model picks its model and prompt freely
+set privilege level endpoints deny       ! it never changes an endpoint
+set tools use bash_tool consent          ! each call asks, until always
+set mcp key sandbox                      ! no value: a masked field asks for it
+```
 
 ## Style
 

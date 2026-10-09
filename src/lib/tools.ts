@@ -5,6 +5,6 @@ const files = import.meta.glob<{ default: Tool }>('../tools/*.ts', { eager: true
 
 export const tools: readonly Tool[] = Object.values(files).map((f) => f.default);
 
-// whether the model sees a tool
-export const USES = ['on', 'off'] as const;
-export const [ON, OFF] = USES;
+// whether the model sees a tool, and calls it freely, from the most closed
+export const USES = ['off', 'consent', 'on'] as const;
+export const [OFF, CONSENT, ON] = USES;

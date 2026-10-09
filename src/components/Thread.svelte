@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { NAME, SLASH } from '../lib/config.js';
 	import Message from './Message.svelte';
+	import Ask from './Ask.svelte';
 	import { app } from '../lib/state.svelte.js';
 
 	// distance from the bottom under which the thread follows new content
@@ -35,6 +36,7 @@
 				<p>Point it at an LLM and just talk. A line starting with {SLASH} runs the CLI.</p>
 			</div>
 		{/if}
+		<Ask />
 	</div>
 </div>
 

@@ -1,4 +1,5 @@
-import type { Assistant, Conversation, Message } from './types.js';
+import type { Assistant, Conversation, Grant, Message, Verdict } from './types.js';
+import { REFUSE } from './types.js';
 import { SLASH, TITLE_LENGTH } from './config.js';
 import { deleteConversation, listConversations, putConversation } from './db.js';
 import { turn } from './agent.js';
@@ -6,11 +7,19 @@ import { parse, serialize, stored } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
+// what the page asks the user, and how the answer settles it: a change or a
+// call the model asks for, or the value of a secret key
+export type Asking =
+	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
+	| { kind: 'secret'; key: string; settle(value: string | null): void };
+
 export const app = $state({
 	conversations: [] as Conversation[],
 	current: null as Conversation | null,
 	// the turn the model writes now, none while it is idle
 	reply: null as Assistant | null,
+	// one question at a time, as batches and calls run one at a time
+	ask: null as Asking | null,
 	terminal: false,
 	// the conversation list, open over the thread on a narrow screen
 	sidebar: false
@@ -115,7 +124,7 @@ export async function send(text: string): Promise<void> {
 	const conversation = current(cli ? SLASH + redact(text.slice(SLASH.length)) : text);
 	if (cli) {
 		const input = text.slice(SLASH.length);
-		const result = await run(input, 'user', { conversation });
+		const result = await run(input, 'user', { conversation, secret });
 		conversation.messages.push({
 			role: 'cli',
 			input: redact(input),
@@ -138,8 +147,9 @@ export async function send(text: string): Promise<void> {
 	const { signal } = controller;
 	const tools = {
 		signal,
-		cli: (lines: string) => run(lines, 'llm', { signal, conversation }),
-		redact
+		cli: (lines: string) => run(lines, 'llm', { signal, conversation, grant, secret }),
+		redact,
+		grant
 	};
 	try {
 		await save(conversation);
@@ -154,6 +164,20 @@ export async function send(text: string): Promise<void> {
 	}
 }
 
+// the user lets the model make a change or a call, or not
+function grant(request: Grant): Promise<Verdict> {
+	return new Promise((resolve) => {
+		app.ask = { kind: 'grant', request, settle: (verdict) => ((app.ask = null), resolve(verdict)) };
+	});
+}
+
+// the value the user gives a secret key, none when they give none
+function secret(key: string): Promise<string | null> {
+	return new Promise((resolve) => {
+		app.ask = { kind: 'secret', key, settle: (value) => ((app.ask = null), resolve(value)) };
+	});
+}
+
 // the open conversation cut at a message of the user, then that message sent
 // again as written now: the model starts over from the same prefix
 export async function edit(index: number, text: string): Promise<void> {
@@ -162,6 +186,9 @@ export async function edit(index: number, text: string): Promise<void> {
 	await send(text);
 }
 
+// the turn aborts, and a question it asks is answered no
 export function stop(): void {
 	controller?.abort();
+	if (app.ask?.kind === 'grant') app.ask.settle(REFUSE);
+	else app.ask?.settle(null);
 }
