@@ -149,7 +149,7 @@ describe('after a stop', () => {
 		const k = await page();
 		const stop = new AbortController();
 		stop.abort();
-		await expect(k.run('set chat system blue', 'llm', stop.signal)).rejects.toThrow();
+		await expect(k.run('set chat system blue', 'llm', { signal: stop.signal })).rejects.toThrow();
 		expect(k.settings.get('chat system')).toBe('');
 	});
 
@@ -159,7 +159,7 @@ describe('after a stop', () => {
 		vi.stubGlobal('fetch', h.fetch);
 		await k.run('set endpoints url a http://a/v1', 'user');
 		const stop = new AbortController();
-		const r = k.run('set chat system blue\nshow models', 'llm', stop.signal);
+		const r = k.run('set chat system blue\nshow models', 'llm', { signal: stop.signal });
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		stop.abort();
 		await expect(r).rejects.toThrow();
@@ -173,7 +173,7 @@ describe('after a stop', () => {
 		await k.run('set endpoints url a http://a/v1', 'user');
 		const first = k.run('show models', 'user');
 		const stop = new AbortController();
-		const queued = k.run('set chat system blue', 'llm', stop.signal);
+		const queued = k.run('set chat system blue', 'llm', { signal: stop.signal });
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		stop.abort();
 		h.release();
@@ -267,6 +267,41 @@ describe('a tool', () => {
 		expect((await k.run('no tools repo.search', 'user')).ok).toBe(true);
 		expect(k.settings.get('tools preview', 'repo.search')).toBeUndefined();
 		expect(k.settings.get('tools use', 'repo.search')).toBe('on');
+	});
+});
+
+describe('a title', () => {
+	it('renames the conversation of the batch with the batch, and no save keeps it', async () => {
+		const k = await page();
+		const c = { title: 'hello' };
+		expect((await k.run('title "Bonjour le monde"', 'llm', { conversation: c })).text).toBe(
+			'- title hello\n+ title "Bonjour le monde"'
+		);
+		expect(c.title).toBe('Bonjour le monde');
+		expect((await k.run('show title', 'user', { conversation: c })).text).toBe(
+			'title "Bonjour le monde"'
+		);
+		const failed = await k.run('title other\nset display tools wide', 'llm', { conversation: c });
+		expect(failed.ok).toBe(false);
+		expect(c.title).toBe('Bonjour le monde');
+		const long = await k.run(`title ${'a'.repeat(61)}`, 'llm', { conversation: c });
+		expect(long.text).toContain('60 characters at most');
+		expect((await k.run('title "a\\nb"', 'llm', { conversation: c })).text).toContain('one line');
+		expect((await k.run('title ""', 'llm', { conversation: c })).text).toContain('a word at least');
+		expect((await k.run('title x', 'llm')).text).toContain('no conversation here');
+		await k.run('save a', 'user');
+		expect(localStorage.getItem('kiss.saves')).not.toContain('Bonjour');
+	});
+});
+
+describe('a word after set, no or show', () => {
+	it('competes with the modules, a prefix of both being ambiguous', async () => {
+		const k = await page();
+		expect((await k.run('show d', 'user')).text).toBe('% ambiguous "d": diff display');
+		expect((await k.run('show t', 'user')).text).toBe('% ambiguous "t": title tools');
+		expect((await k.run('show dis', 'user')).text).toContain('set display thinking closed');
+		expect((await k.run('show tool', 'user')).ok).toBe(true);
+		expect((await k.run('show ti', 'user')).text).toContain('no conversation here');
 	});
 });
 

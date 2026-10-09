@@ -50,11 +50,12 @@ async function page(replies: Reply[]) {
 			return replies.shift()!(init.signal!);
 		})
 	);
-	const { settled, turn } = await import('../src/lib/agent.js');
+	const { turn } = await import('../src/lib/agent.js');
+	const { settled } = await import('../src/lib/conversation.js');
 	const stop = new AbortController();
 	const tools: ToolContext = {
 		signal: stop.signal,
-		cli: (l) => engine.run(l, 'llm', stop.signal),
+		cli: (l) => engine.run(l, 'llm', { signal: stop.signal }),
 		redact: engine.redact
 	};
 	const reply: Assistant = { role: 'assistant', rounds: [] };

@@ -10,6 +10,7 @@ interface Plan {
 export default {
 	path: ['set'],
 	roles: ['user', 'llm'],
+	module: true,
 	parse(schema, args) {
 		const { key, name, rest } = schema.read(args);
 		if (!rest.length) throw new Incomplete();

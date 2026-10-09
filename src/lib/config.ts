@@ -31,6 +31,9 @@ export const MCP_CONNECT_TIMEOUT_MS = 5000;
 // agent
 export const TITLE_LENGTH = 60;
 
+// page: how long a copy button shows its check
+export const COPIED_MS = 1500;
+
 // storage
 export const DB_NAME = 'kiss';
 export const DB_VERSION = 1;

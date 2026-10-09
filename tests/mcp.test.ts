@@ -136,7 +136,7 @@ async function page(
 		const stop = new AbortController();
 		const tools: ToolContext = {
 			signal: stop.signal,
-			cli: (l) => engine.run(l, 'llm', stop.signal),
+			cli: (l) => engine.run(l, 'llm', { signal: stop.signal }),
 			redact: engine.redact
 		};
 		const reply: Assistant = { role: 'assistant', rounds: [] };

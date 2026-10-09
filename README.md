@@ -17,9 +17,10 @@ line    = command { "|" filter }
 command = "set" key value
         | "no" key | "no" module item
         | "show" module [ word [ item ] ] | "show" module item
-        | "show" ( "running" | "style" | "saves" | "version" )
+        | "show" ( "running" | "style" | "saves" | "version" | "title" )
         | "show diff" save save              the word session names the running one
         | "load" save | "reset"
+        | "title" value                      the title of this conversation
         | "save" save | "no save" save        user only, each alone on its line
 key     = module word [ item ]               an item names one of a collection
 save    = name                               a save of the same name gives way
@@ -29,8 +30,9 @@ filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
 
 Its laws, each one held by a test in `tests/`:
 
-- A command, module, key or filter word may be any prefix that names one word only; an exact
-  word always wins. A collection is named in the plural, `endpoints`, `tools`, `saves`, `models`,
+- A command, module, key or filter word may be any prefix that names one word only; right after
+  `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between
+  `diff` and `display`; an exact word always wins. A collection is named in the plural, `endpoints`, `tools`, `saves`, `models`,
   but an acronym, `css`, `mcp`: its singular, a prefix of it, names it too.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
   replaces it only when every line succeeds, and answers with what changed.
@@ -44,6 +46,8 @@ Its laws, each one held by a test in `tests/`:
   alike.
 - On an item holding a secret, the model sets the secret only: a secret goes to a URL the user
   or the site chose, never to one the model chose.
+- `title` renames the conversation the batch was sent in, with the batch; a title is no
+  configuration: no save keeps it, no `load` moves it, the developer terminal has none.
 - The latest save is the configuration the next page load starts with, and the archive changes
   only once the browser stores it.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
@@ -55,9 +59,20 @@ Its laws, each one held by a test in `tests/`:
   alone when the source fails: `show models` by endpoint, `show tools` by who serves it.
 - A turn keeps, on the page and in the browser, what settled: what streamed and the calls that
   ended before a stop, never one that did not.
+- A message copied gives its source: the text typed, the answer without its thinking or calls,
+  the output of a command.
+- A conversation file reads back to the conversation as it settled, under a new id, or imports
+  nothing and says where it goes wrong.
 - Every MCP server serves its tools under their own names, after those of KiSS; a tool turned off
   is never seen by the model; a server that does not answer serves nothing, and a name already
   served stays with the first: the model is told, the save warns of it, nothing ever stops.
+
+## Conversations
+
+Under every message, its copy button; under a message of the user, its edit button too. An edit
+cuts the conversation at that message and sends it again as written now, so the model starts over
+from the very prefix it had: the commands cut with it leave the configuration as it is. A
+conversation exports as a JSON file and imports from the sidebar as a new one.
 
 ## Style
 

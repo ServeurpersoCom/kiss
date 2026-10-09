@@ -6,6 +6,7 @@ type Plan = { module: string; item: string } | { key: string; name?: string };
 export default {
 	path: ['no'],
 	roles: ['user', 'llm'],
+	module: true,
 	parse(schema, args) {
 		if (args.length === 2) {
 			const module = schema.module(args[0]);

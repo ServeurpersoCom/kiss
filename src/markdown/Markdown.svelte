@@ -2,6 +2,7 @@
 	import 'katex/dist/katex.min.css';
 	import type { Attachment } from 'svelte/attachments';
 	import { CLASS, Renderer, type View } from './render.js';
+	import { COPIED_MS } from '../lib/config.js';
 
 	let { text }: { text: string } = $props();
 
@@ -20,9 +21,6 @@
 	});
 
 	$effect(() => () => cancelAnimationFrame(frame));
-
-	// how long a copy button shows its check
-	const COPIED_MS = 1500;
 
 	// a copy button puts the code of its block on the clipboard
 	const copy: Attachment<HTMLDivElement> = (node) => {

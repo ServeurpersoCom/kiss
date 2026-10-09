@@ -56,6 +56,9 @@ export class Incomplete extends Error {}
 export interface Command<P = void> {
 	path: readonly string[];
 	roles: readonly Role[];
+	// its first argument names a module, so after its path the name of a module
+	// competes with the words of longer commands
+	module?: true;
 	// writes the archive at once, so it runs on a line of its own
 	alone?: true;
 	// the plan the arguments spell; a command without it takes no argument
@@ -133,6 +136,8 @@ export interface Schema {
 	// what may follow the words in a line naming a key, a value too when asked,
 	// and right after a collection its items too when asked
 	next(config: ConfigReader, words: readonly string[], value: boolean, items: boolean): string[];
+	// a value as one token that reads back unchanged
+	quote(value: Value): string;
 	// the key and the item name of a stored key
 	unstore(stored: string): [string, string | undefined];
 	// whether a stored key is one a module declares
@@ -143,12 +148,23 @@ export interface Schema {
 	diff(from: Record<string, Value | undefined>, to: Record<string, Value | undefined>): string[];
 }
 
-// what a command reaches; capabilities extend this interface by module
-// augmentation from their own file
-export interface Context {
-	role: Role;
+// what a batch acts on beyond the configuration: the conversation it was sent
+// in, none from the developer terminal, and the signal of the turn
+export interface Scope {
 	// aborts the batch of a stopped model turn, and the requests it makes
 	signal?: AbortSignal;
+	conversation?: Titled;
+}
+
+// a conversation as a batch sees it: its title, and nothing of its messages
+export interface Titled {
+	title: string;
+}
+
+// what a command reaches; capabilities extend this interface by module
+// augmentation from their own file
+export interface Context extends Scope {
+	role: Role;
 	config: Config;
 	archive: Archive;
 	schema: Schema;

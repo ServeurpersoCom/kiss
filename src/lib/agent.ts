@@ -2,6 +2,7 @@ import type { Assistant, Call, Message, Outcome, Round, Tool, ToolContext } from
 import { chat, pick } from './api.js';
 import { aggregate } from './mcp.js';
 import prompts from './prompts.json';
+import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { tools as own } from './tools.js';
 import models from '../modules/models.js';
@@ -31,14 +32,6 @@ function history(messages: readonly Message[]): object[] {
 			...r.calls.map((c) => ({ role: 'tool', tool_call_id: c.id, content: c.result ?? '' }))
 		]);
 	});
-}
-
-// what of a turn holds once it stops or leaves the page: the calls that ran,
-// and the rounds that streamed something; a call without an outcome never ran
-export function settled(rounds: readonly Round[]): Round[] {
-	return rounds
-		.map((r) => ({ ...r, calls: r.calls.filter((c) => c.ok !== undefined) }))
-		.filter((r) => r.reasoning || r.text || r.calls.length);
 }
 
 // runs one call and writes its outcome into it; a call the turn stops before

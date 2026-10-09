@@ -114,9 +114,11 @@ export class KeySchema implements Schema {
 	}
 
 	format(key: string, value: Value): string {
-		if (this.find(key)?.kind === 'secret') return SECRET_SET;
-		if (BARE_VALUE.test(value)) return value;
-		return JSON.stringify(value);
+		return this.find(key)?.kind === 'secret' ? SECRET_SET : this.quote(value);
+	}
+
+	quote(value: Value): string {
+		return BARE_VALUE.test(value) ? value : JSON.stringify(value);
 	}
 
 	module(word: string): string {

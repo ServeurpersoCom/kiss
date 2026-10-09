@@ -1,4 +1,4 @@
-import type { ConfigReader, Context, Outcome, Role, Value } from '../lib/types.js';
+import type { ConfigReader, Context, Outcome, Role, Scope, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import { ERROR_PREFIX, OUTPUT_MAX_LINES, comment } from '../lib/config.js';
 import { splitLines, splitPipes, tokenize } from './parse.js';
@@ -99,25 +99,29 @@ export function start(): void {
 let queue: Promise<unknown> = Promise.resolve();
 
 // every line compiles before the first one runs, then runs on a copy of the
-// running configuration, which replaces it only when all of them succeed: a
-// batch applies whole or not at all, and answers with what it changed; a
-// command that writes the archive runs alone; once the signal aborts, the
-// batch neither starts, nor runs another line, nor replaces anything
-export function run(text: string, role: Role, signal?: AbortSignal): Promise<Outcome> {
-	const result = queue.then(() => batch(text, role, signal));
+// running configuration and of the title of its conversation, which replace
+// them only when all of them succeed: a batch applies whole or not at all, and
+// answers with what it changed; a command that writes the archive runs alone;
+// once the signal aborts, the batch neither starts, nor runs another line, nor
+// replaces anything
+export function run(text: string, role: Role, scope: Scope = {}): Promise<Outcome> {
+	const result = queue.then(() => batch(text, role, scope));
 	queue = result.catch(() => undefined);
 	return result;
 }
 
-async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Outcome> {
+async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
+	const { signal, conversation } = scope;
 	signal?.throwIfAborted();
 	const lines = splitLines(text);
 	if (!lines.length) lines.push('');
 	const alone = lines.length === 1;
 	const draft = running.clone(role);
+	const titled = conversation && { title: conversation.title };
 	const ctx: Context = {
 		role,
 		signal,
+		conversation: titled,
 		config: draft,
 		archive,
 		schema,
@@ -163,6 +167,11 @@ async function batch(text: string, role: Role, signal?: AbortSignal): Promise<Ou
 	const resolved = (c: Values) =>
 		Object.fromEntries(keys.map((k) => [k, c.get(...schema.unstore(k))]));
 	const diff = schema.diff(resolved(running), resolved(draft));
+	if (conversation && titled && titled.title !== conversation.title) {
+		diff.push(`- title ${schema.quote(conversation.title)}`);
+		diff.push(`+ title ${schema.quote(titled.title)}`);
+		conversation.title = titled.title;
+	}
 	const changed = draft.changed(running);
 	running.assign(draft);
 	for (const m of modules) {

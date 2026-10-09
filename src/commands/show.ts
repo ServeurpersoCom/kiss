@@ -38,6 +38,7 @@ function grouped(groups: Group[], body: (name: string) => string[]): string[] {
 export default {
 	path: ['show'],
 	roles: ['user', 'llm'],
+	module: true,
 	parse(schema, args) {
 		if (!args.length) throw new Incomplete();
 		const module = schema.module(args[0]);

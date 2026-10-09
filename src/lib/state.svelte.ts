@@ -1,7 +1,8 @@
 import type { Assistant, Conversation, Message } from './types.js';
 import { SLASH, TITLE_LENGTH } from './config.js';
 import { deleteConversation, listConversations, putConversation } from './db.js';
-import { settled, turn } from './agent.js';
+import { turn } from './agent.js';
+import { parse, serialize, stored } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
@@ -26,12 +27,7 @@ async function save(conversation: Conversation): Promise<void> {
 	if (!app.conversations.some((c) => c.id === conversation.id)) return;
 	conversation.updated = Date.now();
 	const snapshot = $state.snapshot(conversation) as Conversation;
-	await putConversation({
-		...snapshot,
-		messages: snapshot.messages.map((m) =>
-			m.role === 'assistant' ? { ...m, rounds: settled(m.rounds) } : m
-		)
-	});
+	await putConversation({ ...snapshot, messages: stored(snapshot.messages) });
 }
 
 // the conversation named by the URL hash, or none
@@ -66,6 +62,30 @@ export async function remove(id: string): Promise<void> {
 	await deleteConversation(id);
 }
 
+// the characters a file name cannot hold, and the type of a conversation file
+const UNSAFE_NAME = /[\\/:*?"<>|]/g;
+const FILE_TYPE = 'application/json';
+export const FILE_EXTENSION = '.json';
+
+// the browser saves a conversation as a file named after its title
+export function download(c: Conversation): void {
+	const url = URL.createObjectURL(new Blob([serialize(c)], { type: FILE_TYPE }));
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = c.title.replace(UNSAFE_NAME, '_') + FILE_EXTENSION;
+	a.click();
+	URL.revokeObjectURL(url);
+}
+
+// a conversation file becomes a conversation of its own, opened; a file that
+// does not read imports nothing and throws where it goes wrong
+export async function upload(file: File): Promise<void> {
+	const conversation: Conversation = { id: crypto.randomUUID(), ...parse(await file.text()) };
+	app.conversations.unshift(conversation);
+	await putConversation(conversation);
+	open(conversation.id);
+}
+
 // the open conversation, created on the first message
 function current(title: string): Conversation {
 	if (app.current) return app.current;
@@ -95,7 +115,7 @@ export async function send(text: string): Promise<void> {
 	const conversation = current(cli ? SLASH + redact(text.slice(SLASH.length)) : text);
 	if (cli) {
 		const input = text.slice(SLASH.length);
-		const result = await run(input, 'user');
+		const result = await run(input, 'user', { conversation });
 		conversation.messages.push({
 			role: 'cli',
 			input: redact(input),
@@ -114,9 +134,13 @@ export async function send(text: string): Promise<void> {
 	controller = new AbortController();
 	answering = conversation.id;
 	// the model calls the CLI with the rights of the developer terminal, its
-	// batches aborted with the turn
+	// batches aborted with the turn and titling the conversation it answers in
 	const { signal } = controller;
-	const tools = { signal, cli: (lines: string) => run(lines, 'llm', signal), redact };
+	const tools = {
+		signal,
+		cli: (lines: string) => run(lines, 'llm', { signal, conversation }),
+		redact
+	};
 	try {
 		await save(conversation);
 		await turn(before, reply, tools, signal);
@@ -128,6 +152,14 @@ export async function send(text: string): Promise<void> {
 		answering = '';
 		await save(conversation);
 	}
+}
+
+// the open conversation cut at a message of the user, then that message sent
+// again as written now: the model starts over from the same prefix
+export async function edit(index: number, text: string): Promise<void> {
+	if (!app.current || app.reply) return;
+	app.current.messages.splice(index);
+	await send(text);
 }
 
 export function stop(): void {

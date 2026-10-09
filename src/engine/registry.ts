@@ -15,6 +15,7 @@ export const commands: readonly Command<unknown>[] = Object.values(commandFiles)
 	.sort((a, b) => a.path.join(' ').localeCompare(b.path.join(' ')));
 
 export const modules: readonly Module[] = Object.values(moduleFiles).map((f) => f.default);
+const moduleNames = modules.map((m) => m.name);
 
 // a plugin declared wrong or twice stops the page at once, never later
 function audit(): string[] {
@@ -27,14 +28,13 @@ function audit(): string[] {
 		if (!c.roles.length) problems.push(`${path}: no role`);
 		if (paths.indexOf(path) !== i) problems.push(`${path}: declared twice`);
 	}
-	// a module name after a verb must never read as the next word of a command
+	// a module named as a word of a longer command could never be told from it,
+	// not even typed whole
 	const inner = new Set(commands.flatMap((c) => c.path.slice(1)));
-	const names = modules.map((m) => m.name);
-	for (const [i, name] of names.entries()) {
+	for (const [i, name] of moduleNames.entries()) {
 		if (!PATH_WORD.test(name)) problems.push(`module "${name}": bad name`);
-		if (names.indexOf(name) !== i) problems.push(`module ${name}: declared twice`);
-		const clash = [...inner].find((w) => w.startsWith(name) || name.startsWith(w));
-		if (clash) problems.push(`module ${name}: reads as the command word ${clash}`);
+		if (moduleNames.indexOf(name) !== i) problems.push(`module ${name}: declared twice`);
+		if (inner.has(name)) problems.push(`module ${name}: is the command word ${name}`);
 	}
 	return problems;
 }
@@ -56,7 +56,9 @@ interface Walk {
 }
 
 // IOS lookup: each word may be any unambiguous prefix of a path word, an exact
-// word always wins, and the walk stops at the first word no path continues with
+// word always wins, and the walk stops at the first word no path continues
+// with; right after a command whose first argument names a module, the names
+// of the modules compete with the path words, a prefix of both being ambiguous
 export function walk(words: readonly string[], all: readonly Command<unknown>[]): Walk {
 	let pool = all;
 	let command: Command<unknown> | undefined;
@@ -67,8 +69,15 @@ export function walk(words: readonly string[], all: readonly Command<unknown>[])
 		const next = pool.filter((c) => c.path.length > i && c.path[i].startsWith(word));
 		const names = [...new Set(next.map((c) => c.path[i]))];
 		if (!names.length) break;
-		const name = names.length === 1 ? names[0] : names.find((n) => n === word);
-		if (!name) return { command, depth, pool, consumed: i, ambiguous: { word: words[i], names } };
+		const rivals =
+			command?.module && depth === i ? moduleNames.filter((n) => n.startsWith(word)) : [];
+		const exact = names.find((n) => n === word);
+		if (!exact && rivals.includes(word)) break;
+		const name = exact ?? (names.length === 1 && !rivals.length ? names[0] : undefined);
+		if (!name) {
+			const all = [...names, ...rivals].sort();
+			return { command, depth, pool, consumed: i, ambiguous: { word: words[i], names: all } };
+		}
 		pool = next.filter((c) => c.path[i] === name);
 		const done = pool.find((c) => c.path.length === i + 1);
 		if (done) {
