@@ -283,6 +283,7 @@ export type Entry = Message & Link;
 export interface Conversation {
 	id: string;
 	title: string;
+	// the moment its last answer entered, its making while it has none
 	updated: number;
 	// kept atop the sidebar, set only when pinned
 	pinned?: true;

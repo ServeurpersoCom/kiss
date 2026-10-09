@@ -35,16 +35,10 @@ let answering = '';
 // the conversation as it settled, even while the model answers: a call that
 // has not run yet never reaches the database; a conversation deleted meanwhile
 // stays deleted
-async function store(conversation: Conversation): Promise<void> {
+async function save(conversation: Conversation): Promise<void> {
 	if (!app.conversations.some((c) => c.id === conversation.id)) return;
 	const snapshot = $state.snapshot(conversation) as Conversation;
 	await putConversations([{ ...snapshot, entries: stored(snapshot.entries) }]);
-}
-
-// a conversation changed, the moment of the change kept
-async function save(conversation: Conversation): Promise<void> {
-	conversation.updated = Date.now();
-	await store(conversation);
 }
 
 // the conversation named by the URL hash, or none
@@ -71,13 +65,13 @@ export function newChat(): void {
 	app.current = null;
 }
 
-// pinned atop the sidebar, or back under its day, its moment of change kept
+// pinned atop the sidebar, or back under its day
 export async function pin(id: string): Promise<void> {
 	const conversation = app.conversations.find((c) => c.id === id);
 	if (!conversation) return;
 	if (conversation.pinned) delete conversation.pinned;
 	else conversation.pinned = true;
-	await store(conversation);
+	await save(conversation);
 }
 
 // out of the list first: no save reaches the database after the delete
@@ -224,11 +218,14 @@ async function enter(
 
 // the model answers a message of the user from the path up to it, the very
 // prefix it read for any answer it gave the message before; the conversation
-// is saved before the model answers and once it is done
+// dates from that answer, and is saved before the model answers and once it is
+// done
 async function answer(conversation: Conversation, user: string): Promise<void> {
 	conversation.leaf = user;
 	const before = path(conversation);
-	const reply = append(conversation, user, { role: 'assistant', rounds: [] }) as Assistant;
+	const entry = append(conversation, user, { role: 'assistant', rounds: [] });
+	conversation.updated = entry.time;
+	const reply = entry as Assistant;
 	app.reply = reply;
 	controller = new AbortController();
 	answering = conversation.id;

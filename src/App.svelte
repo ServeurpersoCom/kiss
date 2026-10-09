@@ -74,15 +74,15 @@
 		/* the accent drawn toward the text, and black or white, whichever reads
 		   on the accent */
 		--accent-text: color-mix(in oklab, var(--accent) 75%, var(--fg));
-		--on-accent: oklch(from var(--accent) clamp(0, (0.72 - l) * 1000, 1) 0 0);
-		/* colors with a meaning: a hue as vivid as the screen shows, at one
-		   lightness that follows the text, so it reads on a dark background as
-		   on a light one */
+		--on-accent: oklch(from var(--accent) clamp(0, (0.6 - l) * 1000, 1) 0 0);
+		/* colors with a meaning: a hue at one lightness that follows the text, so
+		   it reads on a dark background as on a light one, with the most chroma
+		   the screen shows at both without bending the hue */
 		--ok: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 145);
 		--danger: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 25);
 		--code-string: var(--ok);
-		--code-number: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 60);
-		--code-title: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.3 255);
+		--code-number: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.13 60);
+		--code-title: oklch(from var(--fg) calc(l * 0.37 + 0.42) 0.15 255);
 		--radius: 12px;
 		--font: system-ui, sans-serif;
 		--mono: ui-monospace, monospace;
