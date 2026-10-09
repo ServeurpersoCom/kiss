@@ -100,6 +100,7 @@ export function serialize(conversations: readonly Conversation[]): string {
 			id: c.id,
 			title: c.title,
 			updated: c.updated,
+			...(c.pinned ? { pinned: c.pinned } : {}),
 			leaf: c.leaf,
 			entries: stored(c.entries)
 		}))
@@ -129,7 +130,7 @@ const number: Check = (v, at) => Number.isFinite(v) || fail(at, 'not a number');
 const parent: Check = (v, at) =>
 	v === null || typeof v === 'string' || fail(at, 'not an id or null');
 const constant =
-	(value: string): Check =>
+	(value: string | true): Check =>
 	(v, at) =>
 		v === value || fail(at, `not ${value}`);
 
@@ -182,13 +183,10 @@ const MESSAGES: Record<string, Check> = {
 	),
 	cli: object({ ...link, role: constant('cli'), input: string, output: string, ok: boolean })
 };
-const conversation = object({
-	id: string,
-	title: string,
-	updated: number,
-	leaf: parent,
-	entries: array(entry)
-});
+const conversation = object(
+	{ id: string, title: string, updated: number, leaf: parent, entries: array(entry) },
+	{ pinned: constant(true) }
+);
 const file = object({ [MARK]: constant(KIND), conversations: array(conversation) });
 
 // a tree: every id once, every parent an entry before its child, so no cycle,

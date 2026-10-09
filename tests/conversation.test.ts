@@ -167,12 +167,20 @@ describe('a conversation file', () => {
 	it('reads back to every conversation as it settled, ids and branches kept', () => {
 		const c = demo();
 		const edited = append(c, null, { role: 'user', text: 'bonjour' });
-		const other: Conversation = { id: 'o', title: 'Other', updated: 1, entries: [], leaf: null };
+		const other: Conversation = {
+			id: 'o',
+			title: 'Other',
+			updated: 1,
+			pinned: true,
+			entries: [],
+			leaf: null
+		};
 		const back = parse(serialize([c, other]));
 		expect(back.map((x) => x.id)).toEqual(['c', 'o']);
 		expect(back[0].title).toBe('Demo');
 		expect(back[0].updated).toBe(c.updated);
 		expect(back[0].leaf).toBe(edited.id);
+		expect(back.map((x) => x.pinned)).toEqual([undefined, true]);
 		expect(back[0].entries.map((e) => e.id)).toEqual(c.entries.map((e) => e.id));
 		const assistant = back[0].entries[1];
 		expect(assistant.role === 'assistant' && assistant.rounds[0].calls.map((x) => x.id)).toEqual([
@@ -193,6 +201,7 @@ describe('a conversation file', () => {
 		expect(altered((f) => (f.kiss = 'save'))).toThrow('file.kiss: not conversations');
 		expect(altered((f) => (f.extra = 1))).toThrow('file.extra: unknown');
 		expect(altered((f) => delete f.conversations[0].title)).toThrow(`${at}.title: missing`);
+		expect(altered((f) => (f.conversations[0].pinned = false))).toThrow(`${at}.pinned: not true`);
 		expect(altered((f) => delete f.conversations[0].entries[0].time)).toThrow(
 			`${at}.entries[0].time: missing`
 		);

@@ -67,8 +67,10 @@
 		--hover: color-mix(in oklab, var(--fg) 5%, transparent);
 		--hover-strong: color-mix(in oklab, var(--fg) 9%, transparent);
 		--code-bg: color-mix(in oklab, var(--fg) 6%, transparent);
-		/* black, the lighter the background the fainter */
+		/* black, the lighter the background the fainter, and the half black that
+		   dims the page behind a dialog */
 		--shadow: oklch(from var(--bg) 0 0 0 / calc(0.3 - l * 0.25));
+		--veil: oklch(0 0 0 / 0.5);
 		/* the accent drawn toward the text, and black or white, whichever reads
 		   on the accent */
 		--accent-text: color-mix(in oklab, var(--accent) 75%, var(--fg));
@@ -112,6 +114,10 @@
 		font-size: var(--size-primary);
 		color: var(--fg);
 		background: var(--bg);
+	}
+	/* every scrollbar thin, its thumb a line */
+	:global(*) {
+		scrollbar-width: thin;
 		scrollbar-color: var(--line) transparent;
 	}
 	:global(::placeholder) {

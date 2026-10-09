@@ -313,11 +313,13 @@ export all
 import
 ```
 
-One file format holds one conversation or many, marked `kiss`, every branch and every id in it, read
-whole or refused with where it goes wrong: every conversation once, every entry id once, every
-parent before its child, a leaf that ends a branch. The sidebar lists the conversations, the last
-changed first, under the day they last changed: today, yesterday, then their date, in the language
-of the browser; it deletes one, nothing more.
+One file format holds one conversation or many, marked `kiss`, every branch, every id and every pin
+in it, read whole or refused with where it goes wrong: every conversation once, every entry id once,
+every parent before its child, a leaf that ends a branch. The sidebar lists the conversations, the
+last changed first: the pinned ones under Pinned, the others under the day they last changed, today,
+yesterday, then their date, in the language of the browser. Beside each, a pin pins it or puts it
+back under its day, its moment of change kept, and a cross deletes it once the user confirms, Enter
+or OK, Escape or a click elsewhere cancelling.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.
@@ -339,13 +341,13 @@ The page style is plain CSS, its tokens on `:root`, one theme and no other: thre
 text, the accent drawn toward the text, and hues as vivid as the screen shows, at one lightness that
 follows the text, so a sheet setting the three sets a whole theme, dark or light alike, and a sheet
 setting a derived color sets it alone; `--radius`, `--font`, `--mono`, `--size-primary` for the chat
-and `--size-secondary` for everything around it, the only two sizes of text but `--size-title`, the
-title of the page, `--size-icon`, every icon, the primary size, `--width`, `--bubble-width`,
-`--sidebar-width` within `--sidebar-min` and `--sidebar-max`. `show style` lists it, one rule per
-line; named sheets restyle anything over it. The sidebar follows its edge for the whole drag, within
-those bounds, it closes once the pointer goes below half the least width, and opens again once it
-reaches that width, from the left of the page too; the browser keeps both, the width and whether it
-is closed.
+and `--size-secondary` for everything around it, every scrollbar thin, its thumb a line, the only
+two sizes of text but `--size-title`, the title of the page, `--size-icon`, every icon, the primary
+size, `--width`, `--bubble-width`, `--sidebar-width` within `--sidebar-min` and `--sidebar-max`.
+`show style` lists it, one rule per line; named sheets restyle anything over it. The sidebar follows
+its edge for the whole drag, within those bounds, it closes once the pointer goes below half the
+least width, and opens again once it reaches that width, from the left of the page too; the browser
+keeps both, the width and whether it is closed.
 
 ```
 show style | include :root              ! the tokens and their defaults

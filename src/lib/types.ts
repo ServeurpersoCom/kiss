@@ -284,6 +284,8 @@ export interface Conversation {
 	id: string;
 	title: string;
 	updated: number;
+	// kept atop the sidebar, set only when pinned
+	pinned?: true;
 	entries: Entry[];
 	// the entry the thread ends on, none while the conversation is empty
 	leaf: string | null;
