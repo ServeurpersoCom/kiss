@@ -9,7 +9,8 @@ export const PATHS = {
 	previous: 'M15 6l-6 6 6 6',
 	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 	check: 'M5 12l5 5 9-10',
-	edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4'
+	edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
+	retry: 'M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5'
 };
 
 export type IconName = keyof typeof PATHS;

@@ -87,6 +87,22 @@ describe('an edit', () => {
 	});
 });
 
+describe('an answer again', () => {
+	it('enters beside the answers of its message, from the very prefix, every branch kept', () => {
+		const c: Conversation = { id: 'c', title: 't', updated: 0, entries: [], leaf: null };
+		const one = append(c, null, { role: 'user', text: 'one' });
+		const answer = append(c, one.id, { role: 'assistant', rounds: [] });
+		const more = append(c, answer.id, { role: 'user', text: 'more' });
+		c.leaf = one.id;
+		const prefix = path(c);
+		const again = append(c, one.id, { role: 'assistant', rounds: [] });
+		expect(prefix).toEqual([one]);
+		expect(forks(c).get(one.id)).toEqual([answer, again]);
+		expect(path(c)).toEqual([one, again]);
+		expect(latest(c, answer.id)).toBe(more.id);
+	});
+});
+
 describe('a slash command closed', () => {
 	it('leaves the tree, what follows it following its parent, versions and history kept', () => {
 		const c: Conversation = { id: 'c', title: 't', updated: 0, entries: [], leaf: null };

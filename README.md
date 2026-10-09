@@ -57,8 +57,8 @@ The model configures the page, so KiSS guards what it can reach.
 
 ## Everything a chat should do, done right
 
-- **Edit any message** and a new branch opens beside it, the old one kept, arrows to go between:
-  the model restarts from the exact prefix, so your server reuses its KV cache.
+- **Edit or retry any message** and a new branch opens beside it, the old one kept, arrows to go
+  between: the model restarts from the exact prefix, so your server reuses its KV cache.
 - **Copy any message** as its source, close any command you typed; export and import one
   conversation or all of them, by asking: `/export all`.
 - **MCP over Streamable HTTP** with the official SDK, 2025 and 2026 protocols alike.

@@ -176,6 +176,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
   history the model reads are the path up from the leaf; a version comes back as it was last
   written in.
+- An answer again enters beside the answers of its message, from the very prefix, every branch
+  kept.
 - A command closed leaves the tree, what followed it following the entry before it, the versions
   and the history the model reads as they were.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
@@ -256,12 +258,16 @@ A conversation is a tree, kept flat: every entry holds its id and the entry it f
 conversation holds its leaf, the entry the thread ends on. The thread is the path up from the
 leaf, and so is the history the model reads, so the server reuses its cache along it.
 
-Under every message, its copy button; under a message of the user, its edit button too, and under a
-command its close button: the model never reads a command, so closing one clears the thread and
-leaves its history whole. An edit enters the new text as a version beside the message it edits, and
-the model answers it from the very prefix the edited one had; the branch edited stays whole. Arrows
-under a message with versions go from one to the next, each coming back as it was last written in.
-The configuration belongs to no branch: a command of one branch stays applied when another shows.
+Under every message, its copy button on the outer edge: under a message of the user, retry, edit and
+copy; under an answer, copy and retry; under a command, copy and close, the versions on the inner
+side. Retry, from a message of the user or from an answer to it, enters a new answer beside those it
+had, from the very prefix they were given. The model never reads a command, so closing one clears
+the thread and leaves its history whole. What stops a turn shows under it in a card marked by the
+danger color, like a question to the user. An edit enters the new text as a version beside the
+message it edits, and the model answers it from the very prefix the edited one had; the branch
+edited stays whole. Arrows under a message with versions go from one to the next, each coming back
+as it was last written in. The configuration belongs to no branch: a command of one branch stays
+applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations`
 lists them by id, the one the batch was sent in marked. `export` offers a file of this

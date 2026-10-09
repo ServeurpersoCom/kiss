@@ -158,6 +158,15 @@ export async function edit(id: string, text: string): Promise<void> {
 	await enter(app.current, entry.parent, text);
 }
 
+// the model answers a message of the user again, the answer entering as a
+// version beside those it had: from the message itself or from an answer to it
+export async function retry(id: string): Promise<void> {
+	const entry = app.current?.entries.find((e) => e.id === id);
+	if (!app.current || !entry || app.reply) return;
+	const user = entry.role === 'assistant' ? entry.parent : entry.role === 'user' ? id : null;
+	if (user) await answer(app.current, user);
+}
+
 // a slash command leaves the open conversation: the model never reads one, so
 // its history stays as it was
 export async function dismiss(id: string): Promise<void> {
@@ -175,8 +184,7 @@ export async function browse(id: string): Promise<void> {
 }
 
 // a line entering a conversation after an entry: a line starting with / runs
-// on the CLI as the user, anything else goes to the model; the conversation is
-// saved before the model answers and once it is done
+// on the CLI as the user, anything else goes to the model
 async function enter(
 	conversation: Conversation,
 	parent: string | null,
@@ -197,8 +205,16 @@ async function enter(
 	// a conversation opened by a slash command takes its title from the first message
 	if (conversation.title.startsWith(SLASH)) conversation.title = text.slice(0, TITLE_LENGTH);
 	const user = append(conversation, parent, { role: 'user', text });
+	await answer(conversation, user.id);
+}
+
+// the model answers a message of the user from the path up to it, the very
+// prefix it read for any answer it gave the message before; the conversation
+// is saved before the model answers and once it is done
+async function answer(conversation: Conversation, user: string): Promise<void> {
+	conversation.leaf = user;
 	const before = path(conversation);
-	const reply = append(conversation, user.id, { role: 'assistant', rounds: [] }) as Assistant;
+	const reply = append(conversation, user, { role: 'assistant', rounds: [] }) as Assistant;
 	app.reply = reply;
 	controller = new AbortController();
 	answering = conversation.id;

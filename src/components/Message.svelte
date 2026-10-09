@@ -4,7 +4,7 @@
 	import Icon from './Icon.svelte';
 	import { COPIED_MS, SLASH } from '../lib/config.js';
 	import { source } from '../lib/conversation.js';
-	import { app, browse, dismiss, edit } from '../lib/state.svelte.js';
+	import { app, browse, dismiss, edit, retry } from '../lib/state.svelte.js';
 
 	// versions: the entries beside this one, itself among them, oldest first;
 	// live: the turn the model writes now
@@ -56,6 +56,38 @@
 	}
 </script>
 
+{#snippet clip()}
+	<button onclick={copy} class:copied aria-label="Copy">
+		<Icon name={copied ? 'check' : 'copy'} />
+	</button>
+{/snippet}
+
+{#snippet again()}
+	<button onclick={() => retry(message.id)} disabled={!!app.reply} aria-label="Retry">
+		<Icon name="retry" />
+	</button>
+{/snippet}
+
+{#snippet switcher()}
+	{#if versions.length > 1}
+		<button
+			onclick={() => browse(versions[at - 1].id)}
+			disabled={at === 0 || !!app.reply}
+			aria-label="Previous version"
+		>
+			<Icon name="previous" />
+		</button>
+		<span class="version">{at + 1}/{versions.length}</span>
+		<button
+			onclick={() => browse(versions[at + 1].id)}
+			disabled={at === versions.length - 1 || !!app.reply}
+			aria-label="Next version"
+		>
+			<Icon name="chevron" />
+		</button>
+	{/if}
+{/snippet}
+
 <div class="message {message.role}">
 	{#if message.role === 'user'}
 		{#if draft === null}
@@ -84,32 +116,22 @@
 		</div>
 	{/if}
 	{#if !live && draft === null}
+		<!-- copy holds the outer edge: last under a message of the user, on the
+		     right, first under the others; the versions sit on the inner side -->
 		<div class="actions">
-			{#if versions.length > 1}
-				<button
-					onclick={() => browse(versions[at - 1].id)}
-					disabled={at === 0 || !!app.reply}
-					aria-label="Previous version"
-				>
-					<Icon name="previous" />
-				</button>
-				<span class="version">{at + 1}/{versions.length}</span>
-				<button
-					onclick={() => browse(versions[at + 1].id)}
-					disabled={at === versions.length - 1 || !!app.reply}
-					aria-label="Next version"
-				>
-					<Icon name="chevron" />
-				</button>
-			{/if}
-			<button onclick={copy} class:copied aria-label="Copy">
-				<Icon name={copied ? 'check' : 'copy'} />
-			</button>
 			{#if message.role === 'user'}
+				{@render switcher()}
+				{@render again()}
 				<button onclick={begin} disabled={!!app.reply} aria-label="Edit">
 					<Icon name="edit" />
 				</button>
-			{:else if message.role === 'cli'}
+				{@render clip()}
+			{:else if message.role === 'assistant'}
+				{@render clip()}
+				{@render again()}
+				{@render switcher()}
+			{:else}
+				{@render clip()}
 				<button onclick={() => dismiss(message.id)} disabled={!!app.reply} aria-label="Close">
 					<Icon name="close" />
 				</button>
@@ -171,9 +193,19 @@
 		flex-direction: column;
 		gap: 0.6rem;
 	}
+	/* what stopped the turn, read like a question to the user but marked by
+	   the danger color */
 	.error {
-		color: var(--danger);
+		padding: 0.4rem 0 0.4rem 0.9rem;
+		border-left: 2px solid var(--danger);
+		font-family: var(--mono);
 		font-size: var(--size-secondary);
+		color: var(--danger);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.error::first-letter {
+		text-transform: uppercase;
 	}
 	/* the icons under a message */
 	.actions {
