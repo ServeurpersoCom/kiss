@@ -106,7 +106,7 @@
 	details {
 		color: var(--fg-dim);
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 	}
 	summary {
 		cursor: pointer;

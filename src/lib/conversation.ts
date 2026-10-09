@@ -52,6 +52,15 @@ export function append(c: Conversation, parent: string | null, message: Message)
 	return entry;
 }
 
+// an entry leaves the conversation, the entries following it following its
+// parent in their order, the leaf moving to its parent when it is the leaf
+export function drop(c: Conversation, id: string): void {
+	const entry = index(c).get(id)!;
+	c.entries = c.entries.filter((e) => e !== entry);
+	for (const e of c.entries) if (e.parent === id) e.parent = entry.parent;
+	if (c.leaf === id) c.leaf = entry.parent;
+}
+
 // the entries from the first one to the leaf: the thread, and the history the
 // model reads
 export function path(c: Conversation): Entry[] {

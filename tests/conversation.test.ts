@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Conversation, Entry } from '../src/lib/types.js';
 import {
 	append,
+	drop,
 	forks,
 	fresh,
 	latest,
@@ -83,6 +84,26 @@ describe('an edit', () => {
 		expect(latest(c, one.id)).toBe(more.id);
 		expect(latest(c, uno.id)).toBe(reply.id);
 		expect(texts(path(c))).toEqual(['one', 'assistant', 'more']);
+	});
+});
+
+describe('a slash command closed', () => {
+	it('leaves the tree, what follows it following its parent, versions and history kept', () => {
+		const c: Conversation = { id: 'c', title: 't', updated: 0, entries: [], leaf: null };
+		const one = append(c, null, { role: 'user', text: 'one' });
+		const answer = append(c, one.id, { role: 'assistant', rounds: [] });
+		const cli = append(c, answer.id, { role: 'cli', input: 'show title', output: 't', ok: true });
+		const two = append(c, cli.id, { role: 'user', text: 'two' });
+		const deux = append(c, cli.id, { role: 'user', text: 'deux' });
+		const last = append(c, deux.id, { role: 'cli', input: 'show title', output: 't', ok: true });
+		const model = path(c).filter((e) => e.role !== 'cli');
+		drop(c, cli.id);
+		expect(c.entries).toHaveLength(5);
+		expect(forks(c).get(answer.id)).toEqual([two, deux]);
+		expect(path(c).filter((e) => e.role !== 'cli')).toEqual(model);
+		drop(c, last.id);
+		expect(c.leaf).toBe(deux.id);
+		expect(path(c)).toEqual(model);
 	});
 });
 

@@ -68,7 +68,7 @@
 		align-items: center;
 		padding: 0.4rem 0.6rem 0 1rem;
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 		color: var(--fg-dim);
 	}
 	.markdown :global(.copy) {
@@ -96,7 +96,7 @@
 		padding: 0.5rem 1rem 0.8rem;
 		overflow-x: auto;
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 		line-height: 1.45;
 	}
 	.markdown :global(code) {
@@ -104,7 +104,7 @@
 	}
 	/* a heading stands out by its weight, at the size of the text */
 	.markdown :global(:is(h1, h2, h3, h4, h5, h6)) {
-		font-size: var(--font-large);
+		font-size: var(--size-primary);
 	}
 	.markdown :global(:not(pre) > code) {
 		background: var(--code-bg);

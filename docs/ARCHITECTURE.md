@@ -176,6 +176,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
   history the model reads are the path up from the leaf; a version comes back as it was last
   written in.
+- A command closed leaves the tree, what followed it following the entry before it, the versions
+  and the history the model reads as they were.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
   imports nothing and says where it goes wrong; an import adds only the conversations whose id is
   new, and neither `export` nor `import` changes a conversation.
@@ -254,11 +256,12 @@ A conversation is a tree, kept flat: every entry holds its id and the entry it f
 conversation holds its leaf, the entry the thread ends on. The thread is the path up from the
 leaf, and so is the history the model reads, so the server reuses its cache along it.
 
-Under every message, its copy button; under a message of the user, its edit button too. An edit
-enters the new text as a version beside the message it edits, and the model answers it from the
-very prefix the edited one had; the branch edited stays whole. Arrows under a message with
-versions go from one to the next, each coming back as it was last written in. The configuration
-belongs to no branch: a command of one branch stays applied when another shows.
+Under every message, its copy button; under a message of the user, its edit button too, and under a
+command its close button: the model never reads a command, so closing one clears the thread and
+leaves its history whole. An edit enters the new text as a version beside the message it edits, and
+the model answers it from the very prefix the edited one had; the branch edited stays whole. Arrows
+under a message with versions go from one to the next, each coming back as it was last written in.
+The configuration belongs to no branch: a command of one branch stays applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations`
 lists them by id, the one the batch was sent in marked. `export` offers a file of this
@@ -298,12 +301,13 @@ every block but the last renders once and is kept, and the page renders at most 
 ## Style
 
 The page style is plain CSS, its tokens on `:root`: colors, `--radius`, `--font`, `--mono`,
-`--font-large` for the chat and `--font-small` for everything around it, the only two sizes but
-`--font-name`, the name of the page, `--width`, `--bubble-width`, `--sidebar-width` within
-`--sidebar-min` and `--sidebar-max`. `show style` lists it, one rule per line; named sheets restyle
-anything over it. The sidebar follows its edge for the whole drag, within those bounds, it closes
-once the pointer goes below half the least width, and opens again once it reaches that width, from
-the left of the page too; the browser keeps both, the width and whether it is closed.
+`--size-primary` for the chat and `--size-secondary` for everything around it, the only two sizes of
+text but `--size-title`, the title of the page, `--size-icon`, every icon, the primary size,
+`--width`, `--bubble-width`, `--sidebar-width` within `--sidebar-min` and `--sidebar-max`. `show
+style` lists it, one rule per line; named sheets restyle anything over it. The sidebar follows its
+edge for the whole drag, within those bounds, it closes once the pointer goes below half the least
+width, and opens again once it reaches that width, from the left of the page too; the browser keeps
+both, the width and whether it is closed.
 
 ```
 show style | include :root              ! the tokens and their defaults

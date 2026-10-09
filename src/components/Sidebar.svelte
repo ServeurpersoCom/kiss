@@ -40,7 +40,7 @@
 	}
 	.logo {
 		font-weight: 700;
-		font-size: var(--font-name);
+		font-size: var(--size-title);
 		color: var(--accent-text);
 		padding-left: 0.4rem;
 	}
@@ -56,7 +56,7 @@
 		color: var(--on-accent);
 		padding: 0.4rem 0.9rem;
 		border-radius: 999px;
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 	}
 	nav {
 		overflow-y: auto;
@@ -83,7 +83,7 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 	}
 	.act {
 		display: flex;

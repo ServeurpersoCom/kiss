@@ -93,7 +93,7 @@
 		overflow-y: auto;
 		margin: 0 auto 0.5rem;
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 	}
 	.hints button {
 		width: auto;
@@ -151,7 +151,6 @@
 		border-radius: 50%;
 		background: var(--accent);
 		color: var(--on-accent);
-		font-size: var(--font-large);
 		cursor: pointer;
 	}
 	button:disabled {

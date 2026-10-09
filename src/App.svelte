@@ -76,12 +76,14 @@
 		--radius: 12px;
 		--font: system-ui, sans-serif;
 		--mono: ui-monospace, monospace;
-		/* the two sizes of every text of the page: the chat, then everything
-		   around it, thinking, tools, code, the CLI; the name of the page alone
-		   has a size of its own */
-		--font-large: 1rem;
-		--font-small: 0.8rem;
-		--font-name: 1.5rem;
+		/* the two sizes of every text of the page: primary for the chat,
+		   secondary for everything around it, thinking, tools, code, the CLI;
+		   the title of the page has a size of its own, and every icon the
+		   primary one */
+		--size-primary: 1rem;
+		--size-secondary: 0.8rem;
+		--size-title: 1.5rem;
+		--size-icon: var(--size-primary);
 		/* the thread and the composer, the bubble of the user, the sidebar */
 		--width: 48rem;
 		--bubble-width: 85%;
@@ -89,13 +91,17 @@
 		--sidebar-min: 12rem;
 		--sidebar-max: 24rem;
 	}
+	:global(.icon) {
+		width: var(--size-icon);
+		height: var(--size-icon);
+	}
 	:global(html, body, #app) {
 		height: 100%;
 		margin: 0;
 	}
 	:global(body) {
 		font-family: var(--font);
-		font-size: var(--font-large);
+		font-size: var(--size-primary);
 		color: var(--fg);
 		background: var(--base);
 	}
@@ -129,7 +135,7 @@
 	}
 	header button {
 		font: inherit;
-		font-size: var(--font-large);
+		font-size: var(--size-primary);
 		color: inherit;
 		background: none;
 		border: none;

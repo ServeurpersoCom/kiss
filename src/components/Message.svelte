@@ -4,7 +4,7 @@
 	import Icon from './Icon.svelte';
 	import { COPIED_MS, SLASH } from '../lib/config.js';
 	import { source } from '../lib/conversation.js';
-	import { app, browse, edit } from '../lib/state.svelte.js';
+	import { app, browse, dismiss, edit } from '../lib/state.svelte.js';
 
 	// versions: the entries beside this one, itself among them, oldest first;
 	// live: the turn the model writes now
@@ -109,6 +109,10 @@
 				<button onclick={begin} disabled={!!app.reply} aria-label="Edit">
 					<Icon name="edit" />
 				</button>
+			{:else if message.role === 'cli'}
+				<button onclick={() => dismiss(message.id)} disabled={!!app.reply} aria-label="Close">
+					<Icon name="close" />
+				</button>
 			{/if}
 		</div>
 	{/if}
@@ -147,7 +151,7 @@
 	}
 	.command {
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 		margin: 0;
 		padding: 0.5rem 0.8rem;
 		background: var(--code-bg);
@@ -169,23 +173,22 @@
 	}
 	.error {
 		color: var(--danger);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 	}
-	/* the icons under a message, at the size of the chat as those of the sidebar */
+	/* the icons under a message */
 	.actions {
 		display: flex;
 		align-items: center;
 		gap: 0.2rem;
 	}
 	.version {
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 		color: var(--fg-dim);
 		font-variant-numeric: tabular-nums;
 	}
 	.actions button {
 		display: flex;
 		padding: 0.2rem;
-		font-size: var(--font-large);
 		color: var(--fg-dim);
 		background: none;
 		border: none;

@@ -160,7 +160,7 @@
 		border-radius: var(--radius);
 		box-shadow: 0 12px 40px var(--shadow);
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 		padding: 0.75rem 1rem;
 		box-sizing: border-box;
 		z-index: 10;

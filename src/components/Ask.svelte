@@ -96,7 +96,7 @@
 		padding: 0.4rem 0 0.4rem 0.9rem;
 		border-left: 2px solid var(--accent);
 		font-family: var(--mono);
-		font-size: var(--font-small);
+		font-size: var(--size-secondary);
 	}
 	.head {
 		color: var(--accent-text);

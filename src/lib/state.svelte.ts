@@ -3,7 +3,7 @@ import { REFUSE } from './types.js';
 import { FILE_EXTENSION, SLASH, TITLE_LENGTH } from './config.js';
 import { deleteConversation, listConversations, putConversations } from './db.js';
 import { turn } from './agent.js';
-import { append, fresh, latest, parse, path, serialize, stored } from './conversation.js';
+import { append, drop, fresh, latest, parse, path, serialize, stored } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 
@@ -156,6 +156,15 @@ export async function edit(id: string, text: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || !entry || app.reply) return;
 	await enter(app.current, entry.parent, text);
+}
+
+// a slash command leaves the open conversation: the model never reads one, so
+// its history stays as it was
+export async function dismiss(id: string): Promise<void> {
+	const entry = app.current?.entries.find((e) => e.id === id);
+	if (!app.current || entry?.role !== 'cli' || app.reply) return;
+	drop(app.current, id);
+	await save(app.current);
 }
 
 // another version shows, as it was last written in

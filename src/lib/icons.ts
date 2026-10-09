@@ -17,9 +17,8 @@ export type IconName = keyof typeof PATHS;
 // the attributes of the svg of every icon
 export function stroke(name: IconName): Record<string, string> {
 	return {
+		class: 'icon',
 		viewBox: '0 0 24 24',
-		width: '1em',
-		height: '1em',
 		fill: name === 'stop' ? 'currentColor' : 'none',
 		stroke: 'currentColor',
 		'stroke-width': '2',

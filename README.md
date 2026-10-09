@@ -59,8 +59,8 @@ The model configures the page, so KiSS guards what it can reach.
 
 - **Edit any message** and a new branch opens beside it, the old one kept, arrows to go between:
   the model restarts from the exact prefix, so your server reuses its KV cache.
-- **Copy any message** as its source; export and import one conversation or all of them, by
-  asking: `/export all`.
+- **Copy any message** as its source, close any command you typed; export and import one
+  conversation or all of them, by asking: `/export all`.
 - **MCP over Streamable HTTP** with the official SDK, 2025 and 2026 protocols alike.
 - **Per model parameters**, sent only when set, under their OpenAI names.
 - **Rendering that holds up**: Markdown, LaTeX, code highlighted in 192 languages, for the
