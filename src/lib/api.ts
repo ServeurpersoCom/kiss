@@ -162,6 +162,7 @@ export async function* chat(
 		return res.body;
 	});
 	const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
+	const read = protocol.reader();
 	let buffer = '';
 	for (;;) {
 		const { value, done } = await reader.read();
@@ -172,7 +173,7 @@ export async function* chat(
 			const line = buffer.slice(0, nl).trim();
 			buffer = buffer.slice(nl + 1);
 			if (!line.startsWith(DATA)) continue;
-			const d = protocol.read(line.slice(DATA.length).trim());
+			const d = read(line.slice(DATA.length).trim());
 			if (!d) continue;
 			if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);
 			if (d.end) return;

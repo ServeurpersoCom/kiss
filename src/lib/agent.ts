@@ -144,6 +144,10 @@ export async function turn(
 					round.text += d.content;
 					mark(p, 'writing', '', now);
 				}
+				if (d.opaque) {
+					round.opaque ??= { protocol: endpoint.protocol.name, items: [] };
+					round.opaque.items.push(d.opaque);
+				}
 				for (const c of d.calls ?? []) {
 					if (!calls.has(c.index)) {
 						round.calls.push({ id: c.id ?? `call-${r}-${c.index}`, name: '', args: '' });

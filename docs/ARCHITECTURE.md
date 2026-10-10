@@ -13,7 +13,7 @@ src/engine/      the CLI: parse, schema, values, registry, run, archive
 src/commands/    one file per command, registered by existing
 src/modules/     one file per module: its keys, rules, checks, how it applies to the page
 src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
-src/protocols/   one file per protocol an endpoint speaks: chat
+src/protocols/   one file per protocol an endpoint speaks: chat, messages
 src/lib/         the page side: agent, api, mcp, state, conversation, db
 src/components/  thread, message, round, ask, dialog, composer, sidebar
 src/markdown/    the remark and rehype stack and its incremental renderer
@@ -297,13 +297,26 @@ configuration as it stands, so a tool a call turns on is offered from the next r
 model, a system prompt or a parameter a call changes. A tool in `consent` asks before its call, and
 a turn stopped keeps what settled.
 
-Every endpoint speaks the protocol `endpoints protocol` names, `chat` by default, the chat
-completions of OpenAI: the protocol builds the request from the history, carries the key and reads
-the stream, and the rest of KiSS sees the same deltas whatever it is. Every endpoint sends its key
-as its protocol carries it, a bearer token for `chat`, and every MCP server as a bearer token; each
-sends the headers it is given besides, `Name: value` pairs split by `;`, to it alone: an API that
-answers a page only once it names itself, such as the Claude API, takes
-`anthropic-dangerous-direct-browser-access: true`.
+Every endpoint speaks the protocol `endpoints protocol` names: the protocol builds the request from
+the history, carries the key and reads the stream, and the rest of KiSS sees the same deltas
+whatever it is. A round keeps what its protocol needs back and nothing else rebuilds, a signed
+thinking block, and sends it back to that protocol only.
+
+- `chat`, by default: the chat completions of OpenAI, the open standard of llama.cpp, vLLM and
+  Hugging Face, the key as a bearer token.
+- `messages`: the Messages API of Anthropic, the key in `x-api-key` with the headers a page needs,
+  the thinking summarized and sent back as it came, the prompt cached up to its last block, every
+  tool streaming its arguments. It needs `models max_tokens` set; `min_p`, the penalties and `seed`
+  never go, and a copy says so of a model that sets them.
+
+```
+set endpoints url claude https://api.anthropic.com/v1
+set endpoints protocol claude messages
+set models max_tokens claude/claude-opus-5-5 32000
+```
+
+Every MCP server sends its key as a bearer token. Every endpoint and every MCP server sends the
+headers it is given besides, `Name: value` pairs split by `;`, to it alone.
 
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 

@@ -40,17 +40,30 @@ function calls(...lines: [string, string][]): object {
 	};
 }
 
-// a page talking to a model that answers each request with the next reply
-async function page(replies: Reply[]) {
+// one streamed answer in the events of messages, closed by message_stop, or
+// cut short
+function events(list: object[], end: 'stop' | 'cut' = 'stop'): Reply {
+	const all = end === 'stop' ? [...list, { type: 'message_stop' }] : list;
+	const text = all
+		.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`)
+		.join('');
+	return () => new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+}
+
+// a page talking to a model that answers each request with the next reply,
+// configured by the lines given after its endpoint and model
+async function page(replies: Reply[], lines = '') {
 	vi.resetModules();
 	const engine = await import('../src/engine/run.js');
 	engine.start();
-	await engine.run('set endpoints url m http://m/v1\nset chat model m/x', 'user');
+	await engine.run(`set endpoints url m http://m/v1\nset chat model m/x\n${lines}`, 'user');
 	const bodies: Body[] = [];
+	const requests: { url: string; headers: Record<string, string> }[] = [];
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async (_url: string, init: RequestInit) => {
+		vi.fn(async (url: string, init: RequestInit) => {
 			bodies.push(JSON.parse(String(init.body)));
+			requests.push({ url, headers: init.headers as Record<string, string> });
 			return replies.shift()!(init.signal!);
 		})
 	);
@@ -75,6 +88,7 @@ async function page(replies: Reply[]) {
 	return {
 		engine,
 		bodies,
+		requests,
 		stop,
 		tools,
 		reply,
@@ -249,5 +263,118 @@ describe('a turn', () => {
 		await expect(p.go()).rejects.toThrow('ended before [DONE]');
 		expect(p.reply.rounds).toEqual([]);
 		expect(p.engine.settings.get('display thinking')).toBe('closed');
+	});
+});
+
+describe('the messages protocol', () => {
+	const MESSAGES = 'set endpoints protocol m messages\nset models max_tokens m/x 1000';
+	const block = (index: number, content_block: object) => ({
+		type: 'content_block_start',
+		index,
+		content_block
+	});
+	const delta = (index: number, d: object) => ({ type: 'content_block_delta', index, delta: d });
+	const stop = (index: number) => ({ type: 'content_block_stop', index });
+
+	it('carries the key in its own header, the thinking summarized, the prompt cached, every tool streaming its input', async () => {
+		const p = await page(
+			[
+				events([block(0, { type: 'text', text: '' }), delta(0, { type: 'text_delta', text: 'ok' })])
+			],
+			`${MESSAGES}\nset endpoints key m sk-a\nset chat system be brief\nset models seed m/x 7`
+		);
+		await p.go();
+		expect(p.requests[0].url).toBe('http://m/v1/messages');
+		expect(p.requests[0].headers).toMatchObject({ 'x-api-key': 'sk-a' });
+		expect(p.requests[0].headers).not.toHaveProperty('Authorization');
+		const body = p.bodies[0] as unknown as Record<string, unknown>;
+		expect(body).toMatchObject({
+			max_tokens: 1000,
+			system: 'be brief',
+			thinking: { type: 'adaptive', display: 'summarized' },
+			cache_control: { type: 'ephemeral' },
+			tools: [{ name: 'config', eager_input_streaming: true }]
+		});
+		expect(body).not.toHaveProperty('seed');
+		expect(p.reply.rounds[0].text).toBe('ok');
+	});
+
+	it('streams thinking, text and calls by block, and sends the thinking back signed before them, their results in the user turn after', async () => {
+		const p = await page(
+			[
+				events([
+					block(0, { type: 'thinking', thinking: '', signature: '' }),
+					delta(0, { type: 'thinking_delta', thinking: 'thi' }),
+					delta(0, { type: 'thinking_delta', thinking: 'nk' }),
+					delta(0, { type: 'signature_delta', signature: 'sig' }),
+					stop(0),
+					block(1, { type: 'text', text: '' }),
+					delta(1, { type: 'text_delta', text: 'after' }),
+					stop(1),
+					block(2, { type: 'tool_use', id: 'a', name: 'config', input: {} }),
+					delta(2, { type: 'input_json_delta', partial_json: '{"lines":' }),
+					delta(2, { type: 'input_json_delta', partial_json: '"show version"}' }),
+					stop(2),
+					{ type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 9 } }
+				]),
+				events([
+					block(0, { type: 'text', text: '' }),
+					delta(0, { type: 'text_delta', text: 'done' })
+				])
+			],
+			MESSAGES
+		);
+		await p.go();
+		const thinking = { type: 'thinking', thinking: 'think', signature: 'sig' };
+		expect(p.reply.rounds[0]).toMatchObject({
+			reasoning: 'think',
+			text: 'after',
+			calls: [{ id: 'a', name: 'config', args: '{"lines":"show version"}', ok: true }],
+			opaque: { protocol: 'messages', items: [thinking] }
+		});
+		expect((p.bodies[1] as unknown as { messages: object[] }).messages).toEqual([
+			{ role: 'user', content: [{ type: 'text', text: 'go' }] },
+			{
+				role: 'assistant',
+				content: [
+					thinking,
+					{ type: 'text', text: 'after' },
+					{ type: 'tool_use', id: 'a', name: 'config', input: { lines: 'show version' } }
+				]
+			},
+			{
+				role: 'user',
+				content: [{ type: 'tool_result', tool_use_id: 'a', content: expect.any(String) }]
+			}
+		]);
+	});
+
+	it('sends no thinking a round kept for another protocol', async () => {
+		const p = await page([events([])], MESSAGES);
+		const reply: Message = {
+			role: 'assistant',
+			rounds: [
+				{
+					reasoning: 'r',
+					text: 't',
+					calls: [],
+					opaque: { protocol: 'chat', items: [{ type: 'thinking' }] }
+				}
+			]
+		};
+		const { turn } = await import('../src/lib/agent.js');
+		const history: Message[] = [{ role: 'user', text: 'a' }, reply, { role: 'user', text: 'b' }];
+		const next: Assistant = { role: 'assistant', rounds: [] };
+		await turn(history, next, p.tools, p.stop.signal, pulse(performance.now()));
+		expect((p.bodies[0] as unknown as { messages: object[] }).messages[1]).toEqual({
+			role: 'assistant',
+			content: [{ type: 'text', text: 't' }]
+		});
+	});
+
+	it('needs the tokens a reply may take', async () => {
+		const p = await page([], 'set endpoints protocol m messages');
+		await expect(p.go()).rejects.toThrow('messages needs models max_tokens');
+		expect(p.bodies).toHaveLength(0);
 	});
 });

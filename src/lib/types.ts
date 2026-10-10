@@ -273,11 +273,14 @@ export interface Call {
 }
 
 // one request of an assistant turn: what the model streamed back, then the
-// calls it made; the turn ends with the first round that calls nothing
+// calls it made; the turn ends with the first round that calls nothing; and
+// what the protocol it streamed in needs back that the rest cannot rebuild,
+// sent back to that protocol only
 export interface Round {
 	reasoning: string;
 	text: string;
 	calls: Call[];
+	opaque?: { protocol: string; items: object[] };
 }
 
 // what a turn spent, the time the user took on a question left out: its
@@ -365,13 +368,14 @@ export interface Request {
 }
 
 // what one event of a stream adds to the round: its thinking, its text, the
-// calls by the index the stream gives them, the tokens the endpoint counted;
-// or that the stream ends, or fails with the message of the endpoint, empty
-// when it gives none
+// calls by the index the stream gives them, an item the round keeps for its
+// protocol, the tokens the endpoint counted so far; or that the stream ends,
+// or fails with the message of the endpoint, empty when it gives none
 export interface Delta {
 	content?: string;
 	reasoning?: string;
 	calls?: { index: number; id?: string; name?: string; args?: string }[];
+	opaque?: object;
 	usage?: number;
 	end?: true;
 	error?: string;
@@ -379,13 +383,15 @@ export interface Delta {
 
 // how an endpoint speaks: a file of protocols/, named as endpoints protocol
 // takes it; the path it posts a request to, the headers that carry the key,
-// the body of a request, the event that ends a stream, and what the data of
+// the parameters of models it never sends, the body of a request, the event
+// that ends a stream, and a reader of one stream, which tells what the data of
 // each event adds, none for an event that adds nothing
 export interface Protocol {
 	name: string;
 	path: string;
 	auth(key: string): Record<string, string>;
+	drops: readonly string[];
 	body(request: Request): object;
 	last: string;
-	read(data: string): Delta | undefined;
+	reader(): (data: string) => Delta | undefined;
 }

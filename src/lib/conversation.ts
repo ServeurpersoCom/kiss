@@ -193,7 +193,10 @@ const call = object(
 	{ id: string, name: string, args: string, result: string, ok: boolean },
 	{ images: array(image) }
 );
-const round = object({ reasoning: string, text: string, calls: array(call) });
+const record: Check = (v, at) =>
+	(!!v && typeof v === 'object' && !Array.isArray(v)) || fail(at, 'not an object');
+const opaque = object({ protocol: string, items: array(record) });
+const round = object({ reasoning: string, text: string, calls: array(call) }, { opaque });
 const link = { id: string, parent, time: number };
 const stats = object({ tokens: number, generation: number, system: number });
 const MESSAGES: Record<string, Check> = {

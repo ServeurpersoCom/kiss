@@ -785,6 +785,23 @@ describe('a copy', () => {
 		expect(warnings[0]).toMatch(/^! endpoints a: .* version required, endpoints b: /);
 	});
 
+	it('warns of a parameter the protocol of its endpoint never sends, the parameter kept', async () => {
+		const k = await page();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => models(['x']))
+		);
+		await k.run(
+			'set endpoints url a http://a/v1\nset endpoints protocol a messages\nset chat model a/x',
+			'user'
+		);
+		await k.run('set models seed a/x 7\nset models temperature a/x 0.5', 'user');
+		expect((await k.run('copy running-config b', 'user')).text).toBe(
+			'! copied running-config to b\n! models seed a/x is not sent by messages'
+		);
+		expect(k.settings.get('models seed', 'a/x')).toBe('7');
+	});
+
 	it('copies from a configuration to another, a save of the same name giving way', async () => {
 		const k = await page();
 		expect((await k.run('copy running-config', 'user')).text).toBe(

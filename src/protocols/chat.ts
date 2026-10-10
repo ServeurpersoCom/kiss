@@ -37,6 +37,7 @@ export default {
 	name: 'chat',
 	path: '/chat/completions',
 	auth: bearer,
+	drops: [],
 	// one system message, first, as every template takes it
 	body: (r) => ({
 		...r.parameters,
@@ -53,7 +54,7 @@ export default {
 		stream_options: { include_usage: true }
 	}),
 	last: DONE,
-	read(data) {
+	reader: () => (data) => {
 		if (data === DONE) return { end: true };
 		const json = JSON.parse(data);
 		if (json.error) return { error: json.error.message ?? '' };

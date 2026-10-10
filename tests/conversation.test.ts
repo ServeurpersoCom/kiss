@@ -41,7 +41,12 @@ function demo(): Conversation {
 					{ id: 'b', name: 'bash', args: '{}' }
 				]
 			},
-			{ reasoning: 'again', text: '', calls: [] },
+			{
+				reasoning: 'again',
+				text: '',
+				calls: [],
+				opaque: { protocol: 'messages', items: [{ type: 'thinking', signature: 's' }] }
+			},
 			{ reasoning: '', text: 'salut', calls: [] }
 		],
 		error: 'stopped'
@@ -186,6 +191,10 @@ describe('a conversation file', () => {
 		expect(assistant.role === 'assistant' && assistant.rounds[0].calls.map((x) => x.id)).toEqual([
 			'a'
 		]);
+		expect(assistant.role === 'assistant' && assistant.rounds[1].opaque).toEqual({
+			protocol: 'messages',
+			items: [{ type: 'thinking', signature: 's' }]
+		});
 		expect(parse(serialize(back))).toEqual(back);
 	});
 

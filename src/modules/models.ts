@@ -19,6 +19,19 @@ export default {
 		// as the template of the model reads it: low, medium, high or its own
 		reasoning_effort: { kind: 'string', named: true }
 	},
+	// a parameter set for a model whose endpoint speaks a protocol that never
+	// sends it is said once, the model left as set
+	async check(config) {
+		const all = endpoints(config);
+		const unsent = config.names('models').flatMap((item) => {
+			const endpoint = all.find((e) => item.startsWith(e.name + MODEL_SEPARATOR));
+			if (!endpoint) return [];
+			return endpoint.protocol.drops
+				.filter((key) => config.get(`models ${key}`, item) !== undefined)
+				.map((key) => `models ${key} ${item} is not sent by ${endpoint.protocol.name}`);
+		});
+		return unsent.length ? unsent.join(', ') : null;
+	},
 	// the models of every endpoint at once, by endpoint
 	async items(ctx) {
 		return Promise.all(
