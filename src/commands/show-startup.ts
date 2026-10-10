@@ -1,22 +1,13 @@
-import type { Command, Context, Value } from '../lib/types.js';
+import type { Command } from '../lib/types.js';
 import { STARTUP_CONFIG, comment } from '../lib/config.js';
-
-// a configuration kept in the archive as the lines that show it, or with
-// secrets the lines that set it, sorted, the keys no module declares anymore
-// left out: the startup-config or a save
-export function written(ctx: Context, values: Record<string, Value>, secrets = false): string[] {
-	return Object.entries(values)
-		.filter(([k]) => ctx.schema.known(k))
-		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([k, v]) => (secrets ? ctx.schema.set(k, v) : ctx.schema.line(k, v)));
-}
+import { listed } from './copy.js';
 
 export default {
 	path: ['show', STARTUP_CONFIG],
 	roles: ['user', 'llm'],
-	// what the page starts with over kiss.conf
+	// what the page starts with, kiss.conf included
 	run(ctx) {
-		const lines = written(ctx, ctx.archive.startup());
-		return lines.length ? lines.join('\n') : comment('the page starts on kiss.conf alone');
+		const lines = listed(ctx, STARTUP_CONFIG);
+		return lines.length ? lines.join('\n') : comment('every key is at its default');
 	}
 } satisfies Command;

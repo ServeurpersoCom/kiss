@@ -123,6 +123,9 @@ export interface Config extends ConfigReader {
 	// replaces every key set in the session; returns the keys dropped because no
 	// module declares them anymore
 	load(values: Record<string, Value>): string[];
+	// keys set in a session over the values the site gives, as they would run:
+	// every stored key, sorted
+	over(values: Record<string, Value>): Record<string, Value>;
 }
 
 export interface Save {

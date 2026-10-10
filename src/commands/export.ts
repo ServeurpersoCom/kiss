@@ -12,9 +12,7 @@ import {
 	fileName,
 	localTime
 } from '../lib/config.js';
-import { named, values } from './copy.js';
-import { running } from './show-running.js';
-import { written } from './show-startup.js';
+import { listed, named } from './copy.js';
 
 // what export names: every conversation, the one the batch was sent in, or a
 // word: a configuration, else a conversation by a prefix of its id
@@ -27,12 +25,10 @@ interface File {
 	told: string;
 }
 
-// a configuration with its secrets, as import reads it and a site serves it:
-// the running-config as show running-config lists it, the startup-config or
-// a save as the archive keeps it
+// a configuration with its secrets as it runs, kiss.conf included, as import
+// reads it and a site serves it
 function configFile(ctx: Context, config: string, minute: string): File {
-	const lines =
-		config === RUNNING_CONFIG ? running(ctx, true) : written(ctx, values(ctx, config), true);
+	const lines = listed(ctx, config, true);
 	const name = fileName(`${config} ${minute}`, CONFIG_EXTENSION);
 	return { name, text: lines.join('\n') + '\n', told: `exported ${config} to ${name}` };
 }

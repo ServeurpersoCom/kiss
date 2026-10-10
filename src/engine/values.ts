@@ -73,6 +73,11 @@ export class Values implements Config {
 		return entries.filter(([k]) => !this.schema.known(k)).map(([k]) => k);
 	}
 
+	over(values: Record<string, Value>): Record<string, Value> {
+		const layer = new Values(this.schema, this.site, new Map(Object.entries(values)));
+		return Object.fromEntries(layer.stored().map((k) => [k, layer.get(...unstore(k))!]));
+	}
+
 	// a copy written with the rights of a role
 	clone(role: Role): Values {
 		return new Values(this.schema, this.site, this.map, role);

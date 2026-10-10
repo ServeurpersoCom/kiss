@@ -1,7 +1,7 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment, configuration } from '../lib/config.js';
-import { values } from './copy.js';
+import { effective } from './copy.js';
 
 export default {
 	path: ['show', 'diff'],
@@ -11,10 +11,10 @@ export default {
 		if (args.length > 2) throw beyond(['show', 'diff', ...args.slice(0, 2)], args.slice(2));
 		return args.map(configuration);
 	},
-	// from one configuration to another: the running-config, the
+	// from one configuration to another as they run: the running-config, the
 	// startup-config, or a save
 	run(ctx, [from, to]) {
-		const lines = ctx.schema.diff(values(ctx, from), values(ctx, to));
+		const lines = ctx.schema.diff(effective(ctx, from), effective(ctx, to));
 		return lines.length ? lines.join('\n') : comment('no difference');
 	},
 	complete(ctx, args) {

@@ -30,7 +30,7 @@ all of it through one tool, and so do you, after a `/`.
 ## A real CLI, the Cisco IOS way
 
 - Any unambiguous prefix works, `sh run`; an ambiguous one says so, the way IOS does.
-- `show running-config` and `show startup-config`, `copy run start`, `show diff`, named saves,
+- `show running-config [all]` and `show startup-config`, `copy run start`, `show diff`, named saves,
   `| include`, `| count`, tab completion.
 - A batch applies whole or not at all, and answers with the exact change, `-` then `+`.
 

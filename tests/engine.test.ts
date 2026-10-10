@@ -243,6 +243,20 @@ describe('show running-config', () => {
 		expect((await fresh.run(sets, 'user')).ok).toBe(true);
 		expect((await fresh.run('show running-config', 'user')).text).toBe(shown);
 	});
+
+	it('all lists every module as show lists it, defaults included', async () => {
+		const k = await page();
+		await k.run('set display tools open', 'user');
+		const all = (await k.run('show run al', 'user')).text;
+		const { modules } = await import('../src/engine/registry.js');
+		const each = await Promise.all(modules.map((m) => k.run(`show ${m.name}`, 'user')));
+		expect(all).toBe(each.map((r) => r.text).join('\n'));
+		expect(all).toContain('set display tools open\n');
+		expect(all).toContain('set display thinking closed\n');
+		expect((await k.run('show running-config x', 'user')).text).toBe(
+			'% nothing goes after show running-config: x'
+		);
+	});
 });
 
 describe('the display', () => {
@@ -954,6 +968,7 @@ describe('erase and copy', () => {
 		const values = { 'chat system': 'old', 'privilege level gone': 'allow' };
 		localStorage.setItem('kiss.saves', JSON.stringify([{ name: 'old', date: '', values }]));
 		const later = await page();
+		expect((await later.run('show diff old run', 'user')).text).toBe('- set chat system old');
 		expect((await later.run('copy old running-config', 'user')).text).toBe(
 			'! dropped unknown keys: privilege level gone\n- set chat system ""\n+ set chat system old'
 		);
@@ -973,7 +988,10 @@ describe('a page', () => {
 		const next = await page('set display tools open');
 		expect(next.settings.get('chat system')).toBe('blue');
 		expect(next.settings.get('display tools')).toBe('open');
-		expect((await next.run('show startup-config', 'user')).text).toBe('set chat system blue');
+		expect((await next.run('show startup-config', 'user')).text).toBe(
+			'set chat system blue\nset display tools open'
+		);
+		expect((await next.run('show diff start run', 'user')).text).toBe('! no difference');
 		await next.run('copy b startup-config', 'user');
 		expect((await page()).settings.get('chat system')).toBe('green');
 		expect((await (await page()).run('erase startup-config', 'user', shelf([]))).text).toBe(
@@ -981,8 +999,9 @@ describe('a page', () => {
 		);
 		const bare = await page('set display tools open');
 		expect(bare.settings.get('chat system')).toBe('');
-		expect((await bare.run('show startup-config', 'user')).text).toBe(
-			'! the page starts on kiss.conf alone'
+		expect((await bare.run('show startup-config', 'user')).text).toBe('set display tools open');
+		expect((await (await page()).run('show startup-config', 'user')).text).toBe(
+			'! every key is at its default'
 		);
 	});
 });

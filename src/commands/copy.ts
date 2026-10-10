@@ -17,6 +17,21 @@ export function values(ctx: Context, name: string): Record<string, Value> {
 	return ctx.archive.find(name).values;
 }
 
+// a configuration as it runs: its values over kiss.conf, sorted, the keys no
+// module declares anymore left out
+export function effective(ctx: Context, name: string): Record<string, Value> {
+	const all = Object.entries(ctx.config.over(values(ctx, name)));
+	return Object.fromEntries(all.filter(([k]) => ctx.schema.known(k)));
+}
+
+// a configuration as the lines that show it, or with secrets the lines that
+// set it
+export function listed(ctx: Context, name: string, secrets = false): string[] {
+	return Object.entries(effective(ctx, name)).map(([k, v]) =>
+		secrets ? ctx.schema.set(k, v) : ctx.schema.line(k, v)
+	);
+}
+
 // whether a word names a configuration: the running-config, the
 // startup-config, or a save
 export function named(ctx: Context, word: string): boolean {

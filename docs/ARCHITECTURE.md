@@ -105,7 +105,8 @@ line    = command { "|" filter }
 command = "set" key [ value ]                a secret left out is asked
         | "no" key [ value ] | "no" module item  a value is left as IOS does
         | "show" module [ word [ item ] ] | "show" module item
-        | "show" ( "running-config" | "startup-config" | "css" | "version" | "title" )
+        | "show running-config" [ "all" ]    what differs from the defaults, or every key
+        | "show" ( "startup-config" | "css" | "version" | "title" )
         | "show saves" [ save ]              every save, or one as the lines that set it
         | "show conversations"
         | "show diff" config config
@@ -174,6 +175,10 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A value resolves from what the session sets, over `kiss.conf`, over the default of its key;
   `erase running-config` drops what the session sets, a copy to `running-config` puts back the
   configuration it names. `kiss.conf` applies whole or not at all, like a batch.
+- Every configuration shows as it runs, over `kiss.conf`, the keys no module declares anymore left
+  out: `show`, `show diff` and `export` alike, while a save keeps what the session sets only, so a
+  `kiss.conf` changed reaches every save. `show running-config` lists what differs from the
+  defaults, `show running-config all` every key of every module as `show <module>` lists it.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
