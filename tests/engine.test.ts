@@ -205,6 +205,7 @@ describe('a secret', () => {
 			expect(r.text).toContain(`endpoints ${item} holds a secret`);
 		}
 		expect((await k.run('set endpoints key u sk-model', 'llm')).ok).toBe(true);
+		expect((await k.run('set endpoints timeout u 9', 'llm')).ok).toBe(true);
 		expect((await k.run('set endpoints url fresh http://f/v1', 'llm', { grant })).ok).toBe(true);
 		expect((await k.run('set endpoints url u http://u2/v1', 'user')).ok).toBe(true);
 	});
@@ -314,9 +315,7 @@ describe('the headers of a server', () => {
 		const r = await k.run("set endpoints headers b 'x: 2'", 'llm', { grant: asked.grant });
 		expect(r.text).toContain('the user refused the change');
 		expect(asked.asked).toHaveLength(1);
-		expect((await k.run("set endpoints headers a 'x: 2'", 'llm', { grant })).text).toContain(
-			'endpoints a holds a secret, only the user changes it'
-		);
+		expect((await k.run("set endpoints headers a 'x: 2'", 'llm', { grant })).ok).toBe(true);
 	});
 });
 
@@ -680,7 +679,7 @@ describe('the conversations', () => {
 			'! exported 1 conversation to Two.json'
 		);
 		expect((await k.run('export all', 'llm', s)).text).toMatch(
-			/^! exported 2 conversations to kiss \d{4}-\d\d-\d\d\.json$/
+			/^! exported 2 conversations to all \d{4}-\d\d-\d\d \d\d-\d\d\.json$/
 		);
 		expect(s.offered.map((o) => parse(o.text).map((c) => c.id))).toEqual([
 			['ab34-1'],
@@ -696,13 +695,25 @@ describe('the conversations', () => {
 		const refused = { ...s, offer: async () => false };
 		expect((await k.run('export all', 'llm', refused)).text).toBe('% the user saved no file');
 		await k.run('set endpoints url a http://a/v1\nset endpoints key a sk-a', 'user');
-		expect((await k.run('export running-config', 'llm', s)).text).toBe(
-			'! exported the running configuration to kiss.conf'
+		const shown = await k.run('export running-config', 'llm', s);
+		expect(shown.text).toMatch(
+			/^! exported running-config to running-config \d{4}-\d\d-\d\d \d\d-\d\d\.conf$/
 		);
+		expect(shown.text).not.toContain('sk-a');
 		const conf = s.offered.at(-1)!;
-		expect(conf.name).toBe('kiss.conf');
+		expect(shown.text).toContain(conf.name);
 		expect(conf.text).toContain('set endpoints url a http://a/v1\n');
-		expect(conf.text).not.toContain('sk-a');
+		expect(conf.text).toContain('set endpoints key a sk-a\n');
+		const k2 = await page();
+		expect((await k2.run('import', 'user', shelf([], conf.text))).text).not.toContain('sk-a');
+		expect((await k2.run('show running-config', 'user')).text).toBe(
+			(await k.run('show running-config', 'user')).text
+		);
+		await k.run('copy run ab12', 'user');
+		await k.run('set endpoints key a sk-b', 'user');
+		expect((await k.run('export ab12', 'llm', s)).text).toMatch(/^! exported ab12 to ab12 /);
+		expect(s.offered.at(-1)!.text).toContain('set endpoints key a sk-a\n');
+		expect((await k.run('export start', 'llm', s)).text).toMatch(/^! exported startup-config /);
 	});
 
 	it('import the conversations of a file beside the others, or run a configuration whole', async () => {

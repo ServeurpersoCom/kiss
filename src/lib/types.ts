@@ -186,6 +186,8 @@ export interface Schema {
 	unstore(stored: string): [string, string | undefined];
 	// whether a stored key is one a module declares
 	known(stored: string): boolean;
+	// the line that sets a stored key, a secret with its value
+	set(stored: string, value: Value): string;
 	// one line of show running for a stored key: set, or a comment for a secret
 	line(stored: string, value: Value): string;
 	// the lines turning one set of stored keys into another, - then +

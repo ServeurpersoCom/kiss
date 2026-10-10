@@ -3,9 +3,9 @@ import { stored, unstore } from './schema.js';
 
 // a configuration: the keys set in the session, over the values the site gives, over
 // the defaults of the schema; the site layer is shared by every copy, and a
-// copy written by the model moves no secret: on an item holding one it sets
-// the secret only, while unset, drop and load fall back to values the user or
-// the site chose
+// copy written by the model moves no secret: on an item holding one it changes
+// every key but the url, while unset, drop and load fall back to values the
+// user or the site chose
 export class Values implements Config {
 	private map: Map<string, Value>;
 
@@ -36,14 +36,14 @@ export class Values implements Config {
 
 	set(key: string, value: Value, name?: string): void {
 		const module = key.split(' ')[0];
-		if (this.role === 'llm' && name && this.schema.find(key)?.kind !== 'secret') {
+		if (this.role === 'llm' && name && this.schema.find(key)?.kind === 'url') {
 			const held = this.schema
 				.list()
 				.some(
 					([k, def]) =>
 						def.kind === 'secret' && k.startsWith(module + ' ') && this.get(k, name) !== undefined
 				);
-			if (held) throw new Error(`${module} ${name} holds a secret, only the user changes it`);
+			if (held) throw new Error(`${module} ${name} holds a secret, only the user changes its url`);
 		}
 		this.map.set(stored(key, name), value);
 	}

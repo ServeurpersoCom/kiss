@@ -110,7 +110,7 @@ command = "set" key [ value ]                a secret left out is asked
         | "copy" config config               alone; the model copies to running-config only
         | "reset"
         | "title" value                      the title of this conversation
-        | "export" [ "all" | "running-config" | id ] alone on its line
+        | "export" [ "all" | config | id ] alone on its line
         | "import"                           alone on its line
         | "delete" ( "all" | id )            alone, once the user confirms it
         | "no save" save | "erase startup-config"   user only, each alone on its line
@@ -178,7 +178,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
-- On an item holding a secret, the model sets the secret only: a secret goes to a URL the user
+- On an item holding a secret, the model changes every key but the url: a secret goes to a URL the user
   or the site chose, never to one the model chose.
 - The model changes a guarded key only as far as the privilege of its module goes, whatever
   command spells the change: `deny` refuses, `ask` asks the user, `allow` lets it; closing never
@@ -416,9 +416,13 @@ belongs to no branch: a command of one branch stays applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations` lists
 them by id, the one the batch was sent in marked. `export` offers a file of this conversation, of
-another by a prefix of its id, of all of them, or of the running configuration as `kiss.conf`, the
-`set` lines of `show running-config`, secrets left out, in a card the user saves from: a browser
-saves a file on a click only, so the model never puts one on the disk by itself. `import` asks for a
+another by a prefix of its id, of all of them, or of a configuration, in a card the user saves
+from: a browser saves a file on a click only, so the model never puts one on the disk by itself. A
+configuration, the running-config, the startup-config or a save, is its `set` lines with the values
+of its secrets, the browser holding them in clear anyway, so a copy to another browser needs no key
+typed again; they go to the disk of the user alone, the output naming the file only. A word naming
+a configuration names no conversation. A file is named after what it holds, a configuration and
+all the conversations after the minute too, `running-config 2026-10-10 14-32.conf`. `import` asks for a
 file in a card the user picks from and reads it by what it holds: a JSON file adds its conversations
 whose id is new, the others skipped and told; any other file runs its lines as more lines of the
 batch, whole or not at all, with the rights of whoever asked, the firewall included, the way lines
@@ -431,7 +435,7 @@ an export out of the context, edit the message that asked for it.
 show conversations
 export                                   ! this conversation
 export 3f2a                              ! another, by a prefix of its id
-export running-config                    ! the configuration, as kiss.conf
+export running-config                    ! a configuration, secrets included
 export all
 import
 delete 3f2a                              ! once the user confirms it

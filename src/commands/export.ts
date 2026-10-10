@@ -1,31 +1,57 @@
 import type { Command, Context, Conversation } from '../lib/types.js';
 import {
 	ALL,
+	CONFIG_EXTENSION,
+	FILE_EXTENSION,
 	ID_SHOWN,
 	RUNNING_CONFIG,
-	SITE_CONFIG_URL,
+	STARTUP_CONFIG,
 	beyond,
 	comment,
 	configuration,
 	fileName,
 	localTime
 } from '../lib/config.js';
+import { values } from './copy.js';
 import { running } from './show-running.js';
+import { written } from './show-startup.js';
 
-// what export names: every conversation, one by a prefix of its id, the one
-// the batch was sent in, or the running configuration
-type Plan = typeof ALL | typeof RUNNING_CONFIG | { prefix: string } | null;
+// what export names: every conversation, the one the batch was sent in, or a
+// word: a configuration, else a conversation by a prefix of its id
+type Plan = typeof ALL | null | { word: string };
 
-// the conversations a plan names
-function chosen(ctx: Context, plan: Exclude<Plan, typeof RUNNING_CONFIG>): readonly Conversation[] {
+// a file offered: its name, its text, and what the output tells of it
+interface File {
+	name: string;
+	text: string;
+	told: string;
+}
+
+// a configuration with its secrets, as import reads it and a site serves it:
+// the running-config as show running-config lists it, the startup-config or
+// a save as the archive keeps it
+function configured(ctx: Context, config: string, minute: string): File {
+	const lines =
+		config === RUNNING_CONFIG ? running(ctx, true) : written(ctx, values(ctx, config), true);
+	const name = fileName(`${config} ${minute}`, CONFIG_EXTENSION);
+	return { name, text: lines.join('\n') + '\n', told: `exported ${config} to ${name}` };
+}
+
+// conversations: all of them named after the minute, one after its title
+function packed(ctx: Context, plan: Plan, minute: string): File {
 	const all = ctx.conversations?.list() ?? [];
-	if (plan === ALL) return all;
+	let list: readonly Conversation[] = all;
 	if (plan === null) {
 		const here = all.find((c) => c.id === ctx.conversation?.id);
 		if (!here) throw new Error('no conversation here');
-		return [here];
-	}
-	return [ctx.conversations!.find(plan.prefix)];
+		list = [here];
+	} else if (plan !== ALL) list = [ctx.conversations!.find(plan.word.toLowerCase())];
+	if (!list.length) throw new Error('no conversation yet');
+	const title = plan === ALL ? `${ALL} ${minute}` : list[0].title || list[0].id.slice(0, ID_SHOWN);
+	const name = fileName(title, FILE_EXTENSION);
+	const n = list.length;
+	const told = `exported ${n} ${n === 1 ? 'conversation' : 'conversations'} to ${name}`;
+	return { name, text: ctx.conversations!.pack(list), told };
 }
 
 export default {
@@ -36,33 +62,28 @@ export default {
 		if (args.length > 1) throw beyond(['export', args[0]], args.slice(1));
 		if (!args.length) return null;
 		if (args[0] === ALL) return ALL;
-		if (configuration(args[0]) === RUNNING_CONFIG) return RUNNING_CONFIG;
-		return { prefix: args[0].toLowerCase() };
+		return { word: configuration(args[0]) };
 	},
-	// a file offered to the user: the running configuration as kiss.conf, as a
-	// site serves it and import reads it, secrets left out; one conversation
-	// named after its title, or many named after the day; nothing changes
+	// a file offered to the user, its content going to their disk alone, named
+	// after what it holds: a configuration with its secrets, the running-config,
+	// the startup-config or a save, and all the conversations, after the minute
+	// too; one conversation after its title; nothing changes
 	async run(ctx, plan) {
 		if (!ctx.offer) throw new Error('nobody is here to save the file');
-		if (plan === RUNNING_CONFIG) {
-			const saved = await ctx.offer(SITE_CONFIG_URL, running(ctx).join('\n') + '\n');
-			ctx.signal?.throwIfAborted();
-			if (!saved) throw new Error('the user saved no file');
-			return comment(`exported the running configuration to ${SITE_CONFIG_URL}`);
-		}
-		const list = chosen(ctx, plan);
-		if (!list.length) throw new Error('no conversation yet');
-		const name =
-			list.length === 1
-				? fileName(list[0].title || list[0].id.slice(0, ID_SHOWN))
-				: fileName(`kiss ${localTime(Date.now()).slice(0, 10)}`);
-		const saved = await ctx.offer(name, ctx.conversations!.pack(list));
+		const minute = localTime(Date.now());
+		const config = plan !== null && plan !== ALL ? plan.word : '';
+		const named =
+			config === RUNNING_CONFIG ||
+			config === STARTUP_CONFIG ||
+			ctx.archive.list().some((s) => s.name === config);
+		const file = named ? configured(ctx, config, minute) : packed(ctx, plan, minute);
+		const saved = await ctx.offer(file.name, file.text);
 		ctx.signal?.throwIfAborted();
 		if (!saved) throw new Error('the user saved no file');
-		const n = list.length;
-		return comment(`exported ${n} ${n === 1 ? 'conversation' : 'conversations'} to ${name}`);
+		return comment(file.told);
 	},
-	complete(_ctx, args) {
-		return args.length ? [] : [ALL, RUNNING_CONFIG, '<id>'];
+	complete(ctx, args) {
+		const configs = [RUNNING_CONFIG, STARTUP_CONFIG, ...ctx.archive.list().map((s) => s.name)];
+		return args.length ? [] : [ALL, ...configs, '<id>'];
 	}
 } satisfies Command<Plan>;

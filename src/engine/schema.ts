@@ -220,8 +220,13 @@ export class KeySchema implements Schema {
 		return this.find(unstore(stored)[0])?.kind === 'secret';
 	}
 
-	line(stored: string, value: Value): string {
-		if (this.secret(stored)) return comment(`${stored} is set`);
+	// the line that sets a key, a secret with its value
+	set(stored: string, value: Value): string {
 		return `set ${stored} ${this.quote(value)}`;
+	}
+
+	// the line that shows a key, a secret out of view
+	line(stored: string, value: Value): string {
+		return this.secret(stored) ? comment(`${stored} is set`) : this.set(stored, value);
 	}
 }

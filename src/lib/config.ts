@@ -127,8 +127,10 @@ export const ALL = 'all';
 // the length an id shows, unique among a few thousand conversations
 export const ID_SHOWN = 8;
 export const FILE_EXTENSION = '.json';
+export const CONFIG_EXTENSION = '.conf';
 const UNSAFE_NAME = /[\\/:*?"<>|]/g;
-export const fileName = (title: string): string => title.replace(UNSAFE_NAME, '_') + FILE_EXTENSION;
+export const fileName = (title: string, extension: string): string =>
+	title.replace(UNSAFE_NAME, '-') + extension;
 
 // storage
 export const DB_NAME = 'kiss';

@@ -1,6 +1,6 @@
 import type { Assistant, Conversation, Grant, Library, Verdict } from './types.js';
 import { REFUSE } from './types.js';
-import { FILE_EXTENSION, SLASH, TITLE_LENGTH } from './config.js';
+import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
 import { turn } from './agent.js';
 import {
@@ -123,7 +123,7 @@ export function choose(): Promise<string | null> {
 	return new Promise((resolve) => {
 		const input = document.createElement('input');
 		input.type = 'file';
-		input.accept = `${FILE_EXTENSION},.conf`;
+		input.accept = `${FILE_EXTENSION},${CONFIG_EXTENSION}`;
 		input.onchange = () => {
 			const file = input.files?.[0];
 			if (file) file.text().then(resolve, () => resolve(null));

@@ -1,12 +1,13 @@
 import type { Command, Context } from '../lib/types.js';
 import { RUNNING_CONFIG, comment } from '../lib/config.js';
 
-// every key not at its default, sorted, as the line that sets it: what export
-// running-config writes to kiss.conf too
-export function running(ctx: Context): string[] {
-	return ctx.config
-		.stored()
-		.map((k) => ctx.schema.line(k, ctx.config.get(...ctx.schema.unstore(k))!));
+// every key not at its default, sorted, as the line that shows it, or with
+// secrets the line that sets it, as export running-config writes it
+export function running(ctx: Context, secrets = false): string[] {
+	return ctx.config.stored().map((k) => {
+		const value = ctx.config.get(...ctx.schema.unstore(k))!;
+		return secrets ? ctx.schema.set(k, value) : ctx.schema.line(k, value);
+	});
 }
 
 export default {
