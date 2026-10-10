@@ -1,23 +1,16 @@
 import { tokenize } from './parse.js';
-import { INDENT } from '../lib/config.js';
 
 type Lines = (lines: string[]) => string[];
 
 // output filters after a pipe, IOS style: show css | include :root; every
-// filter but count takes a pattern, a case blind regular expression; a
-// section is a line at the margin with the indented lines under it, kept
-// whole when that line matches: show tools | section sandbox
+// filter but count takes a pattern, a case blind regular expression
 const PATTERNED: Record<string, (re: RegExp) => Lines> = {
 	begin: (re) => (lines) => {
 		const i = lines.findIndex((l) => re.test(l));
 		return i < 0 ? [] : lines.slice(i);
 	},
 	exclude: (re) => (lines) => lines.filter((l) => !re.test(l)),
-	include: (re) => (lines) => lines.filter((l) => re.test(l)),
-	section: (re) => (lines) => {
-		let kept = false;
-		return lines.filter((l) => (l.startsWith(INDENT) ? kept : (kept = re.test(l))));
-	}
+	include: (re) => (lines) => lines.filter((l) => re.test(l))
 };
 
 const count: Lines = (lines) => [String(lines.length)];

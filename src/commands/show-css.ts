@@ -1,5 +1,5 @@
 import type { Command } from '../lib/types.js';
-import { INDENT, comment } from '../lib/config.js';
+import { comment } from '../lib/config.js';
 
 // the rules of the page style, one per line, those of the libraries left out
 // as their own layer holds them
@@ -25,8 +25,6 @@ export default {
 			const name = /\bsvelte-([a-z0-9]+)/.exec(rule)?.[1] ?? 'page';
 			groups.set(name, [...(groups.get(name) ?? []), rule]);
 		}
-		return [...groups]
-			.flatMap(([name, list]) => [comment(name), ...list.map((r) => INDENT + r)])
-			.join('\n');
+		return [...groups].flatMap(([name, list]) => [comment(name), ...list]).join('\n');
 	}
 } satisfies Command;

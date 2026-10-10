@@ -118,16 +118,16 @@ key     = module word [ item ]               an item names one of a collection
 config  = "running-config" | "startup-config" | save   either by any prefix: run, start
 save    = name                               a save of the same name gives way
 value   = bare | "json string" | 'literal'
-filter  = ( "include" | "exclude" | "begin" | "section" ) pattern | "count"
+filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
 ```
 
 One write verb per store, one read verb for all: `set` and `no` write the configuration, `copy`,
 `no save` and `erase` the archive, `title` the conversation, `import` the conversations, and `show`
 reads every one of them.
 
-An output by group indents each body one blank under its header, IOS style: `section` keeps a line
-at the margin with the lines indented under it when that line matches, and an indented line reads
-back as set like any other, so a whole output pastes back as it is.
+Every line stands alone, a key named whole, so the CLI has no mode to enter or leave and no line
+depends on another. An output by group writes each header as a note before its lines, so a whole
+output pastes back as it is.
 
 Every line an output writes is one of four: a command, which pastes back as it is, a change after
 `-` or `+`, a note after `!`, which a paste skips, what a command did, or an error after `%`; a show
@@ -380,7 +380,7 @@ wait a turn, the tools of a turn the same from round to round.
 set mcp url sandbox https://example.com/mcp
 set mcp key sandbox                      ! a masked field asks for the token
 show tools                               ! every tool, by who serves it
-show tools | section sandbox             ! one server, its tools indented under it
+show tools | include bash                ! the settings of the tools named bash
 set tools use str_replace off            ! the model never sees it
 set tools preview bash_tool description  ! what a folded call shows
 no tools bash_tool                       ! every setting of that tool, gone
@@ -491,7 +491,7 @@ set style bg #faf9f5
 set style fg #141413                    ! with bg, a light theme
 set style width 64rem
 no style bg                             ! back to the background of the page
-show css | section composer             ! the rules of the composer
+show css | include composer             ! the rules of the composer
 set style sheet input 'form.svelte-composer { max-width: 64rem }'  ! the composer alone
 ```
 

@@ -25,9 +25,6 @@ export const configuration = (word: string): string =>
 	[RUNNING_CONFIG, STARTUP_CONFIG].find((n) => n.startsWith(word.toLowerCase())) ?? word;
 export const ERROR_PREFIX = '% ';
 export const COMMENT_PREFIX = '!';
-// what sets a line of output under the one at the margin it belongs to, IOS
-// style, so a section filter keeps them together
-export const INDENT = ' ';
 // a line of output that is not a command: a heading, a note, a warning
 export const comment = (text: string): string => `${COMMENT_PREFIX} ${text}`;
 // a line of the composer opening with it runs on the CLI

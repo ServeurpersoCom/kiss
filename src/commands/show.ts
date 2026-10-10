@@ -1,6 +1,6 @@
 import type { Command, Context, Group } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { INDENT, beyond, comment } from '../lib/config.js';
+import { beyond, comment } from '../lib/config.js';
 
 // show chat, show tools use, show tools use bash_tool, and show tools bash_tool:
 // the word after a collection names a key when it names one, else an item
@@ -25,15 +25,15 @@ function lines(ctx: Context, plan: Plan, name: string | undefined): string[] {
 	return out;
 }
 
-// the lines of groups, each body indented under its header: a failed group
-// holds its error on the header, an empty one shows nothing, and one without
-// a name, the one source of its module, reads at the margin
+// the lines of groups, each body after its header: a failed group holds its
+// error on the header, an empty one shows nothing, and one without a name,
+// the one source of its module, has no header
 function grouped(groups: Group[], body: (name: string) => string[]): string[] {
 	return groups.flatMap((g) => {
 		if (g.error) return [comment(`${g.group} ${g.error}`)];
 		const lines = g.names.flatMap(body);
 		if (!g.group) return lines;
-		return lines.length ? [comment(g.group), ...lines.map((l) => INDENT + l)] : [];
+		return lines.length ? [comment(g.group), ...lines] : [];
 	});
 }
 

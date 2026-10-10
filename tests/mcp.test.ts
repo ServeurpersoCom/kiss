@@ -198,7 +198,7 @@ describe('an MCP server', () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
 		expect((await p.engine.run('show tools', 'user')).text).toContain(
-			'! mcp a\n set tools use bash_tool consent'
+			'! mcp a\nset tools use bash_tool consent'
 		);
 		expect(p.auth.length).toBeGreaterThan(0);
 		expect(p.auth.every((a) => a === 'Bearer sk-mcp')).toBe(true);
@@ -381,14 +381,14 @@ describe('an MCP server', () => {
 		expect((await p.engine.run('show tools use', 'user')).text).toBe(
 			[
 				'! KiSS',
-				' set tools use config on',
+				'set tools use config on',
 				'! mcp a',
-				' set tools use bash_tool consent',
-				' set tools use snap off',
-				' set tools use fail consent',
-				' set tools use wait consent',
+				'set tools use bash_tool consent',
+				'set tools use snap off',
+				'set tools use fail consent',
+				'set tools use wait consent',
 				'! others',
-				' set tools use old consent'
+				'set tools use old consent'
 			].join('\n')
 		);
 	});

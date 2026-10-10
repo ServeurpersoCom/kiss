@@ -103,7 +103,7 @@ describe('a batch', () => {
 		const set = k.run('set chat system blue', 'user');
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		h.release();
-		expect((await slow).text).toBe('! endpoints a\n ! a/m');
+		expect((await slow).text).toBe('! endpoints a\n! a/m');
 		await set;
 		expect(k.settings.get('chat system')).toBe('blue');
 	});
@@ -125,7 +125,7 @@ describe('a model list', () => {
 		const r = k.run('show models', 'user');
 		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
 		release();
-		expect((await r).text).toBe('! endpoints a down\n! endpoints b\n ! b/m\n ! b/org/n');
+		expect((await r).text).toBe('! endpoints a down\n! endpoints b\n! b/m\n! b/org/n');
 	});
 
 	it('that never answers frees the queue after its timeout', async () => {
@@ -920,19 +920,11 @@ describe('show', () => {
 	});
 });
 
-describe('a section', () => {
-	it('keeps a line at the margin with the lines indented under it, when that line matches', async () => {
-		const k = await page();
-		expect((await k.run('show tools | section KiSS', 'user')).text).toBe(
-			['! KiSS', ' set tools use config on'].join('\n')
-		);
-		expect((await k.run('show tools | section rounds', 'user')).text).toBe('set tools rounds 25');
-	});
-
-	it('reads back as set lines, indented or not', async () => {
+describe('a listing by group', () => {
+	it('pastes back as it is, its headers skipped as notes', async () => {
 		const k = await page();
 		const shown = (await k.run('show tools', 'user')).text;
-		expect(shown).toContain('\n set tools use config on');
+		expect(shown).toContain('! KiSS\nset tools use config on');
 		expect((await k.run(shown, 'user')).ok).toBe(true);
 	});
 });
