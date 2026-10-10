@@ -101,9 +101,10 @@ The user types it after a `/`, and the model sends it through its tool.
 batch   = line { newline line }              a line opening with ! is a comment
 line    = command { "|" filter }
 command = "set" key [ value ]                a secret left out is asked
-        | "no" key | "no" module item
+        | "no" key [ value ] | "no" module item  a value is left as IOS does
         | "show" module [ word [ item ] ] | "show" module item
-        | "show" ( "running-config" | "startup-config" | "css" | "saves" | "version" | "title" )
+        | "show" ( "running-config" | "startup-config" | "css" | "version" | "title" )
+        | "show saves" [ save ]              every save, or one as the lines that set it
         | "show conversations"
         | "show diff" config config
         | "copy" config config               alone; the model copies to running-config only

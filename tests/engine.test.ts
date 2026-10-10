@@ -437,7 +437,7 @@ describe('the firewall', () => {
 
 	it('checks an item the model names against the configuration as it applies, reaching no address it writes', async () => {
 		const k = await page();
-		const fetch = vi.fn(async () => models(['x']));
+		const fetch = vi.fn(async (_url: string) => models(['x']));
 		vi.stubGlobal('fetch', fetch);
 		const r = await k.run(
 			'set endpoints url z http://z/v1\nset models top_p z/x 0.5',
@@ -856,6 +856,18 @@ describe('a copy', () => {
 		await k.run('copy running-config a', 'user');
 		vi.useRealTimers();
 		expect((await k.run('show saves', 'user')).text).toBe('b 2026-10-05 11:20\na 2026-10-05 11:25');
+		await k.run('set endpoints url m http://m/v1\nset endpoints key m sk-m', 'user');
+		await k.run('copy running-config c', 'user');
+		expect((await k.run('show saves b', 'user')).text).toBe('set chat system blue');
+		expect((await k.run('show saves c', 'user')).text).toBe(
+			['set chat system green', '! endpoints key m is set', 'set endpoints url m http://m/v1'].join(
+				'\n'
+			)
+		);
+		expect((await k.run('show saves c | include url', 'user')).text).toBe(
+			'set endpoints url m http://m/v1'
+		);
+		expect((await k.run('show saves z', 'user')).text).toBe('% unknown save "z"');
 		expect((await k.run('copy a startup-config', 'llm')).text).toBe(
 			'% only the user writes startup-config'
 		);
