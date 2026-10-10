@@ -163,7 +163,6 @@ export interface Schema {
 	// every key with its declaration, sorted
 	list(): [string, Key][];
 	parse(key: string, raw: string): Value;
-	format(key: string, value: Value): string;
 	// the module a word names, a prefix being enough
 	module(word: string): string;
 	// the key of a module a word names, a prefix being enough, if any

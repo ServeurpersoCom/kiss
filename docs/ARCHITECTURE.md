@@ -82,8 +82,13 @@ The page loads its images, fonts, media and styles from itself only, a Content-S
 configuration names. So neither an image in a reply nor a `url()` in a `css` sheet ever carries
 anything out of the page.
 
-A `set` line that leaves out the value of a secret asks the user for it in a masked field; the
-value goes to the draft and never enters the conversation.
+A `set` line that leaves out the value of a secret asks the user for it in a masked field; the value
+goes to the draft and never enters the conversation, and the output says
+`! the user typed mcp key sandbox`. A line that writes the value of a secret is kept with it
+removed, `set mcp key sandbox <removed>`, the way Cisco IOS strips a secret from what it hands out:
+the brackets tell it is no value, and a `set` refuses it as one. A line that asks is kept as
+written, so the history tells who gave the secret. A secret replaced reads as one line,
+`! mcp key sandbox changed`.
 
 ## The CLI
 
@@ -164,7 +169,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   from the page itself, checked in Chromium.
 - A tool in `consent` asks the user before each call: once, always, which turns it on, or
   refuse. The tools of KiSS are on.
-- A secret a `set` line leaves out is asked of the user, and never enters the conversation.
+- A secret a `set` line leaves out is asked of the user, and never enters the conversation; the
+  line that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
 - No css sheet applies while a question stands, whatever it sets meanwhile: the card the user
   answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no

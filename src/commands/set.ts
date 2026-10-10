@@ -1,5 +1,6 @@
 import type { Command, Context, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
+import { comment } from '../lib/config.js';
 
 // no value for a secret: it is asked of the user
 interface Plan {
@@ -29,9 +30,14 @@ export default {
 		if (def.kind !== 'secret') throw new Incomplete();
 		return { key, name };
 	},
+	// a secret the user types says so, so whoever wrote the line knows it is given
 	async run(ctx, { key, name, value }) {
-		ctx.config.set(key, value ?? (await asked(ctx, key, name)), name);
-		return '';
+		if (value !== undefined) {
+			ctx.config.set(key, value, name);
+			return '';
+		}
+		ctx.config.set(key, await asked(ctx, key, name), name);
+		return comment(`the user typed ${name ? `${key} ${name}` : key}`);
 	},
 	complete(ctx, args) {
 		return ctx.schema.next(ctx.config, args, true, false);

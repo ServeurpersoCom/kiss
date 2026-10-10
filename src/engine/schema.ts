@@ -1,6 +1,6 @@
 import type { ConfigReader, Key, KeyWords, Module, Schema, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { NAME_PATTERN, SECRET_SET, comment } from '../lib/config.js';
+import { NAME_PATTERN, REMOVED, comment } from '../lib/config.js';
 import { didYouMean } from './near.js';
 
 const URL_PROTOCOLS = ['http:', 'https:'];
@@ -33,8 +33,11 @@ function check(def: Key, raw: string): Value {
 		case 'string':
 			return raw;
 		case 'secret':
-			if (!raw || raw === SECRET_SET)
-				throw new Error(`"${SECRET_SET}" marks a secret set, it is no value`);
+			if (!raw) throw new Error('a secret is never empty');
+			if (raw === REMOVED)
+				throw new Error(
+					`"${REMOVED}" stands for a secret kept out of view, it is no value -> the line without a value asks the user`
+				);
 			return raw;
 		case 'number': {
 			const n = Number(raw);
@@ -116,10 +119,6 @@ export class KeySchema implements Schema {
 		}
 	}
 
-	format(key: string, value: Value): string {
-		return this.find(key)?.kind === 'secret' ? SECRET_SET : this.quote(value);
-	}
-
 	quote(value: Value): string {
 		return BARE_VALUE.test(value) ? value : JSON.stringify(value);
 	}
@@ -191,20 +190,28 @@ export class KeySchema implements Schema {
 		return !!def && !!def.named === !!name;
 	}
 
+	// what a change does, line by line: the old line after -, the new one after
+	// +; a secret replaced by another reads as one line, its values out of view
 	diff(from: Record<string, Value | undefined>, to: Record<string, Value | undefined>): string[] {
 		const lines: string[] = [];
 		for (const k of [...new Set([...Object.keys(from), ...Object.keys(to)])].sort()) {
 			if (from[k] === to[k]) continue;
+			if (from[k] !== undefined && to[k] !== undefined && this.secret(k)) {
+				lines.push(comment(`${k} changed`));
+				continue;
+			}
 			if (from[k] !== undefined) lines.push('- ' + this.line(k, from[k]));
 			if (to[k] !== undefined) lines.push('+ ' + this.line(k, to[k]));
 		}
 		return lines;
 	}
 
+	secret(stored: string): boolean {
+		return this.find(unstore(stored)[0])?.kind === 'secret';
+	}
+
 	line(stored: string, value: Value): string {
-		const [key, name] = unstore(stored);
-		const head = name ? `${key} ${name}` : key;
-		if (this.find(key)?.kind === 'secret') return comment(`${head} is set`);
-		return `set ${head} ${this.format(key, value)}`;
+		if (this.secret(stored)) return comment(`${stored} is set`);
+		return `set ${stored} ${this.quote(value)}`;
 	}
 }

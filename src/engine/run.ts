@@ -1,6 +1,13 @@
 import type { ConfigReader, Context, Key, Outcome, Role, Scope, Value } from '../lib/types.js';
 import { ALLOW, ALWAYS, ASK, DENY, Incomplete, REFUSE } from '../lib/types.js';
-import { ERROR_PREFIX, OUTPUT_MAX_LINES, PRIVILEGE, beyond, comment } from '../lib/config.js';
+import {
+	ERROR_PREFIX,
+	OUTPUT_MAX_LINES,
+	PRIVILEGE,
+	REMOVED,
+	beyond,
+	comment
+} from '../lib/config.js';
 import { splitLines, splitPipes, tokenize } from './parse.js';
 import { compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
@@ -16,7 +23,6 @@ const running = new Values(schema, site);
 const archive = new SaveArchive(modules);
 
 // what replaces a value that must not be kept, and where a value may open
-const MASK = '****';
 const QUOTE = /["']/;
 
 // the running configuration, read only, for the rest of the page
@@ -230,9 +236,9 @@ async function guard(draft: Values, scope: Scope): Promise<string | null> {
 	return null;
 }
 
-// the lines as written, the value of every secret set by them masked; a line
-// that does not read keeps what comes before its first quote, where a value
-// may open
+// the lines as written, the value of every secret they write removed, a line
+// that writes none, which asks the user, kept as is; a line that does not
+// read keeps what comes before its first quote, where a value may open
 export function redact(text: string): string {
 	return text
 		.split('\n')
@@ -241,13 +247,13 @@ export function redact(text: string): string {
 			try {
 				words = tokenize(splitPipes(l)[0]);
 			} catch {
-				return l.split(QUOTE)[0] + MASK;
+				return l.split(QUOTE)[0] + REMOVED;
 			}
 			try {
 				const { command, args } = resolve(words);
 				if (command.path.join(' ') !== 'set') return l;
-				const { key, def, name } = schema.read(args);
-				return def.kind === 'secret' ? `set ${stored(key, name)} ${MASK}` : l;
+				const { key, def, name, rest } = schema.read(args);
+				return def.kind === 'secret' && rest.length ? `set ${stored(key, name)} ${REMOVED}` : l;
 			} catch {
 				return l;
 			}

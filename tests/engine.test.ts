@@ -215,8 +215,8 @@ describe('a secret', () => {
 		const shown = (await k.run('show running', 'user')).text;
 		expect(shown).toContain('! endpoints key u is set');
 		expect(shown).not.toContain('sk-user');
-		expect(k.redact('set endpoints key u sk-user')).toBe('set endpoints key u ****');
-		expect(k.redact('set endpoints key u "sk-user')).toBe('set endpoints key u ****');
+		expect(k.redact('set endpoints key u sk-user')).toBe('set endpoints key u <removed>');
+		expect(k.redact('set endpoints key u "sk-user')).toBe('set endpoints key u <removed>');
 	});
 });
 
@@ -535,13 +535,38 @@ describe('the firewall', () => {
 		await k.run('set mcp url a http://a/mcp', 'user');
 		const asked: string[] = [];
 		const secret = async (key: string) => (asked.push(key), 'sk-typed');
-		expect((await k.run('set mcp key a', 'llm', { secret })).text).toBe('+ ! mcp key a is set');
+		expect((await k.run('set mcp key a', 'llm', { secret })).text).toBe(
+			'! the user typed mcp key a\n+ ! mcp key a is set'
+		);
 		expect(asked).toEqual(['mcp key a']);
 		expect(k.settings.get('mcp key', 'a')).toBe('sk-typed');
 		expect((await k.run('set mcp key a', 'llm', { secret: async () => null })).text).toBe(
 			'% no value given for mcp key a'
 		);
 		expect((await k.run('set mcp key a', 'llm')).text).toBe('% nobody is here to give mcp key a');
+	});
+
+	it('keeps the line that asks as written, and removes a value written out of view', async () => {
+		const k = await page();
+		expect(k.redact('set mcp key a')).toBe('set mcp key a');
+		expect(k.redact('set mcp key a sk-x\nshow mcp')).toBe('set mcp key a <removed>\nshow mcp');
+		expect(k.redact('set mcp url a http://a/mcp')).toBe('set mcp url a http://a/mcp');
+	});
+
+	it('takes the mark of a secret removed for no value, the asking line named', async () => {
+		const k = await page();
+		await k.run('set mcp url a http://a/mcp\nset mcp key a sk-a', 'user');
+		const out = (await k.run('set mcp key a <removed>', 'llm')).text;
+		expect(out).toContain('"<removed>" stands for a secret kept out of view, it is no value');
+		expect(out).toContain('-> the line without a value asks the user');
+		expect(k.settings.get('mcp key', 'a')).toBe('sk-a');
+	});
+
+	it('reads a secret replaced as one line, its values out of view', async () => {
+		const k = await page();
+		await k.run('set mcp url a http://a/mcp\nset mcp key a sk-a', 'user');
+		expect((await k.run('set mcp key a sk-b', 'user')).text).toBe('! mcp key a changed');
+		expect((await k.run('no mcp key a', 'user')).text).toBe('- ! mcp key a is set');
 	});
 });
 

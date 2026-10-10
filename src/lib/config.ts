@@ -22,7 +22,9 @@ export const COMMENT_PREFIX = '!';
 export const comment = (text: string): string => `${COMMENT_PREFIX} ${text}`;
 // a line of the composer opening with it runs on the CLI
 export const SLASH = '/';
-export const SECRET_SET = '<set>';
+// what stands for a secret kept out of view, in the lines the history keeps;
+// never a value, as its brackets tell
+export const REMOVED = '<removed>';
 // optional file next to the page: set lines that become the defaults of a site
 export const SITE_CONFIG_URL = 'kiss.conf';
 export const PIPE = '|';
