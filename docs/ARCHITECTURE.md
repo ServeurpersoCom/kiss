@@ -183,8 +183,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   blocks only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
   from the page itself, checked in Chromium.
-- A tool in `consent` asks the user before each call: once, always, which turns it on, or
-  refuse. The tools of KiSS are on.
+- A tool in `consent` asks the user before each call: once, always, which turns it on, or refuse.
+  The tools of KiSS are on. A call reaches its tool only while the tool is not off, as it stands
+  when the call goes: a tool a call turns off is reached by no later call of the round.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation; the
   line that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
 - No css token or sheet applies while a question stands, whatever it sets meanwhile: the card the

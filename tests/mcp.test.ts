@@ -394,6 +394,35 @@ describe('an MCP server', () => {
 		);
 	});
 
+	it('turned off by a call is reached by no later call of the same round', async () => {
+		const off = {
+			name: 'config',
+			arguments: JSON.stringify({ lines: 'set tools use bash_tool off' })
+		};
+		const bash = {
+			name: 'bash_tool',
+			arguments: JSON.stringify({ description: 'x', text: 'leak' })
+		};
+		const p = await page({ a: legacy(SHELL) }, [
+			stream([
+				{
+					tool_calls: [
+						{ index: 0, id: 'a', function: off },
+						{ index: 1, id: 'b', function: bash }
+					]
+				}
+			]),
+			stream([{ content: 'ok' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		await (
+			await p.go()
+		).done;
+		expect(p.asked).toEqual([]);
+		expect(p.methods.a).not.toContain('tools/call');
+		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('off');
+	});
+
 	it('turned off is never seen by the model, and frees its name', async () => {
 		const p = await page({ a: legacy(SHELL), b: modern([{ name: 'bash_tool', run: text('x') }]) }, [
 			stream([{ content: 'ok' }])

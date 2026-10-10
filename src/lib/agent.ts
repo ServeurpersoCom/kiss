@@ -6,7 +6,7 @@ import prompts from './prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, stats, type Pulse } from './pulse.js';
-import { CONSENT, ON, tools as own } from './tools.js';
+import { CONSENT, OFF, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
 import { run, settings } from '../engine/run.js';
 
@@ -58,12 +58,13 @@ function object(text: string): Record<string, unknown> | null {
 	}
 }
 
-// runs one call and writes its outcome into it; a call takes its arguments as
-// its tool keeps them, and is stored as sent before it reaches its tool, so a
+// runs one call and writes its outcome into it; a call reaches a tool not off
+// as the configuration stands when it goes, whatever the round offered; it
+// takes its arguments as its tool keeps them, and is stored as sent before it reaches its tool, so a
 // stop or a page closed while it runs leaves it stopped, whatever the tool
 // answers
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
-	const tool = tools.find((t) => t.name === c.name);
+	const tool = tools.find((t) => t.name === c.name && settings.get('tools use', t.name) !== OFF);
 	const args = object(c.args);
 	if (!tool || !args) {
 		// what no tool reads, or what does not read, cannot be masked, so none
