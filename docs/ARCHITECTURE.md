@@ -13,6 +13,7 @@ src/engine/      the CLI: parse, schema, values, registry, run, archive
 src/commands/    one file per command, registered by existing
 src/modules/     one file per module: its keys, rules, checks, how it applies to the page
 src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
+src/protocols/   one file per protocol an endpoint speaks: chat
 src/lib/         the page side: agent, api, mcp, state, conversation, db
 src/components/  thread, message, round, ask, dialog, composer, sidebar
 src/markdown/    the remark and rehype stack and its incremental renderer
@@ -20,10 +21,10 @@ src/tokens.css   the tokens of the page, read as the keys of style
 tests/           the laws, under vitest and happy-dom
 ```
 
-A file in `commands/`, `modules/` or `tools/` registers itself by existing. A command imports
-`lib/types.ts` and `lib/config.ts` only and reaches everything else through its `Context`; a module
-or a tool is where the configuration meets the page, it imports what it drives in `lib/`. A plugin
-declared wrong or twice stops the page at load, never later.
+A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing. A command
+imports `lib/types.ts` and `lib/config.ts` only and reaches everything else through its `Context`; a
+module or a tool is where the configuration meets the page, it imports what it drives in `lib/`. A
+plugin declared wrong or twice stops the page at load, never later.
 
 ## The engine
 
@@ -132,16 +133,16 @@ Every line an output writes is one of four: a command, which pastes back as it i
 lists what it reads. The CLI writes its words as they are, in lower case, keys and values verbatim,
 and the page writes its prose with a capital.
 
-| Module      | Keys                                                                             |
-| ----------- | -------------------------------------------------------------------------------- |
-| `chat`      | `model`, `system`, both guarded                                                  |
-| `display`   | `thinking`, `tools`, `render <thinking or reply>`                                |
-| `endpoints` | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
-| `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                             |
-| `privilege` | `level <module>` guarded, every change asking                                    |
-| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>` guarded            |
-| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                    |
+| Module      | Keys                                                                                                |
+| ----------- | --------------------------------------------------------------------------------------------------- |
+| `chat`      | `model`, `system`, both guarded                                                                     |
+| `display`   | `thinking`, `tools`, `render <thinking or reply>`                                                   |
+| `endpoints` | `url <name>`, `protocol <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
+| `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>`                    |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                |
+| `privilege` | `level <module>` guarded, every change asking                                                       |
+| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>` guarded                               |
+| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                                       |
 
 ### Laws
 
@@ -296,9 +297,13 @@ configuration as it stands, so a tool a call turns on is offered from the next r
 model, a system prompt or a parameter a call changes. A tool in `consent` asks before its call, and
 a turn stopped keeps what settled.
 
-Every endpoint and every MCP server sends its key as a bearer token, and the headers it is given
-besides, `Name: value` pairs split by `;`, to it alone: an API that answers a page only once it
-names itself, such as the Claude API, takes `anthropic-dangerous-direct-browser-access: true`.
+Every endpoint speaks the protocol `endpoints protocol` names, `chat` by default, the chat
+completions of OpenAI: the protocol builds the request from the history, carries the key and reads
+the stream, and the rest of KiSS sees the same deltas whatever it is. Every endpoint sends its key
+as its protocol carries it, a bearer token for `chat`, and every MCP server as a bearer token; each
+sends the headers it is given besides, `Name: value` pairs split by `;`, to it alone: an API that
+answers a page only once it names itself, such as the Claude API, takes
+`anthropic-dangerous-direct-browser-access: true`.
 
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 

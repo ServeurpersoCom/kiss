@@ -1,6 +1,5 @@
 import type { Module } from '../lib/types.js';
-import { listModels } from '../lib/api.js';
-import { remotes } from '../lib/remote.js';
+import { endpoints, listModels } from '../lib/api.js';
 import { MODEL_SEPARATOR } from '../lib/config.js';
 
 // every setting of a model, the model named as the item endpoint/model as chat
@@ -23,7 +22,7 @@ export default {
 	// the models of every endpoint at once, by endpoint
 	async items(ctx) {
 		return Promise.all(
-			remotes(ctx.running, 'endpoints').map((e) =>
+			endpoints(ctx.running).map((e) =>
 				listModels(e, ctx.signal).then(
 					(ids) => ({
 						group: `endpoints ${e.name}`,

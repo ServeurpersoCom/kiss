@@ -1,11 +1,19 @@
 import type { Module } from '../lib/types.js';
-import { listModels } from '../lib/api.js';
-import { remotes, rules } from '../lib/remote.js';
+import { DEFAULT_PROTOCOL, PROTOCOLS, endpoints, listModels } from '../lib/api.js';
+import { rules } from '../lib/remote.js';
 
 export default {
 	name: 'endpoints',
 	keys: {
 		url: { kind: 'url', named: true, guard: 'change' },
+		// how the endpoint speaks, a file of protocols/ by its name
+		protocol: {
+			kind: 'enum',
+			values: PROTOCOLS,
+			default: DEFAULT_PROTOCOL,
+			named: true,
+			guard: 'change'
+		},
 		key: { kind: 'secret', named: true },
 		// sent with every request, Name: value pairs split by ;
 		headers: { kind: 'string', named: true, guard: 'change' },
@@ -19,7 +27,7 @@ export default {
 	// every endpoint lists its models
 	async check(config) {
 		const failures = await Promise.all(
-			remotes(config, 'endpoints').map((e) =>
+			endpoints(config).map((e) =>
 				listModels(e).then(
 					() => null,
 					(err: Error) => `endpoints ${e.name}: ${err.message}`

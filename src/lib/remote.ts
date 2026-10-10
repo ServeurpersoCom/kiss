@@ -56,8 +56,13 @@ export function rules(config: ConfigReader, module: string): string | null {
 	return null;
 }
 
-// what a request to the server carries: its key as a bearer token, then its
+// a key as a bearer token, none without a key
+export function bearer(key: string): Record<string, string> {
+	return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
+// what a request to an MCP server carries: its key as a bearer token, then its
 // headers, which may override it
 export function headers(remote: Remote): Record<string, string> {
-	return { ...(remote.key ? { Authorization: `Bearer ${remote.key}` } : {}), ...remote.headers };
+	return { ...bearer(remote.key), ...remote.headers };
 }

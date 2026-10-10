@@ -1,4 +1,4 @@
-import type { Assistant, Call, Message, Outcome, Tool, ToolContext } from './types.js';
+import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } from './types.js';
 import { ALWAYS, REFUSE } from './types.js';
 import { chat, pick } from './api.js';
 import { aggregate, connecting } from './mcp.js';
@@ -9,32 +9,6 @@ import { chunk, close, mark, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
 import { run, settings } from '../engine/run.js';
-
-// the chat history in OpenAI form: cli messages stay out, and every round of
-// an assistant turn becomes one assistant message followed by its results
-function history(messages: readonly Message[]): object[] {
-	return messages.flatMap((m) => {
-		if (m.role === 'user') return [{ role: 'user', content: m.text }];
-		if (m.role === 'cli') return [];
-		return m.rounds.flatMap((r) => [
-			{
-				role: 'assistant',
-				content: r.text,
-				...(r.reasoning ? { reasoning_content: r.reasoning } : {}),
-				...(r.calls.length
-					? {
-							tool_calls: r.calls.map((c) => ({
-								id: c.id,
-								type: 'function',
-								function: { name: c.name, arguments: c.args }
-							}))
-						}
-					: {})
-			},
-			...r.calls.map((c) => ({ role: 'tool', tool_call_id: c.id, content: c.result ?? '' }))
-		]);
-	});
-}
 
 // whether the user lets the model make this call: a tool in consent asks, and
 // always turns it on, as the user
@@ -118,21 +92,12 @@ async function setup(
 	);
 	const { tools, problems } = await aggregate(settings, own, down);
 	for (const problem of problems) if (!told.includes(problem)) told.push(problem);
-	// one system message, first, as every template takes it: the system prompt,
-	// then what the turn left out
+	// the system prompt, then what the turn left out
 	const system = [prompt, told.length ? [prompts.problems, ...told].join('\n') : '']
 		.filter((part) => part)
 		.join('\n\n');
-	const body = {
-		...parameters,
-		model,
-		messages: [...(system ? [{ role: 'system', content: system }] : []), ...history(messages)],
-		tools: tools.map((t) => ({
-			type: 'function',
-			function: { name: t.name, description: t.description, parameters: t.parameters }
-		}))
-	};
-	return { endpoint, body, tools };
+	const request: Request = { model, system, messages, tools, parameters };
+	return { endpoint, request, tools };
 }
 
 // one assistant turn: rounds streamed into reply as they arrive, until a round
@@ -157,19 +122,19 @@ export async function turn(
 		for (; r < Number(settings.get('tools rounds')); r++) {
 			p.round = r + 1;
 			mark(p, 'preparing', '', performance.now());
-			const { endpoint, body, tools } = await setup([...messages, reply], signal, p, down, told);
+			// the history as it stands before this round, which the round goes on
+			// writing while the request streams
+			const history = [...messages, { ...reply, rounds: [...reply.rounds] }];
+			const { endpoint, request, tools } = await setup(history, signal, p, down, told);
 			mark(p, 'waiting', endpoint.name, performance.now());
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
 			const round = reply.rounds[reply.rounds.length - 1];
 			// the calls of the round by the index the stream gives them
 			const calls = new Map<number, Call>();
 			let usage: number | undefined;
-			for await (const d of chat(endpoint, body, signal)) {
+			for await (const d of chat(endpoint, request, signal)) {
 				const now = performance.now();
-				if (d.usage !== undefined) {
-					usage = d.usage;
-					continue;
-				}
+				if (d.usage !== undefined) usage = d.usage;
 				chunk(p, !!(d.reasoning || d.content || d.calls), now);
 				if (d.reasoning) {
 					round.reasoning += d.reasoning;

@@ -352,3 +352,40 @@ export interface Tool {
 	stored?(ctx: ToolContext, args: Record<string, unknown>): object;
 	run(ctx: ToolContext, args: Record<string, unknown>): Promise<Outcome>;
 }
+
+// what one round asks of a model, whatever protocol carries it: the history
+// as the conversation keeps it, the tools offered, and the parameters set for
+// the model by their names in models, numbers as numbers
+export interface Request {
+	model: string;
+	system: string;
+	messages: readonly Message[];
+	tools: readonly Tool[];
+	parameters: Record<string, string | number>;
+}
+
+// what one event of a stream adds to the round: its thinking, its text, the
+// calls by the index the stream gives them, the tokens the endpoint counted;
+// or that the stream ends, or fails with the message of the endpoint, empty
+// when it gives none
+export interface Delta {
+	content?: string;
+	reasoning?: string;
+	calls?: { index: number; id?: string; name?: string; args?: string }[];
+	usage?: number;
+	end?: true;
+	error?: string;
+}
+
+// how an endpoint speaks: a file of protocols/, named as endpoints protocol
+// takes it; the path it posts a request to, the headers that carry the key,
+// the body of a request, the event that ends a stream, and what the data of
+// each event adds, none for an event that adds nothing
+export interface Protocol {
+	name: string;
+	path: string;
+	auth(key: string): Record<string, string>;
+	body(request: Request): object;
+	last: string;
+	read(data: string): Delta | undefined;
+}

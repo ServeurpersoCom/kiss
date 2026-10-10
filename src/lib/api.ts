@@ -1,22 +1,37 @@
-import type { ConfigReader } from './types.js';
+import type { ConfigReader, Delta, Protocol, Request } from './types.js';
 import { MODEL_SEPARATOR, SLASH } from './config.js';
-import { headers, remotes, type Remote } from './remote.js';
+import { remotes, type Remote } from './remote.js';
+import chatProtocol from '../protocols/chat.js';
 
-// OpenAI compatible client: the model list and streamed chat completions
+// the client of every endpoint: the model list, and a request streamed in the
+// protocol the endpoint speaks
 
 const UNAUTHORIZED = [401, 403];
 const NOT_FOUND = 404;
 // the commands that fix an endpoint which refuses the key, or is no LLM
 const KEY_FIX = `${SLASH}set endpoints key <name> <key>`;
 const URL_FIX = `${SLASH}set endpoints url <name> <url>`;
+const DATA = 'data:';
 
-// one chunk of a stream: what it adds to the reply, and on the last one the
-// tokens the endpoint counted
-interface Delta {
-	content?: string;
-	reasoning?: string;
-	calls?: { index: number; id?: string; name?: string; args?: string }[];
-	usage?: number;
+// the protocols of KiSS: a file in protocols/ offers its protocol by existing
+const files = import.meta.glob<{ default: Protocol }>('../protocols/*.ts', { eager: true });
+const protocols = Object.values(files).map((f) => f.default);
+
+// the names endpoints protocol takes, and the one an endpoint speaks unless set
+export const PROTOCOLS: readonly string[] = protocols.map((p) => p.name);
+export const DEFAULT_PROTOCOL = chatProtocol.name;
+
+// an endpoint: a remote server and the protocol it speaks
+export interface Endpoint extends Remote {
+	protocol: Protocol;
+}
+
+// every endpoint that has a url, sorted by name, each with its protocol
+export function endpoints(config: ConfigReader): Endpoint[] {
+	return remotes(config, 'endpoints').map((r) => ({
+		...r,
+		protocol: protocols.find((p) => p.name === config.get('endpoints protocol', r.name))!
+	}));
 }
 
 // what an endpoint answered wrong, with the command that fixes it when the
@@ -55,9 +70,10 @@ function notAnLlm(res: Response): EndpointError {
 
 // a request the endpoint answers within its timeout, as far as read takes the
 // answer, or less when the signal of the caller aborts; what read leaves of a
-// body streams on that signal alone
+// body streams on that signal alone; it carries the key as the protocol does,
+// then the headers of the endpoint, which may override it
 async function request<T>(
-	endpoint: Remote,
+	endpoint: Endpoint,
 	path: string,
 	init: RequestInit,
 	signal: AbortSignal | undefined,
@@ -71,7 +87,7 @@ async function request<T>(
 	try {
 		const res = await fetch(`${endpoint.url}${path}`, {
 			...init,
-			headers: { ...headers(endpoint), ...init.headers },
+			headers: { ...endpoint.protocol.auth(endpoint.key), ...endpoint.headers, ...init.headers },
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
 			// a network or CORS failure: nothing answers at that URL
@@ -86,7 +102,7 @@ async function request<T>(
 }
 
 // the models an endpoint serves
-export function listModels(endpoint: Remote, signal?: AbortSignal): Promise<string[]> {
+export function listModels(endpoint: Endpoint, signal?: AbortSignal): Promise<string[]> {
 	return request(endpoint, '/models', {}, signal, async (res) => {
 		if (!res.ok) throw await failure(res);
 		if (!res.headers.get('content-type')?.includes('json')) throw notAnLlm(res);
@@ -101,8 +117,8 @@ export function listModels(endpoint: Remote, signal?: AbortSignal): Promise<stri
 export async function pick(
 	config: ConfigReader,
 	signal?: AbortSignal
-): Promise<{ endpoint: Remote; model: string }> {
-	const all = remotes(config, 'endpoints');
+): Promise<{ endpoint: Endpoint; model: string }> {
+	const all = endpoints(config);
 	if (!all.length) {
 		throw new EndpointError('no endpoint yet', URL_FIX);
 	}
@@ -126,20 +142,21 @@ export async function pick(
 	return { endpoint, model: value.slice(cut + MODEL_SEPARATOR.length) };
 }
 
-// one delta per server sent event, until [DONE]: a stream closed before it is
-// cut short, never a finished answer; the endpoint counts the tokens it
-// generated on a last chunk of its own
+// one delta per server sent event, read by the protocol of the endpoint from
+// the data of the event, until the event that ends the stream: a stream closed
+// before it is cut short, never a finished answer
 export async function* chat(
-	endpoint: Remote,
-	body: object,
+	endpoint: Endpoint,
+	req: Request,
 	signal: AbortSignal
 ): AsyncGenerator<Delta> {
+	const { protocol } = endpoint;
 	const init = {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } })
+		body: JSON.stringify(protocol.body(req))
 	};
-	const stream = await request(endpoint, '/chat/completions', init, signal, async (res) => {
+	const stream = await request(endpoint, protocol.path, init, signal, async (res) => {
 		if (!res.ok || !res.body) throw await failure(res);
 		if (res.headers.get('content-type')?.includes('html')) throw notAnLlm(res);
 		return res.body;
@@ -148,37 +165,18 @@ export async function* chat(
 	let buffer = '';
 	for (;;) {
 		const { value, done } = await reader.read();
-		if (done) throw new Error('the stream ended before [DONE]');
+		if (done) throw new Error(`the stream ended before ${protocol.last}`);
 		buffer += value;
 		let nl: number;
 		while ((nl = buffer.indexOf('\n')) >= 0) {
 			const line = buffer.slice(0, nl).trim();
 			buffer = buffer.slice(nl + 1);
-			if (!line.startsWith('data:')) continue;
-			const data = line.slice(5).trim();
-			if (data === '[DONE]') return;
-			const json = JSON.parse(data);
-			if (json.error) throw new Error(json.error.message ?? `${endpoint.url} broke the stream`);
-			const usage = json.usage?.completion_tokens;
-			if (typeof usage === 'number') yield { usage };
-			const delta = json.choices?.[0]?.delta;
-			if (!delta) continue;
-			yield {
-				content: delta.content ?? undefined,
-				reasoning: delta.reasoning_content ?? undefined,
-				calls: delta.tool_calls?.map(
-					(c: {
-						index: number;
-						id?: string;
-						function?: { name?: string; arguments?: string };
-					}) => ({
-						index: c.index,
-						id: c.id,
-						name: c.function?.name,
-						args: c.function?.arguments
-					})
-				)
-			};
+			if (!line.startsWith(DATA)) continue;
+			const d = protocol.read(line.slice(DATA.length).trim());
+			if (!d) continue;
+			if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);
+			if (d.end) return;
+			yield d;
 		}
 	}
 }
