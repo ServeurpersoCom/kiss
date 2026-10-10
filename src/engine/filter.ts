@@ -1,15 +1,19 @@
+import { comment } from '../lib/config.js';
+
 type Lines = (lines: string[]) => string[];
 
 // the filter after a pipe, as IOS reads it: show css | include :root; every
 // filter takes a pattern, the rest of the line as written, a regular
 // expression that minds case: include ^set (tools|style); count tells how
-// many lines match
+// many lines match in the words of IOS, as a note
 const FILTERS: Record<string, (re: RegExp) => Lines> = {
 	begin: (re) => (lines) => {
 		const i = lines.findIndex((l) => re.test(l));
 		return i < 0 ? [] : lines.slice(i);
 	},
-	count: (re) => (lines) => [String(lines.filter((l) => re.test(l)).length)],
+	count: (re) => (lines) => [
+		comment(`number of lines which match regexp = ${lines.filter((l) => re.test(l)).length}`)
+	],
 	exclude: (re) => (lines) => lines.filter((l) => !re.test(l)),
 	include: (re) => (lines) => lines.filter((l) => re.test(l))
 };

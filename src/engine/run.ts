@@ -52,7 +52,7 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 		if (!(e instanceof Incomplete)) throw e;
 		const next = complete(ctx, words, '');
 		if (!alone) throw new Error(`"${head}" misses words, it may go on with: ${next.join(' ')}`);
-		return { run: () => next.join('\n'), filter };
+		return { run: () => comment(next.join(' ')), filter };
 	}
 }
 

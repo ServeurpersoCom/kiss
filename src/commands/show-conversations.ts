@@ -13,7 +13,7 @@ export default {
 			.map((c) => {
 				const mark = c.id === ctx.conversation?.id ? '*' : ' ';
 				const title = titled(c.title, (v) => ctx.schema.quote(v));
-				return `${mark} ${c.id.slice(0, ID_SHOWN)} ${localTime(c.updated)}${title}`;
+				return comment(`${mark} ${c.id.slice(0, ID_SHOWN)} ${localTime(c.updated)}${title}`);
 			})
 			.join('\n');
 	}

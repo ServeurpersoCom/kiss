@@ -19,7 +19,7 @@ export default {
 		}
 		const saves = ctx.archive.list();
 		if (!saves.length) return comment('nothing saved yet');
-		return saves.map((s) => `${s.name} ${localTime(s.date)}`).join('\n');
+		return saves.map((s) => comment(`${s.name} ${localTime(s.date)}`)).join('\n');
 	},
 	complete(ctx, args) {
 		return args.length ? [] : ctx.archive.list().map((s) => s.name);

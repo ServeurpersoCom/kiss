@@ -244,13 +244,14 @@ describe('a filter', () => {
 			'set endpoints url e42 http://e/v1\nset endpoints url e7 http://e/v1'
 		);
 		expect(await run('inc url e7 | x')).toBe('set endpoints url e7 http://e/v1');
-		expect(await run('count http')).toBe('250');
-		expect(await run('cou url e1')).toBe('111');
+		expect(await run('count http')).toBe('! number of lines which match regexp = 250');
+		expect(await run('cou url e1')).toBe('! number of lines which match regexp = 111');
 		expect(await run('begin url e99 ')).toBe('set endpoints url e99 http://e/v1');
 		expect(await run('include url E99')).toBe('! no line matches');
 		expect(await run('exclude url e[0-9]+ ')).toBe('! no line matches');
 		expect(await run('include (')).toBe('% "(" is not a pattern');
 		expect(await run('count')).toBe('% count needs a pattern');
+		expect((await k.run('show version', 'llm')).text).toMatch(/^! KiSS /);
 		expect(await run('sort')).toContain('% unknown filter "sort"');
 	});
 });
@@ -663,7 +664,7 @@ describe('the conversations', () => {
 		const list = [talk('bbbbbbbb-2', 'Two words', 2), talk('aaaaaaaa-1', 'one', 1)];
 		const r = await k.run('show conversations', 'llm', { ...shelf(list), conversation: list[1] });
 		expect(r.text).toBe(
-			[`  bbbbbbbb ${localTime(2)} "Two words"`, `* aaaaaaaa ${localTime(1)} one`].join('\n')
+			[`!   bbbbbbbb ${localTime(2)} "Two words"`, `! * aaaaaaaa ${localTime(1)} one`].join('\n')
 		);
 		expect((await k.run('show conversations', 'llm', shelf([]))).text).toBe(
 			'! no conversation yet'
@@ -851,7 +852,7 @@ describe('a copy', () => {
 	it('copies from a configuration to another, a save of the same name giving way', async () => {
 		const k = await page();
 		expect((await k.run('copy running-config', 'user')).text).toBe(
-			'running-config\nstartup-config\n<name>'
+			'! running-config startup-config <name>'
 		);
 		expect((await k.run('copy running-config running-config', 'user')).text).toContain(
 			'from one configuration to another'
@@ -868,7 +869,9 @@ describe('a copy', () => {
 		await k.run('set chat system green', 'user');
 		await k.run('copy running-config a', 'user');
 		vi.useRealTimers();
-		expect((await k.run('show saves', 'user')).text).toBe('b 2026-10-05 11:20\na 2026-10-05 11:25');
+		expect((await k.run('show saves', 'user')).text).toBe(
+			'! b 2026-10-05 11:20\n! a 2026-10-05 11:25'
+		);
 		await k.run('set endpoints url m http://m/v1\nset endpoints key m sk-m', 'user');
 		await k.run('copy running-config c', 'user');
 		expect((await k.run('show saves b', 'user')).text).toBe('set chat system blue');
@@ -906,7 +909,7 @@ describe('a copy', () => {
 		expect((await k.run('show diff running-config running-config', 'user')).text).toBe(
 			'! no difference'
 		);
-		expect((await k.run('show diff a', 'user')).text).toBe('a\nrunning-config\nstartup-config');
+		expect((await k.run('show diff a', 'user')).text).toBe('! a running-config startup-config');
 	});
 });
 

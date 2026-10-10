@@ -121,7 +121,7 @@ key     = module word [ item ]               an item names one of a collection
 config  = "running-config" | "startup-config" | save   either by any prefix: run, start
 save    = name                               a save of the same name gives way
 value   = bare | "json string" | 'literal'
-filter  = ( "include" | "exclude" | "begin" | "count" ) pattern   count tells how many lines match
+filter  = ( "include" | "exclude" | "begin" | "count" ) pattern
 pattern = the rest of the line as written    a regular expression minding case, | included
 ```
 
@@ -134,9 +134,13 @@ depends on another. An output by group writes each header as a note before its l
 output pastes back as it is.
 
 Every line an output writes is one of four: a command, which pastes back as it is, a change after
-`-` or `+`, a note after `!`, which a paste skips, what a command did, or an error after `%`; a show
-lists what it reads. The CLI writes its words as they are, in lower case, keys and values verbatim,
-and the page writes its prose with a capital.
+`-` or `+`, a note after `!`, which a paste skips, what a command did, or an error after `%`. What a
+listing reads goes in notes: the saves with their dates, the conversations by id, the one the batch
+was sent in marked `*`, the version, the words that may follow a line that stops short, and `count`
+in the words of IOS, `! number of lines which match regexp = 12`; `show css` alone writes the rules
+of the page as they are, under its notes by component.
+The CLI writes its words as they are, in lower case, keys and values verbatim, and the page writes
+its prose with a capital.
 
 | Module      | Keys                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------ |
@@ -188,8 +192,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
-- On an item holding a secret, the model changes every key but the url: a secret goes to a URL the user
-  or the site chose, never to one the model chose.
+- On an item that held a secret before the batch, the model changes every key but the url: a secret
+  goes to a URL the user or the site chose, never to one the model chose; a secret and a url born in
+  one batch go together, in either order.
 - The model opens a way out only once the user agrees, every time, whatever command spells the
   change: a url given a value, a tool opened; closing never asks.
 - A question offers always only for a call, and says what it gives.
@@ -285,13 +290,13 @@ A fix follows an arrow: `no endpoint yet -> /set endpoints url <name> <url>`.
 The question shows in the conversation, in a card marked by the accent: the change the model asks
 for, with Once and Refuse, or the call with its real arguments, with Once, Always and Refuse, and
 what Always gives, `Always turns echo on`. A secret takes a masked field with OK and Cancel, an
-export Save or Cancel, an import Choose file or Cancel, an erase or a copy OK or Cancel; Enter and Escape answer too, never alone. One question shows
-at a time, in the order they come, whatever the conversation open: one from another conversation
-names it, as it holds every batch until answered. The Stop of a conversation answers no to its own
-questions. While a question stands the style tokens and sheets hold off, so nothing restyles, hides
-or covers the card. Monospace is for what a machine wrote: the calls of tools and their outputs,
-code, and a block rendered plain; the cards, the commands and the errors read in the font of the
-page.
+export Save or Cancel, an import Choose file or Cancel, an erase or a copy OK or Cancel; Enter and
+Escape answer too, never alone. One question shows at a time, in the order they come, whatever the
+conversation open: one from another conversation names it, as it holds every batch until answered.
+The Stop of a conversation answers no to its own questions. While a question stands the style tokens
+and sheets hold off, so nothing restyles, hides or covers the card. Monospace is for what a machine
+wrote: the calls of tools and their outputs, code, and a block rendered plain; the cards, the
+commands and the errors read in the font of the page.
 
 ```
 set tools use bash_tool consent          ! each call asks, until always
@@ -323,8 +328,9 @@ thinking block, an encrypted reasoning item, and sends it back to that protocol 
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
   tool streaming its arguments. A signed block is bound to the system, the tools and the messages
   before it: one the configuration changed since, a tool opened or a prompt edited, is dropped by
-  the API and thought again, never refused. The list of the endpoint gives the most tokens the model writes and
-  whether it thinks, `models max_tokens` over it; `min_p`, the penalties and `seed` never go.
+  the API and thought again, never refused. The list of the endpoint gives the most tokens the model
+  writes and whether it thinks, `models max_tokens` over it; `min_p`, the penalties and `seed` never
+  go.
 - `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
   nothing stored on the server, the key as a bearer token, the system prompt as its instructions,
   the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
@@ -362,8 +368,8 @@ once, each turn in its own; a server running one model at a time loads them in t
 
 One line under the turn says what the system does now, each of its parts capital, redrawn at every
 frame of the screen, in milliseconds: `Preparing - 12 ms` while a round reads its model and gathers
-its tools, `Waiting for local - 842 ms` until the first chunk, thinking or writing with the tokens and
-their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool while its call streams,
+its tools, `Waiting for local - 842 ms` until the first chunk, thinking or writing with the tokens
+and their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool while its call streams,
 `Running config - 47 ms` while it runs, after `Round 2 - ` from the second round on. It hides while
 a question of the turn stands, as the time the user takes is none of the system. A request asks the
 endpoint to count its tokens, `stream_options` of OpenAI, one per chunk counting until it does. Once
@@ -424,13 +430,13 @@ belongs to no branch: a command of one branch stays applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations` lists
 them by id, the one the batch was sent in marked. `export` offers a file of this conversation, of
-another by a prefix of its id, of all of them, or of a configuration, in a card the user saves
-from: a browser saves a file on a click only, so the model never puts one on the disk by itself. A
+another by a prefix of its id, of all of them, or of a configuration, in a card the user saves from:
+a browser saves a file on a click only, so the model never puts one on the disk by itself. A
 configuration, the running-config, the startup-config or a save, is its `set` lines with the values
 of its secrets, the browser holding them in clear anyway, so a copy to another browser needs no key
-typed again; they go to the disk of the user alone, the output naming the file only. A word naming
-a configuration names no conversation. A file is named after what it holds, a configuration and
-all the conversations after the minute too, `running-config 2026-10-10 14-32.conf`. `import` asks for a
+typed again; they go to the disk of the user alone, the output naming the file only. A word naming a
+configuration names no conversation. A file is named after what it holds, a configuration and all
+the conversations after the minute too, `running-config 2026-10-10 14-32.conf`. `import` asks for a
 file in a card the user picks from and reads it by what it holds: a JSON file adds its conversations
 whose id is new, the others skipped and told; any other file runs its lines as more lines of the
 batch, whole or not at all, with the rights of whoever asked, the firewall included, the way lines
