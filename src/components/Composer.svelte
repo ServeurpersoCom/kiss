@@ -29,10 +29,13 @@
 	}
 	$effect(resize);
 
+	// whether the model answers in the open conversation now
+	const busy = $derived(!!app.current && app.current.id in app.replies);
+
 	// a slash command runs even while the model answers, a message waits
 	function submit() {
 		const line = text.trim();
-		if (!line || (app.reply && !line.startsWith(SLASH))) return;
+		if (!line || (busy && !line.startsWith(SLASH))) return;
 		text = '';
 		requestAnimationFrame(resize);
 		send(line);
@@ -75,8 +78,10 @@
 		placeholder="Message, or {SLASH} for the CLI"
 		rows="1"
 	></textarea>
-	{#if app.reply}
-		<button type="button" onclick={stop} aria-label="Stop"><Icon name="stop" /></button>
+	{#if busy}
+		<button type="button" onclick={() => app.current && stop(app.current.id)} aria-label="Stop"
+			><Icon name="stop" /></button
+		>
 	{:else}
 		<button type="submit" disabled={!text.trim()} aria-label="Send"><Icon name="send" /></button>
 	{/if}

@@ -39,6 +39,9 @@
 			{#each g.conversations as c (c.id)}
 				<div class="item" class:active={app.current?.id === c.id}>
 					<button class="title" onclick={() => open(c.id)} title={c.title}>{c.title}</button>
+					{#if c.id in app.replies}
+						<span class="busy" aria-label="Answering"></span>
+					{/if}
 					<button class="act" onclick={() => pin(c.id)} aria-label={c.pinned ? 'Unpin' : 'Pin'}>
 						<Icon name="pin" />
 					</button>
@@ -158,6 +161,19 @@
 	}
 	.item:hover .act {
 		display: flex;
+	}
+	/* a dot of the accent while the model answers in the conversation, giving
+	   way to the pin and the cross on hover */
+	.busy {
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		margin: 0 0.75rem 0 0.5rem;
+		border-radius: 50%;
+		background: var(--accent);
+	}
+	.item:hover .busy {
+		display: none;
 	}
 	@media (hover: none) {
 		.act {

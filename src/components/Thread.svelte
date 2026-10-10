@@ -16,6 +16,8 @@
 	// the path up from the leaf, and the versions of each entry along it
 	const thread = $derived(app.current ? path(app.current) : []);
 	const versions = $derived(app.current ? forks(app.current) : new Map<string | null, Entry[]>());
+	// the turn the model writes now in the open conversation, if any
+	const reply = $derived(app.current ? app.replies[app.current.id] : undefined);
 
 	function onscroll() {
 		follow = box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_PX;
@@ -34,11 +36,7 @@
 	<div class="content" bind:this={content}>
 		{#if thread.length}
 			{#each thread as entry (entry.id)}
-				<Message
-					{entry}
-					versions={versions.get(entry.parent) ?? [entry]}
-					live={entry === app.reply}
-				/>
+				<Message {entry} versions={versions.get(entry.parent) ?? [entry]} live={entry === reply} />
 			{/each}
 		{:else}
 			<div class="empty">

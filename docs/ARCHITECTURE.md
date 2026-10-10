@@ -138,6 +138,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   replaces it only when every line succeeds, and answers with what changed.
 - One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model
   neither starts, nor runs another line, nor replaces anything.
+- Each conversation answers on its own, beside the others: its turn, its Stop and its questions
+  are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
+  the turn that asked it.
 - A value resolves from what the session sets, over `kiss.conf`, over the default of its key;
   `reset` drops what the session sets, `load` puts back the save it names. `kiss.conf` applies
   whole or not at all, like a batch.
@@ -220,10 +223,11 @@ for, or the call with its real arguments, with Once, Always and Refuse, and what
 `Always allows chat` or `Always turns echo on`; a change of privilege alone takes Once and Refuse
 only. A secret takes a masked field with OK and Cancel, an export Save or Cancel, an import Choose
 file or Cancel, a delete OK or Cancel; Enter and Escape answer too, never alone. One question shows
-at a time, as batches and calls run one at a time, and Stop answers no. While a question stands
-the css sheets hold off, so no sheet restyles, hides or covers the card. Monospace is for what a
-machine wrote: the calls of tools and their outputs, code, and a block rendered plain; the cards,
-the commands and the errors read in the font of the page.
+at a time, in the order they come, whatever the conversation open: one from another conversation
+names it, as it holds every batch until answered. The Stop of a conversation answers no to its own
+questions. While a question stands the css sheets hold off, so no sheet restyles, hides or covers
+the card. Monospace is for what a machine wrote: the calls of tools and their outputs, code, and a
+block rendered plain; the cards, the commands and the errors read in the font of the page.
 
 ```
 show privilege                           ! every guarded module and how far the model goes
@@ -262,7 +266,8 @@ set endpoints timeout prod 30            ! the seconds the endpoint has to start
 
 The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `presence_penalty`,
 `frequency_penalty`, `seed` and `reasoning_effort`, the last one as the template of the model
-reads it. A reply streams until it ends or the turn is stopped.
+reads it. A reply streams until it ends or the turn is stopped. Several conversations answer at
+once, each turn in its own; a server running one model at a time loads them in turn.
 
 ## MCP servers
 
@@ -335,9 +340,10 @@ while no conversation is open and staying at the top while the list scrolls, the
 the last answered first: the pinned ones under Pinned, the others under the day of their last
 answer, today, yesterday, then their date, in the language of the browser. Beside each, a pin pins
 it or puts it back under its day, and a cross deletes it once the user confirms, Enter or OK, Escape
-or a click elsewhere cancelling. Every item runs from the left edge of the page to the scrollbar,
-and a title too long fades out rather than losing letters to an ellipsis. A conversation dates from
-its last answer: a command, a version shown, a pin or a title dates nothing.
+or a click elsewhere cancelling; while the model answers in it, a dot of the accent stands at its
+right, giving way to the pin and the cross on hover. Every item runs from the left edge of the page
+to the scrollbar, and a title too long fades out rather than losing letters to an ellipsis. A
+conversation dates from its last answer: a command, a version shown, a pin or a title dates nothing.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.

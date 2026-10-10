@@ -20,16 +20,24 @@
 	}
 
 	let value = $state('');
+	// each question starts with an empty field, whatever settled the one before
+	$effect.pre(() => {
+		void app.asks[0]?.id;
+		value = '';
+	});
 
 	// the first way to answer takes the keyboard as the question shows
 	const focused: Attachment<HTMLElement> = (node) => node.focus();
 
 	// a secret given by OK or Enter once typed, none by Cancel or Escape
 	function give(typed: string | null) {
-		if (app.ask?.kind !== 'secret' || typed === '') return;
-		value = '';
-		app.ask.settle(typed);
+		const ask = app.asks[0];
+		if (ask?.kind !== 'secret' || typed === '') return;
+		ask.settle(typed);
 	}
+
+	// the title of the conversation a question comes from
+	const title = (id: string): string => app.conversations.find((c) => c.id === id)?.title ?? '';
 
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') give(null);
@@ -37,10 +45,14 @@
 	}
 </script>
 
-{#if app.ask}
+<!-- the first question waiting, each one drawn anew; one from another
+     conversation names it, as it holds the CLI until answered -->
+{#each app.asks.slice(0, 1) as ask (ask.id)}
 	<div class="ask">
-		{#if app.ask.kind === 'grant'}
-			{@const ask = app.ask}
+		{#if ask.from !== app.current?.id}
+			<div class="note">From {title(ask.from)}</div>
+		{/if}
+		{#if ask.kind === 'grant'}
 			{@const grants = always(ask.request)}
 			{#if ask.request.kind === 'call'}
 				<div class="head">Allow this call of {ask.request.tool}?</div>
@@ -59,8 +71,7 @@
 					</button>
 				{/each}
 			</div>
-		{:else if app.ask.kind === 'offer'}
-			{@const ask = app.ask}
+		{:else if ask.kind === 'offer'}
 			<div class="head">Save {ask.name}, {size(ask.text)}?</div>
 			<div class="answers">
 				<button {@attach focused} onclick={() => (deliver(ask.name, ask.text), ask.settle(true))}>
@@ -68,22 +79,20 @@
 				</button>
 				<button onclick={() => ask.settle(false)}>Cancel</button>
 			</div>
-		{:else if app.ask.kind === 'pick'}
-			{@const ask = app.ask}
+		{:else if ask.kind === 'pick'}
 			<div class="head">Import conversations from a file?</div>
 			<div class="answers">
 				<button {@attach focused} onclick={() => open(ask.settle)}>Choose file</button>
 				<button onclick={() => ask.settle(null)}>Cancel</button>
 			</div>
-		{:else if app.ask.kind === 'confirm'}
-			{@const ask = app.ask}
+		{:else if ask.kind === 'confirm'}
 			<div class="head">{ask.question}</div>
 			<div class="answers">
 				<button {@attach focused} onclick={() => ask.settle(true)}>OK</button>
 				<button onclick={() => ask.settle(false)}>Cancel</button>
 			</div>
 		{:else}
-			<div class="head">Value of {app.ask.key}</div>
+			<div class="head">Value of {ask.key}</div>
 			<input
 				{@attach focused}
 				bind:value
@@ -98,7 +107,7 @@
 			</div>
 		{/if}
 	</div>
-{/if}
+{/each}
 
 <style>
 	/* a question to the user, marked by the accent */

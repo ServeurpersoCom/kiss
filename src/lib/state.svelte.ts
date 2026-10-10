@@ -19,29 +19,32 @@ import { redact, run } from '../engine/run.js';
 import { hold } from '../modules/css.js';
 
 // what the page asks the user, and how the answer settles it: a change or a
-// call the model asks for, the value of a secret key, a file to save, or a
-// file to read
+// call the model asks for, the value of a secret key, a file to save, a file
+// to read, or a yes
 type Asking =
 	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
 	| { kind: 'secret'; key: string; settle(value: string | null): void }
 	| { kind: 'offer'; name: string; text: string; settle(saved: boolean): void }
 	| { kind: 'pick'; settle(text: string | null): void }
 	| { kind: 'confirm'; question: string; settle(yes: boolean): void };
+// a question as it waits for the user, numbered, with the conversation it
+// comes from
+type Posed = Asking & { id: number; from: string };
 
 export const app = $state({
 	conversations: [] as Conversation[],
 	current: null as Conversation | null,
-	// the turn the model writes now, none while it is idle
-	reply: null as Assistant | null,
-	// one question at a time, as batches and calls run one at a time
-	ask: null as Asking | null,
+	// the turns the model writes now, by conversation
+	replies: {} as Record<string, Assistant>,
+	// the questions to the user in the order they came, the first one shown,
+	// as each is answered in turn
+	asks: [] as Posed[],
 	// the conversation list, open over the thread on a narrow screen
 	sidebar: false
 });
 
-let controller: AbortController | null = null;
-// the conversation the model answers in, empty when it is idle
-let answering = '';
+// what stops each turn, by conversation
+const controllers = new Map<string, AbortController>();
 
 // the conversation as it settled, even while the model answers: a call that
 // has not run yet never reaches the database; a conversation deleted meanwhile
@@ -85,9 +88,10 @@ export async function pin(id: string): Promise<void> {
 	await save(conversation);
 }
 
-// out of the list first: no save reaches the database after the delete
+// out of the list first: no save reaches the database after the delete; the
+// turns of the conversations deleted stop, and their questions are answered no
 export async function remove(ids: readonly string[]): Promise<void> {
-	if (ids.includes(answering)) stop();
+	for (const id of ids) stop(id);
 	app.conversations = app.conversations.filter((c) => !ids.includes(c.id));
 	if (app.current && ids.includes(app.current.id)) newChat();
 	await deleteConversations(ids);
@@ -175,7 +179,7 @@ export async function send(text: string): Promise<void> {
 // the model starts over from the very prefix it had, the branch edited kept
 export async function edit(id: string, text: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
-	if (!app.current || !entry || app.reply) return;
+	if (!app.current || !entry || app.current.id in app.replies) return;
 	await enter(app.current, entry.parent, text);
 }
 
@@ -183,7 +187,7 @@ export async function edit(id: string, text: string): Promise<void> {
 // version beside those it had: from the message itself or from an answer to it
 export async function retry(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
-	if (!app.current || !entry || app.reply) return;
+	if (!app.current || !entry || app.current.id in app.replies) return;
 	const user = entry.role === 'assistant' ? entry.parent : entry.role === 'user' ? id : null;
 	if (user) await answer(app.current, user);
 }
@@ -192,7 +196,7 @@ export async function retry(id: string): Promise<void> {
 // its history stays as it was; a conversation left with no entry goes with it
 export async function dismiss(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
-	if (!app.current || entry?.role !== 'cli' || app.reply) return;
+	if (!app.current || entry?.role !== 'cli' || app.current.id in app.replies) return;
 	drop(app.current, id);
 	if (app.current.entries.length) await save(app.current);
 	else await remove([app.current.id]);
@@ -200,7 +204,7 @@ export async function dismiss(id: string): Promise<void> {
 
 // another version shows, as it was last written in
 export async function browse(id: string): Promise<void> {
-	if (!app.current || app.reply) return;
+	if (!app.current || app.current.id in app.replies) return;
 	app.current.leaf = latest(app.current, id);
 	await save(app.current);
 }
@@ -214,7 +218,7 @@ async function enter(
 ): Promise<void> {
 	if (text.startsWith(SLASH)) {
 		const input = text.slice(SLASH.length);
-		const result = await run(input, 'user', { ...reach, conversation });
+		const result = await run(input, 'user', { ...reach(conversation.id), conversation });
 		append(conversation, parent, {
 			role: 'cli',
 			input: redact(input),
@@ -233,22 +237,26 @@ async function enter(
 // the model answers a message of the user from the path up to it, the very
 // prefix it read for any answer it gave the message before; the conversation
 // dates from that answer, and is saved before the model answers and once it is
-// done
+// done; each conversation answers on its own, beside the others
 async function answer(conversation: Conversation, user: string): Promise<void> {
+	const { id } = conversation;
 	conversation.leaf = user;
 	const before = path(conversation);
 	const entry = append(conversation, user, { role: 'assistant', rounds: [] });
 	conversation.updated = entry.time;
 	const reply = entry as Assistant;
-	app.reply = reply;
-	controller = new AbortController();
-	answering = conversation.id;
+	app.replies[id] = reply;
+	const controller = new AbortController();
+	controllers.set(id, controller);
 	// the model calls the CLI with its own rights, its batches aborted with the
-	// turn and titling the conversation it answers in
+	// turn and titling the conversation it answers in, its questions coming
+	// from it
 	const { signal } = controller;
+	const grant = (request: Grant): Promise<Verdict> =>
+		pose(id, (settle) => ({ kind: 'grant', request, settle }));
 	const tools = {
 		signal,
-		cli: (lines: string) => run(lines, 'llm', { ...reach, signal, conversation, grant }),
+		cli: (lines: string) => run(lines, 'llm', { ...reach(id), signal, conversation, grant }),
 		redact,
 		grant
 	};
@@ -258,54 +266,52 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	} catch (e) {
 		reply.error = explain(e as Error);
 	} finally {
-		app.reply = null;
-		controller = null;
-		answering = '';
+		delete app.replies[id];
+		controllers.delete(id);
 		await save(conversation);
 	}
 }
 
-// one question to the user at a time, the css sheets held off until it is
-// answered
-function pose<T>(ask: (settle: (answer: T) => void) => Asking): Promise<T> {
+// the number of the last question posed
+let posed = 0;
+
+// a question to the user from a conversation, shown once those before it are
+// answered; the css sheets hold off while any question stands
+function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return new Promise((resolve) => {
+		const id = ++posed;
 		hold(true);
-		app.ask = ask((answer) => {
-			app.ask = null;
-			hold(false);
+		const settle = (answer: T) => {
+			app.asks = app.asks.filter((q) => q.id !== id);
+			hold(app.asks.length > 0);
 			resolve(answer);
-		});
+		};
+		app.asks.push({ ...ask(settle), id, from });
 	});
 }
 
-// the user lets the model make a change or a call, or not
-const grant = (request: Grant): Promise<Verdict> =>
-	pose((settle) => ({ kind: 'grant', request, settle }));
+// what a batch of the page reaches from a conversation: the conversations, and
+// the questions it may ask the user: the value of a secret key, whether the
+// file offered is saved, the text of a file picked, whether a command goes on
+function reach(from: string) {
+	return {
+		conversations: library,
+		secret: (key: string): Promise<string | null> =>
+			pose(from, (settle) => ({ kind: 'secret', key, settle })),
+		offer: (name: string, text: string): Promise<boolean> =>
+			pose(from, (settle) => ({ kind: 'offer', name, text, settle })),
+		pick: (): Promise<string | null> => pose(from, (settle) => ({ kind: 'pick', settle })),
+		confirm: (question: string): Promise<boolean> =>
+			pose(from, (settle) => ({ kind: 'confirm', question, settle }))
+	};
+}
 
-// the value the user gives a secret key, none when they give none
-const secret = (key: string): Promise<string | null> =>
-	pose((settle) => ({ kind: 'secret', key, settle }));
-
-// whether the user saves the file offered
-const offer = (name: string, text: string): Promise<boolean> =>
-	pose((settle) => ({ kind: 'offer', name, text, settle }));
-
-// the text of the file the user picks, none when they pick none
-const pick = (): Promise<string | null> => pose((settle) => ({ kind: 'pick', settle }));
-
-// whether the user confirms what a command is about to do
-const confirm = (question: string): Promise<boolean> =>
-	pose((settle) => ({ kind: 'confirm', question, settle }));
-
-// what a batch of the page reaches: the conversations, and the questions it
-// may ask the user
-const reach = { conversations: library, secret, offer, pick, confirm };
-
-// the turn aborts, and a question it asks is answered no
-export function stop(): void {
-	controller?.abort();
-	const ask = app.ask;
-	if (ask?.kind === 'grant') ask.settle(REFUSE);
-	else if (ask?.kind === 'offer' || ask?.kind === 'confirm') ask.settle(false);
-	else ask?.settle(null);
+// the turn of a conversation aborts, and every question it asks is answered no
+export function stop(id: string): void {
+	controllers.get(id)?.abort();
+	for (const ask of app.asks.filter((q) => q.from === id)) {
+		if (ask.kind === 'grant') ask.settle(REFUSE);
+		else if (ask.kind === 'offer' || ask.kind === 'confirm') ask.settle(false);
+		else ask.settle(null);
+	}
 }

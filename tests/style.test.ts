@@ -40,13 +40,13 @@ describe('style', () => {
 		css.apply(config as unknown as Config);
 		expect(sheet.media).toBe('');
 		const sent = send('/import');
-		await vi.waitFor(() => expect(app.ask?.kind).toBe('pick'));
+		await vi.waitFor(() => expect(app.asks[0]?.kind).toBe('pick'));
 		expect(sheet.media).toBe('not all');
 		css.apply(config as unknown as Config);
 		expect(sheet.media).toBe('not all');
-		stop();
+		stop(app.current!.id);
 		await sent;
-		expect(app.ask).toBeNull();
+		expect(app.asks).toEqual([]);
 		expect(sheet.media).toBe('');
 	});
 });

@@ -16,6 +16,8 @@
 	}: { entry: Entry; versions: Entry[]; live?: boolean } = $props();
 
 	const at = $derived(versions.findIndex((v) => v.id === message.id));
+	// whether the model answers in the open conversation now
+	const busy = $derived(!!app.current && app.current.id in app.replies);
 
 	let copied = $state(false);
 	// the text being edited, none while the message shows as sent
@@ -50,7 +52,7 @@
 		else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			const text = draft?.trim();
-			if (!text || app.reply) return;
+			if (!text || busy) return;
 			draft = null;
 			void edit(message.id, text);
 		}
@@ -64,7 +66,7 @@
 {/snippet}
 
 {#snippet again()}
-	<button onclick={() => retry(message.id)} disabled={!!app.reply} aria-label="Retry">
+	<button onclick={() => retry(message.id)} disabled={busy} aria-label="Retry">
 		<Icon name="retry" />
 	</button>
 {/snippet}
@@ -77,7 +79,7 @@
 	{#if versions.length > 1}
 		<button
 			onclick={() => browse(versions[at - 1].id)}
-			disabled={at === 0 || !!app.reply}
+			disabled={at === 0 || busy}
 			aria-label="Previous version"
 		>
 			<Icon name="previous" />
@@ -85,7 +87,7 @@
 		<span class="version">{at + 1}/{versions.length}</span>
 		<button
 			onclick={() => browse(versions[at + 1].id)}
-			disabled={at === versions.length - 1 || !!app.reply}
+			disabled={at === versions.length - 1 || busy}
 			aria-label="Next version"
 		>
 			<Icon name="chevron" />
@@ -113,7 +115,7 @@
 		<div class="command">
 			<div class="head">
 				cli
-				<button onclick={() => dismiss(message.id)} disabled={!!app.reply} aria-label="Close">
+				<button onclick={() => dismiss(message.id)} disabled={busy} aria-label="Close">
 					<Icon name="close" />
 				</button>
 			</div>
@@ -139,7 +141,7 @@
 				{@render when()}
 				{@render switcher()}
 				{@render again()}
-				<button onclick={begin} disabled={!!app.reply} aria-label="Edit">
+				<button onclick={begin} disabled={busy} aria-label="Edit">
 					<Icon name="edit" />
 				</button>
 				{@render clip()}
