@@ -9,13 +9,14 @@
 	/* shades of the background: darker for the sidebar and what the user
 	   writes, lighter for what holds a field */
 	--sidebar: oklch(from var(--bg) calc(l - 0.032) c h);
+	/* the item under the pointer and the open one, shades of the sidebar */
+	--hover: color-mix(in oklab, var(--fg) 5%, var(--sidebar));
+	--hover-strong: color-mix(in oklab, var(--fg) 9%, var(--sidebar));
 	--user-bg: oklch(from var(--bg) calc(l - 0.077) c h);
 	--surface: oklch(from var(--bg) calc(l + 0.04) c h);
 	/* shares of the text over the background */
 	--fg-dim: color-mix(in oklab, var(--fg) 58%, var(--bg));
 	--line: color-mix(in oklab, var(--fg) 13%, transparent);
-	--hover: color-mix(in oklab, var(--fg) 5%, transparent);
-	--hover-strong: color-mix(in oklab, var(--fg) 9%, transparent);
 	--code-bg: color-mix(in oklab, var(--fg) 6%, transparent);
 	/* black, the lighter the background the fainter, and the half black that
 	   dims the page behind a dialog */

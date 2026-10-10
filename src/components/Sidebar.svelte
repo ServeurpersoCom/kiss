@@ -115,16 +115,20 @@
 	.group::first-letter {
 		text-transform: uppercase;
 	}
+	/* an item paints its background from --item-bg, which follows its state,
+	   so what lies over its text can fade into it */
 	.item {
+		--item-bg: var(--sidebar);
 		display: flex;
 		align-items: center;
 		border-radius: calc(var(--radius) * 0.6);
+		background: var(--item-bg);
 	}
 	.item:hover {
-		background: var(--hover);
+		--item-bg: var(--hover);
 	}
 	.item.active {
-		background: var(--hover-strong);
+		--item-bg: var(--hover-strong);
 	}
 	.title,
 	.new {
@@ -134,15 +138,22 @@
 		padding: 0.5rem 0 0.5rem 0.75rem;
 		white-space: nowrap;
 		overflow: hidden;
-		font-size: var(--text-secondary);
+		font-size: var(--text-primary);
 	}
-	/* a title too long fades out instead of losing letters to an ellipsis: its
-	   letters drawn in a gradient of the text color, an ordinary paint that
-	   follows every change of width */
+	/* a title too long fades out instead of losing letters to an ellipsis: a
+	   layer over its right end goes from clear to the background of the item,
+	   and the letters under it stay text painted by its color like every other */
 	.title {
-		color: transparent;
-		background: linear-gradient(to right, var(--fg) calc(100% - 1.5rem), transparent);
-		background-clip: text;
+		position: relative;
+	}
+	.title::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 1.5rem;
+		background: linear-gradient(to right, transparent, var(--item-bg));
 	}
 	.new {
 		display: flex;
