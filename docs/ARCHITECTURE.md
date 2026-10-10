@@ -264,7 +264,7 @@ set chat model prod/qwen3:8b
 set models temperature prod/qwen3:8b 0.6
 set models reasoning_effort prod/qwen3:8b high
 no models prod/qwen3:8b                  ! every setting of that model, gone
-set endpoints timeout prod 30            ! the seconds the endpoint has to start answering
+set endpoints timeout prod 300           ! the seconds to start answering, 120 by default
 ```
 
 The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `presence_penalty`,

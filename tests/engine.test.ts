@@ -763,9 +763,9 @@ describe('show', () => {
 		expect((await k.run('show endpoints', 'user')).text).toBe(
 			[
 				'! endpoints key a is set',
-				'set endpoints timeout a 10',
+				'set endpoints timeout a 120',
 				'set endpoints url a http://a/v1',
-				'set endpoints timeout b 10',
+				'set endpoints timeout b 120',
 				'set endpoints url b http://b/v1'
 			].join('\n')
 		);
@@ -777,7 +777,7 @@ describe('show', () => {
 		);
 		expect((await k.run('show endpoints key b', 'user')).text).toBe('! endpoints key b is not set');
 		expect((await k.run('show endpoints a', 'user')).text).toBe(
-			'! endpoints key a is set\nset endpoints timeout a 10\nset endpoints url a http://a/v1'
+			'! endpoints key a is set\nset endpoints timeout a 120\nset endpoints url a http://a/v1'
 		);
 		expect((await k.run('show chat zz', 'user')).text).toContain('unknown key');
 	});

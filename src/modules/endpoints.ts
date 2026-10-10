@@ -11,7 +11,7 @@ export default {
 		headers: { kind: 'string', named: true, guard: 'change' },
 		// seconds the endpoint has to start answering: a model list, the start of
 		// a reply, which then streams until it ends or the turn stops
-		timeout: { kind: 'number', min: 0.1, default: '10', named: true }
+		timeout: { kind: 'number', min: 0.1, default: '120', named: true }
 	},
 	validate(config) {
 		return rules(config, 'endpoints');
