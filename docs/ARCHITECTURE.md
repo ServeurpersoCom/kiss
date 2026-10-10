@@ -112,12 +112,16 @@ command = "set" key [ value ]                a secret left out is asked
 key     = module word [ item ]               an item names one of a collection
 save    = name                               a save of the same name gives way
 value   = bare | "json string" | 'literal'
-filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
+filter  = ( "include" | "exclude" | "begin" | "section" ) pattern | "count"
 ```
 
 One write verb per store, one read verb for all: `set` and `no` write the configuration, `save`
 and `no save` the archive, `title` the conversation, `import` the conversations, and `show` reads
 every one of them.
+
+An output by group indents each body one blank under its header, IOS style: `section` keeps a line
+at the margin with the lines indented under it when that line matches, and an indented line reads
+back as set like any other, so a whole output pastes back as it is.
 
 | Module      | Keys                                                                             |
 | ----------- | -------------------------------------------------------------------------------- |
@@ -310,6 +314,7 @@ wait a turn, the tools of a turn the same from round to round.
 set mcp url sandbox https://example.com/mcp
 set mcp key sandbox                      ! a masked field asks for the token
 show tools                               ! every tool, by who serves it
+show tools | section sandbox             ! one server, its tools indented under it
 set tools use str_replace off            ! the model never sees it
 set tools preview bash_tool description  ! what a folded call shows
 no tools bash_tool                       ! every setting of that tool, gone

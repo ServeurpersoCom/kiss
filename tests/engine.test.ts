@@ -103,7 +103,7 @@ describe('a batch', () => {
 		const set = k.run('set chat system blue', 'user');
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		h.release();
-		expect((await slow).text).toBe('! endpoints a\n! a/m');
+		expect((await slow).text).toBe('! endpoints a\n ! a/m');
 		await set;
 		expect(k.settings.get('chat system')).toBe('blue');
 	});
@@ -125,7 +125,7 @@ describe('a model list', () => {
 		const r = k.run('show models', 'user');
 		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
 		release();
-		expect((await r).text).toBe('! endpoints a down\n! endpoints b\n! b/m\n! b/org/n');
+		expect((await r).text).toBe('! endpoints a down\n! endpoints b\n ! b/m\n ! b/org/n');
 	});
 
 	it('that never answers frees the queue after its timeout', async () => {
@@ -262,8 +262,8 @@ describe('the display', () => {
 		expect((await k.run('show display render', 'user')).text).toBe(
 			[
 				'! blocks',
-				'set display render thinking markdown',
-				'set display render reply markdown'
+				' set display render thinking markdown',
+				' set display render reply markdown'
 			].join('\n')
 		);
 		expect((await k.run('set display render tools plain', 'user')).text).toContain(
@@ -484,10 +484,10 @@ describe('the firewall', () => {
 		expect((await k.run('show privilege', 'user')).text).toBe(
 			[
 				'! modules',
-				'set privilege level chat ask',
-				'set privilege level endpoints ask',
-				'set privilege level mcp ask',
-				'set privilege level tools ask'
+				' set privilege level chat ask',
+				' set privilege level endpoints ask',
+				' set privilege level mcp ask',
+				' set privilege level tools ask'
 			].join('\n')
 		);
 	});
@@ -805,6 +805,29 @@ describe('show', () => {
 			'! endpoints key a is set\nset endpoints timeout a 120\nset endpoints url a http://a/v1'
 		);
 		expect((await k.run('show chat zz', 'user')).text).toContain('unknown key');
+	});
+});
+
+describe('a section', () => {
+	it('keeps a line at the margin with the lines indented under it, when that line matches', async () => {
+		const k = await page();
+		expect((await k.run('show display | section blocks', 'user')).text).toBe(
+			[
+				'! blocks',
+				' set display render thinking markdown',
+				' set display render reply markdown'
+			].join('\n')
+		);
+		expect((await k.run('show display | section thinking', 'user')).text).toBe(
+			'set display thinking closed'
+		);
+	});
+
+	it('reads back as set lines, indented or not', async () => {
+		const k = await page();
+		const shown = (await k.run('show privilege', 'user')).text;
+		expect(shown).toContain('\n set privilege level mcp ask');
+		expect((await k.run(shown, 'user')).ok).toBe(true);
 	});
 });
 
