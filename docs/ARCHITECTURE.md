@@ -141,6 +141,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The line under a turn and what the turn spent measure the system alone: the time the user takes
   on a question leaves every clock of the turn that asks, a round counts its tokens once, by the
   count of the endpoint when it gives one, and the rate starts from the second token.
+- A turn tries each MCP server once: a server that fails sits out its other rounds, and the next
+  turn tries it again; a server connects as soon as the configuration names it.
 - Each conversation answers on its own, beside the others: its turn, its Stop and its questions
   are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
   the turn that asked it.
@@ -289,7 +291,12 @@ KiSS calls the tools of any MCP server over Streamable HTTP, with the official T
 server speaking the 2026 protocol is talked to in it, an older one through the `initialize`
 handshake. One client per server lives while its url, key, headers and timeout stay, with the tool
 list it served once connected, so the tools the model sees stay the same from turn to turn; a
-request that fails drops the client, and the next use connects again.
+request that fails drops the client, and the next use connects again. A server connects as soon as
+the configuration names it, at load or on a change, so the first round that needs its tools finds
+them listed; a round waits only for a server still connecting, and its line names it,
+`Preparing mcp sandbox - 812 ms`. A server that fails sits out the rest of the turn, its error told
+to the model every round, and the next turn tries it again: a server that never answers costs one
+wait a turn, the tools of a turn the same from round to round.
 
 ```
 set mcp url sandbox https://example.com/mcp

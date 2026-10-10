@@ -10,10 +10,12 @@ import { OFF } from './tools.js';
 // connected, so the tools the model sees stay the same from turn to turn; a
 // request that fails drops the client, and the next use connects again
 
+// a client, its tool list, and whether that list came
 interface Connection {
 	remote: Remote;
 	tools: Promise<Tool[]>;
 	client: Promise<Client>;
+	settled: boolean;
 }
 
 const connections = new Map<string, Connection>();
@@ -91,24 +93,41 @@ function connection(remote: Remote): Connection {
 			}
 		}));
 	});
-	const made: Connection = { remote, client, tools };
+	const made: Connection = { remote, client, tools, settled: false };
 	connections.set(remote.name, made);
-	tools.catch(() => connections.get(remote.name) === made && drop(remote.name));
+	tools.then(
+		() => (made.settled = true),
+		() => connections.get(remote.name) === made && drop(remote.name)
+	);
 	return made;
 }
 
+// the servers of the configuration a use waits for: those not down that hold
+// no tool list yet, connecting or about to
+export function connecting(config: ConfigReader, down: ReadonlyMap<string, string>): string[] {
+	return remotes(config, 'mcp')
+		.filter((r) => !down.has(r.name) && !connections.get(r.name)?.settled)
+		.map((r) => r.name);
+}
+
 // every server of the configuration with its tools or what went wrong, sorted
-// by name; servers no longer named are closed
-export async function served(config: ConfigReader): Promise<Served[]> {
+// by name; servers no longer named are closed; a server down answers its
+// error again without a try, and a server that fails joins down, which lives
+// as long as its holder: a turn, so it tries each server once
+export async function served(config: ConfigReader, down: Map<string, string>): Promise<Served[]> {
 	const all = remotes(config, 'mcp');
 	for (const name of connections.keys()) if (!all.some((r) => r.name === name)) drop(name);
 	return Promise.all(
-		all.map((r) =>
-			connection(r).tools.then(
-				(tools) => ({ server: r.name, tools }),
-				(e: Error) => ({ server: r.name, error: e.message })
-			)
-		)
+		all.map(async (r): Promise<Served> => {
+			const error = down.get(r.name);
+			if (error !== undefined) return { server: r.name, error };
+			try {
+				return { server: r.name, tools: await connection(r).tools };
+			} catch (e) {
+				down.set(r.name, (e as Error).message);
+				return { server: r.name, error: (e as Error).message };
+			}
+		})
 	);
 }
 
@@ -118,13 +137,14 @@ export async function served(config: ConfigReader): Promise<Served[]> {
 // each tells why as a problem, never stopping anything
 export async function aggregate(
 	config: ConfigReader,
-	own: readonly Tool[]
+	own: readonly Tool[],
+	down: Map<string, string>
 ): Promise<{ tools: Tool[]; problems: string[] }> {
 	const on = (t: Tool) => config.get('tools use', t.name) !== OFF;
 	const owner = new Map(own.filter(on).map((t) => [t.name, NAME]));
 	const tools = own.filter(on);
 	const problems: string[] = [];
-	for (const s of await served(config)) {
+	for (const s of await served(config, down)) {
 		if (s.error) {
 			problems.push(`mcp ${s.server}: ${s.error}`);
 			continue;

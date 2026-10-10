@@ -34,7 +34,7 @@ export default {
 	},
 	// the tools of KiSS, then those of every MCP server
 	async items(ctx) {
-		const mcp = await served(ctx.config);
+		const mcp = await served(ctx.config, new Map());
 		return [
 			{ group: NAME, names: tools.map((t) => t.name) },
 			...mcp.map((s) => ({

@@ -1,6 +1,6 @@
 import type { Module } from '../lib/types.js';
 import { rules } from '../lib/remote.js';
-import { aggregate } from '../lib/mcp.js';
+import { aggregate, served } from '../lib/mcp.js';
 import { tools } from '../lib/tools.js';
 
 export default {
@@ -18,9 +18,14 @@ export default {
 	validate(config) {
 		return rules(config, 'mcp');
 	},
+	// every server connects as soon as the configuration names it, so the first
+	// round that needs its tools finds them listed
+	apply(config) {
+		void served(config, new Map());
+	},
 	// every server answers with its tools, and no name is served twice
 	async check(config) {
-		const { problems } = await aggregate(config, tools);
+		const { problems } = await aggregate(config, tools, new Map());
 		return problems.length ? problems.join(', ') : null;
 	}
 } satisfies Module;

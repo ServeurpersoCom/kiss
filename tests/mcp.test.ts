@@ -6,7 +6,7 @@ import {
 } from '@modelcontextprotocol/server';
 import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
-import { pulse } from '../src/lib/pulse.js';
+import { line, pulse } from '../src/lib/pulse.js';
 
 interface Body {
 	messages: { role: string; content: string }[];
@@ -145,7 +145,8 @@ async function page(
 		};
 		const reply: Assistant = { role: 'assistant', rounds: [] };
 		const user: Message[] = [{ role: 'user', text: 'go' }];
-		return { reply, stop, done: turn(user, reply, tools, stop.signal, pulse(performance.now())) };
+		const clock = pulse(performance.now());
+		return { reply, stop, clock, done: turn(user, reply, tools, stop.signal, clock) };
 	};
 	// what the model asked the user, answered by the verdicts in order, once past them
 	const asked: Grant[] = [];
@@ -237,6 +238,57 @@ describe('an MCP server', () => {
 		const saved = await p.engine.run('save a', 'user');
 		expect(saved.text).toMatch(/^saved a\n! mcp gone/);
 		expect((await p.engine.run('show tools', 'user')).text).toContain('! mcp gone');
+	});
+
+	it('connects as soon as the configuration names it, before any turn', async () => {
+		const p = await page({ a: legacy(SHELL) }, []);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		await vi.waitFor(() => expect(p.methods.a).toContain('tools/list'));
+	});
+
+	it('that fails sits out the rest of the turn, and is tried again the next', async () => {
+		let tries = 0;
+		const down = async (): Promise<Response> => {
+			tries++;
+			throw new TypeError('fetch failed: down');
+		};
+		const p = await page({ down }, [
+			stream([call('config', { lines: 'show version' })]),
+			stream([call('config', { lines: 'show version' })]),
+			stream([{ content: 'ok' }]),
+			stream([{ content: 'again' }])
+		]);
+		await p.engine.run('set mcp url down http://down/mcp', 'user');
+		await vi.waitFor(() => expect(tries).toBeGreaterThan(0));
+		const before = tries;
+		await (
+			await p.go()
+		).done;
+		const once = tries - before;
+		expect(once).toBeGreaterThan(0);
+		expect(p.bodies).toHaveLength(3);
+		for (const b of p.bodies) expect(b.messages[0].content).toContain('mcp down');
+		await (
+			await p.go()
+		).done;
+		expect(tries - before).toBe(2 * once);
+	});
+
+	it('names the servers a round waits for in its line', async () => {
+		let list!: () => void;
+		const listed = new Promise<void>((resolve) => (list = resolve));
+		const slow = legacy(SHELL);
+		const p = await page({ slow: async (req) => (await listed, slow(req)) }, [
+			stream([{ content: 'ok' }])
+		]);
+		await p.engine.run('set mcp url slow http://slow/mcp', 'user');
+		const turn = await p.go();
+		await vi.waitFor(() =>
+			expect(line(turn.clock, performance.now())).toMatch(/^Preparing mcp slow - /)
+		);
+		list();
+		await turn.done;
+		expect(p.bodies[0].tools.map((t) => t.function.name)).toContain('bash_tool');
 	});
 
 	it('leaves out a name another one serves first, the model told', async () => {
