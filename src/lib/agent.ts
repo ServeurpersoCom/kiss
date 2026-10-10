@@ -61,6 +61,8 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 	try {
 		args = c.args ? JSON.parse(c.args) : {};
 	} catch {
+		// what does not read cannot be masked, so none of it is kept
+		c.args = '{}';
 		c.result = 'the arguments are not JSON';
 		c.ok = false;
 		return;
