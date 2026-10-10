@@ -54,14 +54,23 @@
 		field.focus();
 	});
 
+	// the edit goes as a new version, none while it is empty or a turn runs
+	function save() {
+		const text = draft?.trim();
+		if (!text || busy) return;
+		draft = null;
+		void edit(message.id, text);
+	}
+
+	function cancel() {
+		draft = null;
+	}
+
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') draft = null;
+		if (e.key === 'Escape') cancel();
 		else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
-			const text = draft?.trim();
-			if (!text || busy) return;
-			draft = null;
-			void edit(message.id, text);
+			save();
 		}
 	}
 </script>
@@ -102,7 +111,7 @@
 	{/if}
 {/snippet}
 
-<div class="message {message.role}" class:last>
+<div class="message {message.role}" class:last class:editing={draft !== null}>
 	{#if message.role === 'user'}
 		{#if draft === null}
 			<div class="bubble">{message.text}</div>
@@ -142,12 +151,20 @@
 			{/if}
 		</div>
 	{/if}
-	{#if !live && draft === null}
+	{#if !live}
 		<!-- copy holds the outer edge: last under what the user writes, on the
 		     right, first under an answer; the versions and the time sit on the
-		     inner side -->
+		     inner side; an edit takes the row for its own two, cancel on the
+		     outer edge -->
 		<div class="actions">
-			{#if message.role === 'user'}
+			{#if draft !== null}
+				<button onclick={save} disabled={!draft.trim() || busy} aria-label="Save">
+					<Icon name="check" />
+				</button>
+				<button onclick={cancel} aria-label="Cancel">
+					<Icon name="close" />
+				</button>
+			{:else if message.role === 'user'}
 				{@render when()}
 				{@render switcher()}
 				{@render again()}
@@ -248,8 +265,8 @@
 		text-transform: uppercase;
 	}
 	/* the icons under a message, shown while the message is hovered or holds
-	   the focus, their place kept; always shown under the last message, and
-	   where nothing hovers */
+	   the focus, their place kept; always shown under the last message, under
+	   one being edited, and where nothing hovers */
 	.actions {
 		display: flex;
 		align-items: center;
@@ -258,7 +275,8 @@
 	}
 	.message:hover .actions,
 	.message:focus-within .actions,
-	.message.last .actions {
+	.message.last .actions,
+	.message.editing .actions {
 		visibility: visible;
 	}
 	@media (hover: none) {

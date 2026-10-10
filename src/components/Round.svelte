@@ -157,7 +157,7 @@
 	}
 	.output {
 		color: var(--fg-dim);
-		border-top: 1px dashed var(--line);
+		border-top: 1px solid var(--line);
 		padding-top: 0.3rem;
 	}
 	img {
