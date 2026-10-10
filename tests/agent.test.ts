@@ -284,7 +284,7 @@ describe('the messages protocol', () => {
 	const stop = (index: number) => ({ type: 'content_block_stop', index });
 	const answer = (list: object[]) => events([...list, { type: 'message_stop' }]);
 
-	it('carries the key in its own header, the thinking summarized, the prompt cached, every tool streaming its input', async () => {
+	it('carries the key in its own header, the thinking summarized and dropped once its prefix changes, the prompt cached, every tool streaming its input', async () => {
 		const p = await page(
 			[
 				answer([block(0, { type: 'text', text: '' }), delta(0, { type: 'text_delta', text: 'ok' })])
@@ -293,13 +293,20 @@ describe('the messages protocol', () => {
 		);
 		await p.go();
 		expect(p.requests[0].url).toBe('http://m/v1/messages');
-		expect(p.requests[0].headers).toMatchObject({ 'x-api-key': 'sk-a' });
+		expect(p.requests[0].headers).toMatchObject({
+			'x-api-key': 'sk-a',
+			'anthropic-beta': 'thinking-binding-controls-2026-08-01'
+		});
 		expect(p.requests[0].headers).not.toHaveProperty('Authorization');
 		const body = p.bodies[0] as unknown as Record<string, unknown>;
 		expect(body).toMatchObject({
 			max_tokens: 1000,
 			system: 'be brief',
-			thinking: { type: 'adaptive', display: 'summarized' },
+			thinking: {
+				type: 'adaptive',
+				display: 'summarized',
+				block_binding: { prefix_mismatch_behavior: 'drop_block' }
+			},
 			cache_control: { type: 'ephemeral' },
 			tools: [{ name: 'config', eager_input_streaming: true }]
 		});

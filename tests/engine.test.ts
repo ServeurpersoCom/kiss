@@ -234,11 +234,13 @@ describe('a filter', () => {
 			'set endpoints url e42 http://e/v1\nset endpoints url e7 http://e/v1'
 		);
 		expect(await run('inc url e7 | x')).toBe('set endpoints url e7 http://e/v1');
-		expect(await run('count')).toBe('250');
-		expect(await run('begin url E99 ')).toBe('set endpoints url e99 http://e/v1');
+		expect(await run('count http')).toBe('250');
+		expect(await run('cou url e1')).toBe('111');
+		expect(await run('begin url e99 ')).toBe('set endpoints url e99 http://e/v1');
+		expect(await run('include url E99')).toBe('! no line matches');
 		expect(await run('exclude url e[0-9]+ ')).toBe('! no line matches');
 		expect(await run('include (')).toBe('% "(" is not a pattern');
-		expect(await run('count x')).toBe('% count takes no pattern: x');
+		expect(await run('count')).toBe('% count needs a pattern');
 		expect(await run('sort')).toContain('% unknown filter "sort"');
 	});
 });

@@ -119,8 +119,8 @@ key     = module word [ item ]               an item names one of a collection
 config  = "running-config" | "startup-config" | save   either by any prefix: run, start
 save    = name                               a save of the same name gives way
 value   = bare | "json string" | 'literal'
-filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
-pattern = the rest of the line as written    a case blind regular expression, | included
+filter  = ( "include" | "exclude" | "begin" | "count" ) pattern   count tells how many lines match
+pattern = the rest of the line as written    a regular expression minding case, | included
 ```
 
 One verb per gesture: `set` and `no` write a line of the configuration, `copy` a configuration
@@ -319,7 +319,9 @@ thinking block, an encrypted reasoning item, and sends it back to that protocol 
   Hugging Face, the key as a bearer token.
 - `messages`: the Messages API of Anthropic, the key in `x-api-key` with the headers a page needs,
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
-  tool streaming its arguments. The list of the endpoint gives the most tokens the model writes and
+  tool streaming its arguments. A signed block is bound to the system, the tools and the messages
+  before it: one the configuration changed since, a tool opened or a prompt edited, is dropped by
+  the API and thought again, never refused. The list of the endpoint gives the most tokens the model writes and
   whether it thinks, `models max_tokens` over it; `min_p`, the penalties and `seed` never go.
 - `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
   nothing stored on the server, the key as a bearer token, the system prompt as its instructions,

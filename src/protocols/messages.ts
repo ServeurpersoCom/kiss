@@ -4,13 +4,20 @@ import { SLASH } from '../lib/config.js';
 // the Messages API of Anthropic: content blocks streamed by index, thinking
 // summarized and signed, sent back as it came; the prompt cached up to its
 // last block, the cache moving with the conversation; what the model lists of
-// itself sets the tokens it may write and whether it thinks
+// itself sets the tokens it may write and whether it thinks; a signed block
+// is bound to the system, the tools and the messages before it, so a block
+// the configuration changed since is dropped by the API, never refused
 
 const NAME = 'messages';
 const VERSION = '2023-06-01';
 // the parameters of models sent as they are named
 const CARRIED = ['temperature', 'top_p', 'top_k'] as const;
-const THINKING = { type: 'adaptive', display: 'summarized' };
+const BINDING = 'thinking-binding-controls-2026-08-01';
+const THINKING = {
+	type: 'adaptive',
+	display: 'summarized',
+	block_binding: { prefix_mismatch_behavior: 'drop_block' }
+};
 // the field of the list that holds the most tokens a model writes
 const MAX_TOKENS = 'max_tokens';
 const CACHE = { type: 'ephemeral' };
@@ -82,6 +89,7 @@ export default {
 	auth: (key) => ({
 		...(key ? { 'x-api-key': key } : {}),
 		'anthropic-version': VERSION,
+		'anthropic-beta': BINDING,
 		'anthropic-dangerous-direct-browser-access': 'true'
 	}),
 	drops: ['min_p', 'presence_penalty', 'frequency_penalty', 'seed'],
