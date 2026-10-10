@@ -9,14 +9,17 @@
 	/* shades of the background: darker for the sidebar and what the user
 	   writes, lighter for what holds a field */
 	--sidebar: oklch(from var(--bg) calc(l - 0.032) c h);
-	/* the item under the pointer and the open one, shades of the sidebar */
-	--hover: color-mix(in oklab, var(--fg) 5%, var(--sidebar));
-	--hover-strong: color-mix(in oklab, var(--fg) 9%, var(--sidebar));
+	/* the item under the pointer and the open one, the hue of the thumb of a
+	   scrollbar over the sidebar, each a step of 4% darker than the one above */
+	--hover: color-mix(in oklab, var(--fg) 16%, var(--sidebar));
+	--hover-strong: color-mix(in oklab, var(--fg) 20%, var(--sidebar));
 	--user-bg: oklch(from var(--bg) calc(l - 0.077) c h);
 	--surface: oklch(from var(--bg) calc(l + 0.04) c h);
-	/* shares of the text over the background */
+	/* shares of the text over the background: dim text, a line, the thumb of
+	   a scrollbar, the ground of code */
 	--fg-dim: color-mix(in oklab, var(--fg) 58%, var(--bg));
 	--line: color-mix(in oklab, var(--fg) 13%, transparent);
+	--thumb: color-mix(in oklab, var(--fg) 24%, transparent);
 	--code-bg: color-mix(in oklab, var(--fg) 6%, transparent);
 	/* black, the lighter the background the fainter, and the half black that
 	   dims the page behind a dialog */

@@ -116,12 +116,16 @@
 		text-transform: uppercase;
 	}
 	/* an item paints its background from --item-bg, which follows its state,
-	   so what lies over its text can fade into it */
+	   so what lies over its text can fade into it; rounded as a bubble, its
+	   corners clip what it holds, the fade of a title reaching its right edge
+	   included, and it keeps its height in the list, which never squeezes it */
 	.item {
 		--item-bg: var(--sidebar);
+		flex: none;
 		display: flex;
 		align-items: center;
-		border-radius: calc(var(--radius) * 0.6);
+		border-radius: var(--radius);
+		overflow: hidden;
 		background: var(--item-bg);
 	}
 	.item:hover {

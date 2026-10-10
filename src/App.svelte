@@ -48,10 +48,10 @@
 		color: var(--fg);
 		background: var(--bg);
 	}
-	/* every scrollbar thin, its thumb a line */
+	/* every scrollbar thin, its thumb a share of the text */
 	:global(*) {
 		scrollbar-width: thin;
-		scrollbar-color: var(--line) transparent;
+		scrollbar-color: var(--thumb) transparent;
 	}
 	:global(::placeholder) {
 		color: var(--fg-dim);
