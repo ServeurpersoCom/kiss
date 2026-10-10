@@ -202,6 +202,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The page starts with the startup-config over `kiss.conf`: a copy to `startup-config` writes it and
   `erase startup-config` empties it, a save never touches it; the archive changes only once the
   browser stores it.
+- A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
+  known items only, `privilege level`, `display render`, and a copy says so; a line naming one
+  fails.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
   every endpoint lists at once, one that fails beside the others.
 - A copy from `running-config` warns when no model answers the chat: `chat model` empty with more

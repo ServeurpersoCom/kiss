@@ -61,6 +61,9 @@ export interface Key {
 	// one value per item of a collection, the item named right before the value:
 	// set endpoints url prod https://example.com/v1
 	named?: boolean;
+	// the only items it takes, when they are known: a line naming another
+	// fails, a value stored under another is dropped as an unknown key is
+	names?(modules: readonly Module[]): readonly string[];
 	guard?: Guard;
 }
 

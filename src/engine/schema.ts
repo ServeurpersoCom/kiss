@@ -90,9 +90,9 @@ export class KeySchema implements Schema {
 	private modules: Map<string, Record<string, Key>>;
 	private entries: [string, Key][];
 
-	constructor(modules: readonly Module[]) {
-		this.modules = new Map(modules.map((m) => [m.name, m.keys]));
-		this.entries = modules
+	constructor(private all: readonly Module[]) {
+		this.modules = new Map(all.map((m) => [m.name, m.keys]));
+		this.entries = all
 			.flatMap((m) =>
 				Object.entries(m.keys).map(([k, def]): [string, Key] => [`${m.name} ${k}`, def])
 			)
@@ -160,6 +160,10 @@ export class KeySchema implements Schema {
 		if (!def.named) return { key, def, module, rest: words.slice(2) };
 		if (words.length < 3) throw new Incomplete();
 		if (!NAME_PATTERN.test(words[2])) throw new Error(`"${words[2]}" is not a ${module} name`);
+		const names = def.names?.(this.all);
+		if (names && !names.includes(words[2])) {
+			throw new Error(`unknown ${key} "${words[2]}"` + didYouMean(words[2], names));
+		}
 		return { key, def, module, name: words[2], rest: words.slice(3) };
 	}
 
@@ -174,7 +178,9 @@ export class KeySchema implements Schema {
 			const keyWord = this.key(module, words[1]);
 			if (!keyWord) return [];
 			const def = this.find(`${module} ${keyWord}`)!;
-			if (def.named && words.length === 2) return [...config.names(module), '<name>'];
+			if (def.named && words.length === 2) {
+				return def.names ? [...def.names(this.all)] : [...config.names(module), '<name>'];
+			}
 			if (!value || words.length !== (def.named ? 3 : 2)) return [];
 			if (def.kind === 'enum') return [...(def.values ?? [])];
 			return [`<${def.property ?? def.kind}>`];
@@ -190,7 +196,8 @@ export class KeySchema implements Schema {
 	known(stored: string): boolean {
 		const [key, name] = unstore(stored);
 		const def = this.find(key);
-		return !!def && !!def.named === !!name;
+		if (!def || !!def.named !== !!name) return false;
+		return !name || !def.names || def.names(this.all).includes(name);
 	}
 
 	// what a change does, line by line: the old line after -, the new one after

@@ -15,12 +15,14 @@ function guarded(modules: readonly Module[]): string[] {
 export default {
 	name: PRIVILEGE,
 	keys: {
-		level: { kind: 'enum', values: LEVELS, default: ASK, named: true, guard: 'change' }
-	},
-	validate(config, modules) {
-		const all = guarded(modules);
-		const stray = config.names(PRIVILEGE).filter((n) => !all.includes(n));
-		return stray.length ? `${stray.join(' ')} takes no privilege` : null;
+		level: {
+			kind: 'enum',
+			values: LEVELS,
+			default: ASK,
+			named: true,
+			guard: 'change',
+			names: guarded
+		}
 	},
 	// every module holding a guarded key, with its privilege
 	async items(ctx) {

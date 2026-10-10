@@ -17,11 +17,7 @@ export default {
 	keys: {
 		thinking: { kind: 'enum', values: FOLDS, default: CLOSED },
 		tools: { kind: 'enum', values: FOLDS, default: CLOSED },
-		render: { kind: 'enum', values: RENDERS, default: MARKDOWN, named: true }
-	},
-	validate(config) {
-		const stray = config.names('display').filter((n) => !(BLOCKS as readonly string[]).includes(n));
-		return stray.length ? `${stray.join(' ')} is not a block of text` : null;
+		render: { kind: 'enum', values: RENDERS, default: MARKDOWN, named: true, names: () => BLOCKS }
 	},
 	apply(config) {
 		display.thinking = config.get('display thinking') as Fold;

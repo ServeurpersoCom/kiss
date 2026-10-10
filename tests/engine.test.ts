@@ -263,7 +263,7 @@ describe('the display', () => {
 			['set display render thinking markdown', 'set display render reply markdown'].join('\n')
 		);
 		expect((await k.run('set display render tools plain', 'user')).text).toContain(
-			'tools is not a block of text'
+			'unknown display render "tools"'
 		);
 		expect((await k.run('set display render reply rich', 'user')).text).toContain(
 			'not one of markdown plain'
@@ -472,10 +472,10 @@ describe('the firewall', () => {
 		expect(k.settings.get('privilege level', 'chat')).toBe('ask');
 		expect(k.settings.names('privilege')).toEqual(['chat']);
 		expect((await k.run('set privilege level privilege allow', 'user')).text).toContain(
-			'privilege takes no privilege'
+			'unknown privilege level "privilege"'
 		);
 		expect((await k.run('set privilege level display allow', 'user')).text).toContain(
-			'display takes no privilege'
+			'unknown privilege level "display"'
 		);
 		expect((await k.run('show privilege', 'user')).text).toBe(
 			[
@@ -921,6 +921,13 @@ describe('reset and copy', () => {
 		expect(k.settings.get('chat system')).toBe('green');
 		await k.run('copy first running-config', 'user');
 		expect(k.settings.get('chat system')).toBe('blue');
+		// an item no key takes anymore goes as an unknown key does
+		const values = { 'chat system': 'old', 'privilege level gone': 'allow' };
+		localStorage.setItem('kiss.saves', JSON.stringify([{ name: 'old', date: '', values }]));
+		const later = await page();
+		expect((await later.run('copy old running-config', 'user')).text).toBe(
+			'! dropped unknown keys: privilege level gone\n- set chat system ""\n+ set chat system old'
+		);
 	});
 });
 
