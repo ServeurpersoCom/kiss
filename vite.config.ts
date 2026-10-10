@@ -4,6 +4,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { execSync } from 'child_process';
 import type { Plugin as CssPlugin } from 'postcss';
+import { scope } from './src/lib/config';
 
 // git version baked at build time
 function gitVersion(): string {
@@ -42,7 +43,7 @@ const layers: CssPlugin = {
 };
 
 export default defineConfig({
-	plugins: [svelte(), viteSingleFile(), katexWoff2Only()],
+	plugins: [svelte({ compilerOptions: { cssHash: scope } }), viteSingleFile(), katexWoff2Only()],
 
 	css: {
 		postcss: { plugins: [layers] }

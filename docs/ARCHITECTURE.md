@@ -157,6 +157,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A tool in `consent` asks the user before each call: once, always, which turns it on, or
   refuse. The tools of KiSS are on.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation.
+- No css sheet applies while a question stands, whatever it sets meanwhile: the card the user
+  answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `load` moves it.
 - `delete` deletes nothing before the user confirms it, whoever asks, then every conversation it
@@ -218,7 +220,8 @@ for, or the call with its real arguments, with Once, Always and Refuse, and what
 `Always allows chat` or `Always turns echo on`; a change of privilege alone takes Once and Refuse
 only. A secret takes a masked field with OK and Cancel, an export Save or Cancel, an import Choose
 file or Cancel, a delete OK or Cancel; Enter and Escape answer too, never alone. One question shows
-at a time, as batches and calls run one at a time, and Stop answers no. Monospace is for what a
+at a time, as batches and calls run one at a time, and Stop answers no. While a question stands
+the css sheets hold off, so no sheet restyles, hides or covers the card. Monospace is for what a
 machine wrote: the calls of tools and their outputs, code, and a block rendered plain; the cards,
 the commands and the errors read in the font of the page.
 
@@ -360,16 +363,18 @@ sets a whole theme, dark or light alike, and a sheet setting a derived color set
 around it, every scrollbar thin, its thumb a line, the only two sizes of text but `--size-title`,
 the title of the page, `--size-icon`, every icon, the primary size, `--width`, `--bubble-width`,
 `--sidebar-width` within `--sidebar-min` and `--sidebar-max`. `show style` lists it, one rule per
-line; named sheets restyle anything over it. The sidebar follows its edge for the whole drag, within
-those bounds, it closes once the pointer goes below half the least width, and opens again once it
-reaches that width, from the left of the page too; the browser keeps both, the width and whether it
-is closed.
+line, a rule of a component with its scoping class, the name of the component, `svelte-composer` for
+`Composer.svelte`, so a selector read there aims at that component alone; named sheets restyle
+anything over it. The sidebar follows its edge for the whole drag, within those bounds, it closes
+once the pointer goes below half the least width, and opens again once it reaches that width, from
+the left of the page too; the browser keeps both, the width and whether it is closed.
 
 ```
 show style | include :root              ! the tokens and their defaults
 set css sheet accent ':root { --accent: oklch(0.6 0.2 250) }'
 set css sheet theme ':root { --bg: #faf9f5; --fg: #141413 }'
 set css sheet wide ':root { --width: 64rem }'
+set css sheet input 'form.svelte-composer { max-width: 64rem }'  ! the composer alone
 no css theme                            ! back to the colors of the page
 ```
 

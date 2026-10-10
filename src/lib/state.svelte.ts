@@ -16,6 +16,7 @@ import {
 } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
+import { hold } from '../modules/css.js';
 
 // what the page asks the user, and how the answer settles it: a change or a
 // call the model asks for, the value of a secret key, a file to save, or a
@@ -264,40 +265,37 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	}
 }
 
-// the user lets the model make a change or a call, or not
-function grant(request: Grant): Promise<Verdict> {
+// one question to the user at a time, the css sheets held off until it is
+// answered
+function pose<T>(ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return new Promise((resolve) => {
-		app.ask = { kind: 'grant', request, settle: (verdict) => ((app.ask = null), resolve(verdict)) };
+		hold(true);
+		app.ask = ask((answer) => {
+			app.ask = null;
+			hold(false);
+			resolve(answer);
+		});
 	});
 }
+
+// the user lets the model make a change or a call, or not
+const grant = (request: Grant): Promise<Verdict> =>
+	pose((settle) => ({ kind: 'grant', request, settle }));
 
 // the value the user gives a secret key, none when they give none
-function secret(key: string): Promise<string | null> {
-	return new Promise((resolve) => {
-		app.ask = { kind: 'secret', key, settle: (value) => ((app.ask = null), resolve(value)) };
-	});
-}
+const secret = (key: string): Promise<string | null> =>
+	pose((settle) => ({ kind: 'secret', key, settle }));
 
 // whether the user saves the file offered
-function offer(name: string, text: string): Promise<boolean> {
-	return new Promise((resolve) => {
-		app.ask = { kind: 'offer', name, text, settle: (saved) => ((app.ask = null), resolve(saved)) };
-	});
-}
+const offer = (name: string, text: string): Promise<boolean> =>
+	pose((settle) => ({ kind: 'offer', name, text, settle }));
 
 // the text of the file the user picks, none when they pick none
-function pick(): Promise<string | null> {
-	return new Promise((resolve) => {
-		app.ask = { kind: 'pick', settle: (text) => ((app.ask = null), resolve(text)) };
-	});
-}
+const pick = (): Promise<string | null> => pose((settle) => ({ kind: 'pick', settle }));
 
 // whether the user confirms what a command is about to do
-function confirm(question: string): Promise<boolean> {
-	return new Promise((resolve) => {
-		app.ask = { kind: 'confirm', question, settle: (yes) => ((app.ask = null), resolve(yes)) };
-	});
-}
+const confirm = (question: string): Promise<boolean> =>
+	pose((settle) => ({ kind: 'confirm', question, settle }));
 
 // what a batch of the page reaches: the conversations, and the questions it
 // may ask the user
