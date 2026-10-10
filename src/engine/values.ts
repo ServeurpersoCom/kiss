@@ -3,11 +3,14 @@ import { stored, unstore } from './schema.js';
 
 // a configuration: the keys set in the session, over the values the site gives, over
 // the defaults of the schema; the site layer is shared by every copy, and a
-// copy written by the model moves no secret: on an item holding one it changes
-// every key but the url, while unset, drop and load fall back to values the
-// user or the site chose
+// copy written by the model moves no secret: on an item that held one when the
+// copy began it changes every key but the url, while unset, drop and load fall
+// back to values the user or the site chose; a secret and a url born in the
+// same copy go together, the url asking the user
 export class Values implements Config {
 	private map: Map<string, Value>;
+	// the keys set in the session when the copy began
+	private before: Map<string, Value>;
 
 	constructor(
 		private schema: Schema,
@@ -16,6 +19,7 @@ export class Values implements Config {
 		private role: Role = 'user'
 	) {
 		this.map = new Map(map);
+		this.before = new Map(map);
 	}
 
 	get(key: string, name?: string): Value | undefined {
@@ -37,12 +41,11 @@ export class Values implements Config {
 	set(key: string, value: Value, name?: string): void {
 		const module = key.split(' ')[0];
 		if (this.role === 'llm' && name && this.schema.find(key)?.kind === 'url') {
-			const held = this.schema
-				.list()
-				.some(
-					([k, def]) =>
-						def.kind === 'secret' && k.startsWith(module + ' ') && this.get(k, name) !== undefined
-				);
+			const held = this.schema.list().some(([k, def]) => {
+				const at = stored(k, name);
+				const secret = def.kind === 'secret' && k.startsWith(module + ' ');
+				return secret && (this.before.has(at) || this.site.has(at));
+			});
 			if (held) throw new Error(`${module} ${name} holds a secret, only the user changes its url`);
 		}
 		this.map.set(stored(key, name), value);

@@ -76,8 +76,10 @@ answer given once leaves a way out open. Since `set`, `no`, `erase` and `copy` a
 of resolved values, they are guarded alike. Everything else, the model of the chat, its prompt, the
 style, the headers, the sampling, the model changes freely, the change shown in its output.
 
-On an item holding a secret the model changes every key but the url, whatever the user answers: a
-secret goes to a URL the user or the site chose, never to one the model chose.
+On an item that held a secret before the batch the model changes every key but the url, whatever
+the user answers: a secret goes to a URL the user or the site chose, never to one the model chose.
+A secret and a url born in one batch go together, in either order, the url asking the user, who
+refuses both at once.
 
 What loses data asks too, once the user confirms it, whoever asks for an erase and the model for a
 copy to the startup-config or a save: nothing is left that the user alone may do.
@@ -360,7 +362,7 @@ once, each turn in its own; a server running one model at a time loads them in t
 
 One line under the turn says what the system does now, each of its parts capital, redrawn at every
 frame of the screen, in milliseconds: `Preparing - 12 ms` while a round reads its model and gathers
-its tools, `Waiting for pod - 842 ms` until the first chunk, thinking or writing with the tokens and
+its tools, `Waiting for local - 842 ms` until the first chunk, thinking or writing with the tokens and
 their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool while its call streams,
 `Running config - 47 ms` while it runs, after `Round 2 - ` from the second round on. It hides while
 a question of the turn stands, as the time the user takes is none of the system. A request asks the

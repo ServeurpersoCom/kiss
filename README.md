@@ -2,75 +2,92 @@
 
 **The chat UI with no settings panel. You talk; the model sets up the page.**
 
-Point KiSS at any OpenAI compatible endpoint, or the Claude and OpenAI APIs in their own
-protocols, and just say what you want: use the Qwen on my box, plug in my MCP sandbox, go light
-with a purple accent. The model types the configuration itself, in a real CLI modeled on Cisco IOS,
-and anything that widens its reach waits for your yes.
-
-One HTML file. No backend, no account, no settings page. Ever.
-
-## You talk, it configures itself
+One HTML file, no backend, no account. Give it one endpoint, yourself or through the `kiss.conf` of
+the site, and the model bootstraps the rest: other endpoints, MCP servers, tools, style, typed by
+the model itself in a CLI modeled on Cisco IOS. Anything that opens a way out of the page waits for
+your yes, and a key goes from your keyboard to the page, never through the model.
 
 ```
-you     use the qwen on http://pod:8080/v1 and go light
+you     add Hugging Face, I have a token, and go light
 
-KiSS    set endpoints url pod http://pod:8080/v1
-        set chat model pod/qwen3:8b
+KiSS    set endpoints url hf https://router.huggingface.co/v1
+        set endpoints key hf
         set style bg #faf9f5
         set style fg #141413
 
+        Value of endpoints key hf
+        [ ************ ]  [ OK ]  [ Cancel ]
+
         Allow this change?
-        + set endpoints url pod http://pod:8080/v1
+        + set endpoints url hf https://router.huggingface.co/v1
         [ Once ]  [ Refuse ]
+
+        ! the user typed endpoints key hf
+        + ! endpoints key hf is set
+        + set endpoints url hf https://router.huggingface.co/v1
+        - set style bg "oklch(0.17 0.005 260)"
+        + set style bg #faf9f5
+        - set style fg #f2f1ef
+        + set style fg #141413
 ```
 
-Endpoints, models, sampling, system prompt, MCP servers, tools, display, style: the model reaches
-all of it through one tool, and so do you, after a `/`.
+## Endpoints
+
+KiSS speaks the OpenAI compatible chat completions for now, plus the Anthropic Messages API and the
+OpenAI Responses API in their own protocols. Type these lines after a `/`, or just ask the model. A
+key left out opens a masked field: it never enters the conversation.
+
+**llama-server**, or any OpenAI compatible server:
+
+```
+set endpoints url local http://localhost:9931/v1
+```
+
+**Hugging Face**:
+
+```
+set endpoints url hf https://router.huggingface.co/v1
+set endpoints key hf
+```
+
+**Claude**:
+
+```
+set endpoints url claude https://api.anthropic.com/v1
+set endpoints protocol claude messages
+set endpoints key claude
+```
+
+**ChatGPT**:
+
+```
+set endpoints url gpt https://api.openai.com/v1
+set endpoints protocol gpt responses
+set endpoints key gpt
+```
+
+Then `show models`, `set chat model claude/<model>`, and `copy run start` to keep it.
 
 ## A real CLI, the Cisco IOS way
 
-- Any unambiguous prefix works, `sh run`; an ambiguous one says so, the way IOS does.
-- `show running-config [all]` and `show startup-config`, `copy run start`, `show diff`, named saves,
-  `| include`, `| count`, tab completion.
-- A batch applies whole or not at all, and answers with the exact change, `-` then `+`.
+```
+sh run | include ^set endpoints
+show running-config all | count ^set tools
+show diff work running-config
+copy running-config work
+copy run start
+```
 
-```
-/sh run | include endpoints
-/show diff work running-config
-/copy running-config work
-/copy home running-config
-/copy run start
-```
+Any unambiguous prefix works. A batch applies whole or not at all and answers with the exact
+change, `-` then `+`. Endpoints, models, sampling, system prompt, MCP servers, tools, display and
+style all go through it, for the model as for you.
 
 ## Secure by design
 
-The model configures the page, so KiSS guards what it can reach.
-
-- **The firewall reads the effect, not the command.** `set`, `no`, `erase` or `copy`: whatever
-  spells a change, the resolved diff decides.
-- **A way out asks every time.** A new address for an endpoint or an MCP server, or a tool opened:
-  no answer turns the question off. A key never follows a URL the model wrote.
-- **Nothing only you can do.** An erase or a copy to keep the configuration asks you to confirm,
-  so the model helps with everything.
-- **Nothing leaks through the page.** No image in a reply and no style ever loads from another
-  host, so nothing rides out on them.
-- **Every MCP tool starts in consent.** Each call shows its real arguments: once, always, or
-  refuse.
-- **Secrets never pass through the model.** It leaves the value out; a masked field asks you.
-- **Stop means stop.** Nothing is ever half applied.
-
-## Everything a chat should do, done right
-
-- **Edit or retry any message** and a new branch opens beside it, the old one kept, arrows to go
-  between: the model restarts from the exact prefix, so your server reuses its KV cache.
-- **Copy any message** as its source, close any command you typed; export and import one
-  conversation or all of them, by asking: `/export all`.
-- **MCP over Streamable HTTP** with the official SDK, 2025 and 2026 protocols alike.
-- **Per model parameters**, sent only when set, under their OpenAI names.
-- **Rendering that holds up**: Markdown, LaTeX, code highlighted in 192 languages, for the
-  thinking as for the reply, or either plain in monospace.
-- **Restyle anything**, just by asking: every token of the page is a key, `set style bg #faf9f5`,
-  and named CSS sheets go over it.
+- **A way out asks every time**: a new endpoint or MCP address, a tool opened. No answer turns the
+  question off, and a key never follows a URL the model wrote.
+- **The firewall reads the effect**, not the command: whatever spells a change, the diff decides.
+- **Every MCP tool starts in consent**, each call shown with its real arguments.
 
 ## Quick start
 
@@ -79,18 +96,16 @@ The model configures the page, so KiSS guards what it can reach.
 npm run preview
 ```
 
-The page serves on http://localhost:4173. To host it, copy `dist/index.html` to any static web
-server, Apache or nginx, with an optional `kiss.conf` beside it giving a fresh page its LLM: any
-OpenAI compatible endpoint, a llama-server as well.
+To host it, copy `dist/index.html` to any static web server, with an optional `kiss.conf` beside
+it: `set` lines that give a fresh page its endpoints.
 
-```
-set endpoints url prod http://localhost:8080/v1
-```
+## Built with itself
 
-## Learn more
+KiSS is developed with KiSS, by a variety of models, Claude, GPT, Qwen, GLM and more, working in a
+rootless container they reach through MCP.
 
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the engine, the grammar of the CLI, the firewall,
-and every law the tests hold.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the engine, the grammar, the firewall, and every law
+the tests hold.
 
 ## License
 

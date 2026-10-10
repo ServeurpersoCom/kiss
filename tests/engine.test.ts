@@ -206,6 +206,16 @@ describe('a secret', () => {
 		}
 		expect((await k.run('set endpoints key u sk-model', 'llm')).ok).toBe(true);
 		expect((await k.run('set endpoints timeout u 9', 'llm')).ok).toBe(true);
+		const secret = async () => 'sk-typed';
+		for (const lines of [
+			'set endpoints key n1\nset endpoints url n1 http://n1/v1',
+			'set endpoints url n2 http://n2/v1\nset endpoints key n2'
+		]) {
+			expect((await k.run(lines, 'llm', { secret, grant })).ok).toBe(true);
+		}
+		expect((await k.run('set endpoints url n1 http://evil/v1', 'llm', { grant })).text).toContain(
+			'endpoints n1 holds a secret'
+		);
 		expect((await k.run('set endpoints url fresh http://f/v1', 'llm', { grant })).ok).toBe(true);
 		expect((await k.run('set endpoints url u http://u2/v1', 'user')).ok).toBe(true);
 	});
