@@ -184,10 +184,12 @@ export async function send(text: string): Promise<void> {
 }
 
 // an entry of the user edited: the line enters as a new version beside it, so
-// the model starts over from the very prefix it had, the branch edited kept
+// the model starts over from the very prefix it had, the branch edited kept; a
+// text left as it was enters nothing
 export async function edit(id: string, text: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
-	if (!app.current || !entry || app.current.id in app.replies) return;
+	if (!app.current || entry?.role !== 'user' || entry.text === text) return;
+	if (app.current.id in app.replies) return;
 	await enter(app.current, entry.parent, text);
 }
 

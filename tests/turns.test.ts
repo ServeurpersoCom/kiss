@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant, Grant, ToolContext, Verdict } from '../src/lib/types.js';
 import type { Pulse } from '../src/lib/pulse.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
-import { app, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
+import { app, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 
 // a turn of the model the test holds: it writes, asks and ends when told, and
 // stops with its signal
@@ -133,5 +133,24 @@ describe('turns in several conversations', () => {
 		expect([held[1].pulse.start, held[1].pulse.since]).toEqual(b);
 		held.forEach((h) => h.end());
 		await sent;
+	});
+});
+
+describe('an edit', () => {
+	it('enters a new version only when the text changes', async () => {
+		newChat();
+		const sent = send('one');
+		await vi.waitFor(() => expect(held).toHaveLength(1));
+		held[0].end();
+		await sent;
+		const entries = app.current!.entries.length;
+		const user = app.current!.entries.find((e) => e.role === 'user')!;
+		await edit(user.id, 'one');
+		expect(held).toHaveLength(1);
+		expect(app.current!.entries).toHaveLength(entries);
+		const edited = edit(user.id, 'two');
+		await vi.waitFor(() => expect(held).toHaveLength(2));
+		held[1].end();
+		await edited;
 	});
 });
