@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
+import type { Assistant, Grant, Message, Round, ToolContext, Verdict } from '../src/lib/types.js';
 import { ONCE } from '../src/lib/types.js';
 import { pulse } from '../src/lib/pulse.js';
 import { STOPPED } from '../src/lib/conversation.js';
@@ -61,14 +61,16 @@ async function page(replies: Reply[]) {
 	const asked: Grant[] = [];
 	const verdicts: Verdict[] = [];
 	const grant = async (request: Grant) => (asked.push(request), verdicts.shift() ?? ONCE);
+	const reply: Assistant = { role: 'assistant', rounds: [] };
+	// the rounds as the page last stored them
+	const kept: { rounds: Round[] } = { rounds: [] };
 	const tools: ToolContext = {
 		signal: stop.signal,
 		cli: (l) => engine.run(l, 'llm', { signal: stop.signal, grant }),
 		redact: engine.redact,
 		grant,
-		keep: async () => {}
+		keep: async () => void (kept.rounds = settled(reply.rounds))
 	};
-	const reply: Assistant = { role: 'assistant', rounds: [] };
 	const user: Message[] = [{ role: 'user', text: 'go' }];
 	return {
 		engine,
@@ -79,6 +81,7 @@ async function page(replies: Reply[]) {
 		asked,
 		verdicts,
 		settled,
+		kept,
 		go: () => turn(user, reply, tools, stop.signal, pulse(performance.now()))
 	};
 }
@@ -211,6 +214,16 @@ describe('a turn', () => {
 			{ id: 'b', args: '{"lines":"show display thinking"}', ok: false, result: STOPPED }
 		]);
 		expect(p.engine.settings.get('display thinking')).toBe('closed');
+	});
+
+	it('stores no secret the model writes, from before its call is sent', async () => {
+		const p = await page([
+			stream([calls(['a', 'set endpoints key m sk-model'])]),
+			stream([{ content: 'done' }])
+		]);
+		await p.go();
+		expect(p.kept.rounds[0].calls[0].args).toBe('{"lines":"set endpoints key m <removed>"}');
+		expect(JSON.stringify(p.reply.rounds)).not.toContain('sk-model');
 	});
 
 	it('settles, even mid stream, to what streamed and the calls that ran', async () => {

@@ -46,9 +46,10 @@ async function allowed(ctx: ToolContext, c: Call): Promise<boolean> {
 	return verdict !== REFUSE;
 }
 
-// runs one call and writes its outcome into it; a call is stored as sent
-// before it reaches its tool, so a stop or a page closed while it runs leaves
-// it stopped, whatever the tool answers
+// runs one call and writes its outcome into it; a call takes its arguments as
+// its tool keeps them, and is stored as sent before it reaches its tool, so a
+// stop or a page closed while it runs leaves it stopped, whatever the tool
+// answers
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
 	const tool = tools.find((t) => t.name === c.name);
 	if (!tool) {
@@ -64,6 +65,7 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 		c.ok = false;
 		return;
 	}
+	if (tool.stored) c.args = JSON.stringify(tool.stored(ctx, args));
 	if (!(await allowed(ctx, c))) {
 		c.result = 'the user refused the call';
 		c.ok = false;
@@ -71,11 +73,10 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 	}
 	c.sent = true;
 	await ctx.keep();
-	const result: Outcome & { args?: object } = await tool
+	const result: Outcome = await tool
 		.run(ctx, args)
 		.catch((e: Error) => ({ ok: false, text: e.message }));
 	ctx.signal.throwIfAborted();
-	if (result.args) c.args = JSON.stringify(result.args);
 	if (result.images) c.images = result.images;
 	c.result = result.text;
 	c.ok = result.ok;

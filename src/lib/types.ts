@@ -344,6 +344,8 @@ export interface Tool {
 	name: string;
 	description: string;
 	parameters: Record<string, unknown>;
-	// args, when returned, replace the stored arguments: secrets stay out of the history
-	run(ctx: ToolContext, args: Record<string, unknown>): Promise<Outcome & { args?: object }>;
+	// the arguments as the conversation keeps them, before the call is sent:
+	// secrets stay out of the history
+	stored?(ctx: ToolContext, args: Record<string, unknown>): object;
+	run(ctx: ToolContext, args: Record<string, unknown>): Promise<Outcome>;
 }
