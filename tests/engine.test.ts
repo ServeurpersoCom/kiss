@@ -755,7 +755,7 @@ describe('a model', () => {
 });
 
 describe('a save', () => {
-	it('warns when no model answers the chat', async () => {
+	it('warns when no model answers the chat, and once of an endpoint that fails', async () => {
 		const k = await page();
 		vi.stubGlobal(
 			'fetch',
@@ -771,6 +771,14 @@ describe('a save', () => {
 		);
 		await k.run('set chat model b/m', 'user');
 		expect((await k.run('save a', 'user')).text).toBe('! saved a');
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => Response.json({ error: { message: 'version required' } }, { status: 400 }))
+		);
+		// an endpoint that fails warns once, by endpoints, never again by chat
+		const warnings = (await k.run('save a', 'user')).text.split('\n').slice(1);
+		expect(warnings).toHaveLength(1);
+		expect(warnings[0]).toMatch(/^! endpoints a: .* version required, endpoints b: /);
 	});
 
 	it('takes one name, never session, and a save of the same name gives way', async () => {

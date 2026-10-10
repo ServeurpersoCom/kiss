@@ -1,5 +1,5 @@
 import type { Module } from '../lib/types.js';
-import { listModels, pick } from '../lib/api.js';
+import { EndpointError, listModels, pick } from '../lib/api.js';
 import { remotes } from '../lib/remote.js';
 
 export default {
@@ -11,13 +11,18 @@ export default {
 		system: { kind: 'string', default: '', guard: 'change' }
 	},
 	// the model a turn would talk to is served; a page without an endpoint has
-	// no chat to check
+	// no chat to check, and an endpoint that fails is the warning of endpoints
 	async check(config) {
 		if (!remotes(config, 'endpoints').length) return null;
-		const { endpoint, model } = await pick(config);
-		const served = await listModels(endpoint);
-		return served.includes(model)
-			? null
-			: `${endpoint.name} does not serve ${model}, see show models`;
+		try {
+			const { endpoint, model } = await pick(config);
+			const served = await listModels(endpoint);
+			return served.includes(model)
+				? null
+				: `${endpoint.name} does not serve ${model}, see show models`;
+		} catch (e) {
+			if (e instanceof EndpointError) return null;
+			throw e;
+		}
 	}
 } satisfies Module;

@@ -200,8 +200,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   only once the browser stores it.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
   every endpoint lists at once, one that fails beside the others.
-- A save warns when no model answers the chat: `chat model` empty with more than one endpoint,
-  or naming a model its endpoint does not serve.
+- A save warns when no model answers the chat: `chat model` empty with more than one endpoint, or
+  naming a model its endpoint does not serve; an endpoint that fails warns once, by its name.
 - The keys of `css` are the tokens of the page of a value of their own, the model free on them; a
   token derived from others is no key. The sheets of `css` apply by name over every style and every
   token of the page, whatever their selectors, and the model writes one only as far as its privilege
