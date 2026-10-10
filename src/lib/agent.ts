@@ -82,12 +82,15 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 // it stands: the model, its parameters, the system prompt, and the own tools
 // of KiSS then those of every MCP server, the same from round to round while
 // the configuration and the servers stay; a server down sits out the turn, and
-// the pulse names the servers the round waits for
+// the pulse names the servers the round waits for; told gathers what the
+// rounds of the turn left out, and the model reads all of it every round, so
+// what it did about a server stays explained once the server is back
 async function setup(
 	messages: readonly Message[],
 	signal: AbortSignal,
 	p: Pulse,
-	down: Map<string, string>
+	down: Map<string, string>,
+	told: string[]
 ) {
 	const { endpoint, model } = await pick(settings, signal);
 	const waits = connecting(settings, down);
@@ -101,14 +104,13 @@ async function setup(
 		})
 	);
 	const { tools, problems } = await aggregate(settings, own, down);
+	for (const problem of problems) if (!told.includes(problem)) told.push(problem);
 	const body = {
 		...parameters,
 		model,
 		messages: [
 			...(system ? [{ role: 'system', content: system }] : []),
-			...(problems.length
-				? [{ role: 'system', content: [prompts.problems, ...problems].join('\n') }]
-				: []),
+			...(told.length ? [{ role: 'system', content: [prompts.problems, ...told].join('\n') }] : []),
 			...history(messages)
 		],
 		tools: tools.map((t) => ({
@@ -133,13 +135,15 @@ export async function turn(
 	p: Pulse
 ): Promise<void> {
 	let r = 0;
-	// the servers that failed this turn, as they were named, with what they answered
+	// the servers that failed this turn, as they were named, with what they
+	// answered, and every tool the turn left out, as the model was told
 	const down = new Map<string, string>();
+	const told: string[] = [];
 	try {
 		for (; r < Number(settings.get('tools rounds')); r++) {
 			p.round = r + 1;
 			mark(p, 'preparing', '', performance.now());
-			const { endpoint, body, tools } = await setup([...messages, reply], signal, p, down);
+			const { endpoint, body, tools } = await setup([...messages, reply], signal, p, down, told);
 			mark(p, 'waiting', endpoint.name, performance.now());
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
 			const round = reply.rounds[reply.rounds.length - 1];

@@ -290,7 +290,8 @@ describe('an MCP server', () => {
 		).done;
 		expect(p.bodies[0].messages[0].content).toContain('mcp locked');
 		expect(p.bodies[1].tools.map((t) => t.function.name)).toContain('bash_tool');
-		expect(p.bodies[1].messages[0].role).toBe('user');
+		// the model still reads why it asked for the key, the server back
+		expect(p.bodies[1].messages[0].content).toBe(p.bodies[0].messages[0].content);
 	});
 
 	it('names the servers a round waits for in its line', async () => {

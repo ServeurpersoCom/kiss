@@ -254,11 +254,13 @@ A turn picks the endpoint and the model `chat model` names, `endpoint/model`; le
 the one model of the one endpoint, any other choice being the user's, since a router loads whatever
 model it is asked for. The tools the model sees are those of KiSS, then those of every MCP server,
 those turned off left out; a server that fails, or a name served twice, becomes a system note to the
-model. Each round streams its thinking, its text and its calls, the arguments of a call read as
-the stream writes them, their JSON closed where it stops; a round that calls nothing ends the
-turn, at most `tools rounds` of them. Every round reads the configuration as it stands, so a tool a
-call turns on is offered from the next round on, as is a model, a system prompt or a parameter a
-call changes. A tool in `consent` asks before its call, and a turn stopped keeps what settled.
+model, which tells the user, the note kept until the turn ends, so what the model did about a server
+stays explained once the server is back. Each round streams its thinking, its text and its calls,
+the arguments of a call read as the stream writes them, their JSON closed where it stops; a round
+that calls nothing ends the turn, at most `tools rounds` of them. Every round reads the
+configuration as it stands, so a tool a call turns on is offered from the next round on, as is a
+model, a system prompt or a parameter a call changes. A tool in `consent` asks before its call, and
+a turn stopped keeps what settled.
 
 Every endpoint and every MCP server sends its key as a bearer token, and the headers it is given
 besides, `Name: value` pairs split by `;`, to it alone: an API that answers a page only once it
