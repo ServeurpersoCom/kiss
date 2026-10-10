@@ -95,7 +95,7 @@ async function setup(
 	const { endpoint, model } = await pick(settings, signal);
 	const waits = connecting(settings, down);
 	if (waits.length) mark(p, 'preparing', `mcp ${waits.join(', ')}`, performance.now());
-	const system = String(settings.get('chat system') ?? '');
+	const prompt = String(settings.get('chat system') ?? '');
 	// the parameters set for this model, numbers as numbers
 	const parameters = Object.fromEntries(
 		Object.entries(models.keys).flatMap(([name, def]) => {
@@ -105,14 +105,15 @@ async function setup(
 	);
 	const { tools, problems } = await aggregate(settings, own, down);
 	for (const problem of problems) if (!told.includes(problem)) told.push(problem);
+	// one system message, first, as every template takes it: the system prompt,
+	// then what the turn left out
+	const system = [prompt, told.length ? [prompts.problems, ...told].join('\n') : '']
+		.filter((part) => part)
+		.join('\n\n');
 	const body = {
 		...parameters,
 		model,
-		messages: [
-			...(system ? [{ role: 'system', content: system }] : []),
-			...(told.length ? [{ role: 'system', content: [prompts.problems, ...told].join('\n') }] : []),
-			...history(messages)
-		],
+		messages: [...(system ? [{ role: 'system', content: system }] : []), ...history(messages)],
 		tools: tools.map((t) => ({
 			type: 'function',
 			function: { name: t.name, description: t.description, parameters: t.parameters }

@@ -151,8 +151,13 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
   replaces it only when every line succeeds, and answers with what changed; it always answers,
   `! no change` when it writes nothing and changes nothing, so a request never ends in silence.
+- Nothing reaches the network before it passes the firewall: a batch writes a draft, and what
+  lists models or tools reads the configuration as it applies, so a show after a set in the same
+  batch reads what was there before.
 - One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model
   neither starts, nor runs another line, nor replaces anything.
+- A request holds one system message, first, as every template takes it: the system prompt, then
+  what the turn left out.
 - The line under a turn and what the turn spent measure the system alone: the time the user takes
   on a question leaves every clock of the turn that asks, a round counts its tokens once, by the
   count of the endpoint when it gives one, and the rate starts from the second token.

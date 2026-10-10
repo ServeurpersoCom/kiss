@@ -74,7 +74,8 @@ export interface Module {
 	check?(config: ConfigReader): Promise<string | null>;
 	// mirrors the running configuration into the page after each change
 	apply?(config: ConfigReader): void;
-	// the items of a collection the module knows beyond those set, by
+	// the items of a collection the module knows beyond those set, read from
+	// the running configuration as anything that reaches the network is, by
 	// group: who knows them, and why it knows none when it failed
 	items?(ctx: Context): Promise<Group[]>;
 }
@@ -231,7 +232,12 @@ export interface Library {
 // augmentation from their own file
 export interface Context extends Scope {
 	role: Role;
+	// the draft the batch writes, which nothing outside the page reads before
+	// the batch applies
 	config: Config;
+	// the configuration as it applies, past the firewall: the one that reaches
+	// the network
+	running: ConfigReader;
 	archive: Archive;
 	schema: Schema;
 	modules: readonly Module[];

@@ -129,6 +129,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		role,
 		conversation: titled,
 		config: draft,
+		running,
 		archive,
 		schema,
 		modules,
@@ -291,6 +292,7 @@ export function suggest(text: string, role: Role): string[] {
 	const ctx: Context = {
 		role,
 		config: running,
+		running,
 		archive,
 		schema,
 		modules,

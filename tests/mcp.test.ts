@@ -311,6 +311,37 @@ describe('an MCP server', () => {
 		expect(p.bodies[0].tools.map((t) => t.function.name)).toContain('bash_tool');
 	});
 
+	it('is never reached by a batch of the model before the user lets it, nor closed by one', async () => {
+		let models = 0;
+		const y = async () => (models++, new Response('{"data":[]}'));
+		const p = await page({ a: legacy(SHELL), x: legacy(SHELL), y }, []);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		await vi.waitFor(() => expect(p.methods.a).toContain('tools/list'));
+		const before = p.methods.a.length;
+		const refuse = async () => REFUSE;
+		const r = await p.engine.run('no mcp a\nset mcp url x http://x/mcp\nshow tools', 'llm', {
+			grant: refuse
+		});
+		expect(r.text).toContain('the user refused the change');
+		expect(p.methods.x).toBeUndefined();
+		await p.engine.run('set endpoints url y http://y/v1\nshow models', 'llm', { grant: refuse });
+		expect(models).toBe(0);
+		await p.engine.run('show tools', 'user');
+		expect(p.methods.a).toHaveLength(before);
+	});
+
+	it('tells what it left out in the one system message, after the system prompt', async () => {
+		const p = await page({}, [stream([{ content: 'ok' }])]);
+		await p.engine.run('set chat system "be brief"\nset mcp url gone http://gone/mcp', 'user');
+		await (
+			await p.go()
+		).done;
+		const system = p.bodies[0].messages.filter((m) => m.role === 'system');
+		expect(system).toHaveLength(1);
+		expect(system[0].content).toMatch(/^be brief\n\n[^\n]+\nmcp gone/);
+		expect(p.bodies[0].messages[0].role).toBe('system');
+	});
+
 	it('leaves out a name another one serves first, the model told', async () => {
 		const p = await page(
 			{

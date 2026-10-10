@@ -23,7 +23,7 @@ export default {
 	// the models of every endpoint at once, by endpoint
 	async items(ctx) {
 		return Promise.all(
-			remotes(ctx.config, 'endpoints').map((e) =>
+			remotes(ctx.running, 'endpoints').map((e) =>
 				listModels(e, ctx.signal).then(
 					(ids) => ({
 						group: `endpoints ${e.name}`,
