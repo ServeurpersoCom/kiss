@@ -224,9 +224,9 @@ describe('show running', () => {
 	it('reads back to the same values', async () => {
 		const k = await page();
 		const lines = [
-			'set css sheet a ":root { --accent: oklch(0.6 0.2 300) }"',
+			'set style sheet a ":root { --accent: oklch(0.6 0.2 300) }"',
 			'set chat system "a|b \\"c\\"\\nd"',
-			'set css sheet b \'body { font-family: "Inter", sans-serif }\'',
+			'set style sheet b \'body { font-family: "Inter", sans-serif }\'',
 			'set display tools open',
 			'set endpoints url a http://a/v1'
 		];
@@ -480,9 +480,9 @@ describe('the firewall', () => {
 		expect((await k.run('show privilege', 'user')).text).toBe(
 			[
 				'set privilege level chat ask',
-				'set privilege level css ask',
 				'set privilege level endpoints ask',
 				'set privilege level mcp ask',
+				'set privilege level style ask',
 				'set privilege level tools ask'
 			].join('\n')
 		);
@@ -857,10 +857,13 @@ describe('a section', () => {
 	});
 });
 
-describe('css', () => {
+describe('style', () => {
 	it('is the last style sheet of the page, its sheets by name, gone with a reset', async () => {
 		const k = await page();
-		await k.run(`set css sheet b 'b { color: red }'\nset css sheet a 'a { color: blue }'`, 'user');
+		await k.run(
+			`set style sheet b 'b { color: red }'\nset style sheet a 'a { color: blue }'`,
+			'user'
+		);
 		const last = () => document.head.querySelector('style:last-of-type')!.textContent;
 		expect(last()).toBe('a { color: blue }\nb { color: red }');
 		await k.run('reset', 'user');
@@ -869,16 +872,16 @@ describe('css', () => {
 
 	it('keys the tokens of the page of a value of their own, the model free on them alone', async () => {
 		const k = await page();
-		const shown = (await k.run('show css', 'user')).text;
-		expect(shown).toContain('set css bg "oklch(0.17 0.005 260)"');
-		expect(shown).toContain('set css size-secondary 0.8rem');
-		expect(shown).not.toMatch(/css (ok|surface|text-secondary|icon) /);
+		const shown = (await k.run('show style', 'user')).text;
+		expect(shown).toContain('set style bg "oklch(0.17 0.005 260)"');
+		expect(shown).toContain('set style size-secondary 0.8rem');
+		expect(shown).not.toMatch(/style (ok|surface|text-secondary|icon) /);
 		const refuse = user(REFUSE);
-		expect((await k.run('set css accent red', 'llm', refuse)).ok).toBe(true);
+		expect((await k.run('set style accent red', 'llm', refuse)).ok).toBe(true);
 		expect(refuse.asked).toEqual([]);
 		const tokens = document.head.querySelector('style:nth-last-of-type(2)')!;
 		expect((tokens as HTMLStyleElement).sheet!.cssRules[0].cssText).toContain('--accent: red');
-		expect((await k.run(`set css sheet x '.tool { display: none }'`, 'llm', refuse)).text).toBe(
+		expect((await k.run(`set style sheet x '.tool { display: none }'`, 'llm', refuse)).text).toBe(
 			'% the user refused the change'
 		);
 	});

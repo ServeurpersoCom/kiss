@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { compile } from 'svelte/compiler';
 import { scope } from '../src/lib/config.js';
-import css from '../src/modules/css.js';
+import style from '../src/modules/style.js';
 import { app, send, stop } from '../src/lib/state.svelte.js';
 import type { Config } from '../src/lib/types.js';
 
@@ -21,7 +21,7 @@ const sources = import.meta.glob<string>('../src/**/*.svelte', {
 const name = (file: string): string => file.replace(/^.*\/|\.svelte$/g, '');
 
 describe('style', () => {
-	it('scopes the rules of a component by its name, which a css sheet aims at', () => {
+	it('scopes the rules of a component by its name, which a style sheet aims at', () => {
 		const file = '../src/components/Composer.svelte';
 		const { css } = compile(sources[file], { filename: file, cssHash: scope });
 		expect(css!.code).toMatch(/form\.svelte-composer\s*\{/);
@@ -34,15 +34,15 @@ describe('style', () => {
 		expect(new Set(names).size).toBe(names.length);
 	});
 
-	it('holds every token and css sheet off while a question stands, whatever it sets meanwhile', async () => {
+	it('holds every token and style sheet off while a question stands, whatever it sets meanwhile', async () => {
 		const media = () => [...document.head.querySelectorAll('style')].slice(-2).map((s) => s.media);
 		const config = { names: () => ['cover'], get: () => '.svelte-ask { display: none }' };
-		css.apply(config as unknown as Config);
+		style.apply(config as unknown as Config);
 		expect(media()).toEqual(['', '']);
 		const sent = send('/import');
 		await vi.waitFor(() => expect(app.asks[0]?.kind).toBe('pick'));
 		expect(media()).toEqual(['not all', 'not all']);
-		css.apply(config as unknown as Config);
+		style.apply(config as unknown as Config);
 		expect(media()).toEqual(['not all', 'not all']);
 		stop(app.current!.id);
 		await sent;

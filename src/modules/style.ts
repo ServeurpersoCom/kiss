@@ -39,7 +39,7 @@ export function hold(held: boolean): void {
 }
 
 export default {
-	name: 'css',
+	name: 'style',
 	keys: {
 		...keys,
 		// style sheets over the style of the page, applied by name; a selector
@@ -51,12 +51,12 @@ export default {
 		set.textContent = ':root {}';
 		const root = set.sheet!.cssRules[0] as CSSStyleRule;
 		for (const [key, def] of Object.entries(keys)) {
-			const value = config.get(`css ${key}`)!;
+			const value = config.get(`style ${key}`)!;
 			if (value !== def.default) root.style.setProperty(`--${key}`, value);
 		}
 		sheet.textContent = config
-			.names('css')
-			.map((name) => String(config.get('css sheet', name)))
+			.names('style')
+			.map((name) => String(config.get('style sheet', name)))
 			.join('\n');
 	}
 } satisfies Module;

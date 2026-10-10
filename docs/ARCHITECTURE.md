@@ -16,7 +16,7 @@ src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
 src/lib/         the page side: agent, api, mcp, state, conversation, db
 src/components/  thread, message, round, ask, dialog, composer, sidebar
 src/markdown/    the remark and rehype stack and its incremental renderer
-src/tokens.css   the tokens of the page, read as the keys of css
+src/tokens.css   the tokens of the page, read as the keys of style
 tests/           the laws, under vitest and happy-dom
 ```
 
@@ -80,7 +80,7 @@ The question says what always gives, and offers no always when it gives nothing.
 
 The page loads its images, fonts, media and styles from itself only, a Content-Security-Policy in
 `index.html` saying so; requests go anywhere, to the endpoints and the MCP servers the
-configuration names. So neither an image in a reply nor a `url()` in a `css` sheet ever carries
+configuration names. So neither an image in a reply nor a `url()` in a style sheet ever carries
 anything out of the page.
 
 A `set` line that leaves out the value of a secret asks the user for it in a masked field; the value
@@ -132,12 +132,12 @@ and the page writes its prose with a capital.
 | Module      | Keys                                                                             |
 | ----------- | -------------------------------------------------------------------------------- |
 | `chat`      | `model`, `system`, both guarded                                                  |
-| `css`       | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>` guarded            |
 | `display`   | `thinking`, `tools`, `render <thinking or reply>`                                |
 | `endpoints` | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
 | `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`                             |
 | `privilege` | `level <module>` guarded, every change asking                                    |
+| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>` guarded            |
 | `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                    |
 
 ### Laws
@@ -145,10 +145,10 @@ and the page writes its prose with a capital.
 Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 
 - A command, module, key or filter word may be any prefix that names one word only; right after
-  `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between
-  `diff` and `display`; an exact word always wins. A collection is named in the plural,
-  `endpoints`, `tools`, `saves`, `models`, but an acronym, `css`, `mcp`: its singular, a prefix
-  of it, names it too.
+  `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between `diff`
+  and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
+  `tools`, `saves`, `models`, its singular, a prefix of it, naming it too; an acronym, `mcp`, or a
+  whole, `display`, `style`, keeps its one name.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
   replaces it only when every line succeeds, and answers with what changed; it always answers,
   `! no change` when it writes nothing and changes nothing, so a request never ends in silence.
@@ -188,7 +188,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   when the call goes: a tool a call turns off is reached by no later call of the round.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation; the
   line that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
-- No css token or sheet applies while a question stands, whatever it sets meanwhile: the card the
+- No style token or sheet applies while a question stands, whatever it sets meanwhile: the card the
   user answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `load` moves it.
@@ -202,14 +202,14 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   every endpoint lists at once, one that fails beside the others.
 - A save warns when no model answers the chat: `chat model` empty with more than one endpoint, or
   naming a model its endpoint does not serve; an endpoint that fails warns once, by its name.
-- The keys of `css` are the tokens of the page of a value of their own, the model free on them; a
-  token derived from others is no key. The sheets of `css` apply by name over every style and every
-  token of the page, whatever their selectors, and the model writes one only as far as its privilege
-  lets it: a selector reaches anything the thread shows.
+- The keys of `style` are the tokens of the page of a value of their own, the model free on them; a
+  token derived from others is no key. The sheets of `style` apply by name over every style and
+  every token of the page, whatever their selectors, and the model writes one only as far as its
+  privilege lets it: a selector reaches anything the thread shows.
 - The page reads every size of text floored, so no size hides what the thread shows.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>` alone
-  when the source fails: `show models` by endpoint, `show tools` by who serves it; a listing from
-  one source, `show privilege`, reads at the margin.
+  when the source fails: `show models` by endpoint, `show tools` by who serves it, `show css` by
+  component; a listing from one source, `show privilege`, reads at the margin.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
   next round on.
 - A turn keeps, on the page and in the browser, what settled: what streamed, the calls that ended
@@ -261,9 +261,10 @@ only. A secret takes a masked field with OK and Cancel, an export Save or Cancel
 file or Cancel, a delete OK or Cancel; Enter and Escape answer too, never alone. One question shows
 at a time, in the order they come, whatever the conversation open: one from another conversation
 names it, as it holds every batch until answered. The Stop of a conversation answers no to its own
-questions. While a question stands the css tokens and sheets hold off, so nothing restyles, hides or
-covers the card. Monospace is for what a machine wrote: the calls of tools and their outputs, code,
-and a block rendered plain; the cards, the commands and the errors read in the font of the page.
+questions. While a question stands the style tokens and sheets hold off, so nothing restyles, hides
+or covers the card. Monospace is for what a machine wrote: the calls of tools and their outputs,
+code, and a block rendered plain; the cards, the commands and the errors read in the font of the
+page.
 
 ```
 show privilege                           ! every guarded module and how far the model goes
@@ -427,24 +428,26 @@ text, with the most chroma the screen shows at any lightness without bending the
 set a whole theme, dark or light alike; `radius`, `font`, `mono`, `size-primary` for the chat and
 `size-secondary` for everything around it, the only two sizes of text but `size-title`, the title of
 the page, each read floored, every icon at the primary size, `width`, `bubble-width`,
-`sidebar-width` within `sidebar-min` and `sidebar-max`; every scrollbar thin, its thumb a line. A
-token of a value of its own is a key of `css`, typed by its default, a color, a length or a font,
-and `show css` lists them with their defaults; a derived one follows the tokens it reads, and only a
-sheet sets it alone. `show style` lists the style of the page, one rule per line, a rule of a
-component with its scoping class, the name of the component, `svelte-composer` for
-`Composer.svelte`, so a selector read there aims at that component alone; named sheets restyle
-anything over it. The sidebar follows its edge for the whole drag, within those bounds, it closes
-once the pointer goes below half the least width, and opens again once it reaches that width, from
-the left of the page too; the browser keeps both, the width and whether it is closed.
+`sidebar-width` within `sidebar-min` and `sidebar-max`; every scrollbar thin, its thumb a line. The
+module `style` sets it: a token of a value of its own is a key, typed by its default, a color, a
+length or a font, and `show style` lists them with their defaults, as set lines; a derived one
+follows the tokens it reads, and only a sheet sets it alone. `show css` lists the CSS of the page by
+component, the rules of a component under its name, each with its scoping class, `svelte-composer`
+for `Composer.svelte`, so a selector read there aims at that component alone, and the rules of none
+under `page`; named sheets restyle anything over it. The sidebar follows its edge for the whole
+drag, within those bounds, it closes once the pointer goes below half the least width, and opens
+again once it reaches that width, from the left of the page too; the browser keeps both, the width
+and whether it is closed.
 
 ```
-show css                                ! the tokens and their defaults
-set css accent 'oklch(0.6 0.2 250)'
-set css bg #faf9f5
-set css fg #141413                      ! with bg, a light theme
-set css width 64rem
-no css bg                               ! back to the background of the page
-set css sheet input 'form.svelte-composer { max-width: 64rem }'  ! the composer alone
+show style                              ! the tokens and their defaults
+set style accent 'oklch(0.6 0.2 250)'
+set style bg #faf9f5
+set style fg #141413                    ! with bg, a light theme
+set style width 64rem
+no style bg                             ! back to the background of the page
+show css | section composer             ! the rules of the composer
+set style sheet input 'form.svelte-composer { max-width: 64rem }'  ! the composer alone
 ```
 
 ## Site defaults

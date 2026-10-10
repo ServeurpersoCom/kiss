@@ -16,7 +16,7 @@ import {
 } from './conversation.js';
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
-import { hold } from '../modules/css.js';
+import { hold } from '../modules/style.js';
 import { held, pulse, type Pulse } from './pulse.js';
 
 // what the page asks the user, and how the answer settles it: a change or a
@@ -288,8 +288,8 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 let posed = 0;
 
 // a question to the user from a conversation, shown once those before it are
-// answered; the css sheets hold off while any question stands, and the time it
-// stands leaves the clock of the turn that asks
+// answered; the style tokens and sheets hold off while any question stands,
+// and the time it stands leaves the clock of the turn that asks
 function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return new Promise((resolve) => {
 		const id = ++posed;

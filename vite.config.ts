@@ -31,7 +31,7 @@ function katexWoff2Only() {
 }
 
 // every style sits in a cascade layer by where it comes from: the libraries
-// of node_modules in lib, the page itself in page over them; css sheets,
+// of node_modules in lib, the page itself in page over them; style sheets,
 // outside any layer, win over both whatever the specificity of their selectors
 const layers: CssPlugin = {
 	postcssPlugin: 'kiss-layers',
@@ -64,7 +64,7 @@ export default defineConfig({
 		// a time zone ahead of UTC, so a law tells local time from UTC
 		env: { TZ: 'Europe/Paris' },
 		include: ['tests/*.test.ts'],
-		// the tokens of the page, which the css module reads as its keys
+		// the tokens of the page, which the style module reads as its keys
 		css: { include: [/tokens\.css/] }
 	}
 });

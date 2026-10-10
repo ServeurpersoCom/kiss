@@ -1,7 +1,7 @@
 /* the tokens of the page: three colors, every other color derived from
    them, then the shape, the fonts, the sizes and the widths; a token of a
-   value of its own is a key of css, set css bg #faf9f5, and a derived one
-   follows the tokens it reads */
+   value of its own is a key of style, set style bg #faf9f5, and a derived
+   one follows the tokens it reads */
 :root {
 	--bg: oklch(0.17 0.005 260);
 	--fg: #f2f1ef;

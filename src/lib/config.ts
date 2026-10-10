@@ -1,7 +1,7 @@
 // the name the page shows
 export const NAME = 'KiSS';
 // the scoping class of a component is its name, svelte-composer for
-// Composer.svelte, so show style tells whose a rule is and a css sheet aims at
+// Composer.svelte, so show css tells whose a rule is and a style sheet aims at
 // one component by the selector it reads there
 export const scope = ({ name }: { name: string }): string => `svelte-${name.toLowerCase()}`;
 

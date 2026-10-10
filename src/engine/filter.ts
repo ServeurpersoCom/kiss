@@ -3,7 +3,7 @@ import { INDENT } from '../lib/config.js';
 
 type Lines = (lines: string[]) => string[];
 
-// output filters after a pipe, IOS style: show style | include :root; every
+// output filters after a pipe, IOS style: show css | include :root; every
 // filter but count takes a pattern, a case blind regular expression; a
 // section is a line at the margin with the indented lines under it, kept
 // whole when that line matches: show tools | section sandbox
