@@ -66,9 +66,13 @@ function outcome(result: CallToolResult): Outcome {
 	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
 }
 
+// a server as the configuration names it: its name, url, key, headers and
+// timeout; a change of any makes it another server
+const signature = (remote: Remote): string => JSON.stringify(remote);
+
 function connection(remote: Remote): Connection {
 	const held = connections.get(remote.name);
-	if (held && JSON.stringify(held.remote) === JSON.stringify(remote)) return held;
+	if (held && signature(held.remote) === signature(remote)) return held;
 	if (held) drop(remote.name);
 	const client = connect(remote);
 	const tools = client.then(async (c) => {
@@ -106,25 +110,26 @@ function connection(remote: Remote): Connection {
 // no tool list yet, connecting or about to
 export function connecting(config: ConfigReader, down: ReadonlyMap<string, string>): string[] {
 	return remotes(config, 'mcp')
-		.filter((r) => !down.has(r.name) && !connections.get(r.name)?.settled)
+		.filter((r) => !down.has(signature(r)) && !connections.get(r.name)?.settled)
 		.map((r) => r.name);
 }
 
 // every server of the configuration with its tools or what went wrong, sorted
 // by name; servers no longer named are closed; a server down answers its
 // error again without a try, and a server that fails joins down, which lives
-// as long as its holder: a turn, so it tries each server once
+// as long as its holder: a turn, so it tries each server once; down holds a
+// server as it was named, so a new url, key or header tries it again
 export async function served(config: ConfigReader, down: Map<string, string>): Promise<Served[]> {
 	const all = remotes(config, 'mcp');
 	for (const name of connections.keys()) if (!all.some((r) => r.name === name)) drop(name);
 	return Promise.all(
 		all.map(async (r): Promise<Served> => {
-			const error = down.get(r.name);
+			const error = down.get(signature(r));
 			if (error !== undefined) return { server: r.name, error };
 			try {
 				return { server: r.name, tools: await connection(r).tools };
 			} catch (e) {
-				down.set(r.name, (e as Error).message);
+				down.set(signature(r), (e as Error).message);
 				return { server: r.name, error: (e as Error).message };
 			}
 		})

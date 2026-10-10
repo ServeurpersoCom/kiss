@@ -274,6 +274,25 @@ describe('an MCP server', () => {
 		expect(tries - before).toBe(2 * once);
 	});
 
+	it('that failed is tried again within the turn once its key changes', async () => {
+		const open = legacy(SHELL);
+		const locked = async (req: Request) =>
+			req.headers.get('authorization') === 'Bearer good'
+				? open(req)
+				: new Response('{"error":"unauthorized"}', { status: 401 });
+		const p = await page({ locked }, [
+			stream([call('config', { lines: 'set mcp key locked good' })]),
+			stream([{ content: 'ok' }])
+		]);
+		await p.engine.run('set mcp url locked http://locked/mcp', 'user');
+		await (
+			await p.go()
+		).done;
+		expect(p.bodies[0].messages[0].content).toContain('mcp locked');
+		expect(p.bodies[1].tools.map((t) => t.function.name)).toContain('bash_tool');
+		expect(p.bodies[1].messages[0].role).toBe('user');
+	});
+
 	it('names the servers a round waits for in its line', async () => {
 		let list!: () => void;
 		const listed = new Promise<void>((resolve) => (list = resolve));

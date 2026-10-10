@@ -133,7 +133,7 @@ export async function turn(
 	p: Pulse
 ): Promise<void> {
 	let r = 0;
-	// the servers that failed this turn, with what they answered
+	// the servers that failed this turn, as they were named, with what they answered
 	const down = new Map<string, string>();
 	try {
 		for (; r < Number(settings.get('tools rounds')); r++) {
