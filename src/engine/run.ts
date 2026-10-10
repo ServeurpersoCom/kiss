@@ -1,13 +1,6 @@
 import type { ConfigReader, Context, Key, Outcome, Role, Scope, Value } from '../lib/types.js';
-import { ALLOW, ALWAYS, ASK, DENY, Incomplete, REFUSE } from '../lib/types.js';
-import {
-	ERROR_PREFIX,
-	OUTPUT_MAX_LINES,
-	PRIVILEGE,
-	REMOVED,
-	beyond,
-	comment
-} from '../lib/config.js';
+import { Incomplete, REFUSE } from '../lib/types.js';
+import { ERROR_PREFIX, OUTPUT_MAX_LINES, REMOVED, beyond, comment } from '../lib/config.js';
 import { splitLines, splitPipes, tokenize } from './parse.js';
 import { compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
@@ -244,43 +237,32 @@ function resolved(
 	return [of(running), of(draft)];
 }
 
-// whether a change moves an enum toward its more open values
+// whether a change opens a way out: a url given a value, an enum moved toward
+// its more open values
 function opens(def: Key, from: Value | undefined, to: Value | undefined): boolean {
+	if (def.kind === 'url') return to !== undefined;
 	const values = def.values ?? [];
 	return values.indexOf(to ?? '') > values.indexOf(from ?? '');
 }
 
-// what the model may change: a guarded key only as far as the privilege of its
-// module goes, the user asked when it says ask, an answer of always giving
-// those modules allow; privilege, which no privilege rules, stays at the ask of
-// its default, and always gives it nothing; returns why the batch stops, if it
-// does
+// what the model may change: a guarded key only once the user agrees, every
+// time, when the change opens it; returns why the batch stops, if it does
 async function guard(draft: Values, scope: Scope): Promise<string | null> {
 	const [before, after] = resolved(draft);
-	const asked = new Set<string>();
 	const from: Record<string, Value | undefined> = {};
 	const to: Record<string, Value | undefined> = {};
 	for (const k of Object.keys(after)) {
 		if (before[k] === after[k]) continue;
-		const [key] = schema.unstore(k);
-		const module = key.split(' ')[0];
-		const def = schema.find(key);
-		if (!def?.guard || (def.guard === 'opening' && !opens(def, before[k], after[k]))) continue;
-		const level = running.get(`${PRIVILEGE} level`, module);
-		if (level === DENY) return `the privilege of ${module} denies the change`;
-		if (level !== ASK) continue;
-		asked.add(module);
+		const def = schema.find(schema.unstore(k)[0]);
+		if (!def?.guard || !opens(def, before[k], after[k])) continue;
 		from[k] = before[k];
 		to[k] = after[k];
 	}
-	if (!asked.size) return null;
+	if (!Object.keys(to).length) return null;
 	if (!scope.grant) return 'nobody is here to agree to the change';
-	const allows = [...asked].filter((m) => m !== PRIVILEGE);
-	const verdict = await scope.grant({ kind: 'change', lines: schema.diff(from, to), allows });
+	const verdict = await scope.grant({ kind: 'change', lines: schema.diff(from, to) });
 	scope.signal?.throwIfAborted();
-	if (verdict === REFUSE) return 'the user refused the change';
-	if (verdict === ALWAYS) for (const m of allows) draft.set(`${PRIVILEGE} level`, ALLOW, m);
-	return null;
+	return verdict === REFUSE ? 'the user refused the change' : null;
 }
 
 // the lines as written, the value of every secret they write removed, a line

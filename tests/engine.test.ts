@@ -312,10 +312,9 @@ describe('the headers of a server', () => {
 			true
 		);
 		const asked = user(REFUSE);
-		const r = await k.run("set endpoints headers b 'x: 2'", 'llm', { grant: asked.grant });
-		expect(r.text).toContain('the user refused the change');
-		expect(asked.asked).toHaveLength(1);
-		expect((await k.run("set endpoints headers a 'x: 2'", 'llm', { grant })).ok).toBe(true);
+		expect((await k.run("set endpoints headers b 'x: 2'", 'llm', asked)).ok).toBe(true);
+		expect((await k.run("set endpoints headers a 'x: 2'", 'llm', asked)).ok).toBe(true);
+		expect(asked.asked).toEqual([]);
 	});
 });
 
@@ -405,31 +404,26 @@ function user(verdict: Verdict) {
 }
 
 describe('the firewall', () => {
-	it('asks the user before the model changes a guarded key, whatever spells it', async () => {
+	it('asks the user every time the model opens a way out, whatever spells it', async () => {
 		const k = await page();
 		await k.run('set tools use config off\nset chat system mine', 'user');
 		const once = user(ONCE);
 		expect((await k.run('set chat system theirs', 'llm', once)).ok).toBe(true);
+		expect((await k.run('set endpoints url b http://b/v1', 'llm', once)).ok).toBe(true);
+		expect((await k.run('set endpoints url b http://c/v1', 'llm', once)).ok).toBe(true);
 		expect(once.asked).toEqual([
+			{ kind: 'change', lines: ['+ set endpoints url b http://b/v1'] },
 			{
 				kind: 'change',
-				lines: ['- set chat system mine', '+ set chat system theirs'],
-				allows: ['chat']
+				lines: ['- set endpoints url b http://b/v1', '+ set endpoints url b http://c/v1']
 			}
 		]);
 		const refuse = user(REFUSE);
-		expect((await k.run('reset', 'llm', refuse)).text).toBe('% the user refused the change');
 		expect((await k.run('no tools config', 'llm', refuse)).text).toBe(
 			'% the user refused the change'
 		);
-		expect(refuse.asked.map((a) => a.kind === 'change' && a.lines)).toEqual([
-			[
-				'- set chat system theirs',
-				'+ set chat system ""',
-				'- set tools use config off',
-				'+ set tools use config on'
-			],
-			['- set tools use config off', '+ set tools use config on']
+		expect(refuse.asked).toEqual([
+			{ kind: 'change', lines: ['- set tools use config off', '+ set tools use config on'] }
 		]);
 		expect(k.settings.get('tools use', 'config')).toBe('off');
 	});
@@ -461,96 +455,35 @@ describe('the firewall', () => {
 
 	it('never asks when the model closes', async () => {
 		const k = await page();
+		await k.run('set endpoints url a http://a/v1', 'user');
 		const refuse = user(REFUSE);
 		expect((await k.run('set tools use config off', 'llm', refuse)).ok).toBe(true);
+		expect((await k.run('no endpoints a', 'llm', refuse)).ok).toBe(true);
 		expect(refuse.asked).toEqual([]);
 		expect((await k.run('set tools use config consent', 'llm', refuse)).ok).toBe(false);
 	});
 
-	it('goes as far as the privilege of the module, a privilege changing on a yes every time', async () => {
-		const k = await page();
-		const once = user(ONCE);
-		await k.run('set privilege level chat deny', 'user');
-		expect((await k.run('set chat system x', 'llm', once)).text).toBe(
-			'% the privilege of chat denies the change'
-		);
-		await k.run('set privilege level chat allow', 'user');
-		expect((await k.run('set chat system x', 'llm', once)).ok).toBe(true);
-		expect(once.asked).toEqual([]);
-		const refuse = user(REFUSE);
-		expect((await k.run('set privilege level chat ask', 'llm', refuse)).text).toBe(
-			'% the user refused the change'
-		);
-		expect((await k.run('reset', 'llm', refuse)).text).toBe('% the user refused the change');
-		expect(refuse.asked).toEqual([
-			{
-				kind: 'change',
-				lines: ['- set privilege level chat allow', '+ set privilege level chat ask'],
-				allows: []
-			},
-			{
-				kind: 'change',
-				lines: ['- set privilege level chat allow', '+ set privilege level chat ask'],
-				allows: []
-			}
-		]);
-		expect((await k.run('set privilege level chat ask', 'llm', user(ALWAYS))).ok).toBe(true);
-		expect(k.settings.get('privilege level', 'chat')).toBe('ask');
-		expect(k.settings.names('privilege')).toEqual(['chat']);
-		expect((await k.run('set privilege level privilege allow', 'user')).text).toContain(
-			'unknown privilege level "privilege"'
-		);
-		expect((await k.run('set privilege level display allow', 'user')).text).toContain(
-			'unknown privilege level "display"'
-		);
-		expect((await k.run('show privilege', 'user')).text).toBe(
-			[
-				'set privilege level chat ask',
-				'set privilege level endpoints ask',
-				'set privilege level mcp ask',
-				'set privilege level style ask',
-				'set privilege level tools ask'
-			].join('\n')
-		);
-	});
-
-	it('offers always only when it grants something, and says what', () => {
+	it('offers always for a call alone, a change asking every time', () => {
 		const call: Grant = { kind: 'call', tool: 'echo', args: '{}' };
-		const change: Grant = { kind: 'change', lines: [], allows: ['chat', 'mcp'] };
-		const privilege: Grant = { kind: 'change', lines: [], allows: [] };
+		const change: Grant = { kind: 'change', lines: [] };
 		expect([always(call), answers(call)]).toEqual(['turns echo on', [ONCE, ALWAYS, REFUSE]]);
-		expect([always(change), answers(change)]).toEqual(['allows chat, mcp', [ONCE, ALWAYS, REFUSE]]);
-		expect([always(privilege), answers(privilege)]).toEqual([null, [ONCE, REFUSE]]);
-	});
-
-	it('takes always as the allow privilege of the modules asked', async () => {
-		const k = await page();
-		await k.run('set endpoints url a http://a/v1', 'user');
-		expect((await k.run('set chat model a/b', 'llm', user(ALWAYS))).text).toBe(
-			[
-				'- set chat model ""',
-				'+ set chat model a/b',
-				'- set privilege level chat ask',
-				'+ set privilege level chat allow'
-			].join('\n')
-		);
-		expect((await k.run('set chat system y', 'llm', user(REFUSE))).ok).toBe(true);
+		expect([always(change), answers(change)]).toEqual([null, [ONCE, REFUSE]]);
 	});
 
 	it('refuses when nobody is here, and a stop while it asks applies nothing', async () => {
 		const k = await page();
-		expect((await k.run('set chat system x', 'llm')).text).toBe(
+		expect((await k.run('set endpoints url z http://z/v1', 'llm')).text).toBe(
 			'% nobody is here to agree to the change'
 		);
 		const stop = new AbortController();
 		let answer: ((v: Verdict) => void) | undefined;
 		const grant = () => new Promise<Verdict>((resolve) => (answer = resolve));
-		const r = k.run('set chat system x', 'llm', { signal: stop.signal, grant });
+		const r = k.run('set endpoints url z http://z/v1', 'llm', { signal: stop.signal, grant });
 		await vi.waitFor(() => expect(answer).toBeDefined());
 		stop.abort();
 		answer!(ONCE);
 		await expect(r).rejects.toThrow();
-		expect(k.settings.get('chat system')).toBe('');
+		expect(k.settings.get('endpoints url', 'z')).toBeUndefined();
 	});
 
 	it('asks the value of a secret left out, which never shows', async () => {
@@ -629,7 +562,7 @@ function talk(id: string, title: string, updated: number): Conversation {
 	return c;
 }
 
-describe('a delete', () => {
+describe('an erase', () => {
 	it('goes once the user confirms it, all at once, the pinned kept unless named', async () => {
 		const k = await page();
 		const list = () => [
@@ -638,20 +571,41 @@ describe('a delete', () => {
 			talk('cd56-3', 'three', 1)
 		];
 		const all = shelf(list());
-		expect((await k.run('delete all', 'llm', all)).text).toBe('- ab12-1 one\n- cd56-3 three');
-		expect(all.asked).toEqual(['Delete 2 conversations?']);
+		expect((await k.run('erase all', 'llm', all)).text).toBe('- ab12-1 one\n- cd56-3 three');
+		expect(all.asked).toEqual(['Erase 2 conversations?']);
 		expect(all.conversations.list().map((c) => c.id)).toEqual(['ab34-2']);
 		const pinned = shelf(list());
-		expect((await k.run('delete ab3', 'user', pinned)).text).toBe('- ab34-2 kept');
-		expect(pinned.asked).toEqual(['Delete kept?']);
+		expect((await k.run('erase ab3', 'user', pinned)).text).toBe('- ab34-2 kept');
+		expect(pinned.asked).toEqual(['Erase kept?']);
 		const kept = shelf(list(), null, false);
-		expect((await k.run('delete all', 'llm', kept)).text).toBe('% the user deleted nothing');
+		expect((await k.run('erase all', 'llm', kept)).text).toBe('% the user erased nothing');
 		expect(kept.conversations.list()).toHaveLength(3);
-		expect((await k.run('delete ab', 'user', shelf(list()))).text).toBe(
+		expect((await k.run('erase ab', 'user', shelf(list()))).text).toBe(
 			'% ambiguous conversation "ab": ab12-1 ab34-2'
 		);
-		expect((await k.run('delete all', 'user', shelf([]))).text).toBe('% no conversation to delete');
-		expect((await k.run('delete all', 'user')).text).toBe('% nobody is here to confirm the delete');
+		expect((await k.run('erase all', 'user', shelf([]))).text).toBe('% no conversation to erase');
+		expect((await k.run('erase all', 'user')).text).toBe('% nobody is here to confirm the erase');
+	});
+
+	it('takes a configuration whole before a conversation of the same word', async () => {
+		const k = await page();
+		await k.run('set chat system blue', 'user');
+		await k.run('copy running-config ab12', 'user');
+		const list = [talk('ab12-1', 'one', 1)];
+		const s = shelf(list, null, false);
+		expect((await k.run('erase ab12', 'llm', s)).text).toBe('% the user erased nothing');
+		const yes = shelf(list);
+		expect((await k.run('erase ab12', 'llm', yes)).text).toBe('! erased ab12');
+		expect((await k.run('erase run', 'llm', yes)).text).toBe(
+			'- set chat system blue\n+ set chat system ""'
+		);
+		expect([...s.asked, ...yes.asked]).toEqual([
+			'Erase ab12?',
+			'Erase ab12?',
+			'Erase running-config?'
+		]);
+		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
+		expect((await k.run('erase ab12', 'llm', yes)).text).toBe('- ab12-1 one');
 	});
 });
 
@@ -879,10 +833,17 @@ describe('a copy', () => {
 			'set endpoints url m http://m/v1'
 		);
 		expect((await k.run('show saves z', 'user')).text).toBe('% unknown save "z"');
-		expect((await k.run('copy a startup-config', 'llm')).text).toBe(
-			'% only the user writes startup-config'
+		const no = shelf([], null, false);
+		expect((await k.run('copy a startup-config', 'llm', no)).text).toBe(
+			'% the user copied nothing'
 		);
-		expect((await k.run('copy b a', 'llm')).text).toBe('% only the user writes a');
+		const yes = shelf([]);
+		expect((await k.run('copy b a', 'llm', yes)).text).toBe('! copied b to a');
+		expect([...no.asked, ...yes.asked]).toEqual([
+			'Copy a to startup-config?',
+			'Copy b to a, replacing it?'
+		]);
+		expect((await k.run('show saves a', 'user')).text).toBe('set chat system blue');
 	});
 
 	it('compares one configuration with another', async () => {
@@ -941,7 +902,7 @@ describe('a listing by group', () => {
 });
 
 describe('style', () => {
-	it('is the last style sheet of the page, its sheets by name, gone with a reset', async () => {
+	it('is the last style sheet of the page, its sheets by name, gone with the running-config', async () => {
 		const k = await page();
 		await k.run(
 			`set style sheet b 'b { color: red }'\nset style sheet a 'a { color: blue }'`,
@@ -949,11 +910,11 @@ describe('style', () => {
 		);
 		const last = () => document.head.querySelector('style:last-of-type')!.textContent;
 		expect(last()).toBe('a { color: blue }\nb { color: red }');
-		await k.run('reset', 'user');
+		await k.run('erase running-config', 'user', shelf([]));
 		expect(last()).toBe('');
 	});
 
-	it('keys the tokens of the page of a value of their own, the model free on them alone', async () => {
+	it('keys the tokens of the page of a value of their own, the model free on them and on sheets', async () => {
 		const k = await page();
 		const shown = (await k.run('show style', 'user')).text;
 		expect(shown).toContain('set style bg "oklch(0.17 0.005 260)"');
@@ -964,14 +925,15 @@ describe('style', () => {
 		expect(refuse.asked).toEqual([]);
 		const tokens = document.head.querySelector('style:nth-last-of-type(2)')!;
 		expect((tokens as HTMLStyleElement).sheet!.cssRules[0].cssText).toContain('--accent: red');
-		expect((await k.run(`set style sheet x '.tool { display: none }'`, 'llm', refuse)).text).toBe(
-			'% the user refused the change'
+		expect((await k.run(`set style sheet x '.tool { display: none }'`, 'llm', refuse)).ok).toBe(
+			true
 		);
+		expect(refuse.asked).toEqual([]);
 	});
 });
 
-describe('reset and copy', () => {
-	it('reset drops what the session sets, a copy to running-config puts back the save it names', async () => {
+describe('erase and copy', () => {
+	it('erase running-config drops what the session sets, a copy to it puts back the save it names', async () => {
 		const k = await page('set display tools open');
 		expect((await k.run('copy first running-config', 'user')).text).toContain(
 			'unknown save "first"'
@@ -981,7 +943,7 @@ describe('reset and copy', () => {
 		await k.run('set chat system green', 'user');
 		await k.run('copy running-config second', 'user');
 		await k.run('set chat system pink\nset display tools closed', 'user');
-		await k.run('reset', 'user');
+		await k.run('erase running-config', 'user', shelf([]));
 		expect(k.settings.get('chat system')).toBe('');
 		expect(k.settings.get('display tools')).toBe('open');
 		await k.run('copy second running-config', 'user');
@@ -1014,7 +976,7 @@ describe('a page', () => {
 		expect((await next.run('show startup-config', 'user')).text).toBe('set chat system blue');
 		await next.run('copy b startup-config', 'user');
 		expect((await page()).settings.get('chat system')).toBe('green');
-		expect((await (await page()).run('erase startup-config', 'user')).text).toBe(
+		expect((await (await page()).run('erase startup-config', 'user', shelf([]))).text).toBe(
 			'! erased startup-config, the page starts on kiss.conf'
 		);
 		const bare = await page('set display tools open');
@@ -1095,13 +1057,12 @@ describe('every key', () => {
 		const k = await full();
 		const { modules } = await import('../src/engine/registry.js');
 		const known = modules.filter((m) => m.items).map((m) => m.name);
-		expect(known.sort()).toEqual(['display', 'models', 'privilege', 'tools']);
+		expect(known.sort()).toEqual(['display', 'models', 'tools']);
 		for (const line of [
 			'set models max_tokens m/nope 5',
 			'set models max_tokens nowhere/x 5',
 			'set tools use nope on',
-			'set display render nope plain',
-			'set privilege level nope allow'
+			'set display render nope plain'
 		]) {
 			expect((await k.run(line, 'user')).text).toMatch(/^% unknown [a-z ]+"[a-z/]+"/);
 		}

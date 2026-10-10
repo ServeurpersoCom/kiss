@@ -42,10 +42,8 @@ export default {
 	name: 'style',
 	keys: {
 		...keys,
-		// style sheets over the style of the page, applied by name; a selector
-		// reaches anything the thread shows, so the model writes one only as
-		// far as its privilege lets it
-		sheet: { kind: 'string', named: true, guard: 'change' }
+		// style sheets over the style of the page, applied by name
+		sheet: { kind: 'string', named: true }
 	},
 	apply(config) {
 		set.textContent = ':root {}';

@@ -20,9 +20,8 @@ KiSS    set endpoints url pod http://pod:8080/v1
         set style fg #141413
 
         Allow this change?
-        + set chat model pod/qwen3:8b
         + set endpoints url pod http://pod:8080/v1
-        [ Once ]  [ Always ]  [ Refuse ]
+        [ Once ]  [ Refuse ]
 ```
 
 Endpoints, models, sampling, system prompt, MCP servers, tools, display, style: the model reaches
@@ -47,10 +46,12 @@ all of it through one tool, and so do you, after a `/`.
 
 The model configures the page, so KiSS guards what it can reach.
 
-- **The firewall reads the effect, not the command.** `set`, `no`, `reset` or `copy`: whatever
+- **The firewall reads the effect, not the command.** `set`, `no`, `erase` or `copy`: whatever
   spells a change, the resolved diff decides.
-- **Privilege per module**, `deny`, `ask` or `allow`; the model changes it only on your yes,
-  every time.
+- **A way out asks every time.** A new address for an endpoint or an MCP server, or a tool opened:
+  no answer turns the question off. A key never follows a URL the model wrote.
+- **Nothing only you can do.** An erase or a copy to keep the configuration asks you to confirm,
+  so the model helps with everything.
 - **Nothing leaks through the page.** No image in a reply and no style ever loads from another
   host, so nothing rides out on them.
 - **Every MCP tool starts in consent.** Each call shows its real arguments: once, always, or

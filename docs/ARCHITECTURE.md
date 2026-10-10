@@ -66,19 +66,21 @@ The model changes the page itself, so the engine guards the effect of its batche
 words. Between the rules and the commit, the resolved change of a batch of the model is read key by
 key:
 
-- a key declared `change` is guarded on any change: the url or the headers of an endpoint or an
-  MCP server, `chat model`, `chat system`, and `privilege level` itself;
-- a key declared `opening` is guarded on a change toward a more open value of its enum only:
-  `tools use` goes `off`, `consent`, `on`, so closing never asks.
+- a guarded url, of an endpoint or an MCP server, asks when it takes a value: the page would
+  send there the conversation, or the arguments of a call;
+- a guarded enum asks when it moves toward its more open values: `tools use` goes `off`,
+  `consent`, `on`, so closing never asks.
 
-A guarded change goes as far as `privilege level <module>`: `deny` stops the batch, `ask` shows the
-lines to the user, `allow` lets it. Since `set`, `no`, `reset` and `copy` all end as a change of
-resolved values, they are guarded alike. The answer takes once, always or refuse; always gives the
-modules asked the `allow` privilege, in the same batch.
+The question shows the lines and takes once or refuse, every time: nothing turns it off, so no
+answer given once leaves a way out open. Since `set`, `no`, `erase` and `copy` all end as a change
+of resolved values, they are guarded alike. Everything else, the model of the chat, its prompt, the
+style, the headers, the sampling, the model changes freely, the change shown in its output.
 
-No privilege rules `privilege`: the registry refuses `privilege level privilege`, so a change of a
-privilege by the model stays at the `ask` of its default, every time, and always gives it nothing.
-The question says what always gives, and offers no always when it gives nothing.
+On an item holding a secret the model changes every key but the url, whatever the user answers: a
+secret goes to a URL the user or the site chose, never to one the model chose.
+
+What loses data asks too, once the user confirms it, whoever asks for an erase and the model for a
+copy to the startup-config or a save: nothing is left that the user alone may do.
 
 The page loads its images, fonts, media and styles from itself only, a Content-Security-Policy in
 `index.html` saying so; requests go anywhere, to the endpoints and the MCP servers the
@@ -107,13 +109,11 @@ command = "set" key [ value ]                a secret left out is asked
         | "show saves" [ save ]              every save, or one as the lines that set it
         | "show conversations"
         | "show diff" config config
-        | "copy" config config               alone; the model copies to running-config only
-        | "reset"
+        | "copy" config config               alone; the model writes another config once confirmed
         | "title" value                      the title of this conversation
         | "export" [ "all" | config | id ] alone on its line
         | "import"                           alone on its line
-        | "delete" ( "all" | id )            alone, once the user confirms it
-        | "no save" save | "erase startup-config"   user only, each alone on its line
+        | "erase" ( "all" | config | id )    alone, once the user confirms it
 key     = module word [ item ]               an item names one of a collection
 config  = "running-config" | "startup-config" | save   either by any prefix: run, start
 save    = name                               a save of the same name gives way
@@ -121,9 +121,9 @@ value   = bare | "json string" | 'literal'
 filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
 ```
 
-One write verb per store, one read verb for all: `set` and `no` write the configuration, `copy`,
-`no save` and `erase` the archive, `title` the conversation, `import` the conversations, and `show`
-reads every one of them.
+One verb per gesture: `set` and `no` write a line of the configuration, `copy` a configuration
+whole, `erase` removes a configuration or conversations whole, `title` writes the conversation,
+`import` adds conversations, and `show` reads every one of them.
 
 Every line stands alone, a key named whole, so the CLI has no mode to enter or leave and no line
 depends on another. An output by group writes each header as a note before its lines, so a whole
@@ -134,16 +134,15 @@ Every line an output writes is one of four: a command, which pastes back as it i
 lists what it reads. The CLI writes its words as they are, in lower case, keys and values verbatim,
 and the page writes its prose with a capital.
 
-| Module      | Keys                                                                                                |
-| ----------- | --------------------------------------------------------------------------------------------------- |
-| `chat`      | `model`, `system`, both guarded                                                                     |
-| `display`   | `thinking`, `tools`, `render <thinking or reply>`                                                   |
-| `endpoints` | `url <name>` and `headers <name>` guarded, `protocol <name>`, `key <name>` secret, `timeout <name>` |
-| `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>`                    |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                |
-| `privilege` | `level <module>` guarded, every change asking                                                       |
-| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>` guarded                               |
-| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                                       |
+| Module      | Keys                                                                                             |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| `chat`      | `model`, `system`                                                                                |
+| `display`   | `thinking`, `tools`, `render <thinking or reply>`                                                |
+| `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `headers <name>`, `timeout <name>` |
+| `mcp`       | `url <name>` guarded, `key <name>` secret, `headers <name>`, `timeout <name>`                    |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                             |
+| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                    |
+| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                                    |
 
 ### Laws
 
@@ -173,17 +172,16 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
   the turn that asked it.
 - A value resolves from what the session sets, over `kiss.conf`, over the default of its key;
-  `reset` drops what the session sets, a copy to `running-config` puts back the configuration it
-  names. `kiss.conf` applies whole or not at all, like a batch.
+  `erase running-config` drops what the session sets, a copy to `running-config` puts back the
+  configuration it names. `kiss.conf` applies whole or not at all, like a batch.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
 - On an item holding a secret, the model changes every key but the url: a secret goes to a URL the user
   or the site chose, never to one the model chose.
-- The model changes a guarded key only as far as the privilege of its module goes, whatever
-  command spells the change: `deny` refuses, `ask` asks the user, `allow` lets it; closing never
-  asks, and a change of `privilege` asks every time.
-- A question offers always only when it gives something, and says what.
+- The model opens a way out only once the user agrees, every time, whatever command spells the
+  change: a url given a value, a tool opened; closing never asks.
+- A question offers always only for a call, and says what it gives.
 - The thinking and the reply render as Markdown unless set `plain`; `render` takes these two
   blocks only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
@@ -199,8 +197,10 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   configuration: no save keeps it, no `copy` moves it.
 - A conversation takes its title from its first message; one the CLI opened has none until then,
   and reads `CLI` where a title would: its title is a name, never a line typed.
-- `delete` deletes nothing before the user confirms it, whoever asks, then every conversation it
-  names in one write; `delete all` keeps the pinned ones, which go only when named.
+- `erase` removes nothing before the user confirms it, whoever asks; a word naming a configuration
+  names no conversation; every conversation it names goes in one write, `erase all` keeping the
+  pinned ones, which go only when named. The model writes a configuration but the running-config
+  once the user confirms it too.
 - The page starts with the startup-config over `kiss.conf`: a copy to `startup-config` writes it and
   `erase startup-config` empties it, a save never touches it; the archive changes only once the
   browser stores it.
@@ -213,7 +213,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuses the line with its error. `chat model` names an endpoint of the configuration, the model
   left to the endpoint. A model names an endpoint, and holds no parameter its protocol never sends.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
-  known items only, `privilege level`, `display render`, and a copy says so; a line naming one
+  known items only, `display render`, `tools use`, and a copy says so; a line naming one
   fails.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
   every endpoint lists at once, one that fails beside the others.
@@ -222,12 +222,11 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   once, by its name.
 - The keys of `style` are the tokens of the page of a value of their own, the model free on them; a
   token derived from others is no key. The sheets of `style` apply by name over every style and
-  every token of the page, whatever their selectors, and the model writes one only as far as its
-  privilege lets it: a selector reaches anything the thread shows.
+  every token of the page, whatever their selectors.
 - The page reads every size of text floored, so no size hides what the thread shows.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>` alone
   when the source fails: `show models` by endpoint, `show tools` by who serves it, `show css` by
-  component; a listing from one source, `show privilege`, reads at the margin.
+  component; a listing from one source, `show display`, reads at the margin.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
   next round on.
 - A turn keeps, on the page and in the browser, what settled: what streamed, the calls that ended
@@ -273,10 +272,9 @@ A fix follows an arrow: `no endpoint yet -> /set endpoints url <name> <url>`.
 ## Consent
 
 The question shows in the conversation, in a card marked by the accent: the change the model asks
-for, or the call with its real arguments, with Once, Always and Refuse, and what Always gives,
-`Always allows chat` or `Always turns echo on`; a change of privilege alone takes Once and Refuse
-only. A secret takes a masked field with OK and Cancel, an export Save or Cancel, an import Choose
-file or Cancel, a delete OK or Cancel; Enter and Escape answer too, never alone. One question shows
+for, with Once and Refuse, or the call with its real arguments, with Once, Always and Refuse, and
+what Always gives, `Always turns echo on`. A secret takes a masked field with OK and Cancel, an
+export Save or Cancel, an import Choose file or Cancel, an erase or a copy OK or Cancel; Enter and Escape answer too, never alone. One question shows
 at a time, in the order they come, whatever the conversation open: one from another conversation
 names it, as it holds every batch until answered. The Stop of a conversation answers no to its own
 questions. While a question stands the style tokens and sheets hold off, so nothing restyles, hides
@@ -285,9 +283,6 @@ code, and a block rendered plain; the cards, the commands and the errors read in
 page.
 
 ```
-show privilege                           ! every guarded module and how far the model goes
-set privilege level chat allow           ! the model picks its model and prompt freely
-set privilege level endpoints deny       ! it never changes an endpoint
 set tools use bash_tool consent          ! each call asks, until always
 set mcp key sandbox                      ! no value: a masked field asks for it
 ```
@@ -438,8 +433,9 @@ export 3f2a                              ! another, by a prefix of its id
 export running-config                    ! a configuration, secrets included
 export all
 import
-delete 3f2a                              ! once the user confirms it
-delete all                               ! all but the pinned ones
+erase 3f2a                               ! once the user confirms it
+erase all                                ! all but the pinned ones
+erase work                               ! a save
 ```
 
 One file format holds one conversation or many, marked `kiss`, every branch, every id and every pin

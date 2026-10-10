@@ -72,7 +72,8 @@ function check(def: Key, raw: string): Value {
 function audit(key: string, def: Key): string | null {
 	if (!key.split(' ').every((w) => WORD.test(w))) return `"${key}": bad key name`;
 	if (def.kind === 'enum' && !def.values?.length) return `${key}: enum without values`;
-	if (def.guard === 'opening' && def.kind !== 'enum') return `${key}: opening guard on no enum`;
+	if (def.guard && def.kind !== 'enum' && def.kind !== 'url')
+		return `${key}: guard on no url and no enum`;
 	for (const value of [def.default, ...Object.values(def.defaults ?? {})]) {
 		if (value === undefined) continue;
 		try {

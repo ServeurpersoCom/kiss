@@ -10,40 +10,26 @@ export type Value = string;
 
 export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret' | 'css';
 
-// what a change of a key by the model needs from the privilege of its module:
-// change, any change; opening, a change toward a later value of an enum whose
-// values go from the most closed to the most open
-export type Guard = 'change' | 'opening';
-
-// how far the model changes the guarded keys of a module: never, once the user
-// agrees, or freely
-export const LEVELS = ['deny', 'ask', 'allow'] as const;
-export type Level = (typeof LEVELS)[number];
-export const [DENY, ASK, ALLOW] = LEVELS;
-
 // what the user answers when the model asks for a change or a call: this time,
 // from now on, or not
 export const VERDICTS = ['once', 'always', 'refuse'] as const;
 export type Verdict = (typeof VERDICTS)[number];
 export const [ONCE, ALWAYS, REFUSE] = VERDICTS;
 
-// what an answer of always does to a request, none when it grants nothing,
-// and the answers the request takes
+// what an answer of always does to a request, none for a change, which asks
+// every time, and the answers the request takes
 export function always(request: Grant): string | null {
-	if (request.kind === 'call') return `turns ${request.tool} on`;
-	return request.allows.length ? `allows ${request.allows.join(', ')}` : null;
+	return request.kind === 'call' ? `turns ${request.tool} on` : null;
 }
 
 export function answers(request: Grant): readonly Verdict[] {
 	return always(request) ? VERDICTS : VERDICTS.filter((v) => v !== ALWAYS);
 }
 
-// what the model asks the user to let it do: the lines of a change with the
-// modules an answer of always allows, none for a change of privilege alone, or
-// a call of a tool with its arguments
+// what the model asks the user to let it do: the lines of a change, or a call
+// of a tool with its arguments
 export type Grant =
-	| { kind: 'change'; lines: string[]; allows: string[] }
-	| { kind: 'call'; tool: string; args: string };
+	{ kind: 'change'; lines: string[] } | { kind: 'call'; tool: string; args: string };
 
 export interface Key {
 	kind: Kind;
@@ -64,7 +50,10 @@ export interface Key {
 	// the only items it takes, when they are known: a line naming another
 	// fails, a value stored under another is dropped as an unknown key is
 	names?(modules: readonly Module[]): readonly string[];
-	guard?: Guard;
+	// a way out of the page, which the model opens only once the user agrees,
+	// every time: a url given a value, an enum moved toward its more open
+	// values, which go from the most closed to the most open
+	guard?: true;
 }
 
 // a module owns the keys spelled after its name: "chat" owns "chat model";

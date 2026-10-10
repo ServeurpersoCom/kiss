@@ -13,8 +13,6 @@ export const STARTUP_STORAGE_KEY = 'kiss.startup';
 export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
 // between the endpoint and the model id in the name of a model: prod/qwen3:8b
 export const MODEL_SEPARATOR = '/';
-// the module holding how far the model changes each module
-export const PRIVILEGE = 'privilege';
 // the configuration the page runs, and the one it starts with, as IOS names
 // them; neither is a save name
 export const RUNNING_CONFIG = 'running-config';

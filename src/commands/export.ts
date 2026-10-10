@@ -12,7 +12,7 @@ import {
 	fileName,
 	localTime
 } from '../lib/config.js';
-import { values } from './copy.js';
+import { named, values } from './copy.js';
 import { running } from './show-running.js';
 import { written } from './show-startup.js';
 
@@ -30,7 +30,7 @@ interface File {
 // a configuration with its secrets, as import reads it and a site serves it:
 // the running-config as show running-config lists it, the startup-config or
 // a save as the archive keeps it
-function configured(ctx: Context, config: string, minute: string): File {
+function configFile(ctx: Context, config: string, minute: string): File {
 	const lines =
 		config === RUNNING_CONFIG ? running(ctx, true) : written(ctx, values(ctx, config), true);
 	const name = fileName(`${config} ${minute}`, CONFIG_EXTENSION);
@@ -72,11 +72,7 @@ export default {
 		if (!ctx.offer) throw new Error('nobody is here to save the file');
 		const minute = localTime(Date.now());
 		const config = plan !== null && plan !== ALL ? plan.word : '';
-		const named =
-			config === RUNNING_CONFIG ||
-			config === STARTUP_CONFIG ||
-			ctx.archive.list().some((s) => s.name === config);
-		const file = named ? configured(ctx, config, minute) : packed(ctx, plan, minute);
+		const file = named(ctx, config) ? configFile(ctx, config, minute) : packed(ctx, plan, minute);
 		const saved = await ctx.offer(file.name, file.text);
 		ctx.signal?.throwIfAborted();
 		if (!saved) throw new Error('the user saved no file');

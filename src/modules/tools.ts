@@ -19,7 +19,7 @@ export default {
 			default: CONSENT,
 			defaults: Object.fromEntries(tools.map((t) => [t.name, ON])),
 			named: true,
-			guard: 'opening'
+			guard: true
 		},
 		// the argument a call of the tool shows folded; unset, its first one
 		preview: { kind: 'string', named: true }

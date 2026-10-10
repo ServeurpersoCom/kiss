@@ -5,12 +5,12 @@ import { rules } from '../lib/remote.js';
 export default {
 	name: 'endpoints',
 	keys: {
-		url: { kind: 'url', named: true, guard: 'change' },
+		url: { kind: 'url', named: true, guard: true },
 		// how the endpoint speaks, a file of protocols/ by its name
 		protocol: { kind: 'enum', values: PROTOCOLS, default: DEFAULT_PROTOCOL, named: true },
 		key: { kind: 'secret', named: true },
 		// sent with every request, Name: value pairs split by ;
-		headers: { kind: 'string', named: true, guard: 'change' },
+		headers: { kind: 'string', named: true },
 		// seconds the endpoint has to start answering: a model list, the start of
 		// a reply, which then streams until it ends or the turn stops
 		timeout: { kind: 'number', min: 0.1, default: '120', named: true }
