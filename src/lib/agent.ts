@@ -46,24 +46,30 @@ async function allowed(ctx: ToolContext, c: Call): Promise<boolean> {
 	return verdict !== REFUSE;
 }
 
+// the arguments of a call as an object, none when they read as anything else
+function object(text: string): Record<string, unknown> | null {
+	try {
+		const value: unknown = text ? JSON.parse(text) : {};
+		return value && typeof value === 'object' && !Array.isArray(value)
+			? (value as Record<string, unknown>)
+			: null;
+	} catch {
+		return null;
+	}
+}
+
 // runs one call and writes its outcome into it; a call takes its arguments as
 // its tool keeps them, and is stored as sent before it reaches its tool, so a
 // stop or a page closed while it runs leaves it stopped, whatever the tool
 // answers
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
 	const tool = tools.find((t) => t.name === c.name);
-	if (!tool) {
-		c.result = `unknown tool "${c.name}"`;
-		c.ok = false;
-		return;
-	}
-	let args: Record<string, unknown>;
-	try {
-		args = c.args ? JSON.parse(c.args) : {};
-	} catch {
-		// what does not read cannot be masked, so none of it is kept
+	const args = object(c.args);
+	if (!tool || !args) {
+		// what no tool reads, or what does not read, cannot be masked, so none
+		// of it is kept
 		c.args = '{}';
-		c.result = 'the arguments are not JSON';
+		c.result = tool ? 'the arguments are not a JSON object' : `unknown tool "${c.name}"`;
 		c.ok = false;
 		return;
 	}

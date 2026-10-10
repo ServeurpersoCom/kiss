@@ -216,17 +216,23 @@ describe('a turn', () => {
 		expect(p.engine.settings.get('display thinking')).toBe('closed');
 	});
 
-	it('stores no secret the model writes, from before its call is sent, even in arguments that do not read', async () => {
-		const broken = { name: 'config', arguments: '{"lines":"set endpoints key m sk-broken' };
+	it('stores no secret the model writes, from before its call is sent, even in arguments that read as no object', async () => {
+		const config = (id: string, args: string) => ({
+			tool_calls: [{ index: 0, id, function: { name: 'config', arguments: args } }]
+		});
 		const p = await page([
 			stream([calls(['a', 'set endpoints key m sk-model'])]),
-			stream([{ tool_calls: [{ index: 0, id: 'b', function: broken }] }]),
+			stream([config('b', '{"lines":"set endpoints key m sk-broken')]),
+			stream([
+				config('c', JSON.stringify(JSON.stringify({ lines: 'set endpoints key m sk-dbl' })))
+			]),
 			stream([{ content: 'done' }])
 		]);
 		await p.go();
 		expect(p.kept.rounds[0].calls[0].args).toBe('{"lines":"set endpoints key m <removed>"}');
-		expect(p.reply.rounds[1].calls[0]).toMatchObject({ args: '{}', ok: false });
-		expect(JSON.stringify(p.reply.rounds)).not.toMatch(/sk-model|sk-broken/);
+		for (const r of [1, 2])
+			expect(p.reply.rounds[r].calls[0]).toMatchObject({ args: '{}', ok: false });
+		expect(JSON.stringify(p.reply.rounds)).not.toMatch(/sk-model|sk-broken|sk-dbl/);
 	});
 
 	it('settles, even mid stream, to what streamed and the calls that ran', async () => {
