@@ -41,10 +41,12 @@
 		send(line);
 	}
 
+	// on a CLI line Tab completes, and keeps the keyboard in the field when
+	// nothing is left to complete; elsewhere it moves the focus as usual
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Tab' && hints.length) {
+		if (e.key === 'Tab' && !e.shiftKey && text.startsWith(SLASH)) {
 			e.preventDefault();
-			take(hints);
+			if (hints.length) take(hints);
 			return;
 		}
 		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
