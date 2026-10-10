@@ -73,11 +73,10 @@ export function tokenize(line: string): string[] {
 	return tokens;
 }
 
-// splits a line on the pipes standing outside quotes: the command, then filters
-export function splitPipes(line: string): string[] {
-	const parts: string[] = [];
+// splits a line at its first pipe outside quotes, as IOS does: the command,
+// then the filter, the rest of the line as written, pipes included
+export function splitFilter(line: string): [string, string | undefined] {
 	let quote = '';
-	let start = 0;
 	for (let i = 0; i < line.length; i++) {
 		const c = line[i];
 		if (quote) {
@@ -86,10 +85,8 @@ export function splitPipes(line: string): string[] {
 		} else if (c === '"' || c === "'") {
 			quote = c;
 		} else if (c === PIPE) {
-			parts.push(line.slice(start, i).trim());
-			start = i + 1;
+			return [line.slice(0, i).trim(), line.slice(i + 1)];
 		}
 	}
-	parts.push(line.slice(start).trim());
-	return parts;
+	return [line.trim(), undefined];
 }

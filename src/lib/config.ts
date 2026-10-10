@@ -40,7 +40,6 @@ export const REMOVED = '<removed>';
 // optional file next to the page: set lines that become the defaults of a site
 export const SITE_CONFIG_URL = 'kiss.conf';
 export const PIPE = '|';
-export const OUTPUT_MAX_LINES = 200;
 // a word this many edits away from a candidate per three letters is a typo
 export const TYPO_LETTERS_PER_EDIT = 3;
 

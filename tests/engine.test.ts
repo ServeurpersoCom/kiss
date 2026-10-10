@@ -221,6 +221,28 @@ describe('a secret', () => {
 	});
 });
 
+describe('a filter', () => {
+	it('takes the rest of the line as its pattern, as IOS does, and the output comes whole', async () => {
+		const k = await page();
+		const urls = Array.from({ length: 250 }, (_, i) => `set endpoints url e${i} http://e/v1`);
+		await k.run(urls.join('\n'), 'user');
+		const all = (await k.run('show running-config', 'llm')).text.split('\n');
+		expect(all).toHaveLength(250);
+		const run = async (filter: string) =>
+			(await k.run(`show running-config | ${filter}`, 'llm')).text;
+		expect(await run('include url e(7|42) http')).toBe(
+			'set endpoints url e42 http://e/v1\nset endpoints url e7 http://e/v1'
+		);
+		expect(await run('inc url e7 | x')).toBe('set endpoints url e7 http://e/v1');
+		expect(await run('count')).toBe('250');
+		expect(await run('begin url E99 ')).toBe('set endpoints url e99 http://e/v1');
+		expect(await run('exclude url e[0-9]+ ')).toBe('! no line matches');
+		expect(await run('include (')).toBe('% "(" is not a pattern');
+		expect(await run('count x')).toBe('% count takes no pattern: x');
+		expect(await run('sort')).toContain('% unknown filter "sort"');
+	});
+});
+
 describe('show running-config', () => {
 	it('reads back to the same values', async () => {
 		const k = await page();

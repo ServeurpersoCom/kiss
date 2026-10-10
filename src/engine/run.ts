@@ -1,7 +1,7 @@
 import type { ConfigReader, Context, Key, Outcome, Role, Scope, Value } from '../lib/types.js';
 import { Incomplete, REFUSE } from '../lib/types.js';
-import { ERROR_PREFIX, OUTPUT_MAX_LINES, REMOVED, beyond, comment } from '../lib/config.js';
-import { splitLines, splitPipes, tokenize } from './parse.js';
+import { ERROR_PREFIX, REMOVED, beyond, comment } from '../lib/config.js';
+import { splitFilter, splitLines, tokenize } from './parse.js';
 import { compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
 import { KeySchema, stored } from './schema.js';
@@ -22,29 +22,20 @@ const QUOTE = /["']/;
 // the running configuration, read only, for the rest of the page
 export const settings: ConfigReader = running;
 
-// the model reads at most OUTPUT_MAX_LINES lines of one command, so a long
-// listing never floods its context
-function budget(text: string): string {
-	const lines = text.split('\n');
-	if (lines.length <= OUTPUT_MAX_LINES) return text;
-	const more = lines.length - OUTPUT_MAX_LINES;
-	const note = comment(`${more} more lines, narrow with | include`);
-	return [...lines.slice(0, OUTPUT_MAX_LINES), note].join('\n');
-}
-
-// one compiled line: what runs on the draft, then the filters of its output
+// one compiled line: what runs on the draft, then the filter of its output, if
+// any
 interface Step {
 	run(ctx: Context): Promise<string> | string;
-	filters: ((text: string) => string)[];
+	filter?: (text: string) => string;
 }
 
 // a line as the schema alone reads it: the command and the plan of its
-// arguments, rights checked, filters compiled; a lone line that stops short
+// arguments, rights checked, its filter compiled; a lone line that stops short
 // lists what may follow it instead
 function compile(ctx: Context, text: string, alone: boolean): Step {
-	const [head, ...pipes] = splitPipes(text);
+	const [head, spec] = splitFilter(text);
 	const words = tokenize(head);
-	const filters = pipes.map(compileFilter);
+	const filter = spec === undefined ? undefined : compileFilter(spec);
 	try {
 		const { command, args } = resolve(words);
 		const path = command.path.join(' ');
@@ -56,12 +47,12 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 			throw beyond([path], args);
 		}
 		const plan = command.parse?.(schema, args);
-		return { run: (c) => command.run(c, plan), filters };
+		return { run: (c) => command.run(c, plan), filter };
 	} catch (e) {
 		if (!(e instanceof Incomplete)) throw e;
 		const next = complete(ctx, words, '');
 		if (!alone) throw new Error(`"${head}" misses words, it may go on with: ${next.join(' ')}`);
-		return { run: () => next.join('\n'), filters };
+		return { run: () => next.join('\n'), filter };
 	}
 }
 
@@ -169,7 +160,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
 			}
 			signal?.throwIfAborted();
-			for (const f of step.filters) text = f(text);
+			if (step.filter) text = step.filter(text);
 			if (text) out.push(text);
 		}
 		return out.join('\n');
@@ -198,9 +189,8 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 			return fail(i, (e as Error).message);
 		}
 		signal?.throwIfAborted();
-		for (const f of step.filters) text = f(text);
-		if (step.filters.length && !text) text = comment('no line matches');
-		if (text) out.push(role === 'llm' ? budget(text) : text);
+		if (step.filter) text = step.filter(text) || comment('no line matches');
+		if (text) out.push(text);
 	}
 	const broken: string[] = [];
 	for (const m of modules) {
@@ -274,7 +264,7 @@ export function redact(text: string): string {
 		.map((l) => {
 			let words: string[];
 			try {
-				words = tokenize(splitPipes(l)[0]);
+				words = tokenize(splitFilter(l)[0]);
 			} catch {
 				return l.split(QUOTE)[0] + REMOVED;
 			}

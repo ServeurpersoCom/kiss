@@ -42,7 +42,7 @@ schema before anything runs.
 One batch runs at a time, whoever sends it: the user or the model.
 
 1. Every line compiles before the first one runs: the command resolves, its rights and whether it
-   runs alone are checked, its arguments parse against the schema, its filters compile.
+   runs alone are checked, its arguments parse against the schema, its filter compiles.
 2. The lines run in order on a draft: a copy of the running configuration and of the title of the
    conversation the batch was sent in.
 3. The rules of every module hold on the draft.
@@ -101,7 +101,7 @@ The user types it after a `/`, and the model sends it through its tool.
 
 ```
 batch   = line { newline line }              a line opening with ! is a comment
-line    = command { "|" filter }
+line    = command [ "|" filter ]
 command = "set" key [ value ]                a secret left out is asked
         | "no" key [ value ] | "no" module item  a value is left as IOS does
         | "show" module [ word [ item ] ] | "show" module item
@@ -120,6 +120,7 @@ config  = "running-config" | "startup-config" | save   either by any prefix: run
 save    = name                               a save of the same name gives way
 value   = bare | "json string" | 'literal'
 filter  = ( "include" | "exclude" | "begin" ) pattern | "count"
+pattern = the rest of the line as written    a case blind regular expression, | included
 ```
 
 One verb per gesture: `set` and `no` write a line of the configuration, `copy` a configuration
@@ -149,6 +150,9 @@ and the page writes its prose with a capital.
 
 Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 
+- A line takes one filter, after its first pipe outside quotes, as IOS does: the pattern is the rest
+  of the line as written, so `| include ^set (tools|style)` reads whole; an output comes whole, as
+  long as it is, the filter narrowing it.
 - A command, module, key or filter word may be any prefix that names one word only; right after
   `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between `diff`
   and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
