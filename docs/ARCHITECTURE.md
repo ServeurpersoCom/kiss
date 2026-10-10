@@ -297,8 +297,10 @@ Escape answer too, never alone. One question shows at a time, in the order they 
 conversation open: one from another conversation names it, as it holds every batch until answered.
 The Stop of a conversation answers no to its own questions. While a question stands the style tokens
 and sheets hold off, so nothing restyles, hides or covers the card. Monospace is for what a machine
-wrote: the calls of tools and their outputs, code, and a block rendered plain; the cards, the
-commands and the errors read in the font of the page.
+wrote: the calls of tools and their outputs, the commands of the CLI and their outputs, the lines
+and the arguments a card shows, code, and a block rendered plain, so a `-` and a `+` line up; the
+heads of the cards and of the commands, the answers and the error of a turn read in the font of the
+page.
 
 ```
 set tools use bash_tool consent          ! each call asks, until always

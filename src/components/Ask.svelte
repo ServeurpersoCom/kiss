@@ -126,11 +126,14 @@
 	.note {
 		color: var(--fg-dim);
 	}
+	/* the lines of a change or the arguments of a call, as the machine wrote
+	   them, in monospace so a - and a + line up */
 	pre {
 		margin: 0;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 		font: inherit;
+		font-family: var(--mono);
 	}
 	.answers {
 		display: flex;

@@ -233,10 +233,12 @@
 		align-items: center;
 		padding: 0.4rem 0.6rem 0 1rem;
 	}
+	/* the command and its output in monospace, as a terminal shows them */
 	.command pre {
 		margin: 0;
 		padding: 0.5rem 1rem 0.8rem;
 		font: inherit;
+		font-family: var(--mono);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
