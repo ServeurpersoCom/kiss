@@ -1,6 +1,6 @@
 import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } from './types.js';
 import { ALWAYS, REFUSE } from './types.js';
-import { chat, pick } from './api.js';
+import { chat, describe, pick } from './api.js';
 import { aggregate, connecting } from './mcp.js';
 import prompts from './prompts.json';
 import { settled } from './conversation.js';
@@ -66,7 +66,8 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 }
 
 // what one round sends and may call, read from the running configuration as
-// it stands: the model, its parameters, the system prompt, and the own tools
+// it stands: the model, its parameters, what its endpoint lists of it when
+// the protocol reads it, the system prompt, and the own tools
 // of KiSS then those of every MCP server, the same from round to round while
 // the configuration and the servers stay; a server down sits out the turn, and
 // the pulse names the servers the round waits for; told gathers what the
@@ -96,7 +97,8 @@ async function setup(
 	const system = [prompt, told.length ? [prompts.problems, ...told].join('\n') : '']
 		.filter((part) => part)
 		.join('\n\n');
-	const request: Request = { model, system, messages, tools, parameters };
+	const info = endpoint.protocol.described ? await describe(endpoint, model, signal) : undefined;
+	const request: Request = { model, system, messages, tools, parameters, info };
 	return { endpoint, request, tools };
 }
 

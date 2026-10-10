@@ -1,5 +1,6 @@
 import type { Module } from '../lib/types.js';
 import { EndpointError, endpoints, listModels, pick } from '../lib/api.js';
+import { MODEL_SEPARATOR, SLASH } from '../lib/config.js';
 
 export default {
 	name: 'chat',
@@ -8,6 +9,16 @@ export default {
 		model: { kind: 'string', default: '', guard: 'change' },
 		// sent first in every request, none when empty
 		system: { kind: 'string', default: '', guard: 'change' }
+	},
+	// a model set names an endpoint of the configuration, the model itself
+	// left to the endpoint
+	validate(config) {
+		const value = String(config.get('chat model') ?? '');
+		if (!value) return null;
+		const named = endpoints(config).some((e) => value.startsWith(e.name + MODEL_SEPARATOR));
+		return named
+			? null
+			: `chat model ${value} names no endpoint -> ${SLASH}show models lists every endpoint/model`;
 	},
 	// the model a turn would talk to is served; a page without an endpoint has
 	// no chat to check, and an endpoint that fails is the warning of endpoints

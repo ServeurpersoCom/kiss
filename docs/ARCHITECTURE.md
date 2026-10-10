@@ -137,7 +137,7 @@ and the page writes its prose with a capital.
 | ----------- | --------------------------------------------------------------------------------------------------- |
 | `chat`      | `model`, `system`, both guarded                                                                     |
 | `display`   | `thinking`, `tools`, `render <thinking or reply>`                                                   |
-| `endpoints` | `url <name>`, `protocol <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
+| `endpoints` | `url <name>` and `headers <name>` guarded, `protocol <name>`, `key <name>` secret, `timeout <name>` |
 | `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>`                    |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                |
 | `privilege` | `level <module>` guarded, every change asking                                                       |
@@ -203,6 +203,14 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The page starts with the startup-config over `kiss.conf`: a copy to `startup-config` writes it and
   `erase startup-config` empties it, a save never touches it; the archive changes only once the
   browser stores it.
+- Every line `show running-config` writes pastes back after `no`, whatever value follows its key,
+  and removes only itself, unless a rule of its module says why it stays: a model still names the
+  endpoint it would remove.
+- A line names only an item its module may hold: one the configuration holds, or one its source
+  serves, a model its endpoint lists, a tool KiSS or an MCP server serves, the source read from the
+  draft for the user and from the configuration as it applies for the model; a source that fails
+  refuses the line with its error. `chat model` names an endpoint of the configuration, the model
+  left to the endpoint. A model names an endpoint, and holds no parameter its protocol never sends.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
   known items only, `privilege level`, `display render`, and a copy says so; a line naming one
   fails.
@@ -306,8 +314,8 @@ thinking block, an encrypted reasoning item, and sends it back to that protocol 
   Hugging Face, the key as a bearer token.
 - `messages`: the Messages API of Anthropic, the key in `x-api-key` with the headers a page needs,
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
-  tool streaming its arguments. It needs `models max_tokens` set; `min_p`, the penalties and `seed`
-  never go, and a copy says so of a model that sets them.
+  tool streaming its arguments. The list of the endpoint gives the most tokens the model writes and
+  whether it thinks, `models max_tokens` over it; `min_p`, the penalties and `seed` never go.
 - `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
   nothing stored on the server, the key as a bearer token, the system prompt as its instructions,
   the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
@@ -317,13 +325,15 @@ thinking block, an encrypted reasoning item, and sends it back to that protocol 
 ```
 set endpoints url claude https://api.anthropic.com/v1
 set endpoints protocol claude messages
-set models max_tokens claude/claude-opus-5-5 32000
+set chat model claude/claude-opus-5-5
 set endpoints url openai https://api.openai.com/v1
 set endpoints protocol openai responses
 ```
 
-Every MCP server sends its key as a bearer token. Every endpoint and every MCP server sends the
-headers it is given besides, `Name: value` pairs split by `;`, to it alone.
+The Claude API speaks `chat` too, once the headers of its endpoint name the page,
+`anthropic-dangerous-direct-browser-access: true`, and give `anthropic-version: 2023-06-01`, which
+its list needs. Every MCP server sends its key as a bearer token. Every endpoint and every MCP
+server sends the headers it is given besides, `Name: value` pairs split by `;`, to it alone.
 
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 

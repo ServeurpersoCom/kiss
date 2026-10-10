@@ -36,6 +36,8 @@ function history(messages: readonly Message[]): object[] {
 export default {
 	name: 'chat',
 	path: '/chat/completions',
+	models: '/models',
+	described: false,
 	auth: bearer,
 	drops: [],
 	// one system message, first, as every template takes it

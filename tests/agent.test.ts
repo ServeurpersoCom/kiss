@@ -49,22 +49,30 @@ function events(list: object[]): Reply {
 }
 
 // a page talking to a model that answers each request with the next reply,
-// configured by the lines given after its endpoint and model
-async function page(replies: Reply[], lines = '') {
+// configured by the lines given after its endpoint and model; the endpoint
+// lists the models given, x and y unless told otherwise
+async function page(replies: Reply[], lines = '', listed: object[] = [{ id: 'x' }, { id: 'y' }]) {
 	vi.resetModules();
-	const engine = await import('../src/engine/run.js');
-	engine.start();
-	await engine.run(`set endpoints url m http://m/v1\nset chat model m/x\n${lines}`, 'user');
 	const bodies: Body[] = [];
 	const requests: { url: string; headers: Record<string, string> }[] = [];
+	// the lists of models asked, by url
+	const lists: string[] = [];
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (url: string, init: RequestInit) => {
+			if (init.method !== 'POST') return (lists.push(url), Response.json({ data: listed }));
 			bodies.push(JSON.parse(String(init.body)));
 			requests.push({ url, headers: init.headers as Record<string, string> });
 			return replies.shift()!(init.signal!);
 		})
 	);
+	const engine = await import('../src/engine/run.js');
+	engine.start();
+	const set = await engine.run(
+		`set endpoints url m http://m/v1\nset chat model m/x\n${lines}`,
+		'user'
+	);
+	if (!set.ok) throw new Error(set.text);
 	const { turn } = await import('../src/lib/agent.js');
 	const { settled } = await import('../src/lib/conversation.js');
 	const stop = new AbortController();
@@ -87,6 +95,7 @@ async function page(replies: Reply[], lines = '') {
 		engine,
 		bodies,
 		requests,
+		lists,
 		stop,
 		tools,
 		reply,
@@ -280,7 +289,7 @@ describe('the messages protocol', () => {
 			[
 				answer([block(0, { type: 'text', text: '' }), delta(0, { type: 'text_delta', text: 'ok' })])
 			],
-			`${MESSAGES}\nset endpoints key m sk-a\nset chat system be brief\nset models seed m/x 7`
+			`${MESSAGES}\nset endpoints key m sk-a\nset chat system be brief`
 		);
 		await p.go();
 		expect(p.requests[0].url).toBe('http://m/v1/messages');
@@ -294,7 +303,6 @@ describe('the messages protocol', () => {
 			cache_control: { type: 'ephemeral' },
 			tools: [{ name: 'config', eager_input_streaming: true }]
 		});
-		expect(body).not.toHaveProperty('seed');
 		expect(p.reply.rounds[0].text).toBe('ok');
 	});
 
@@ -371,6 +379,29 @@ describe('the messages protocol', () => {
 		});
 	});
 
+	it('takes from the list of its endpoint the tokens a model may write, and whether it thinks', async () => {
+		const p = await page([answer([]), answer([])], 'set endpoints protocol m messages', [
+			{
+				id: 'x',
+				max_tokens: 64000,
+				capabilities: { thinking: { types: { adaptive: { supported: false } } } }
+			},
+			{
+				id: 'y',
+				max_tokens: 128000,
+				capabilities: { thinking: { types: { adaptive: { supported: true } } } }
+			}
+		]);
+		await p.go();
+		await p.engine.run('set chat model m/y\nset models max_tokens m/y 500', 'user');
+		await p.go();
+		const [x, y] = p.bodies as unknown as Record<string, unknown>[];
+		expect(x.max_tokens).toBe(64000);
+		expect(x).not.toHaveProperty('thinking');
+		expect(y).toMatchObject({ max_tokens: 500, thinking: { type: 'adaptive' } });
+		expect(p.lists).toContain('http://m/v1/models?limit=1000');
+	});
+
 	it('needs the tokens a reply may take', async () => {
 		const p = await page([], 'set endpoints protocol m messages');
 		await expect(p.go()).rejects.toThrow('messages needs models max_tokens');
@@ -399,7 +430,7 @@ describe('the responses protocol', () => {
 	it('sends the system as instructions, nothing stored, the summary of the reasoning asked, every tool as it is', async () => {
 		const p = await page(
 			[events([text('ok'), completed(1)])],
-			`${RESPONSES}\nset endpoints key m sk-a\nset chat system be brief\nset models max_tokens m/x 500\nset models reasoning_effort m/x high\nset models top_k m/x 3`
+			`${RESPONSES}\nset endpoints key m sk-a\nset chat system be brief\nset models max_tokens m/x 500\nset models reasoning_effort m/x high`
 		);
 		await p.go();
 		expect(p.requests[0].url).toBe('http://m/v1/responses');
@@ -413,7 +444,6 @@ describe('the responses protocol', () => {
 			store: false,
 			tools: [{ type: 'function', name: 'config', strict: false }]
 		});
-		expect(body).not.toHaveProperty('top_k');
 		expect(p.reply.rounds[0].text).toBe('ok');
 		expect(p.reply.stats).toMatchObject({ tokens: 1 });
 	});
@@ -475,7 +505,7 @@ describe('the responses protocol', () => {
 		expect(p.reply.stats).toMatchObject({ tokens: 10 });
 	});
 
-	it('sends no reasoning with a round that has nothing to follow it', async () => {
+	it('sends back every reasoning item a round kept, one with nothing after it too', async () => {
 		const p = await page([events([text('ok'), completed(1)])], RESPONSES);
 		const reply: Message = {
 			role: 'assistant',
@@ -493,6 +523,7 @@ describe('the responses protocol', () => {
 		await turn(history, { role: 'assistant', rounds: [] }, p.tools, p.stop.signal, pulse(0));
 		expect((p.bodies[0] as unknown as { input: object[] }).input).toEqual([
 			{ role: 'user', content: 'a' },
+			{ type: 'reasoning', id: 'rs' },
 			{ role: 'user', content: 'b' }
 		]);
 	});

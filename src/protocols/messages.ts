@@ -3,13 +3,16 @@ import { SLASH } from '../lib/config.js';
 
 // the Messages API of Anthropic: content blocks streamed by index, thinking
 // summarized and signed, sent back as it came; the prompt cached up to its
-// last block, the cache moving with the conversation
+// last block, the cache moving with the conversation; what the model lists of
+// itself sets the tokens it may write and whether it thinks
 
 const NAME = 'messages';
 const VERSION = '2023-06-01';
 // the parameters of models sent as they are named
 const CARRIED = ['temperature', 'top_p', 'top_k'] as const;
 const THINKING = { type: 'adaptive', display: 'summarized' };
+// the field of the list that holds the most tokens a model writes
+const MAX_TOKENS = 'max_tokens';
 const CACHE = { type: 'ephemeral' };
 
 type Block = Record<string, unknown>;
@@ -26,6 +29,14 @@ function input(args: string): object {
 	} catch {
 		return {};
 	}
+}
+
+// whether the model thinks as adaptive thinking asks, which it does unless
+// its list says otherwise
+function adaptive(info: Record<string, unknown> | undefined): boolean {
+	const capabilities = info?.capabilities as
+		{ thinking?: { types?: { adaptive?: { supported?: boolean } } } } | undefined;
+	return capabilities?.thinking?.types?.adaptive?.supported !== false;
 }
 
 // the history in blocks: cli messages stay out; every round of an assistant
@@ -66,6 +77,8 @@ function history(messages: readonly Message[]): Turn[] {
 export default {
 	name: NAME,
 	path: '/messages',
+	models: '/models?limit=1000',
+	described: true,
 	auth: (key) => ({
 		...(key ? { 'x-api-key': key } : {}),
 		'anthropic-version': VERSION,
@@ -74,16 +87,17 @@ export default {
 	drops: ['min_p', 'presence_penalty', 'frequency_penalty', 'seed'],
 	body(r) {
 		const p = r.parameters;
-		if (p.max_tokens === undefined) {
+		const max = p.max_tokens ?? r.info?.[MAX_TOKENS];
+		if (max === undefined || max === null) {
 			throw new Error(
 				`${NAME} needs models max_tokens -> ${SLASH}set models max_tokens <endpoint/model> <tokens>`
 			);
 		}
 		return {
 			model: r.model,
-			max_tokens: p.max_tokens,
+			max_tokens: max,
 			...Object.fromEntries(CARRIED.filter((k) => p[k] !== undefined).map((k) => [k, p[k]])),
-			thinking: THINKING,
+			...(adaptive(r.info) ? { thinking: THINKING } : {}),
 			...(p.reasoning_effort !== undefined
 				? { output_config: { effort: p.reasoning_effort } }
 				: {}),

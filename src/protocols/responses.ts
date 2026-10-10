@@ -15,9 +15,8 @@ const PARTS = '\n\n';
 type Item = Record<string, unknown>;
 
 // the history in items: cli messages stay out; every round of an assistant
-// turn becomes the reasoning its protocol kept when it is this one, which
-// always goes with what followed it, its text as one message in the phase it
-// came in, its calls, then their outputs
+// turn becomes the reasoning its protocol kept when it is this one, its text
+// as one message in the phase it came in, its calls, then their outputs
 function history(messages: readonly Message[]): Item[] {
 	return messages.flatMap((m): Item[] => {
 		if (m.role === 'user') return [{ role: 'user', content: m.text }];
@@ -25,9 +24,8 @@ function history(messages: readonly Message[]): Item[] {
 		return m.rounds.flatMap((r) => {
 			const kept = (r.opaque?.protocol === NAME ? r.opaque.items : []) as Item[];
 			const phase = kept.filter((i) => i.type === 'message').at(-1)?.phase;
-			const followed = !!(r.text || r.calls.length);
 			return [
-				...(followed ? kept.filter((i) => i.type === 'reasoning') : []),
+				...kept.filter((i) => i.type === 'reasoning'),
 				...(r.text ? [{ role: 'assistant', content: r.text, ...(phase ? { phase } : {}) }] : []),
 				...r.calls.map((c) => ({
 					type: 'function_call',
@@ -48,6 +46,8 @@ function history(messages: readonly Message[]): Item[] {
 export default {
 	name: NAME,
 	path: '/responses',
+	models: '/models',
+	described: false,
 	auth: bearer,
 	drops: ['top_k', 'min_p', 'presence_penalty', 'frequency_penalty', 'seed'],
 	body(r) {

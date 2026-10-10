@@ -373,12 +373,11 @@ describe('an MCP server', () => {
 		expect(told).toContain('mcp b: tool config left out, KiSS serves it');
 	});
 
-	it('lists every tool by who serves it, the settings set alone last', async () => {
-		const p = await page({ a: legacy(SHELL) }, []);
-		await p.engine.run(
-			'set mcp url a http://a/mcp\nset tools use snap off\nset tools preview old x',
-			'user'
-		);
+	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
+		const p = await page({ a: legacy(SHELL), b: legacy([{ name: 'old', run: text('old') }]) }, []);
+		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
+		await p.engine.run('set tools use snap off\nset tools preview old x', 'user');
+		await p.engine.run('no mcp b', 'user');
 		expect((await p.engine.run('show tools use', 'user')).text).toBe(
 			[
 				'! KiSS',

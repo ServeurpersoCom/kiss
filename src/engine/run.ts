@@ -15,6 +15,7 @@ import { KeySchema, stored } from './schema.js';
 import { Values } from './values.js';
 import { SaveArchive } from './archive.js';
 import { complete, partialWord } from './complete.js';
+import { didYouMean } from './near.js';
 
 const schema = new KeySchema(modules);
 // what the site configuration gives, below every save
@@ -69,6 +70,25 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 		if (!alone) throw new Error(`"${head}" misses words, it may go on with: ${next.join(' ')}`);
 		return { run: () => next.join('\n'), filters };
 	}
+}
+
+// an item a line names: one the draft already holds, or one its source
+// serves, the source read from the draft for the user, who chose every url in
+// it, and from the running configuration for the model, whose changes reach
+// nothing before they apply; a module that knows no items of its own takes
+// any name
+async function admit(ctx: Context, module: string, name: string): Promise<void> {
+	const m = ctx.modules.find((x) => x.name === module);
+	if (!m?.items || ctx.config.names(module).includes(name)) return;
+	const source = ctx.role === 'user' ? ctx.config : ctx.running;
+	const groups = await m.items({ ...ctx, running: source });
+	const known = groups.flatMap((g) => g.names);
+	if (known.includes(name)) return;
+	const failed = groups.filter((g) => g.error).map((g) => `${g.group}: ${g.error}`);
+	throw new Error(
+		`unknown ${module} "${name}"` +
+			(failed.length ? `, ${failed.join(', ')}` : didYouMean(name, known))
+	);
 }
 
 // the site configuration: set lines whose values sit between the defaults and
@@ -133,7 +153,8 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		archive,
 		schema,
 		modules,
-		commands: commands.filter((c) => c.roles.includes(role))
+		commands: commands.filter((c) => c.roles.includes(role)),
+		admit: (module, name) => admit(ctx, module, name)
 	};
 	// the lines of a file compile as lines among others, so none runs alone,
 	// then run on the draft; a line that fails names its place in the file
@@ -296,7 +317,8 @@ export function suggest(text: string, role: Role): string[] {
 		archive,
 		schema,
 		modules,
-		commands: commands.filter((c) => c.roles.includes(role))
+		commands: commands.filter((c) => c.roles.includes(role)),
+		admit: (module, name) => admit(ctx, module, name)
 	};
 	try {
 		const partial = partialWord(text);

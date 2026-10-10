@@ -252,6 +252,10 @@ export interface Context extends Scope {
 	// the lines of a file run as more lines of the batch, on the same draft,
 	// whole or not at all with it; their output
 	lines?(text: string): Promise<string>;
+	// throws unless an item a line names is one its module may hold: one the
+	// configuration already holds, or one its source serves, read from the
+	// configuration the role reaches; a source that fails says why
+	admit(module: string, name: string): Promise<void>;
 }
 
 // an image a tool hands back, base64 data, shown to the user only
@@ -357,14 +361,16 @@ export interface Tool {
 }
 
 // what one round asks of a model, whatever protocol carries it: the history
-// as the conversation keeps it, the tools offered, and the parameters set for
-// the model by their names in models, numbers as numbers
+// as the conversation keeps it, the tools offered, the parameters set for the
+// model by their names in models, numbers as numbers, and what the endpoint
+// lists of the model when its protocol reads it
 export interface Request {
 	model: string;
 	system: string;
 	messages: readonly Message[];
 	tools: readonly Tool[];
 	parameters: Record<string, string | number>;
+	info?: Record<string, unknown>;
 }
 
 // what one event of a stream adds to the round: its thinking, its text, the
@@ -382,13 +388,16 @@ export interface Delta {
 }
 
 // how an endpoint speaks: a file of protocols/, named as endpoints protocol
-// takes it; the path it posts a request to, the headers that carry the key,
-// the parameters of models it never sends, the body of a request, the event
-// that ends a stream, and a reader of one stream, which tells what the data of
-// each event adds, none for an event that adds nothing
+// takes it; the path it posts a request to, the path that lists its models
+// and whether a request reads what it lists of its model, the headers that
+// carry the key, the parameters of models it never sends, the body of a
+// request, the event that ends a stream, and a reader of one stream, which
+// tells what the data of each event adds, none for an event that adds nothing
 export interface Protocol {
 	name: string;
 	path: string;
+	models: string;
+	described: boolean;
 	auth(key: string): Record<string, string>;
 	drops: readonly string[];
 	body(request: Request): object;

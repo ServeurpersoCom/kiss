@@ -1,6 +1,6 @@
 import type { Module } from '../lib/types.js';
 import { endpoints, listModels } from '../lib/api.js';
-import { MODEL_SEPARATOR } from '../lib/config.js';
+import { MODEL_SEPARATOR, SLASH } from '../lib/config.js';
 
 // every setting of a model, the model named as the item endpoint/model as chat
 // model takes it: the parameters of an OpenAI compatible request under their
@@ -19,18 +19,19 @@ export default {
 		// as the template of the model reads it: low, medium, high or its own
 		reasoning_effort: { kind: 'string', named: true }
 	},
-	// a parameter set for a model whose endpoint speaks a protocol that never
-	// sends it is said once, the model left as set
-	async check(config) {
+	// every model is one of an endpoint, and none holds a parameter the
+	// protocol of its endpoint never sends
+	validate(config) {
 		const all = endpoints(config);
-		const unsent = config.names('models').flatMap((item) => {
+		for (const item of config.names('models')) {
 			const endpoint = all.find((e) => item.startsWith(e.name + MODEL_SEPARATOR));
-			if (!endpoint) return [];
-			return endpoint.protocol.drops
-				.filter((key) => config.get(`models ${key}`, item) !== undefined)
-				.map((key) => `models ${key} ${item} is not sent by ${endpoint.protocol.name}`);
-		});
-		return unsent.length ? unsent.join(', ') : null;
+			if (!endpoint) return `models ${item} names no endpoint -> ${SLASH}no models ${item}`;
+			const { name, drops } = endpoint.protocol;
+			const key = drops.find((k) => config.get(`models ${k}`, item) !== undefined);
+			if (key)
+				return `models ${key} ${item}: ${name} never sends it -> ${SLASH}no models ${key} ${item}`;
+		}
+		return null;
 	},
 	// the models of every endpoint at once, by endpoint
 	async items(ctx) {

@@ -1,7 +1,7 @@
 import type { Command } from '../lib/types.js';
-import { beyond } from '../lib/config.js';
 
-// no endpoints prod names an item of a collection, no chat model a key
+// no endpoints prod names an item of a collection, no chat model a key; a
+// key takes the line show running-config writes, whatever value follows it
 type Plan = { module: string; item: string } | { key: string; name?: string };
 
 export default {
@@ -15,8 +15,7 @@ export default {
 				return { module, item: args[1] };
 			}
 		}
-		const { key, name, rest } = schema.read(args);
-		if (rest.length) throw beyond(['no', key, ...(name ? [name] : [])], rest);
+		const { key, name } = schema.read(args);
 		return { key, name };
 	},
 	run(ctx, plan) {

@@ -349,15 +349,15 @@ describe('a tool', () => {
 	it('holds every setting of its own under its name, a dotted one too', async () => {
 		const k = await page();
 		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
-		const r = await k.run(
-			'set tools preview repo.search query\nset tools use repo.search off',
-			'user'
+		expect((await k.run('set tools use repo.search off', 'user')).text).toBe(
+			'% unknown tools "repo.search"'
 		);
+		const r = await k.run('set tools preview config query\nset tools use config off', 'user');
 		expect(r.ok).toBe(true);
-		expect((await k.run('show tools repo.search', 'user')).text).toBe(
-			'set tools preview repo.search query\nset tools use repo.search off'
+		expect((await k.run('show tools config', 'user')).text).toBe(
+			'set tools preview config query\nset tools use config off'
 		);
-		expect((await k.run('no tools repo.search', 'user')).ok).toBe(true);
+		expect((await k.run('no tools config', 'user')).ok).toBe(true);
 		expect(k.settings.get('tools preview', 'repo.search')).toBeUndefined();
 		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
 	});
@@ -408,7 +408,7 @@ function user(verdict: Verdict) {
 describe('the firewall', () => {
 	it('asks the user before the model changes a guarded key, whatever spells it', async () => {
 		const k = await page();
-		await k.run('set tools use t off\nset chat system mine', 'user');
+		await k.run('set tools use config off\nset chat system mine', 'user');
 		const once = user(ONCE);
 		expect((await k.run('set chat system theirs', 'llm', once)).ok).toBe(true);
 		expect(once.asked).toEqual([
@@ -420,25 +420,52 @@ describe('the firewall', () => {
 		]);
 		const refuse = user(REFUSE);
 		expect((await k.run('reset', 'llm', refuse)).text).toBe('% the user refused the change');
-		expect((await k.run('no tools t', 'llm', refuse)).text).toBe('% the user refused the change');
+		expect((await k.run('no tools config', 'llm', refuse)).text).toBe(
+			'% the user refused the change'
+		);
 		expect(refuse.asked.map((a) => a.kind === 'change' && a.lines)).toEqual([
 			[
 				'- set chat system theirs',
 				'+ set chat system ""',
-				'- set tools use t off',
-				'+ set tools use t consent'
+				'- set tools use config off',
+				'+ set tools use config on'
 			],
-			['- set tools use t off', '+ set tools use t consent']
+			['- set tools use config off', '+ set tools use config on']
 		]);
-		expect(k.settings.get('tools use', 't')).toBe('off');
+		expect(k.settings.get('tools use', 'config')).toBe('off');
+	});
+
+	it('checks an item the model names against the configuration as it applies, reaching no address it writes', async () => {
+		const k = await page();
+		const fetch = vi.fn(async () => models(['x']));
+		vi.stubGlobal('fetch', fetch);
+		const r = await k.run(
+			'set endpoints url z http://z/v1\nset models top_p z/x 0.5',
+			'llm',
+			user(ONCE)
+		);
+		expect(r.text).toContain('unknown models "z/x"');
+		expect(fetch.mock.calls.map(([url]) => String(url))).not.toContainEqual(
+			expect.stringContaining('http://z/')
+		);
+	});
+
+	it('lets the model choose how an endpoint speaks, never where it goes', async () => {
+		const k = await page();
+		await k.run('set endpoints url a http://a/v1', 'user');
+		const refuse = user(REFUSE);
+		expect((await k.run('set endpoints protocol a messages', 'llm', refuse)).ok).toBe(true);
+		expect(refuse.asked).toEqual([]);
+		expect((await k.run('set endpoints url a http://b/v1', 'llm', refuse)).ok).toBe(false);
+		expect(refuse.asked).toHaveLength(1);
 	});
 
 	it('never asks when the model closes', async () => {
 		const k = await page();
 		const refuse = user(REFUSE);
-		expect((await k.run('set tools use t off', 'llm', refuse)).ok).toBe(true);
+		expect((await k.run('set tools use config off', 'llm', refuse)).ok).toBe(true);
 		expect(refuse.asked).toEqual([]);
-		expect((await k.run('set tools use t consent', 'llm', refuse)).ok).toBe(false);
+		expect((await k.run('set tools use config consent', 'llm', refuse)).ok).toBe(false);
 	});
 
 	it('goes as far as the privilege of the module, a privilege changing on a yes every time', async () => {
@@ -499,6 +526,7 @@ describe('the firewall', () => {
 
 	it('takes always as the allow privilege of the modules asked', async () => {
 		const k = await page();
+		await k.run('set endpoints url a http://a/v1', 'user');
 		expect((await k.run('set chat model a/b', 'llm', user(ALWAYS))).text).toBe(
 			[
 				'- set chat model ""',
@@ -749,6 +777,11 @@ describe('the archive', () => {
 describe('a model', () => {
 	it('takes the name a server gives it, and numbers within their bounds', async () => {
 		const k = await page();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => models(['org/m:tag']))
+		);
+		await k.run('set endpoints url hf http://hf/v1', 'user');
 		expect((await k.run('set models temperature hf/org/m:tag 0.70', 'user')).ok).toBe(true);
 		expect(k.settings.get('models temperature', 'hf/org/m:tag')).toBe('0.7');
 		expect((await k.run('set models top_p a/b 2', 'user')).text).toContain('"2" is above 1');
@@ -785,21 +818,21 @@ describe('a copy', () => {
 		expect(warnings[0]).toMatch(/^! endpoints a: .* version required, endpoints b: /);
 	});
 
-	it('warns of a parameter the protocol of its endpoint never sends, the parameter kept', async () => {
+	it('refuses a parameter the protocol of its endpoint never sends, a protocol that leaves one too', async () => {
 		const k = await page();
 		vi.stubGlobal(
 			'fetch',
 			vi.fn(async () => models(['x']))
 		);
-		await k.run(
-			'set endpoints url a http://a/v1\nset endpoints protocol a messages\nset chat model a/x',
-			'user'
+		await k.run('set endpoints url a http://a/v1\nset endpoints protocol a messages', 'user');
+		expect((await k.run('set models seed a/x 7', 'user')).text).toBe(
+			'% models: models seed a/x: messages never sends it -> /no models seed a/x'
 		);
-		await k.run('set models seed a/x 7\nset models temperature a/x 0.5', 'user');
-		expect((await k.run('copy running-config b', 'user')).text).toBe(
-			'! copied running-config to b\n! models seed a/x is not sent by messages'
+		await k.run('set endpoints protocol a chat\nset models seed a/x 7', 'user');
+		expect((await k.run('set endpoints protocol a messages', 'user')).ok).toBe(false);
+		expect((await k.run('no models seed a/x\nset endpoints protocol a messages', 'user')).ok).toBe(
+			true
 		);
-		expect(k.settings.get('models seed', 'a/x')).toBe('7');
 	});
 
 	it('copies from a configuration to another, a save of the same name giving way', async () => {
@@ -973,6 +1006,112 @@ describe('a page', () => {
 		expect(bare.settings.get('chat system')).toBe('');
 		expect((await bare.run('show startup-config', 'user')).text).toBe(
 			'! the page starts on kiss.conf alone'
+		);
+	});
+});
+
+describe('every key', () => {
+	// the item a named key of a module takes in these laws, m unless told: the
+	// keys of endpoints go to n, so m keeps the protocol every parameter goes by
+	const ITEMS: Record<string, string> = {
+		endpoints: 'n',
+		models: 'm/x',
+		tools: 'config',
+		mcp: 'b'
+	};
+	// values to try for a key by its kind, the first it takes that is not its
+	// default kept
+	const TRIES: Record<string, string[]> = {
+		string: ['m/x', 'X-A: 1'],
+		url: ['http://n/v1'],
+		css: ['#123456', '2px', '700', 'serif', '1.5']
+	};
+
+	// a page with an endpoint m serving x, and one line set for every key that
+	// takes a value written out, each the first value it takes
+	async function full() {
+		const k = await page();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => models(['x']))
+		);
+		await k.run('set endpoints url m http://m/v1', 'user');
+		const { modules } = await import('../src/engine/registry.js');
+		const untaken: string[] = [];
+		for (const m of modules) {
+			for (const [name, def] of Object.entries(m.keys)) {
+				if (def.kind === 'secret') continue;
+				const item = def.named ? ` ${def.names?.(modules)[0] ?? ITEMS[m.name] ?? 'm'}` : '';
+				const bounds = [def.min, def.max, 1, 2].filter((n) => n !== undefined).map(String);
+				const tries =
+					def.kind === 'enum' ? [...def.values!] : def.kind === 'number' ? bounds : TRIES[def.kind];
+				const line = await (async () => {
+					for (const value of tries.filter((v) => v !== def.default)) {
+						const l = `set ${m.name} ${name}${item} ${JSON.stringify(value)}`;
+						const r = await k.run(l, 'user');
+						if (r.ok && r.text.split('\n').some((o) => o.startsWith('+ '))) return l;
+					}
+				})();
+				if (!line) untaken.push(`${m.name} ${name}${item}`);
+			}
+		}
+		expect(untaken).toEqual([]);
+		return k;
+	}
+
+	it('pastes back after no as show running-config writes it, and goes alone, or a rule of its module says why', async () => {
+		const k = await full();
+		const running = (await k.run('show running-config', 'user')).text;
+		const lines = running.split('\n').filter((l) => l.startsWith('set '));
+		for (const line of lines) {
+			const r = await k.run(`no ${line.slice('set '.length)}`, 'user');
+			if (r.ok) {
+				const after = (await k.run('show running-config', 'user')).text.split('\n');
+				expect(after).not.toContain(line);
+				expect(lines.filter((l) => l !== line && !after.includes(l))).toEqual([]);
+				await k.run(line, 'user');
+			} else {
+				expect(r.text).toMatch(/^% [a-z]+: /);
+			}
+		}
+	});
+
+	it('names only an item its source serves, one already held whatever the source says', async () => {
+		const k = await full();
+		const { modules } = await import('../src/engine/registry.js');
+		const known = modules.filter((m) => m.items).map((m) => m.name);
+		expect(known.sort()).toEqual(['display', 'models', 'privilege', 'tools']);
+		for (const line of [
+			'set models max_tokens m/nope 5',
+			'set models max_tokens nowhere/x 5',
+			'set tools use nope on',
+			'set display render nope plain',
+			'set privilege level nope allow'
+		]) {
+			expect((await k.run(line, 'user')).text).toMatch(/^% unknown [a-z ]+"[a-z/]+"/);
+		}
+		expect((await k.run('set models max_tokens m/xy 5', 'user')).text).toBe(
+			'% unknown models "m/xy", did you mean m/x'
+		);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) =>
+				url.startsWith('http://m/')
+					? Response.json({ error: { message: 'down' } }, { status: 503 })
+					: models(['x'])
+			)
+		);
+		expect((await k.run('set models top_p m/y 0.5', 'user')).text).toMatch(
+			/^% unknown models "m\/y", endpoints m: .*answers 503 down$/
+		);
+		expect((await k.run('set models top_p m/x 0.5', 'user')).ok).toBe(true);
+		expect((await k.run('set chat model nowhere/x', 'user')).text).toContain(
+			'chat model nowhere/x names no endpoint'
+		);
+		expect((await k.run('set chat model m/anything', 'user')).ok).toBe(true);
+		await k.run('set chat model n/x', 'user');
+		expect((await k.run('no endpoints m', 'user')).text).toBe(
+			'% models: models m/x names no endpoint -> /no models m/x'
 		);
 	});
 });

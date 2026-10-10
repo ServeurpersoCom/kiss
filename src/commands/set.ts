@@ -30,8 +30,10 @@ export default {
 		if (def.kind !== 'secret') throw new Incomplete();
 		return { key, name };
 	},
-	// a secret the user types says so, so whoever wrote the line knows it is given
+	// an item it names is one its module may hold; a secret the user types says
+	// so, so whoever wrote the line knows it is given
 	async run(ctx, { key, name, value }) {
+		if (name !== undefined) await ctx.admit(key.slice(0, key.indexOf(' ')), name);
 		if (value !== undefined) {
 			ctx.config.set(key, value, name);
 			return '';

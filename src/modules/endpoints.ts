@@ -7,13 +7,7 @@ export default {
 	keys: {
 		url: { kind: 'url', named: true, guard: 'change' },
 		// how the endpoint speaks, a file of protocols/ by its name
-		protocol: {
-			kind: 'enum',
-			values: PROTOCOLS,
-			default: DEFAULT_PROTOCOL,
-			named: true,
-			guard: 'change'
-		},
+		protocol: { kind: 'enum', values: PROTOCOLS, default: DEFAULT_PROTOCOL, named: true },
 		key: { kind: 'secret', named: true },
 		// sent with every request, Name: value pairs split by ;
 		headers: { kind: 'string', named: true, guard: 'change' },

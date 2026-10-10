@@ -101,14 +101,41 @@ async function request<T>(
 	}
 }
 
-// the models an endpoint serves
-export function listModels(endpoint: Endpoint, signal?: AbortSignal): Promise<string[]> {
-	return request(endpoint, '/models', {}, signal, async (res) => {
+// what an endpoint lists of every model it serves, each with its id
+type Listed = { id: string } & Record<string, unknown>;
+
+function list(endpoint: Endpoint, signal?: AbortSignal): Promise<Listed[]> {
+	return request(endpoint, endpoint.protocol.models, {}, signal, async (res) => {
 		if (!res.ok) throw await failure(res);
 		if (!res.headers.get('content-type')?.includes('json')) throw notAnLlm(res);
 		const json = await res.json();
-		return (json.data ?? []).map((m: { id: string }) => m.id);
+		return json.data ?? [];
 	});
+}
+
+// the models an endpoint serves
+export async function listModels(endpoint: Endpoint, signal?: AbortSignal): Promise<string[]> {
+	return (await list(endpoint, signal)).map((m) => m.id);
+}
+
+// the list of every endpoint as it last answered, by where it goes and with
+// what key, for the life of the page; a list that failed is asked again
+const lists = new Map<string, Promise<Listed[]>>();
+
+// what an endpoint lists of one model, none when it lists no such model
+export async function describe(
+	endpoint: Endpoint,
+	model: string,
+	signal?: AbortSignal
+): Promise<Listed | undefined> {
+	const id = `${endpoint.url}${endpoint.protocol.models} ${endpoint.key}`;
+	let all = lists.get(id);
+	if (!all) {
+		all = list(endpoint, signal);
+		lists.set(id, all);
+		all.catch(() => lists.delete(id));
+	}
+	return (await all).find((m) => m.id === model);
 }
 
 // the endpoint and model id chat model asks for, written endpoint/model; empty,
