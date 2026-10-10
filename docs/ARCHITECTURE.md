@@ -31,9 +31,10 @@ declared wrong or twice stops the page at load, never later.
 
 A value resolves through layers, the first that holds it winning: what the session sets, then
 `kiss.conf`, then the default of the item, then the default of the key. A save keeps the session
-layer only. A key is two fixed words, a module then a key; a key of a collection takes the item name
-next, and the value always comes last. Its kind is `string`, `number`, `enum`, `url`, `secret` or
-`css`, a value of the CSS property it names, checked by the schema before anything runs.
+layer only, and so does the startup-config. A key is two fixed words, a module then a key; a key of
+a collection takes the item name next, and the value always comes last. Its kind is `string`,
+`number`, `enum`, `url`, `secret` or `css`, a value of the CSS property it names, checked by the
+schema before anything runs.
 
 ### A batch
 
@@ -70,7 +71,7 @@ key:
   `tools use` goes `off`, `consent`, `on`, so closing never asks.
 
 A guarded change goes as far as `privilege level <module>`: `deny` stops the batch, `ask` shows the
-lines to the user, `allow` lets it. Since `set`, `no`, `reset` and `load` all end as a change of
+lines to the user, `allow` lets it. Since `set`, `no`, `reset` and `copy` all end as a change of
 resolved values, they are guarded alike. The answer takes once, always or refuse; always gives the
 modules asked the `allow` privilege, in the same batch.
 
@@ -101,24 +102,26 @@ line    = command { "|" filter }
 command = "set" key [ value ]                a secret left out is asked
         | "no" key | "no" module item
         | "show" module [ word [ item ] ] | "show" module item
-        | "show" ( "running" | "style" | "saves" | "version" | "title" )
+        | "show" ( "running-config" | "startup-config" | "css" | "saves" | "version" | "title" )
         | "show conversations"
-        | "show diff" save save              the word session names the running one
-        | "load" save | "reset"
+        | "show diff" config config
+        | "copy" config config               alone; the model copies to running-config only
+        | "reset"
         | "title" value                      the title of this conversation
-        | "export" [ "all" | "running" | id ] alone on its line
+        | "export" [ "all" | "running-config" | id ] alone on its line
         | "import"                           alone on its line
         | "delete" ( "all" | id )            alone, once the user confirms it
-        | "save" save | "no save" save        user only, each alone on its line
+        | "no save" save | "erase startup-config"   user only, each alone on its line
 key     = module word [ item ]               an item names one of a collection
+config  = "running-config" | "startup-config" | save   either by any prefix: run, start
 save    = name                               a save of the same name gives way
 value   = bare | "json string" | 'literal'
 filter  = ( "include" | "exclude" | "begin" | "section" ) pattern | "count"
 ```
 
-One write verb per store, one read verb for all: `set` and `no` write the configuration, `save`
-and `no save` the archive, `title` the conversation, `import` the conversations, and `show` reads
-every one of them.
+One write verb per store, one read verb for all: `set` and `no` write the configuration, `copy`,
+`no save` and `erase` the archive, `title` the conversation, `import` the conversations, and `show`
+reads every one of them.
 
 An output by group indents each body one blank under its header, IOS style: `section` keeps a line
 at the margin with the lines indented under it when that line matches, and an indented line reads
@@ -168,8 +171,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
   the turn that asked it.
 - A value resolves from what the session sets, over `kiss.conf`, over the default of its key;
-  `reset` drops what the session sets, `load` puts back the save it names. `kiss.conf` applies
-  whole or not at all, like a batch.
+  `reset` drops what the session sets, a copy to `running-config` puts back the configuration it
+  names. `kiss.conf` applies whole or not at all, like a batch.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
@@ -191,17 +194,19 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - No style token or sheet applies while a question stands, whatever it sets meanwhile: the card the
   user answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
-  configuration: no save keeps it, no `load` moves it.
+  configuration: no save keeps it, no `copy` moves it.
 - A conversation takes its title from its first message; one the CLI opened has none until then,
   and reads `CLI` where a title would: its title is a name, never a line typed.
 - `delete` deletes nothing before the user confirms it, whoever asks, then every conversation it
   names in one write; `delete all` keeps the pinned ones, which go only when named.
-- The latest save is the configuration the next page load starts with, and the archive changes
-  only once the browser stores it.
+- The page starts with the startup-config over `kiss.conf`: a copy to `startup-config` writes it and
+  `erase startup-config` empties it, a save never touches it; the archive changes only once the
+  browser stores it.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
   every endpoint lists at once, one that fails beside the others.
-- A save warns when no model answers the chat: `chat model` empty with more than one endpoint, or
-  naming a model its endpoint does not serve; an endpoint that fails warns once, by its name.
+- A copy from `running-config` warns when no model answers the chat: `chat model` empty with more
+  than one endpoint, or naming a model its endpoint does not serve; an endpoint that fails warns
+  once, by its name.
 - The keys of `style` are the tokens of the page of a value of their own, the model free on them; a
   token derived from others is no key. The sheets of `style` apply by name over every style and
   every token of the page, whatever their selectors, and the model writes one only as far as its
@@ -229,9 +234,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
   imports nothing and says where it goes wrong; an import adds only the conversations whose id is
   new, and neither `export` nor `import` changes a conversation.
-- Every MCP server serves its tools under their own names, after those of KiSS; a tool turned off
-  is never seen by the model; a server that does not answer serves nothing, and a name already
-  served stays with the first: the model is told, the save warns of it, nothing ever stops.
+- Every MCP server serves its tools under their own names, after those of KiSS; a tool turned off is
+  never seen by the model; a server that does not answer serves nothing, and a name already served
+  stays with the first: the model is told, a copy warns of it, nothing ever stops.
 
 ### Messages
 
@@ -243,7 +248,7 @@ period. What was typed stands in double quotes, what KiSS names stands bare. An 
 ```
 % unknown command "sow", did you mean show
 % ambiguous word "d": diff display
-% nothing goes after save a: b
+% nothing goes after copy running-config a: b
 % "2" is above 1
 % nobody is here to pick a file
 % the user refused the change
@@ -373,21 +378,21 @@ belongs to no branch: a command of one branch stays applied when another shows.
 Files go through the CLI, so the model handles them as well as the user. `show conversations` lists
 them by id, the one the batch was sent in marked. `export` offers a file of this conversation, of
 another by a prefix of its id, of all of them, or of the running configuration as `kiss.conf`, the
-`set` lines of `show running`, secrets left out, in a card the user saves from: a browser saves a
-file on a click only, so the model never puts one on the disk by itself. `import` asks for a file in
-a card the user picks from and reads it by what it holds: a JSON file adds its conversations whose
-id is new, the others skipped and told; any other file runs its lines as more lines of the batch,
-whole or not at all, with the rights of whoever asked, the firewall included, the way lines pasted
-after a `/` run, its output opening with `! ran 5 lines of the file`; a file that holds nothing
-fails. Neither changes a conversation, the one shown included: an export reads the conversations as
-they settled, without the call that exports them, and an import only adds. To keep an export out of
-the context, edit the message that asked for it.
+`set` lines of `show running-config`, secrets left out, in a card the user saves from: a browser
+saves a file on a click only, so the model never puts one on the disk by itself. `import` asks for a
+file in a card the user picks from and reads it by what it holds: a JSON file adds its conversations
+whose id is new, the others skipped and told; any other file runs its lines as more lines of the
+batch, whole or not at all, with the rights of whoever asked, the firewall included, the way lines
+pasted after a `/` run, its output opening with `! ran 5 lines of the file`; a file that holds
+nothing fails. Neither changes a conversation, the one shown included: an export reads the
+conversations as they settled, without the call that exports them, and an import only adds. To keep
+an export out of the context, edit the message that asked for it.
 
 ```
 show conversations
 export                                   ! this conversation
 export 3f2a                              ! another, by a prefix of its id
-export running                           ! the configuration, as kiss.conf
+export running-config                    ! the configuration, as kiss.conf
 export all
 import
 delete 3f2a                              ! once the user confirms it
@@ -407,7 +412,8 @@ to the scrollbar, and a title too long fades out rather than losing letters to a
 conversation dates from its last answer: a command, a version shown, a pin or a title dates nothing.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
-under `kiss.saves`, and the width of the sidebar under `kiss.sidebar`.
+under `kiss.saves`, the startup-config under `kiss.startup`, and the width of the sidebar under
+`kiss.sidebar`.
 
 ## Rendering
 

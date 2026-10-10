@@ -30,21 +30,23 @@ all of it through one tool, and so do you, after a `/`.
 ## A real CLI, the Cisco IOS way
 
 - Any unambiguous prefix works, `sh run`; an ambiguous one says so, the way IOS does.
-- `show running`, `show diff`, named saves, `| include`, `| count`, tab completion.
+- `show running-config` and `show startup-config`, `copy run start`, `show diff`, named saves,
+  `| include`, `| count`, tab completion.
 - A batch applies whole or not at all, and answers with the exact change, `-` then `+`.
 
 ```
 /sh run | include endpoints
-/show diff work session
-/save work
-/load home
+/show diff work running-config
+/copy running-config work
+/copy home running-config
+/copy run start
 ```
 
 ## Secure by design
 
 The model configures the page, so KiSS guards what it can reach.
 
-- **The firewall reads the effect, not the command.** `set`, `no`, `reset` or `load`: whatever
+- **The firewall reads the effect, not the command.** `set`, `no`, `reset` or `copy`: whatever
   spells a change, the resolved diff decides.
 - **Privilege per module**, `deny`, `ask` or `allow`; the model changes it only on your yes,
   every time.

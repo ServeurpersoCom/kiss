@@ -7,6 +7,7 @@ export const scope = ({ name }: { name: string }): string => `svelte-${name.toLo
 
 // engine
 export const ARCHIVE_STORAGE_KEY = 'kiss.saves';
+export const STARTUP_STORAGE_KEY = 'kiss.startup';
 // a name of an item or of a save: a word of its own, typed by the user, as a
 // server writes the name of a tool or of a model among them
 export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
@@ -14,8 +15,14 @@ export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
 export const MODEL_SEPARATOR = '/';
 // the module holding how far the model changes each module
 export const PRIVILEGE = 'privilege';
-// the word show diff reads as the running configuration, never a save name
-export const SESSION = 'session';
+// the configuration the page runs, and the one it starts with, as IOS names
+// them; neither is a save name
+export const RUNNING_CONFIG = 'running-config';
+export const STARTUP_CONFIG = 'startup-config';
+// a word naming one of them by any prefix, as IOS reads copy run start, else
+// a save by its name
+export const configuration = (word: string): string =>
+	[RUNNING_CONFIG, STARTUP_CONFIG].find((n) => n.startsWith(word.toLowerCase())) ?? word;
 export const ERROR_PREFIX = '% ';
 export const COMMENT_PREFIX = '!';
 // what sets a line of output under the one at the margin it belongs to, IOS
@@ -120,8 +127,6 @@ export function beyond(head: readonly string[], rest: readonly string[]): Error 
 // conversations: the word naming every one of them, and their files, named
 // after a title without the characters a file name cannot hold
 export const ALL = 'all';
-// what export names for the running configuration
-export const RUNNING = 'running';
 // the length an id shows, unique among a few thousand conversations
 export const ID_SHOWN = 8;
 export const FILE_EXTENSION = '.json';

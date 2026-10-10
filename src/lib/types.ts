@@ -145,12 +145,12 @@ export interface Archive {
 	list(): readonly Save[];
 	// throws when no save has that name
 	find(name: string): Save;
-	// the save the page starts with
-	latest(): Save | undefined;
-	// saves whatever the module checks find, and resolves to what they warn of;
 	// a save of the same name gives way to the new one
-	save(config: Config, name: string): Promise<string[]>;
+	save(name: string, values: Record<string, Value>): void;
 	remove(save: Save): void;
+	// what the page starts with over kiss.conf, nothing once erased
+	startup(): Record<string, Value>;
+	boot(values: Record<string, Value> | undefined): void;
 }
 
 // the key the leading words of a line name, and the words after it

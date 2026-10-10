@@ -1,11 +1,7 @@
-import type { Command, Context, Value } from '../lib/types.js';
+import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { SESSION, beyond, comment } from '../lib/config.js';
-
-// the values of a save, or of the running configuration for session
-function values(ctx: Context, name: string): Record<string, Value> {
-	return name === SESSION ? ctx.config.values() : ctx.archive.find(name).values;
-}
+import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment, configuration } from '../lib/config.js';
+import { values } from './copy.js';
 
 export default {
 	path: ['show', 'diff'],
@@ -13,14 +9,17 @@ export default {
 	parse(_schema, args) {
 		if (args.length < 2) throw new Incomplete();
 		if (args.length > 2) throw beyond(['show', 'diff', ...args.slice(0, 2)], args.slice(2));
-		return args;
+		return args.map(configuration);
 	},
-	// from one save to another, session naming the running configuration
+	// from one configuration to another: the running-config, the
+	// startup-config, or a save
 	run(ctx, [from, to]) {
 		const lines = ctx.schema.diff(values(ctx, from), values(ctx, to));
 		return lines.length ? lines.join('\n') : comment('no difference');
 	},
 	complete(ctx, args) {
-		return args.length < 2 ? [...ctx.archive.list().map((s) => s.name), SESSION] : [];
+		return args.length < 2
+			? [RUNNING_CONFIG, STARTUP_CONFIG, ...ctx.archive.list().map((s) => s.name)]
+			: [];
 	}
 } satisfies Command<string[]>;

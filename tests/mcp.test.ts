@@ -239,8 +239,8 @@ describe('an MCP server', () => {
 		]);
 		expect(p.bodies[0].messages[0]).toMatchObject({ role: 'system' });
 		expect(p.bodies[0].messages[0].content).toContain('mcp gone');
-		const saved = await p.engine.run('save a', 'user');
-		expect(saved.text).toMatch(/^! saved a\n! mcp gone/);
+		const saved = await p.engine.run('copy running-config a', 'user');
+		expect(saved.text).toMatch(/^! copied running-config to a\n! mcp gone/);
 		expect((await p.engine.run('show tools', 'user')).text).toContain('! mcp gone');
 	});
 

@@ -2,7 +2,7 @@ import type { Command, Module } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import { didYouMean } from './near.js';
 
-const PATH_WORD = /^[a-z][a-z0-9]*$/;
+const PATH_WORD = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
 // a file in commands/ or modules/ registers itself by existing
 const commandFiles = import.meta.glob<{ default: Command<unknown> }>('../commands/*.ts', {

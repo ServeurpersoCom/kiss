@@ -20,7 +20,7 @@ const schema = new KeySchema(modules);
 // what the site configuration gives, below every save
 const site = new Map<string, Value>();
 const running = new Values(schema, site);
-const archive = new SaveArchive(modules);
+const archive = new SaveArchive();
 
 // what replaces a value that must not be kept, and where a value may open
 const QUOTE = /["']/;
@@ -95,9 +95,9 @@ export function defaults(text: string): string[] {
 	return problems;
 }
 
-// the latest save becomes the running configuration
+// the startup-config becomes the running configuration, over kiss.conf
 export function start(): void {
-	running.load(archive.latest()?.values ?? {});
+	running.load(archive.startup());
 	for (const m of modules) m.apply?.(running);
 }
 

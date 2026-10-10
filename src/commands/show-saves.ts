@@ -4,7 +4,7 @@ import { comment, localTime } from '../lib/config.js';
 export default {
 	path: ['show', 'saves'],
 	roles: ['user', 'llm'],
-	// oldest first, the latest save last: the one the next page load starts with
+	// oldest first
 	run(ctx) {
 		const saves = ctx.archive.list();
 		if (!saves.length) return comment('nothing saved yet');
