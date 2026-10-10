@@ -1,8 +1,9 @@
 import type { Stats } from './types.js';
 
-// what a turn does now, as the system spends it: waiting for the endpoint,
-// streaming its thinking, its text or a call, or running a tool
-export type Phase = 'waiting' | 'thinking' | 'writing' | 'calling' | 'running';
+// what a turn does now, as the system spends it: preparing a round, its model
+// and its tools, waiting for the endpoint, streaming its thinking, its text or
+// a call, or running a tool
+export type Phase = 'preparing' | 'waiting' | 'thinking' | 'writing' | 'calling' | 'running';
 
 // the clock of one turn, in milliseconds of performance.now(); the time the
 // user takes on a question is taken out of it, so it measures the system alone
@@ -29,7 +30,7 @@ export interface Pulse {
 export function pulse(now: number): Pulse {
 	return {
 		round: 1,
-		phase: 'waiting',
+		phase: 'preparing',
 		name: '',
 		since: now,
 		start: now,
@@ -90,6 +91,7 @@ const rate = (n: number, time: number): string => `${((n * 1000) / time).toFixed
 
 // what each phase reads as, before the name it holds
 const PHASES: Record<Phase, string> = {
+	preparing: 'preparing',
 	waiting: 'waiting for',
 	thinking: 'thinking',
 	writing: 'writing',
@@ -97,9 +99,12 @@ const PHASES: Record<Phase, string> = {
 	running: 'running'
 };
 
-// the line of a turn at a moment: its round from the second on, the phase and
-// its clock, and while it streams its tokens and their rate, from its second
-// token, between its first chunk and its last
+// a part of a line, its first letter capital
+const capital = (part: string): string => part[0].toUpperCase() + part.slice(1);
+
+// the line of a turn at a moment, each of its parts capital: its round from the
+// second on, the phase and its clock, and while it streams its tokens and their
+// rate, from its second token, between its first chunk and its last
 export function line(p: Pulse, now: number): string {
 	const parts = p.round > 1 ? [`round ${p.round}`] : [];
 	parts.push(p.name ? `${PHASES[p.phase]} ${p.name}` : p.phase, ms(now - p.since));
@@ -107,7 +112,7 @@ export function line(p: Pulse, now: number): string {
 		parts.push(tokens(p.tokens));
 		if (p.tokens > 1) parts.push(rate(p.tokens - 1, p.last - p.first));
 	}
-	return parts.join(' - ');
+	return parts.map(capital).join(' - ');
 }
 
 // what a turn spent, as it reads under its answer

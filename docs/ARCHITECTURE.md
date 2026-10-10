@@ -272,15 +272,16 @@ The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `pres
 reads it. A reply streams until it ends or the turn is stopped. Several conversations answer at
 once, each turn in its own; a server running one model at a time loads them in turn.
 
-One line under the turn says what the system does now, its first letter capital, redrawn at every
-frame of the screen, in milliseconds: `Waiting for pod - 842 ms` until the first chunk, thinking or
-writing with the tokens and their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool
-while its call streams, `Running config - 47 ms` while it runs, after `Round 2 - ` from the second
-round on. It hides while a question of the turn stands, as the time the user takes is none of the
-system. A request asks the endpoint to count its tokens, `stream_options` of OpenAI, one per chunk
-counting until it does. Once the turn ends, what it spent stays with its answer, beside its time:
-`1,204 tokens - 51.3 t/s - 23,512 ms`, the rate over the generation alone, the last figure the
-whole time of the system.
+One line under the turn says what the system does now, each of its parts capital, redrawn at every
+frame of the screen, in milliseconds: `Preparing - 12 ms` while a round reads its model and gathers
+its tools, `Waiting for pod - 842 ms` until the first chunk, thinking or writing with the tokens and
+their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool while its call streams,
+`Running config - 47 ms` while it runs, after `Round 2 - ` from the second round on. It hides while
+a question of the turn stands, as the time the user takes is none of the system. A request asks the
+endpoint to count its tokens, `stream_options` of OpenAI, one per chunk counting until it does. Once
+the turn ends, what it spent stays with its answer, beside its time:
+`1,204 tokens - 51.3 t/s - 23,512 ms`, the rate over the generation alone, the last figure the whole
+time of the system.
 
 ## MCP servers
 

@@ -2,41 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { chunk, close, held, line, mark, pulse, stats, summary } from '../src/lib/pulse.js';
 
 describe('the line of a turn', () => {
-	it('waits for the endpoint, its clock from the request on', () => {
+	it('prepares, then waits for the endpoint, its clock from the request on', () => {
 		const p = pulse(0);
-		expect(line(p, 3)).toBe('waiting - 3 ms');
+		expect(line(p, 3)).toBe('Preparing - 3 ms');
 		mark(p, 'waiting', 'pod', 10);
-		expect(line(p, 852)).toBe('waiting for pod - 842 ms');
+		expect(line(p, 852)).toBe('Waiting for pod - 842 ms');
 	});
 
 	it('streams its tokens, their rate from the second one, between first and last chunk', () => {
 		const p = pulse(0);
 		mark(p, 'waiting', 'pod', 0);
 		chunk(p, false, 100);
-		expect(line(p, 150)).toBe('waiting for pod - 150 ms');
+		expect(line(p, 150)).toBe('Waiting for pod - 150 ms');
 		chunk(p, true, 100);
 		mark(p, 'thinking', '', 100);
-		expect(line(p, 100)).toBe('thinking - 0 ms - 1 token');
+		expect(line(p, 100)).toBe('Thinking - 0 ms - 1 token');
 		chunk(p, true, 120);
 		chunk(p, true, 140);
 		mark(p, 'writing', '', 140);
-		expect(line(p, 1340)).toBe('writing - 1,200 ms - 3 tokens - 50.0 t/s');
+		expect(line(p, 1340)).toBe('Writing - 1,200 ms - 3 tokens - 50.0 t/s');
 	});
 
 	it('names the call written and the tool run, and the round from the second on', () => {
 		const p = pulse(0);
 		mark(p, 'calling', 'config', 5);
-		expect(line(p, 317)).toBe('calling config - 312 ms');
+		expect(line(p, 317)).toBe('Calling config - 312 ms');
 		p.round = 2;
 		mark(p, 'running', 'config', 400);
-		expect(line(p, 447)).toBe('round 2 - running config - 47 ms');
+		expect(line(p, 447)).toBe('Round 2 - Running config - 47 ms');
 	});
 
 	it('restarts its clock only when the phase or its name changes', () => {
 		const p = pulse(0);
 		mark(p, 'writing', '', 10);
 		mark(p, 'writing', '', 50);
-		expect(line(p, 60)).toBe('writing - 50 ms - 0 tokens');
+		expect(line(p, 60)).toBe('Writing - 50 ms - 0 tokens');
 	});
 });
 
@@ -58,7 +58,7 @@ describe('what a turn spent', () => {
 		close(p);
 		mark(p, 'running', 'bash', 200);
 		held(p, 5000);
-		expect(line(p, 5250)).toBe('running bash - 50 ms');
+		expect(line(p, 5250)).toBe('Running bash - 50 ms');
 		expect(stats(p, 5300)!.system).toBe(300);
 	});
 

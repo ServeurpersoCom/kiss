@@ -20,14 +20,10 @@
 <div class="status" {@attach tick}></div>
 
 <style>
-	/* what the system does now, its first letter capital, in figures that keep
-	   their width */
+	/* what the system does now, in figures that keep their width */
 	.status {
 		font-size: var(--size-secondary);
 		color: var(--fg-dim);
 		font-variant-numeric: tabular-nums;
-	}
-	.status::first-letter {
-		text-transform: uppercase;
 	}
 </style>

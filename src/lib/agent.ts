@@ -128,6 +128,7 @@ export async function turn(
 	try {
 		for (; r < Number(settings.get('tools rounds')); r++) {
 			p.round = r + 1;
+			mark(p, 'preparing', '', performance.now());
 			const { endpoint, body, tools } = await setup([...messages, reply], signal);
 			mark(p, 'waiting', endpoint.name, performance.now());
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
