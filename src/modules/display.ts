@@ -30,6 +30,6 @@ export default {
 	},
 	// the blocks of text a turn renders
 	async items() {
-		return [{ group: 'blocks', names: [...BLOCKS] }];
+		return [{ group: '', names: [...BLOCKS] }];
 	}
 } satisfies Module;

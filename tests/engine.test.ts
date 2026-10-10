@@ -260,11 +260,7 @@ describe('the display', () => {
 		expect(k.settings.get('display render', 'thinking')).toBe('markdown');
 		expect(k.settings.get('display render', 'reply')).toBe('markdown');
 		expect((await k.run('show display render', 'user')).text).toBe(
-			[
-				'! blocks',
-				' set display render thinking markdown',
-				' set display render reply markdown'
-			].join('\n')
+			['set display render thinking markdown', 'set display render reply markdown'].join('\n')
 		);
 		expect((await k.run('set display render tools plain', 'user')).text).toContain(
 			'tools is not a block of text'
@@ -483,12 +479,11 @@ describe('the firewall', () => {
 		);
 		expect((await k.run('show privilege', 'user')).text).toBe(
 			[
-				'! modules',
-				' set privilege level chat ask',
-				' set privilege level css ask',
-				' set privilege level endpoints ask',
-				' set privilege level mcp ask',
-				' set privilege level tools ask'
+				'set privilege level chat ask',
+				'set privilege level css ask',
+				'set privilege level endpoints ask',
+				'set privilege level mcp ask',
+				'set privilege level tools ask'
 			].join('\n')
 		);
 	});
@@ -840,22 +835,16 @@ describe('show', () => {
 describe('a section', () => {
 	it('keeps a line at the margin with the lines indented under it, when that line matches', async () => {
 		const k = await page();
-		expect((await k.run('show display | section blocks', 'user')).text).toBe(
-			[
-				'! blocks',
-				' set display render thinking markdown',
-				' set display render reply markdown'
-			].join('\n')
+		expect((await k.run('show tools | section KiSS', 'user')).text).toBe(
+			['! KiSS', ' set tools use config on'].join('\n')
 		);
-		expect((await k.run('show display | section thinking', 'user')).text).toBe(
-			'set display thinking closed'
-		);
+		expect((await k.run('show tools | section rounds', 'user')).text).toBe('set tools rounds 25');
 	});
 
 	it('reads back as set lines, indented or not', async () => {
 		const k = await page();
-		const shown = (await k.run('show privilege', 'user')).text;
-		expect(shown).toContain('\n set privilege level mcp ask');
+		const shown = (await k.run('show tools', 'user')).text;
+		expect(shown).toContain('\n set tools use config on');
 		expect((await k.run(shown, 'user')).ok).toBe(true);
 	});
 });

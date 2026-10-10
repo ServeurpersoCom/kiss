@@ -206,8 +206,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   token of the page, whatever their selectors, and the model writes one only as far as its privilege
   lets it: a selector reaches anything the thread shows.
 - The page reads every size of text floored, so no size hides what the thread shows.
-- A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>`
-  alone when the source fails: `show models` by endpoint, `show tools` by who serves it.
+- A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>` alone
+  when the source fails: `show models` by endpoint, `show tools` by who serves it; a listing from
+  one source, `show privilege`, reads at the margin.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
   next round on.
 - A turn keeps, on the page and in the browser, what settled: what streamed and the calls that

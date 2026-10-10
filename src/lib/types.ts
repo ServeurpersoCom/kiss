@@ -78,7 +78,8 @@ export interface Module {
 	apply?(config: ConfigReader): void;
 	// the items of a collection the module knows beyond those set, read from
 	// the running configuration as anything that reaches the network is, by
-	// group: who knows them, and why it knows none when it failed
+	// group: who knows them, none for the one source of the module, and why it
+	// knows none when it failed
 	items?(ctx: Context): Promise<Group[]>;
 }
 

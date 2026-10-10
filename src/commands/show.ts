@@ -26,11 +26,13 @@ function lines(ctx: Context, plan: Plan, name: string | undefined): string[] {
 }
 
 // the lines of groups, each body indented under its header: a failed group
-// holds its error on the header, an empty one shows nothing
+// holds its error on the header, an empty one shows nothing, and one without
+// a name, the one source of its module, reads at the margin
 function grouped(groups: Group[], body: (name: string) => string[]): string[] {
 	return groups.flatMap((g) => {
 		if (g.error) return [comment(`${g.group} ${g.error}`)];
 		const lines = g.names.flatMap(body);
+		if (!g.group) return lines;
 		return lines.length ? [comment(g.group), ...lines.map((l) => INDENT + l)] : [];
 	});
 }

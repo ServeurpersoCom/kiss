@@ -24,6 +24,6 @@ export default {
 	},
 	// every module holding a guarded key, with its privilege
 	async items(ctx) {
-		return [{ group: 'modules', names: guarded(ctx.modules) }];
+		return [{ group: '', names: guarded(ctx.modules) }];
 	}
 } satisfies Module;
