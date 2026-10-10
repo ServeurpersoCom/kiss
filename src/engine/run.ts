@@ -134,6 +134,31 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		modules,
 		commands: commands.filter((c) => c.roles.includes(role))
 	};
+	// the lines of a file compile as lines among others, so none runs alone,
+	// then run on the draft; a line that fails names its place in the file
+	ctx.lines = async (text) => {
+		const steps = splitLines(text).map((line, i) => {
+			try {
+				return compile(ctx, line, false);
+			} catch (e) {
+				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
+			}
+		});
+		const out: string[] = [];
+		for (const [i, step] of steps.entries()) {
+			let text: string;
+			try {
+				text = await step.run(ctx);
+			} catch (e) {
+				signal?.throwIfAborted();
+				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
+			}
+			signal?.throwIfAborted();
+			for (const f of step.filters) text = f(text);
+			if (text) out.push(text);
+		}
+		return out.join('\n');
+	};
 	const fail = (i: number | null, message: string): Outcome => {
 		const where = i === null || alone ? '' : `line ${i + 1}: `;
 		const out = [ERROR_PREFIX + where + message.replaceAll('\n', '\n' + ERROR_PREFIX)];

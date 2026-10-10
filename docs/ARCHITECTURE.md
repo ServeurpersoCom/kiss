@@ -105,7 +105,7 @@ command = "set" key [ value ]                a secret left out is asked
         | "show diff" save save              the word session names the running one
         | "load" save | "reset"
         | "title" value                      the title of this conversation
-        | "export" [ "all" | id ]            alone on its line
+        | "export" [ "all" | "running" | id ] alone on its line
         | "import"                           alone on its line
         | "delete" ( "all" | id )            alone, once the user confirms it
         | "save" save | "no save" save        user only, each alone on its line
@@ -350,19 +350,23 @@ from the very prefix the edited one had; the branch edited stays whole. Arrows u
 versions go from one to the next, each coming back as it was last written in. The configuration
 belongs to no branch: a command of one branch stays applied when another shows.
 
-Files go through the CLI, so the model handles them as well as the user. `show conversations`
-lists them by id, the one the batch was sent in marked. `export` offers a file of this
-conversation, of another by a prefix of its id, or of all of them, in a card the user saves from:
-a browser saves a file on a click only, so the model never puts one on the disk by itself.
-`import` asks for a file in a card the user picks from, then adds its conversations whose id is
-new, the others skipped and told. Neither changes a conversation, the one shown included: an
-export reads the conversations as they settled, without the call that exports them, and an import
-only adds. To keep an export out of the context, edit the message that asked for it.
+Files go through the CLI, so the model handles them as well as the user. `show conversations` lists
+them by id, the one the batch was sent in marked. `export` offers a file of this conversation, of
+another by a prefix of its id, of all of them, or of the running configuration as `kiss.conf`, the
+`set` lines of `show running`, secrets left out, in a card the user saves from: a browser saves a
+file on a click only, so the model never puts one on the disk by itself. `import` asks for a file in
+a card the user picks from and reads it by what it holds: a JSON file adds its conversations whose
+id is new, the others skipped and told; any other file runs its lines as more lines of the batch,
+whole or not at all, with the rights of whoever asked, the firewall included, the way lines pasted
+after a `/` run. Neither changes a conversation, the one shown included: an export reads the
+conversations as they settled, without the call that exports them, and an import only adds. To keep
+an export out of the context, edit the message that asked for it.
 
 ```
 show conversations
 export                                   ! this conversation
 export 3f2a                              ! another, by a prefix of its id
+export running                           ! the configuration, as kiss.conf
 export all
 import
 delete 3f2a                              ! once the user confirms it

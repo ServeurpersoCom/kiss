@@ -1,12 +1,21 @@
 import type { Command, Context, Conversation } from '../lib/types.js';
-import { ALL, ID_SHOWN, beyond, fileName, localTime } from '../lib/config.js';
+import {
+	ALL,
+	ID_SHOWN,
+	RUNNING,
+	SITE_CONFIG_URL,
+	beyond,
+	fileName,
+	localTime
+} from '../lib/config.js';
+import { running } from './show-running.js';
 
-// what export names: every conversation, one by a prefix of its id, or the one
-// the batch was sent in
-type Plan = typeof ALL | { prefix: string } | null;
+// what export names: every conversation, one by a prefix of its id, the one
+// the batch was sent in, or the running configuration
+type Plan = typeof ALL | typeof RUNNING | { prefix: string } | null;
 
 // the conversations a plan names
-function chosen(ctx: Context, plan: Plan): readonly Conversation[] {
+function chosen(ctx: Context, plan: Exclude<Plan, typeof RUNNING>): readonly Conversation[] {
 	const all = ctx.conversations?.list() ?? [];
 	if (plan === ALL) return all;
 	if (plan === null) {
@@ -24,14 +33,21 @@ export default {
 	parse(_schema, args) {
 		if (args.length > 1) throw beyond(['export', args[0]], args.slice(1));
 		if (!args.length) return null;
-		return args[0] === ALL ? ALL : { prefix: args[0].toLowerCase() };
+		return args[0] === ALL || args[0] === RUNNING ? args[0] : { prefix: args[0].toLowerCase() };
 	},
-	// a file offered to the user, of one conversation named after its title, or
-	// of many named after the day; no conversation changes
+	// a file offered to the user: the running configuration as kiss.conf, as a
+	// site serves it and import reads it, secrets left out; one conversation
+	// named after its title, or many named after the day; nothing changes
 	async run(ctx, plan) {
+		if (!ctx.offer) throw new Error('nobody is here to save the file');
+		if (plan === RUNNING) {
+			const saved = await ctx.offer(SITE_CONFIG_URL, running(ctx).join('\n') + '\n');
+			ctx.signal?.throwIfAborted();
+			if (!saved) throw new Error('the user saved no file');
+			return `exported the running configuration to ${SITE_CONFIG_URL}`;
+		}
 		const list = chosen(ctx, plan);
 		if (!list.length) throw new Error('no conversation yet');
-		if (!ctx.offer) throw new Error('nobody is here to save the file');
 		const name =
 			list.length === 1
 				? fileName(list[0].title || list[0].id.slice(0, ID_SHOWN))
@@ -42,6 +58,6 @@ export default {
 		return `exported ${list.length} to ${name}`;
 	},
 	complete(_ctx, args) {
-		return args.length ? [] : [ALL, '<id>'];
+		return args.length ? [] : [ALL, RUNNING, '<id>'];
 	}
 } satisfies Command<Plan>;

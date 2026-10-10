@@ -81,7 +81,7 @@
 				<button onclick={() => ask.settle(false)}>Cancel</button>
 			</div>
 		{:else if ask.kind === 'pick'}
-			<div class="head">Import conversations from a file?</div>
+			<div class="head">Import a file?</div>
 			<div class="answers">
 				<button {@attach focused} onclick={() => open(ask.settle)}>Choose file</button>
 				<button onclick={() => ask.settle(null)}>Cancel</button>

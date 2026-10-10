@@ -645,7 +645,7 @@ describe('the conversations', () => {
 		);
 	});
 
-	it('export the one the batch was sent in, another by a prefix of its id, or all', async () => {
+	it('export the one the batch was sent in, another by a prefix of its id, all, or the configuration', async () => {
 		const k = await page();
 		const list = [talk('ab12-2', 'Two', 2), talk('ab34-1', 'One', 1)];
 		const s = shelf(list);
@@ -669,9 +669,17 @@ describe('the conversations', () => {
 		expect((await k.run('export all\nshow title', 'llm', s)).text).toContain('runs alone');
 		const refused = { ...s, offer: async () => false };
 		expect((await k.run('export all', 'llm', refused)).text).toBe('% the user saved no file');
+		await k.run('set endpoints url a http://a/v1\nset endpoints key a sk-a', 'user');
+		expect((await k.run('export running', 'llm', s)).text).toBe(
+			'exported the running configuration to kiss.conf'
+		);
+		const conf = s.offered.at(-1)!;
+		expect(conf.name).toBe('kiss.conf');
+		expect(conf.text).toContain('set endpoints url a http://a/v1\n');
+		expect(conf.text).not.toContain('sk-a');
 	});
 
-	it('import a file whole beside the others, those already here skipped', async () => {
+	it('import the conversations of a file beside the others, or run a configuration whole', async () => {
 		const k = await page();
 		const here = talk('aaaaaaaa-1', 'Here', 1);
 		const file = serialize([talk('bbbbbbbb-2', 'New', 2), here]);
@@ -685,6 +693,14 @@ describe('the conversations', () => {
 		);
 		expect(list).toHaveLength(2);
 		expect((await k.run('import', 'llm', shelf(list))).text).toBe('% the user picked no file');
+		const conf = 'set chat system "from a file"\n! a note\n set display tools open\n';
+		expect((await k.run('import', 'user', shelf(list, conf))).text).toContain(
+			'+ set chat system "from a file"'
+		);
+		expect(k.settings.get('display tools')).toBe('open');
+		const broken = 'set chat system other\nbogus';
+		expect((await k.run('import', 'user', shelf(list, broken))).text).toContain('file line 2:');
+		expect(k.settings.get('chat system')).toBe('from a file');
 	});
 });
 

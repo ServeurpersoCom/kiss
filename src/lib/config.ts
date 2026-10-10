@@ -120,6 +120,8 @@ export function beyond(head: readonly string[], rest: readonly string[]): Error 
 // conversations: the word naming every one of them, and their files, named
 // after a title without the characters a file name cannot hold
 export const ALL = 'all';
+// what export names for the running configuration
+export const RUNNING = 'running';
 // the length an id shows, unique among a few thousand conversations
 export const ID_SHOWN = 8;
 export const FILE_EXTENSION = '.json';

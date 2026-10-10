@@ -237,6 +237,9 @@ export interface Context extends Scope {
 	modules: readonly Module[];
 	// the commands open to the role
 	commands: readonly Command<unknown>[];
+	// the lines of a file run as more lines of the batch, on the same draft,
+	// whole or not at all with it; their output
+	lines?(text: string): Promise<string>;
 }
 
 // an image a tool hands back, base64 data, shown to the user only

@@ -104,12 +104,11 @@ export async function remove(ids: readonly string[]): Promise<void> {
 	await deleteConversations(ids);
 }
 
-// the type of a conversation file
-const FILE_TYPE = 'application/json';
-
-// the browser saves a file; it does so on a gesture of the user only
+// the browser saves a file, conversations as JSON, a configuration as text; it
+// does so on a gesture of the user only
 export function deliver(name: string, text: string): void {
-	const url = URL.createObjectURL(new Blob([text], { type: FILE_TYPE }));
+	const type = name.endsWith(FILE_EXTENSION) ? 'application/json' : 'text/plain';
+	const url = URL.createObjectURL(new Blob([text], { type }));
 	const a = document.createElement('a');
 	a.href = url;
 	a.download = name;
@@ -117,13 +116,14 @@ export function deliver(name: string, text: string): void {
 	URL.revokeObjectURL(url);
 }
 
-// the text of a file the user picks, none when they pick none; the browser
-// opens its picker on a gesture of the user only
+// the text of a file the user picks, conversations or a configuration, none
+// when they pick none; the browser opens its picker on a gesture of the user
+// only
 export function choose(): Promise<string | null> {
 	return new Promise((resolve) => {
 		const input = document.createElement('input');
 		input.type = 'file';
-		input.accept = FILE_EXTENSION;
+		input.accept = `${FILE_EXTENSION},.conf`;
 		input.onchange = () => {
 			const file = input.files?.[0];
 			if (file) file.text().then(resolve, () => resolve(null));
