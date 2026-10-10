@@ -52,7 +52,7 @@ function bytes(base64: string): number {
 }
 
 // the content blocks as the model reads them: text as is, every other block a
-// line naming it; images also go to the user
+// line naming it; images also go to the user, and to the model that sees them
 function outcome(result: CallToolResult): Outcome {
 	const lines: string[] = [];
 	const images: Image[] = [];

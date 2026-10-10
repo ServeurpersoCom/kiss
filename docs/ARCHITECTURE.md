@@ -202,6 +202,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   blocks only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
   from the page itself, checked in Chromium.
+- The images of a call go to the model with its result, every round, when the list of its endpoint
+  says it sees them or says nothing, never when it says it does not.
 - A tool in `consent` asks the user before each call: once, always, which turns it on, or refuse.
   The tools of KiSS are on. A call reaches its tool only while the tool is not off, as it stands
   when the call goes: a tool a call turns off is reached by no later call of the round.
@@ -320,22 +322,28 @@ a turn stopped keeps what settled.
 Every endpoint speaks the protocol `endpoints protocol` names: the protocol builds the request from
 the history, carries the key and reads the stream, and the rest of KiSS sees the same deltas
 whatever it is. A round keeps what its protocol needs back and nothing else rebuilds, a signed
-thinking block, an encrypted reasoning item, and sends it back to that protocol only.
+thinking block, an encrypted reasoning item, and sends it back to that protocol only. The images a
+call answers with go to the model with its result, every round, in the form its protocol takes,
+when the list of the endpoint says the model sees them or says nothing; a model that does not
+reads the line its result keeps of each, `! image image/png, 4096 bytes`.
 
 - `chat`, by default: the chat completions of OpenAI, the open standard of llama.cpp, vLLM and
-  Hugging Face, the key as a bearer token.
+  Hugging Face, the key as a bearer token. A tool message holds text only, so the images of a round
+  follow its results in one user message; `architecture.input_modalities` in the list, as
+  llama-server and Hugging Face give it, says whether the model sees them.
 - `messages`: the Messages API of Anthropic, the key in `x-api-key` with the headers a page needs,
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
-  tool streaming its arguments. A signed block is bound to the system, the tools and the messages
-  before it: one the configuration changed since, a tool opened or a prompt edited, is dropped by
-  the API and thought again, never refused. The list of the endpoint gives the most tokens the model
-  writes and whether it thinks, `models max_tokens` over it; `min_p`, the penalties and `seed` never
-  go.
+  tool streaming its arguments, the images of a call in its result, unless
+  `capabilities.image_input` says otherwise. A signed block is bound to the system, the tools and
+  the messages before it: one the configuration changed since, a tool opened or a prompt edited, is
+  dropped by the API and thought again, never refused. The list of the endpoint gives the most
+  tokens the model writes and whether it thinks, `models max_tokens` over it; `min_p`, the penalties
+  and `seed` never go.
 - `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
   nothing stored on the server, the key as a bearer token, the system prompt as its instructions,
   the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
-  written. `max_tokens` goes as `max_output_tokens`; `top_k`, `min_p`, the penalties and `seed`
-  never go.
+  written, the images of a call in its output. `max_tokens` goes as `max_output_tokens`; `top_k`,
+  `min_p`, the penalties and `seed` never go.
 
 ```
 set endpoints url claude https://api.anthropic.com/v1

@@ -1,4 +1,4 @@
-import type { ConfigReader } from './types.js';
+import type { ConfigReader, Image } from './types.js';
 
 // an item of a collection module that names a remote server by a url, an
 // optional bearer key, the headers sent besides it and the seconds it has to
@@ -66,3 +66,6 @@ export function bearer(key: string): Record<string, string> {
 export function headers(remote: Remote): Record<string, string> {
 	return { ...bearer(remote.key), ...remote.headers };
 }
+
+// an image as a URL that holds it, for a protocol that takes images so
+export const dataUrl = (image: Image): string => `data:${image.mime};base64,${image.data}`;

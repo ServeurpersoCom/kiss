@@ -1,8 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Assistant, Grant, Message, Round, ToolContext, Verdict } from '../src/lib/types.js';
+import type {
+	Assistant,
+	Grant,
+	Message,
+	Request,
+	Round,
+	ToolContext,
+	Verdict
+} from '../src/lib/types.js';
 import { ONCE } from '../src/lib/types.js';
 import { pulse } from '../src/lib/pulse.js';
 import { STOPPED } from '../src/lib/conversation.js';
+import chat from '../src/protocols/chat.js';
+import messages from '../src/protocols/messages.js';
+import responses from '../src/protocols/responses.js';
 
 interface Body {
 	tools: { function: { name: string } }[];
@@ -129,6 +140,8 @@ describe('a turn', () => {
 		expect(p.bodies[0]).toMatchObject({ stream: true, stream_options: { include_usage: true } });
 		expect(p.reply.stats).toMatchObject({ tokens: 7 });
 		expect(p.reply.rounds[0].text).toBe('abc');
+		// what the list says of the model, whether it sees images, goes with the request
+		expect(p.lists).toEqual(['http://m/v1/models']);
 	});
 
 	it('counts one token per chunk when the endpoint gives no count', async () => {
@@ -546,5 +559,75 @@ describe('the responses protocol', () => {
 			RESPONSES
 		);
 		await expect(p.go()).rejects.toThrow('the model failed');
+	});
+});
+
+describe('the images of a call', () => {
+	// a history whose one call answered with text and an image, for a model
+	// whose list says what is given
+	const request = (info?: Record<string, unknown>): Request => ({
+		model: 'x',
+		system: '',
+		parameters: { max_tokens: 10 },
+		tools: [],
+		info,
+		messages: [
+			{ role: 'user', text: 'look' },
+			{
+				role: 'assistant',
+				rounds: [
+					{
+						reasoning: '',
+						text: '',
+						calls: [
+							{
+								id: 'c1',
+								name: 'shot',
+								args: '{}',
+								result: '! image image/png, 3 bytes',
+								ok: true,
+								images: [{ mime: 'image/png', data: 'AAAA' }]
+							}
+						]
+					}
+				]
+			}
+		]
+	});
+	const URL = 'data:image/png;base64,AAAA';
+
+	it('go to a model that sees them, in the form its protocol takes, and never to one that does not', () => {
+		type Sent = { messages: object[] };
+		const tail = (info?: Record<string, unknown>) =>
+			(chat.body(request(info)) as unknown as Sent).messages.slice(-2);
+		const shown = { role: 'user', content: [{ type: 'image_url', image_url: { url: URL } }] };
+		expect(tail()[1]).toEqual(shown);
+		expect(tail({ architecture: { input_modalities: ['text', 'image'] } })[1]).toEqual(shown);
+		expect(tail({ architecture: { input_modalities: ['text'] } })[1]).toMatchObject({
+			role: 'tool',
+			content: '! image image/png, 3 bytes'
+		});
+
+		const result = (info?: Record<string, unknown>) =>
+			(
+				messages.body(request(info)) as unknown as {
+					messages: { content: { content: unknown }[] }[];
+				}
+			).messages[2].content[0].content;
+		expect(result()).toEqual([
+			{ type: 'text', text: '! image image/png, 3 bytes' },
+			{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+		]);
+		expect(result({ capabilities: { image_input: { supported: false } } })).toBe(
+			'! image image/png, 3 bytes'
+		);
+
+		const input = (
+			responses.body(request()) as unknown as { input: { type?: string; output?: unknown }[] }
+		).input;
+		expect(input.find((i) => i.type === 'function_call_output')?.output).toEqual([
+			{ type: 'input_text', text: '! image image/png, 3 bytes' },
+			{ type: 'input_image', image_url: URL }
+		]);
 	});
 });

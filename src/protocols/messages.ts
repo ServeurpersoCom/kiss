@@ -1,4 +1,4 @@
-import type { Message, Protocol } from '../lib/types.js';
+import type { Image, Message, Protocol } from '../lib/types.js';
 import { SLASH } from '../lib/config.js';
 
 // the Messages API of Anthropic: content blocks streamed by index, thinking
@@ -38,6 +38,18 @@ function input(args: string): object {
 	}
 }
 
+// an image as a block of the API
+const picture = (i: Image): Block => ({
+	type: 'image',
+	source: { type: 'base64', media_type: i.mime, data: i.data }
+});
+
+// whether the model takes images, which it does unless its list says otherwise
+function sees(info: Record<string, unknown> | undefined): boolean {
+	const capabilities = info?.capabilities as { image_input?: { supported?: boolean } } | undefined;
+	return capabilities?.image_input?.supported !== false;
+}
+
 // whether the model thinks as adaptive thinking asks, which it does unless
 // its list says otherwise
 function adaptive(info: Record<string, unknown> | undefined): boolean {
@@ -48,9 +60,10 @@ function adaptive(info: Record<string, unknown> | undefined): boolean {
 
 // the history in blocks: cli messages stay out; every round of an assistant
 // turn becomes the blocks its protocol kept when it is this one, its text and
-// its calls, then a user turn of their results; turns of one role in a row
-// merge, as the API takes one role after the other
-function history(messages: readonly Message[]): Turn[] {
+// its calls, then a user turn of their results, a result holding its images
+// after its text when the model sees them; turns of one role in a row merge,
+// as the API takes one role after the other
+function history(messages: readonly Message[], images: boolean): Turn[] {
 	const turns: Turn[] = [];
 	const add = (role: Turn['role'], content: Block[]) => {
 		const last = turns[turns.length - 1];
@@ -72,7 +85,10 @@ function history(messages: readonly Message[]): Turn[] {
 				r.calls.map((c) => ({
 					type: 'tool_result',
 					tool_use_id: c.id,
-					content: c.result ?? '',
+					content:
+						images && c.images?.length
+							? [{ type: 'text', text: c.result ?? '' }, ...c.images.map(picture)]
+							: (c.result ?? ''),
 					...(c.ok === false ? { is_error: true } : {})
 				}))
 			);
@@ -111,7 +127,7 @@ export default {
 				: {}),
 			cache_control: CACHE,
 			...(r.system ? { system: r.system } : {}),
-			messages: history(r.messages),
+			messages: history(r.messages, sees(r.info)),
 			...(r.tools.length
 				? {
 						tools: r.tools.map((t) => ({

@@ -1,5 +1,5 @@
 import type { Message, Protocol } from '../lib/types.js';
-import { bearer } from '../lib/remote.js';
+import { bearer, dataUrl } from '../lib/remote.js';
 
 // the Responses API of OpenAI, stateless: the history goes whole as items
 // every round, nothing stored on the server; the reasoning streams as its
@@ -16,7 +16,8 @@ type Item = Record<string, unknown>;
 
 // the history in items: cli messages stay out; every round of an assistant
 // turn becomes the reasoning its protocol kept when it is this one, its text
-// as one message in the phase it came in, its calls, then their outputs
+// as one message in the phase it came in, its calls, then their outputs, an
+// output holding its images after its text
 function history(messages: readonly Message[]): Item[] {
 	return messages.flatMap((m): Item[] => {
 		if (m.role === 'user') return [{ role: 'user', content: m.text }];
@@ -36,7 +37,12 @@ function history(messages: readonly Message[]): Item[] {
 				...r.calls.map((c) => ({
 					type: 'function_call_output',
 					call_id: c.id,
-					output: c.result ?? ''
+					output: c.images?.length
+						? [
+								{ type: 'input_text', text: c.result ?? '' },
+								...c.images.map((i) => ({ type: 'input_image', image_url: dataUrl(i) }))
+							]
+						: (c.result ?? '')
 				}))
 			];
 		});
