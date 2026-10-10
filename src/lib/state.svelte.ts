@@ -53,9 +53,9 @@ const pulses = new Map<string, Pulse>();
 // the clock of the turn a conversation answers now, if any
 export const pulseOf = (id: string): Pulse | undefined => pulses.get(id);
 
-// the conversation as it settled, even while the model answers: a call that
-// has not run yet never reaches the database; a conversation deleted meanwhile
-// stays deleted
+// the conversation as it settled, even while the model answers: a call not
+// sent yet never reaches the database, one running reaches it as stopped; a
+// conversation deleted meanwhile stays deleted
 async function save(conversation: Conversation): Promise<void> {
 	if (!app.conversations.some((c) => c.id === conversation.id)) return;
 	const snapshot = $state.snapshot(conversation) as Conversation;
@@ -268,7 +268,8 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 		signal,
 		cli: (lines: string) => run(lines, 'llm', { ...reach(id), signal, conversation, grant }),
 		redact,
-		grant
+		grant,
+		keep: () => save(conversation)
 	};
 	try {
 		await save(conversation);

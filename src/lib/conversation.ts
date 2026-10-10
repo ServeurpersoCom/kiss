@@ -25,11 +25,21 @@ export function source(m: Message): string {
 	}
 }
 
+// the outcome of a call stopped once sent: its tool may have acted
+export const STOPPED = 'stopped before it answered: the tool may have acted';
+
 // what of a turn holds once it stops or leaves the page: the calls that ran,
-// and the rounds that streamed something; a call without an outcome never ran
+// those sent as stopped, with the arguments they went with, and the rounds
+// that streamed something; a call never sent never ran
 export function settled(rounds: readonly Round[]): Round[] {
 	return rounds
-		.map((r) => ({ ...r, calls: r.calls.filter((c) => c.ok !== undefined) }))
+		.map((r) => ({
+			...r,
+			calls: r.calls.flatMap(({ sent, ...c }) => {
+				if (c.ok !== undefined) return [c];
+				return sent ? [{ ...c, result: STOPPED, ok: false }] : [];
+			})
+		}))
 		.filter((r) => r.reasoning || r.text || r.calls.length);
 }
 

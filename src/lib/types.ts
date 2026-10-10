@@ -257,7 +257,8 @@ export interface Image {
 	data: string;
 }
 
-// one tool call of a round, with its result once it ran
+// one tool call of a round, with its result once it ran; sent, in the page
+// only, once it reaches its tool
 export interface Call {
 	id: string;
 	name: string;
@@ -265,6 +266,7 @@ export interface Call {
 	result?: string;
 	ok?: boolean;
 	images?: Image[];
+	sent?: true;
 }
 
 // one request of an assistant turn: what the model streamed back, then the
@@ -333,6 +335,8 @@ export interface ToolContext {
 	grant(request: Grant): Promise<Verdict>;
 	// the lines with every secret value masked
 	redact(text: string): string;
+	// stores the conversation as it settled
+	keep(): Promise<void>;
 }
 
 // a tool the model may call: a file of tools/, or one an MCP server serves

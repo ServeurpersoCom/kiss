@@ -4,9 +4,10 @@ import {
 	WebStandardStreamableHTTPServerTransport,
 	createMcpHandler
 } from '@modelcontextprotocol/server';
-import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
+import type { Assistant, Grant, Message, Round, ToolContext, Verdict } from '../src/lib/types.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 import { line, pulse } from '../src/lib/pulse.js';
+import { STOPPED, settled } from '../src/lib/conversation.js';
 
 interface Body {
 	messages: { role: string; content: string }[];
@@ -137,16 +138,19 @@ async function page(
 	const go = async () => {
 		const stop = new AbortController();
 		const grant = async (request: Grant) => (asked.push(request), verdicts.shift() ?? ONCE);
+		const reply: Assistant = { role: 'assistant', rounds: [] };
+		// the rounds as the page last stored them
+		const kept: { rounds: Round[] } = { rounds: [] };
 		const tools: ToolContext = {
 			signal: stop.signal,
 			cli: (l) => engine.run(l, 'llm', { signal: stop.signal, grant }),
 			redact: engine.redact,
-			grant
+			grant,
+			keep: async () => void (kept.rounds = settled(reply.rounds))
 		};
-		const reply: Assistant = { role: 'assistant', rounds: [] };
 		const user: Message[] = [{ role: 'user', text: 'go' }];
 		const clock = pulse(performance.now());
-		return { reply, stop, clock, done: turn(user, reply, tools, stop.signal, clock) };
+		return { reply, stop, clock, kept, done: turn(user, reply, tools, stop.signal, clock) };
 	};
 	// what the model asked the user, answered by the verdicts in order, once past them
 	const asked: Grant[] = [];
@@ -414,15 +418,23 @@ describe('an MCP server', () => {
 		expect(t.reply.rounds[0].calls[0].result).toContain('mcp a');
 	});
 
-	it('runs no call past a stop', async () => {
+	it('keeps a call it stops as stopped, its arguments as sent, stored so before it runs', async () => {
 		const p = await page({ a: legacy(SHELL) }, [stream([call('wait', { description: 'hold' })])]);
 		await p.engine.run('set mcp url a http://a/mcp', 'user');
 		const t = await p.go();
 		await vi.waitFor(() => expect(t.reply.rounds[0]?.calls.length).toBe(1));
 		await new Promise((r) => setTimeout(r, 50));
+		const stopped = {
+			id: expect.any(String),
+			name: 'wait',
+			args: '{"description":"hold"}',
+			result: STOPPED,
+			ok: false
+		};
+		expect(t.kept.rounds[0].calls).toEqual([stopped]);
 		t.stop.abort();
 		await expect(t.done).rejects.toThrow();
-		expect(t.reply.rounds).toEqual([]);
+		expect(t.reply.rounds[0].calls).toEqual([stopped]);
 	});
 
 	it('in consent asks before each call: once lets it, always turns it on, refuse fails it', async () => {

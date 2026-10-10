@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
 import { ONCE } from '../src/lib/types.js';
 import { pulse } from '../src/lib/pulse.js';
+import { STOPPED } from '../src/lib/conversation.js';
 
 interface Body {
 	tools: { function: { name: string } }[];
@@ -64,7 +65,8 @@ async function page(replies: Reply[]) {
 		signal: stop.signal,
 		cli: (l) => engine.run(l, 'llm', { signal: stop.signal, grant }),
 		redact: engine.redact,
-		grant
+		grant,
+		keep: async () => {}
 	};
 	const reply: Assistant = { role: 'assistant', rounds: [] };
 	const user: Message[] = [{ role: 'user', text: 'go' }];
@@ -187,7 +189,7 @@ describe('a turn', () => {
 		});
 	});
 
-	it('runs no call after a stop, and keeps the calls that ended before it', async () => {
+	it('runs no call after a stop, and keeps the calls sent before it, the one it cut as stopped', async () => {
 		const p = await page([
 			stream([
 				calls(
@@ -204,7 +206,10 @@ describe('a turn', () => {
 		p.tools.cli = cli;
 		await expect(p.go()).rejects.toThrow();
 		expect(cli).toHaveBeenCalledTimes(2);
-		expect(p.reply.rounds[0].calls.map((c) => c.id)).toEqual(['a']);
+		expect(p.reply.rounds[0].calls).toMatchObject([
+			{ id: 'a', ok: true },
+			{ id: 'b', args: '{"lines":"show display thinking"}', ok: false, result: STOPPED }
+		]);
 		expect(p.engine.settings.get('display thinking')).toBe('closed');
 	});
 

@@ -211,8 +211,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   one source, `show privilege`, reads at the margin.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
   next round on.
-- A turn keeps, on the page and in the browser, what settled: what streamed and the calls that
-  ended before a stop, never one that did not.
+- A turn keeps, on the page and in the browser, what settled: what streamed, the calls that ended
+  before a stop, and the one a stop or a page closed cut while it ran, with its arguments and as
+  stopped, since the tool may have acted; a call never sent leaves nothing.
 - A message copied gives its source: the text typed, the answer without its thinking or calls,
   the output of a command.
 - An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
