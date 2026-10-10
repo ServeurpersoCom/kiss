@@ -5,7 +5,7 @@
 	import Splitter from './components/Splitter.svelte';
 	import Icon from './components/Icon.svelte';
 	import { app } from './lib/state.svelte.js';
-	import { NAME } from './lib/config.js';
+	import { CLI, NAME } from './lib/config.js';
 
 	// the width of the sidebar the user dragged, 0 when closed, none before a
 	// drag
@@ -26,7 +26,7 @@
 			<button onclick={() => (app.sidebar = true)} aria-label="Conversations"
 				><Icon name="menu" /></button
 			>
-			<span>{app.current?.title ?? NAME}</span>
+			<span>{app.current ? app.current.title || CLI : NAME}</span>
 		</header>
 		<Thread />
 		<div class="composer"><Composer /></div>

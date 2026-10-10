@@ -1,6 +1,6 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { ALL, ID_SHOWN, beyond } from '../lib/config.js';
+import { ALL, ID_SHOWN, beyond, titled } from '../lib/config.js';
 
 // what delete names: every conversation but the pinned ones, or one by a prefix
 // of its id
@@ -26,13 +26,15 @@ export default {
 		if (!list.length) throw new Error('no conversation to delete');
 		const question =
 			list.length === 1
-				? `Delete ${ctx.schema.quote(list[0].title)}?`
+				? `Delete${titled(list[0].title, (v) => ctx.schema.quote(v)) || ' this conversation'}?`
 				: `Delete ${list.length} conversations?`;
 		const yes = await ctx.confirm(question);
 		ctx.signal?.throwIfAborted();
 		if (!yes) throw new Error('the user deleted nothing');
 		await ctx.conversations.remove(list.map((c) => c.id));
-		return list.map((c) => `- ${c.id.slice(0, ID_SHOWN)} ${ctx.schema.quote(c.title)}`).join('\n');
+		return list
+			.map((c) => `- ${c.id.slice(0, ID_SHOWN)}${titled(c.title, (v) => ctx.schema.quote(v))}`)
+			.join('\n');
 	},
 	complete(_ctx, args) {
 		return args.length ? [] : [ALL, '<id>'];

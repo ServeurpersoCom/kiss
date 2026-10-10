@@ -25,6 +25,13 @@ export const INDENT = ' ';
 export const comment = (text: string): string => `${COMMENT_PREFIX} ${text}`;
 // a line of the composer opening with it runs on the CLI
 export const SLASH = '/';
+// the name of the command line: the head of a command, and what reads in place
+// of the title of a conversation the CLI opened, until a message names it
+export const CLI = 'CLI';
+// the title of a conversation after what names it on a CLI line, quoted as
+// title reads it, nothing while the conversation has none
+export const titled = (title: string, quote: (value: string) => string): string =>
+	title ? ` ${quote(title)}` : '';
 // what stands for a secret kept out of view, in the lines the history keeps;
 // never a value, as its brackets tell
 export const REMOVED = '<removed>';

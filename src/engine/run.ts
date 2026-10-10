@@ -175,7 +175,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	const [before, after] = resolved(draft);
 	const diff = schema.diff(before, after);
 	if (conversation && titled && titled.title !== conversation.title) {
-		diff.push(`- title ${schema.quote(conversation.title)}`);
+		if (conversation.title) diff.push(`- title ${schema.quote(conversation.title)}`);
 		diff.push(`+ title ${schema.quote(titled.title)}`);
 		conversation.title = titled.title;
 	}

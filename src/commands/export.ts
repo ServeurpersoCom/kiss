@@ -1,5 +1,5 @@
 import type { Command, Context, Conversation } from '../lib/types.js';
-import { ALL, beyond, fileName, localTime } from '../lib/config.js';
+import { ALL, ID_SHOWN, beyond, fileName, localTime } from '../lib/config.js';
 
 // what export names: every conversation, one by a prefix of its id, or the one
 // the batch was sent in
@@ -34,7 +34,7 @@ export default {
 		if (!ctx.offer) throw new Error('nobody is here to save the file');
 		const name =
 			list.length === 1
-				? fileName(list[0].title)
+				? fileName(list[0].title || list[0].id.slice(0, ID_SHOWN))
 				: fileName(`kiss ${localTime(Date.now()).slice(0, 10)}`);
 		const saved = await ctx.offer(name, ctx.conversations!.pack(list));
 		ctx.signal?.throwIfAborted();

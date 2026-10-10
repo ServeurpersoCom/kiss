@@ -3,7 +3,7 @@
 	import Round from './Round.svelte';
 	import Status from './Status.svelte';
 	import Icon from './Icon.svelte';
-	import { COPIED_MS, SLASH, ago, stamp } from '../lib/config.js';
+	import { CLI, COPIED_MS, SLASH, ago, stamp } from '../lib/config.js';
 	import { clock } from '../lib/clock.svelte.js';
 	import { source } from '../lib/conversation.js';
 	import { app, browse, dismiss, edit, pulseOf, retry } from '../lib/state.svelte.js';
@@ -121,7 +121,7 @@
 		     from its corner, then the line typed and its output -->
 		<div class="command">
 			<div class="head">
-				CLI
+				{CLI}
 				<button onclick={() => dismiss(message.id)} disabled={busy} aria-label="Close">
 					<Icon name="close" />
 				</button>

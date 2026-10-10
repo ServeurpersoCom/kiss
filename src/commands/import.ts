@@ -1,5 +1,5 @@
 import type { Command } from '../lib/types.js';
-import { ID_SHOWN, comment } from '../lib/config.js';
+import { ID_SHOWN, comment, titled } from '../lib/config.js';
 
 export default {
 	path: ['import'],
@@ -14,7 +14,7 @@ export default {
 		if (text === null) throw new Error('the user picked no file');
 		const { added, skipped } = await ctx.conversations.unpack(text);
 		const line = (id: string, title: string) =>
-			`${id.slice(0, ID_SHOWN)} ${ctx.schema.quote(title)}`;
+			id.slice(0, ID_SHOWN) + titled(title, (v) => ctx.schema.quote(v));
 		return [
 			...added.map((c) => `+ ${line(c.id, c.title)}`),
 			...skipped.map((c) => comment(`${line(c.id, c.title)} is already here`))

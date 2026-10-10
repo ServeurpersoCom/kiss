@@ -3,6 +3,7 @@
 	import type { Verdict } from '../lib/types.js';
 	import { always, answers } from '../lib/types.js';
 	import { app, choose, deliver } from '../lib/state.svelte.js';
+	import { CLI } from '../lib/config.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };
 	const KIB = 1024;
@@ -37,7 +38,7 @@
 	}
 
 	// the title of the conversation a question comes from
-	const title = (id: string): string => app.conversations.find((c) => c.id === id)?.title ?? '';
+	const title = (id: string): string => app.conversations.find((c) => c.id === id)?.title || CLI;
 
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') give(null);

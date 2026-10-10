@@ -152,7 +152,8 @@ const library: Library = {
 	remove
 };
 
-// the open conversation, created on the first message
+// the open conversation, created on the first line, named by a message and
+// left without a title by a command
 function current(title: string): Conversation {
 	if (app.current) return app.current;
 	app.conversations.unshift({
@@ -178,7 +179,7 @@ function explain(error: Error): string {
 // a line typed in the open conversation, after the entry the thread ends on
 export async function send(text: string): Promise<void> {
 	const cli = text.startsWith(SLASH);
-	const conversation = current(cli ? SLASH + redact(text.slice(SLASH.length)) : text);
+	const conversation = current(cli ? '' : text);
 	await enter(conversation, conversation.leaf, text);
 }
 
@@ -235,8 +236,8 @@ async function enter(
 		await save(conversation);
 		return;
 	}
-	// a conversation opened by a slash command takes its title from the first message
-	if (conversation.title.startsWith(SLASH)) conversation.title = text.slice(0, TITLE_LENGTH);
+	// a conversation with no title yet takes it from its first message
+	if (!conversation.title) conversation.title = text.slice(0, TITLE_LENGTH);
 	const user = append(conversation, parent, { role: 'user', text });
 	await answer(conversation, user.id);
 }

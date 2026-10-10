@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { app, newChat, open, pin, remove } from '../lib/state.svelte.js';
 	import type { Conversation } from '../lib/types.js';
-	import { NAME, dayName } from '../lib/config.js';
+	import { CLI, NAME, dayName } from '../lib/config.js';
 	import { clock } from '../lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
 	import Dialog from './Dialog.svelte';
@@ -38,7 +38,9 @@
 			<div class="group">{g.name}</div>
 			{#each g.conversations as c (c.id)}
 				<div class="item" class:active={app.current?.id === c.id}>
-					<button class="title" onclick={() => open(c.id)} title={c.title}>{c.title}</button>
+					<button class="title" onclick={() => open(c.id)} title={c.title || CLI}
+						>{c.title || CLI}</button
+					>
 					{#if c.id in app.replies}
 						<span class="busy" aria-label="Answering"></span>
 					{/if}

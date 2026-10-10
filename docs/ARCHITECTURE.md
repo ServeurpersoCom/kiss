@@ -179,6 +179,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `load` moves it.
+- A conversation takes its title from its first message; one the CLI opened has none until then,
+  and reads `CLI` where a title would: its title is a name, never a line typed.
 - `delete` deletes nothing before the user confirms it, whoever asks, then every conversation it
   names in one write; `delete all` keeps the pinned ones, which go only when named.
 - The latest save is the configuration the next page load starts with, and the archive changes
