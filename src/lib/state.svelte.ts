@@ -17,6 +17,7 @@ import {
 import { EndpointError } from './api.js';
 import { redact, run } from '../engine/run.js';
 import { hold } from '../modules/css.js';
+import { held, pulse, type Pulse } from './pulse.js';
 
 // what the page asks the user, and how the answer settles it: a change or a
 // call the model asks for, the value of a secret key, a file to save, a file
@@ -45,6 +46,12 @@ export const app = $state({
 
 // what stops each turn, by conversation
 const controllers = new Map<string, AbortController>();
+// the clock of each turn, by conversation, read at every frame of the screen
+// and never through the state of the page
+const pulses = new Map<string, Pulse>();
+
+// the clock of the turn a conversation answers now, if any
+export const pulseOf = (id: string): Pulse | undefined => pulses.get(id);
 
 // the conversation as it settled, even while the model answers: a call that
 // has not run yet never reaches the database; a conversation deleted meanwhile
@@ -245,6 +252,8 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	const entry = append(conversation, user, { role: 'assistant', rounds: [] });
 	conversation.updated = entry.time;
 	const reply = entry as Assistant;
+	const p = pulse(performance.now());
+	pulses.set(id, p);
 	app.replies[id] = reply;
 	const controller = new AbortController();
 	controllers.set(id, controller);
@@ -262,12 +271,13 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	};
 	try {
 		await save(conversation);
-		await turn(before, reply, tools, signal);
+		await turn(before, reply, tools, signal, p);
 	} catch (e) {
 		reply.error = explain(e as Error);
 	} finally {
 		delete app.replies[id];
 		controllers.delete(id);
+		pulses.delete(id);
 		await save(conversation);
 	}
 }
@@ -276,14 +286,20 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 let posed = 0;
 
 // a question to the user from a conversation, shown once those before it are
-// answered; the css sheets hold off while any question stands
+// answered; the css sheets hold off while any question stands, and the time it
+// stands leaves the clock of the turn that asks
 function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return new Promise((resolve) => {
 		const id = ++posed;
+		const asked = performance.now();
 		hold(true);
+		// the first answer settles it, any later one finds it gone
 		const settle = (answer: T) => {
+			if (!app.asks.some((q) => q.id === id)) return;
 			app.asks = app.asks.filter((q) => q.id !== id);
 			hold(app.asks.length > 0);
+			const p = pulses.get(from);
+			if (p) held(p, performance.now() - asked);
 			resolve(answer);
 		};
 		app.asks.push({ ...ask(settle), id, from });

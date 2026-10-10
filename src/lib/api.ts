@@ -10,10 +10,13 @@ const NOT_FOUND = 404;
 const KEY_FIX = `${SLASH}set endpoints key <name> <key>`;
 const URL_FIX = `${SLASH}set endpoints url <name> <url>`;
 
+// one chunk of a stream: what it adds to the reply, and on the last one the
+// tokens the endpoint counted
 interface Delta {
 	content?: string;
 	reasoning?: string;
 	calls?: { index: number; id?: string; name?: string; args?: string }[];
+	usage?: number;
 }
 
 // what an endpoint answered wrong, with the command that fixes it when the
@@ -124,7 +127,8 @@ export async function pick(
 }
 
 // one delta per server sent event, until [DONE]: a stream closed before it is
-// cut short, never a finished answer
+// cut short, never a finished answer; the endpoint counts the tokens it
+// generated on a last chunk of its own
 export async function* chat(
 	endpoint: Remote,
 	body: object,
@@ -133,7 +137,7 @@ export async function* chat(
 	const init = {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ ...body, stream: true })
+		body: JSON.stringify({ ...body, stream: true, stream_options: { include_usage: true } })
 	};
 	const stream = await request(endpoint, '/chat/completions', init, signal, async (res) => {
 		if (!res.ok || !res.body) throw await failure(res);
@@ -155,6 +159,8 @@ export async function* chat(
 			if (data === '[DONE]') return;
 			const json = JSON.parse(data);
 			if (json.error) throw new Error(json.error.message ?? `${endpoint.url} broke the stream`);
+			const usage = json.usage?.completion_tokens;
+			if (typeof usage === 'number') yield { usage };
 			const delta = json.choices?.[0]?.delta;
 			if (!delta) continue;
 			yield {

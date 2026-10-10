@@ -36,7 +36,12 @@
 	<div class="content" bind:this={content}>
 		{#if thread.length}
 			{#each thread as entry (entry.id)}
-				<Message {entry} versions={versions.get(entry.parent) ?? [entry]} live={entry === reply} />
+				<Message
+					{entry}
+					versions={versions.get(entry.parent) ?? [entry]}
+					live={entry === reply}
+					last={entry === thread.at(-1)}
+				/>
 			{/each}
 		{:else}
 			<div class="empty">

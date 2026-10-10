@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant, Grant, ToolContext, Verdict } from '../src/lib/types.js';
+import type { Pulse } from '../src/lib/pulse.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 import { app, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 
@@ -8,14 +9,15 @@ import { app, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 interface Held {
 	reply: Assistant;
 	ctx: ToolContext;
+	pulse: Pulse;
 	end(): void;
 }
 const held = vi.hoisted(() => [] as Held[]);
 
 vi.mock('../src/lib/agent.js', () => ({
-	turn: (_: unknown, reply: Assistant, ctx: ToolContext, signal: AbortSignal) =>
+	turn: (_: unknown, reply: Assistant, ctx: ToolContext, signal: AbortSignal, pulse: Pulse) =>
 		new Promise<void>((end, fail) => {
-			held.push({ reply, ctx, end });
+			held.push({ reply, ctx, pulse, end });
 			signal.addEventListener('abort', () => fail(signal.reason));
 		})
 }));
@@ -115,5 +117,21 @@ describe('turns in several conversations', () => {
 		held[0].end();
 		await sent;
 		expect(last(first).error).toBeUndefined();
+	});
+
+	it('leave the time the user takes on a question out of the clock of the turn that asks', async () => {
+		const { sent } = await two();
+		const [a, b] = held.map((h) => [h.pulse.start, h.pulse.since]);
+		let now = performance.now();
+		const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+		const asked = held[0].ctx.grant(call('x'));
+		now += 5000;
+		answer(ONCE);
+		await asked;
+		clock.mockRestore();
+		expect([held[0].pulse.start, held[0].pulse.since]).toEqual(a.map((t) => t + 5000));
+		expect([held[1].pulse.start, held[1].pulse.since]).toEqual(b);
+		held.forEach((h) => h.end());
+		await sent;
 	});
 });

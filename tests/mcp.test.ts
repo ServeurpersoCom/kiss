@@ -6,6 +6,7 @@ import {
 } from '@modelcontextprotocol/server';
 import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
+import { pulse } from '../src/lib/pulse.js';
 
 interface Body {
 	messages: { role: string; content: string }[];
@@ -144,7 +145,7 @@ async function page(
 		};
 		const reply: Assistant = { role: 'assistant', rounds: [] };
 		const user: Message[] = [{ role: 'user', text: 'go' }];
-		return { reply, stop, done: turn(user, reply, tools, stop.signal) };
+		return { reply, stop, done: turn(user, reply, tools, stop.signal, pulse(performance.now())) };
 	};
 	// what the model asked the user, answered by the verdicts in order, once past them
 	const asked: Grant[] = [];

@@ -138,6 +138,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   replaces it only when every line succeeds, and answers with what changed.
 - One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model
   neither starts, nor runs another line, nor replaces anything.
+- The line under a turn and what the turn spent measure the system alone: the time the user takes
+  on a question leaves every clock of the turn that asks, a round counts its tokens once, by the
+  count of the endpoint when it gives one, and the rate starts from the second token.
 - Each conversation answers on its own, beside the others: its turn, its Stop and its questions
   are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
   the turn that asked it.
@@ -269,6 +272,16 @@ The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `pres
 reads it. A reply streams until it ends or the turn is stopped. Several conversations answer at
 once, each turn in its own; a server running one model at a time loads them in turn.
 
+One line under the turn says what the system does now, its first letter capital, redrawn at every
+frame of the screen, in milliseconds: `Waiting for pod - 842 ms` until the first chunk, thinking or
+writing with the tokens and their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool
+while its call streams, `Running config - 47 ms` while it runs, after `Round 2 - ` from the second
+round on. It hides while a question of the turn stands, as the time the user takes is none of the
+system. A request asks the endpoint to count its tokens, `stream_options` of OpenAI, one per chunk
+counting until it does. Once the turn ends, what it spent stays with its answer, beside its time:
+`1,204 tokens - 51.3 t/s - 23,512 ms`, the rate over the generation alone, the last figure the
+whole time of the system.
+
 ## MCP servers
 
 KiSS calls the tools of any MCP server over Streamable HTTP, with the official TypeScript SDK. A
@@ -300,19 +313,19 @@ it entered, and the conversation holds its leaf, the entry the thread ends on. T
 path up from the leaf, and so is the history the model reads, so the server reuses its cache along
 it.
 
-Under every message, shown while it is hovered, always where nothing hovers, how long ago it
-entered, its moment in full under the pointer, in the language of the browser, and its copy button
-on the outer edge, the versions and the time on the inner side: under a message of the user, retry,
-edit and copy; under an answer, copy and retry; under a command, copy and the time, no versions. A
-command reads like a block of code, a head naming the CLI, `cli`, with its close button in the
-corner. Retry, from a message of the user or from an answer to it, enters a new answer beside those
-it had, from the very prefix they were given. The model never reads a command, so closing one clears
-the thread and leaves its history whole. What stops a turn shows under it in a card marked by the
-danger color, like a question to the user. An edit enters the new text as a version beside the
-message it edits, and the model answers it from the very prefix the edited one had; the branch
-edited stays whole. Arrows under a message with versions go from one to the next, each coming back
-as it was last written in. The configuration belongs to no branch: a command of one branch stays
-applied when another shows.
+Under every message, shown while it is hovered, always under the last message of the thread and
+where nothing hovers, how long ago it entered, its first letter capital, its moment in full under
+the pointer, in the language of the browser, and its copy button on the outer edge, the versions and
+the time on the inner side: under a message of the user, retry, edit and copy; under an answer, copy
+and retry; under a command, copy and the time, no versions. A command reads like a block of code, a
+head naming the CLI, `CLI`, with its close button in the corner. Retry, from a message of the user
+or from an answer to it, enters a new answer beside those it had, from the very prefix they were
+given. The model never reads a command, so closing one clears the thread and leaves its history
+whole. What stops a turn shows under it in a card marked by the danger color, like a question to the
+user. An edit enters the new text as a version beside the message it edits, and the model answers it
+from the very prefix the edited one had; the branch edited stays whole. Arrows under a message with
+versions go from one to the next, each coming back as it was last written in. The configuration
+belongs to no branch: a command of one branch stays applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations`
 lists them by id, the one the batch was sent in marked. `export` offers a file of this

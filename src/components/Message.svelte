@@ -1,23 +1,30 @@
 <script lang="ts">
 	import type { Entry } from '../lib/types.js';
 	import Round from './Round.svelte';
+	import Status from './Status.svelte';
 	import Icon from './Icon.svelte';
 	import { COPIED_MS, SLASH, ago, stamp } from '../lib/config.js';
 	import { clock } from '../lib/clock.svelte.js';
 	import { source } from '../lib/conversation.js';
-	import { app, browse, dismiss, edit, retry } from '../lib/state.svelte.js';
+	import { app, browse, dismiss, edit, pulseOf, retry } from '../lib/state.svelte.js';
+	import { summary } from '../lib/pulse.js';
 
 	// versions: the entries beside this one, itself among them, oldest first;
-	// live: the turn the model writes now
+	// live: the turn the model writes now; last: the message the thread ends on
 	let {
 		entry: message,
 		versions,
-		live = false
-	}: { entry: Entry; versions: Entry[]; live?: boolean } = $props();
+		live = false,
+		last = false
+	}: { entry: Entry; versions: Entry[]; live?: boolean; last?: boolean } = $props();
 
 	const at = $derived(versions.findIndex((v) => v.id === message.id));
 	// whether the model answers in the open conversation now
 	const busy = $derived(!!app.current && app.current.id in app.replies);
+	// the clock of the turn written now, hidden while a question of it stands,
+	// as the time the user takes is none of the system
+	const pulse = $derived(live && app.current ? pulseOf(app.current.id) : undefined);
+	const asking = $derived(app.asks.some((q) => q.from === app.current?.id));
 
 	let copied = $state(false);
 	// the text being edited, none while the message shows as sent
@@ -95,7 +102,7 @@
 	{/if}
 {/snippet}
 
-<div class="message {message.role}">
+<div class="message {message.role}" class:last>
 	{#if message.role === 'user'}
 		{#if draft === null}
 			<div class="bubble">{message.text}</div>
@@ -114,7 +121,7 @@
 		     from its corner, then the line typed and its output -->
 		<div class="command">
 			<div class="head">
-				cli
+				CLI
 				<button onclick={() => dismiss(message.id)} disabled={busy} aria-label="Close">
 					<Icon name="close" />
 				</button>
@@ -129,6 +136,9 @@
 			{/each}
 			{#if message.error}
 				<div class="error">{message.error}</div>
+			{/if}
+			{#if pulse && !asking}
+				<Status {pulse} />
 			{/if}
 		</div>
 	{/if}
@@ -150,6 +160,9 @@
 				{@render again()}
 				{@render switcher()}
 				{@render when()}
+				{#if message.stats}
+					<span class="time">{summary(message.stats)}</span>
+				{/if}
 			{:else}
 				{@render when()}
 				{@render clip()}
@@ -235,7 +248,8 @@
 		text-transform: uppercase;
 	}
 	/* the icons under a message, shown while the message is hovered or holds
-	   the focus, their place kept; always shown where nothing hovers */
+	   the focus, their place kept; always shown under the last message, and
+	   where nothing hovers */
 	.actions {
 		display: flex;
 		align-items: center;
@@ -243,7 +257,8 @@
 		visibility: hidden;
 	}
 	.message:hover .actions,
-	.message:focus-within .actions {
+	.message:focus-within .actions,
+	.message.last .actions {
 		visibility: visible;
 	}
 	@media (hover: none) {
@@ -255,6 +270,10 @@
 		padding: 0 0.4rem;
 		font-size: var(--size-secondary);
 		color: var(--fg-dim);
+	}
+	/* the time and what the turn spent, their first letter capital */
+	.time::first-letter {
+		text-transform: uppercase;
 	}
 	.version {
 		font-size: var(--size-secondary);

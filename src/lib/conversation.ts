@@ -185,11 +185,12 @@ const call = object(
 );
 const round = object({ reasoning: string, text: string, calls: array(call) });
 const link = { id: string, parent, time: number };
+const stats = object({ tokens: number, generation: number, system: number });
 const MESSAGES: Record<string, Check> = {
 	user: object({ ...link, role: constant('user'), text: string }),
 	assistant: object(
 		{ ...link, role: constant('assistant'), rounds: array(round) },
-		{ error: string }
+		{ error: string, stats }
 	),
 	cli: object({ ...link, role: constant('cli'), input: string, output: string, ok: boolean })
 };

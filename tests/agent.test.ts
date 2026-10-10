@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant, Grant, Message, ToolContext, Verdict } from '../src/lib/types.js';
 import { ONCE } from '../src/lib/types.js';
+import { pulse } from '../src/lib/pulse.js';
 
 interface Body {
 	tools: { function: { name: string } }[];
@@ -76,7 +77,7 @@ async function page(replies: Reply[]) {
 		asked,
 		verdicts,
 		settled,
-		go: () => turn(user, reply, tools, stop.signal)
+		go: () => turn(user, reply, tools, stop.signal, pulse(performance.now()))
 	};
 }
 
@@ -86,6 +87,32 @@ beforeEach(() => {
 });
 
 describe('a turn', () => {
+	it('asks the tokens counted, and keeps what it spent, the count of the endpoint first', async () => {
+		// the count of the endpoint on a last chunk of its own, before [DONE]
+		const usage: Reply = () => {
+			const chunks = [
+				...['a', 'b', 'c'].map((content) => ({ choices: [{ delta: { content } }] })),
+				{ choices: [], usage: { completion_tokens: 7 } }
+			];
+			const text =
+				chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
+			return new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+		};
+		const p = await page([usage]);
+		await p.go();
+		expect(p.bodies[0]).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+		expect(p.reply.stats).toMatchObject({ tokens: 7 });
+		expect(p.reply.rounds[0].text).toBe('abc');
+	});
+
+	it('counts one token per chunk when the endpoint gives no count', async () => {
+		const p = await page([
+			stream([{ content: 'a' }, { reasoning_content: 'r' }, { content: 'b' }])
+		]);
+		await p.go();
+		expect(p.reply.stats).toMatchObject({ tokens: 3 });
+	});
+
 	it('sends the parameters set for its model only, numbers as numbers', async () => {
 		const p = await page([stream([{ content: 'ok' }])]);
 		await p.engine.run(

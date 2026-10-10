@@ -264,12 +264,20 @@ export interface Round {
 	calls: Call[];
 }
 
-// user: what the user typed; assistant: one whole turn, round by round, and
-// what stopped it when it failed; cli: a slash command and its output, never
-// sent to the model
+// what a turn spent, the time the user took on a question left out: its
+// tokens, and in milliseconds of the system, generating them and in all
+export interface Stats {
+	tokens: number;
+	generation: number;
+	system: number;
+}
+
+// user: what the user typed; assistant: one whole turn, round by round, what
+// stopped it when it failed, and what it spent once it streamed; cli: a slash
+// command and its output, never sent to the model
 export type Message =
 	| { role: 'user'; text: string }
-	| { role: 'assistant'; rounds: Round[]; error?: string }
+	| { role: 'assistant'; rounds: Round[]; error?: string; stats?: Stats }
 	| { role: 'cli'; input: string; output: string; ok: boolean };
 
 export type Assistant = Extract<Message, { role: 'assistant' }>;

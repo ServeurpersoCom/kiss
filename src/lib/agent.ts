@@ -5,6 +5,7 @@ import { aggregate } from './mcp.js';
 import prompts from './prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
+import { chunk, close, mark, stats, type Pulse } from './pulse.js';
 import { CONSENT, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
 import { run, settings } from '../engine/run.js';
@@ -114,24 +115,41 @@ async function setup(messages: readonly Message[], signal: AbortSignal) {
 // calls nothing; every round reads the configuration as it stands, so what a
 // call changes holds from the next round on; reply belongs to the page state,
 // so the round and its calls are read back from it once added; after a stop no
-// call runs, and the reply keeps what settled before it
+// call runs, and the reply keeps what settled before it; the pulse follows the
+// turn chunk by chunk, and what it spent enters the reply once it streamed
 export async function turn(
 	messages: readonly Message[],
 	reply: Assistant,
 	ctx: ToolContext,
-	signal: AbortSignal
+	signal: AbortSignal,
+	p: Pulse
 ): Promise<void> {
 	let r = 0;
 	try {
 		for (; r < Number(settings.get('tools rounds')); r++) {
+			p.round = r + 1;
 			const { endpoint, body, tools } = await setup([...messages, reply], signal);
+			mark(p, 'waiting', endpoint.name, performance.now());
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
 			const round = reply.rounds[reply.rounds.length - 1];
 			// the calls of the round by the index the stream gives them
 			const calls = new Map<number, Call>();
+			let usage: number | undefined;
 			for await (const d of chat(endpoint, body, signal)) {
-				if (d.reasoning) round.reasoning += d.reasoning;
-				if (d.content) round.text += d.content;
+				const now = performance.now();
+				if (d.usage !== undefined) {
+					usage = d.usage;
+					continue;
+				}
+				chunk(p, !!(d.reasoning || d.content || d.calls), now);
+				if (d.reasoning) {
+					round.reasoning += d.reasoning;
+					mark(p, 'thinking', '', now);
+				}
+				if (d.content) {
+					round.text += d.content;
+					mark(p, 'writing', '', now);
+				}
 				for (const c of d.calls ?? []) {
 					if (!calls.has(c.index)) {
 						round.calls.push({ id: c.id ?? `call-${r}-${c.index}`, name: '', args: '' });
@@ -141,16 +159,21 @@ export async function turn(
 					if (c.id) part.id = c.id;
 					if (c.name) part.name += c.name;
 					if (c.args) part.args += c.args;
+					mark(p, 'calling', part.name, now);
 				}
 			}
+			close(p, usage);
 			if (!round.calls.length) return;
 			for (const c of round.calls) {
 				signal.throwIfAborted();
+				mark(p, 'running', c.name, performance.now());
 				await call(tools, ctx, c);
 			}
 		}
 		reply.error = `stopped after ${r} tool rounds`;
 	} finally {
 		reply.rounds = settled(reply.rounds);
+		const spent = stats(p, performance.now());
+		if (spent) reply.stats = spent;
 	}
 }
