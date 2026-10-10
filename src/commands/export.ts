@@ -5,6 +5,7 @@ import {
 	RUNNING,
 	SITE_CONFIG_URL,
 	beyond,
+	comment,
 	fileName,
 	localTime
 } from '../lib/config.js';
@@ -44,7 +45,7 @@ export default {
 			const saved = await ctx.offer(SITE_CONFIG_URL, running(ctx).join('\n') + '\n');
 			ctx.signal?.throwIfAborted();
 			if (!saved) throw new Error('the user saved no file');
-			return `exported the running configuration to ${SITE_CONFIG_URL}`;
+			return comment(`exported the running configuration to ${SITE_CONFIG_URL}`);
 		}
 		const list = chosen(ctx, plan);
 		if (!list.length) throw new Error('no conversation yet');
@@ -55,7 +56,8 @@ export default {
 		const saved = await ctx.offer(name, ctx.conversations!.pack(list));
 		ctx.signal?.throwIfAborted();
 		if (!saved) throw new Error('the user saved no file');
-		return `exported ${list.length} to ${name}`;
+		const n = list.length;
+		return comment(`exported ${n} ${n === 1 ? 'conversation' : 'conversations'} to ${name}`);
 	},
 	complete(_ctx, args) {
 		return args.length ? [] : [ALL, RUNNING, '<id>'];

@@ -650,11 +650,13 @@ describe('the conversations', () => {
 		const list = [talk('ab12-2', 'Two', 2), talk('ab34-1', 'One', 1)];
 		const s = shelf(list);
 		expect((await k.run('export', 'llm', { ...s, conversation: list[1] })).text).toBe(
-			'exported 1 to One.json'
+			'! exported 1 conversation to One.json'
 		);
-		expect((await k.run('export ab1', 'llm', s)).text).toBe('exported 1 to Two.json');
+		expect((await k.run('export ab1', 'llm', s)).text).toBe(
+			'! exported 1 conversation to Two.json'
+		);
 		expect((await k.run('export all', 'llm', s)).text).toMatch(
-			/^exported 2 to kiss \d{4}-\d\d-\d\d\.json$/
+			/^! exported 2 conversations to kiss \d{4}-\d\d-\d\d\.json$/
 		);
 		expect(s.offered.map((o) => parse(o.text).map((c) => c.id))).toEqual([
 			['ab34-1'],
@@ -671,7 +673,7 @@ describe('the conversations', () => {
 		expect((await k.run('export all', 'llm', refused)).text).toBe('% the user saved no file');
 		await k.run('set endpoints url a http://a/v1\nset endpoints key a sk-a', 'user');
 		expect((await k.run('export running', 'llm', s)).text).toBe(
-			'exported the running configuration to kiss.conf'
+			'! exported the running configuration to kiss.conf'
 		);
 		const conf = s.offered.at(-1)!;
 		expect(conf.name).toBe('kiss.conf');
@@ -742,7 +744,7 @@ describe('the archive', () => {
 		expect((await k.run('save two', 'user')).text).toContain('refuses to store');
 		vi.unstubAllGlobals();
 		expect((await k.run('show saves', 'user')).text).not.toContain('two');
-		expect((await k.run('save three', 'user')).text).toBe('saved three');
+		expect((await k.run('save three', 'user')).text).toBe('! saved three');
 	});
 });
 
@@ -765,14 +767,14 @@ describe('a save', () => {
 		);
 		await k.run('set endpoints url a http://a/v1\nset endpoints url b http://b/v1', 'user');
 		expect((await k.run('save a', 'user')).text).toBe(
-			'saved a\n! chat model is not set -> /show models, then /set chat model <endpoint/model>'
+			'! saved a\n! chat model is not set -> /show models, then /set chat model <endpoint/model>'
 		);
 		await k.run('set chat model b/x', 'user');
 		expect((await k.run('save a', 'user')).text).toBe(
-			'saved a\n! b does not serve x, see show models'
+			'! saved a\n! b does not serve x, see show models'
 		);
 		await k.run('set chat model b/m', 'user');
-		expect((await k.run('save a', 'user')).text).toBe('saved a');
+		expect((await k.run('save a', 'user')).text).toBe('! saved a');
 	});
 
 	it('takes one name, never session, and a save of the same name gives way', async () => {

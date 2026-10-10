@@ -123,6 +123,11 @@ An output by group indents each body one blank under its header, IOS style: `sec
 at the margin with the lines indented under it when that line matches, and an indented line reads
 back as set like any other, so a whole output pastes back as it is.
 
+Every line an output writes is one of four: a command, which pastes back as it is, a change after
+`-` or `+`, a note after `!`, which a paste skips, what a command did, or an error after `%`; a show
+lists what it reads. The CLI writes its words as they are, in lower case, keys and values verbatim,
+and the page writes its prose with a capital.
+
 | Module      | Keys                                                                             |
 | ----------- | -------------------------------------------------------------------------------- |
 | `chat`      | `model`, `system`, both guarded                                                  |

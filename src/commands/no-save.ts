@@ -1,6 +1,6 @@
 import type { Command } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
-import { beyond } from '../lib/config.js';
+import { beyond, comment } from '../lib/config.js';
 
 export default {
 	path: ['no', 'save'],
@@ -13,7 +13,7 @@ export default {
 	},
 	run(ctx, name) {
 		ctx.archive.remove(ctx.archive.find(name));
-		return `deleted ${name}`;
+		return comment(`deleted the save ${name}`);
 	},
 	complete(ctx, args) {
 		return args.length ? [] : ctx.archive.list().map((s) => s.name);
