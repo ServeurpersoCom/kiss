@@ -2,10 +2,10 @@
 
 **The chat UI with no settings panel. You talk; the model sets up the page.**
 
-Point KiSS at any OpenAI compatible endpoint, or the Claude API in its own protocol, and just say
-what you want: use the Qwen on my box, plug in my MCP sandbox, go light with a purple accent. The
-model types the configuration itself, in a real CLI modeled on Cisco IOS, and anything that widens
-its reach waits for your yes.
+Point KiSS at any OpenAI compatible endpoint, or the Claude and OpenAI APIs in their own
+protocols, and just say what you want: use the Qwen on my box, plug in my MCP sandbox, go light
+with a purple accent. The model types the configuration itself, in a real CLI modeled on Cisco IOS,
+and anything that widens its reach waits for your yes.
 
 One HTML file. No backend, no account, no settings page. Ever.
 

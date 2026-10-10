@@ -143,8 +143,9 @@ export async function pick(
 }
 
 // one delta per server sent event, read by the protocol of the endpoint from
-// the data of the event, until the event that ends the stream: a stream closed
-// before it is cut short, never a finished answer
+// the data of the event, up to the event that ends the stream, which may carry
+// the last count: a stream closed before it is cut short, never a finished
+// answer
 export async function* chat(
 	endpoint: Endpoint,
 	req: Request,
@@ -176,8 +177,8 @@ export async function* chat(
 			const d = read(line.slice(DATA.length).trim());
 			if (!d) continue;
 			if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);
-			if (d.end) return;
 			yield d;
+			if (d.end) return;
 		}
 	}
 }

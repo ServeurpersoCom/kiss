@@ -13,7 +13,7 @@ src/engine/      the CLI: parse, schema, values, registry, run, archive
 src/commands/    one file per command, registered by existing
 src/modules/     one file per module: its keys, rules, checks, how it applies to the page
 src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
-src/protocols/   one file per protocol an endpoint speaks: chat, messages
+src/protocols/   one file per protocol an endpoint speaks: chat, messages, responses
 src/lib/         the page side: agent, api, mcp, state, conversation, db
 src/components/  thread, message, round, ask, dialog, composer, sidebar
 src/markdown/    the remark and rehype stack and its incremental renderer
@@ -300,7 +300,7 @@ a turn stopped keeps what settled.
 Every endpoint speaks the protocol `endpoints protocol` names: the protocol builds the request from
 the history, carries the key and reads the stream, and the rest of KiSS sees the same deltas
 whatever it is. A round keeps what its protocol needs back and nothing else rebuilds, a signed
-thinking block, and sends it back to that protocol only.
+thinking block, an encrypted reasoning item, and sends it back to that protocol only.
 
 - `chat`, by default: the chat completions of OpenAI, the open standard of llama.cpp, vLLM and
   Hugging Face, the key as a bearer token.
@@ -308,11 +308,18 @@ thinking block, and sends it back to that protocol only.
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
   tool streaming its arguments. It needs `models max_tokens` set; `min_p`, the penalties and `seed`
   never go, and a copy says so of a model that sets them.
+- `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
+  nothing stored on the server, the key as a bearer token, the system prompt as its instructions,
+  the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
+  written. `max_tokens` goes as `max_output_tokens`; `top_k`, `min_p`, the penalties and `seed`
+  never go.
 
 ```
 set endpoints url claude https://api.anthropic.com/v1
 set endpoints protocol claude messages
 set models max_tokens claude/claude-opus-5-5 32000
+set endpoints url openai https://api.openai.com/v1
+set endpoints protocol openai responses
 ```
 
 Every MCP server sends its key as a bearer token. Every endpoint and every MCP server sends the
