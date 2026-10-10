@@ -478,13 +478,14 @@ describe('the firewall', () => {
 		expect((await k.run('set privilege level privilege allow', 'user')).text).toContain(
 			'privilege takes no privilege'
 		);
-		expect((await k.run('set privilege level css allow', 'user')).text).toContain(
-			'css takes no privilege'
+		expect((await k.run('set privilege level display allow', 'user')).text).toContain(
+			'display takes no privilege'
 		);
 		expect((await k.run('show privilege', 'user')).text).toBe(
 			[
 				'! modules',
 				' set privilege level chat ask',
+				' set privilege level css ask',
 				' set privilege level endpoints ask',
 				' set privilege level mcp ask',
 				' set privilege level tools ask'
@@ -867,6 +868,22 @@ describe('css', () => {
 		expect(last()).toBe('a { color: blue }\nb { color: red }');
 		await k.run('reset', 'user');
 		expect(last()).toBe('');
+	});
+
+	it('keys the tokens of the page of a value of their own, the model free on them alone', async () => {
+		const k = await page();
+		const shown = (await k.run('show css', 'user')).text;
+		expect(shown).toContain('set css bg "oklch(0.17 0.005 260)"');
+		expect(shown).toContain('set css size-secondary 0.8rem');
+		expect(shown).not.toMatch(/css (ok|surface|text-secondary|icon) /);
+		const refuse = user(REFUSE);
+		expect((await k.run('set css accent red', 'llm', refuse)).ok).toBe(true);
+		expect(refuse.asked).toEqual([]);
+		const tokens = document.head.querySelector('style:nth-last-of-type(2)')!;
+		expect((tokens as HTMLStyleElement).sheet!.cssRules[0].cssText).toContain('--accent: red');
+		expect((await k.run(`set css sheet x '.tool { display: none }'`, 'llm', refuse)).text).toBe(
+			'% the user refused the change'
+		);
 	});
 });
 

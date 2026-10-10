@@ -8,7 +8,7 @@ export type Role = 'user' | 'llm';
 
 export type Value = string;
 
-export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret';
+export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret' | 'css';
 
 // what a change of a key by the model needs from the privilege of its module:
 // change, any change; opening, a change toward a later value of an enum whose
@@ -52,6 +52,8 @@ export interface Key {
 	defaults?: Record<string, Value>;
 	// enum choices
 	values?: readonly string[];
+	// the property whose values a css value takes: color, width, font-family
+	property?: string;
 	// number bounds, both included, and whether it is whole
 	min?: number;
 	max?: number;

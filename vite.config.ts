@@ -63,6 +63,8 @@ export default defineConfig({
 		environment: 'happy-dom',
 		// a time zone ahead of UTC, so a law tells local time from UTC
 		env: { TZ: 'Europe/Paris' },
-		include: ['tests/*.test.ts']
+		include: ['tests/*.test.ts'],
+		// the tokens of the page, which the css module reads as its keys
+		css: { include: [/tokens\.css/] }
 	}
 });

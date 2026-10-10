@@ -207,7 +207,7 @@
 	.command {
 		background: var(--user-bg);
 		border-radius: calc(var(--radius) * 0.6);
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--fg-dim);
 	}
 	.command .head {
@@ -239,7 +239,7 @@
 	.error {
 		padding: 0.4rem 0 0.4rem 0.9rem;
 		border-left: 2px solid var(--danger);
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--danger);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
@@ -268,7 +268,7 @@
 	}
 	.time {
 		padding: 0 0.4rem;
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--fg-dim);
 	}
 	/* the time and what the turn spent, their first letter capital */
@@ -276,7 +276,7 @@
 		text-transform: uppercase;
 	}
 	.version {
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--fg-dim);
 		font-variant-numeric: tabular-nums;
 	}

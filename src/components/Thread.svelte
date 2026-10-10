@@ -73,7 +73,7 @@
 		color: var(--fg-dim);
 	}
 	h1 {
-		font-size: var(--size-title);
+		font-size: var(--text-title);
 		margin: 0 0 0.5rem;
 		color: var(--accent-text);
 		letter-spacing: -0.03em;

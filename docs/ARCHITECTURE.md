@@ -16,6 +16,7 @@ src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
 src/lib/         the page side: agent, api, mcp, state, conversation, db
 src/components/  thread, message, round, ask, dialog, composer, sidebar
 src/markdown/    the remark and rehype stack and its incremental renderer
+src/tokens.css   the tokens of the page, read as the keys of css
 tests/           the laws, under vitest and happy-dom
 ```
 
@@ -31,8 +32,8 @@ declared wrong or twice stops the page at load, never later.
 A value resolves through layers, the first that holds it winning: what the session sets, then
 `kiss.conf`, then the default of the item, then the default of the key. A save keeps the session
 layer only. A key is two fixed words, a module then a key; a key of a collection takes the item name
-next, and the value always comes last. Its kind is `string`, `number`, `enum`, `url` or `secret`,
-checked by the schema before anything runs.
+next, and the value always comes last. Its kind is `string`, `number`, `enum`, `url`, `secret` or
+`css`, a value of the CSS property it names, checked by the schema before anything runs.
 
 ### A batch
 
@@ -131,7 +132,7 @@ and the page writes its prose with a capital.
 | Module      | Keys                                                                             |
 | ----------- | -------------------------------------------------------------------------------- |
 | `chat`      | `model`, `system`, both guarded                                                  |
-| `css`       | `sheet <name>`                                                                   |
+| `css`       | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>` guarded            |
 | `display`   | `thinking`, `tools`, `render <thinking or reply>`                                |
 | `endpoints` | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
 | `mcp`       | `url <name>` and `headers <name>` guarded, `key <name>` secret, `timeout <name>` |
@@ -186,8 +187,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuse. The tools of KiSS are on.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation; the
   line that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
-- No css sheet applies while a question stands, whatever it sets meanwhile: the card the user
-  answers reads in the style of the page alone.
+- No css token or sheet applies while a question stands, whatever it sets meanwhile: the card the
+  user answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `load` moves it.
 - A conversation takes its title from its first message; one the CLI opened has none until then,
@@ -200,7 +201,11 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   every endpoint lists at once, one that fails beside the others.
 - A save warns when no model answers the chat: `chat model` empty with more than one endpoint,
   or naming a model its endpoint does not serve.
-- The sheets of `css` apply by name over every style of the page, whatever their selectors.
+- The keys of `css` are the tokens of the page of a value of their own, the model free on them; a
+  token derived from others is no key. The sheets of `css` apply by name over every style and every
+  token of the page, whatever their selectors, and the model writes one only as far as its privilege
+  lets it: a selector reaches anything the thread shows.
+- The page reads every size of text floored, so no size hides what the thread shows.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>`
   alone when the source fails: `show models` by endpoint, `show tools` by who serves it.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
@@ -253,9 +258,9 @@ only. A secret takes a masked field with OK and Cancel, an export Save or Cancel
 file or Cancel, a delete OK or Cancel; Enter and Escape answer too, never alone. One question shows
 at a time, in the order they come, whatever the conversation open: one from another conversation
 names it, as it holds every batch until answered. The Stop of a conversation answers no to its own
-questions. While a question stands the css sheets hold off, so no sheet restyles, hides or covers
-the card. Monospace is for what a machine wrote: the calls of tools and their outputs, code, and a
-block rendered plain; the cards, the commands and the errors read in the font of the page.
+questions. While a question stands the css tokens and sheets hold off, so nothing restyles, hides or
+covers the card. Monospace is for what a machine wrote: the calls of tools and their outputs, code,
+and a block rendered plain; the cards, the commands and the errors read in the font of the page.
 
 ```
 show privilege                           ! every guarded module and how far the model goes
@@ -412,28 +417,31 @@ every block but the last renders once and is kept, and the page renders at most 
 
 ## Style
 
-The page style is plain CSS, its tokens on `:root`, one theme and no other: three colors, `--bg`,
-`--fg` and `--accent`, every other color derived from them, shades of the background, shares of the
-text, the accent drawn toward the text, and hues at one lightness that follows the text, with the
-most chroma the screen shows at any lightness without bending the hue, so a sheet setting the three
-sets a whole theme, dark or light alike, and a sheet setting a derived color sets it alone;
-`--radius`, `--font`, `--mono`, `--size-primary` for the chat and `--size-secondary` for everything
-around it, every scrollbar thin, its thumb a line, the only two sizes of text but `--size-title`,
-the title of the page, `--size-icon`, every icon, the primary size, `--width`, `--bubble-width`,
-`--sidebar-width` within `--sidebar-min` and `--sidebar-max`. `show style` lists it, one rule per
-line, a rule of a component with its scoping class, the name of the component, `svelte-composer` for
+The page style is plain CSS, its tokens on `:root` in `tokens.css`, one theme and no other: three
+colors, `bg`, `fg` and `accent`, every other color derived from them, shades of the background,
+shares of the text, the accent drawn toward the text, and hues at one lightness that follows the
+text, with the most chroma the screen shows at any lightness without bending the hue, so the three
+set a whole theme, dark or light alike; `radius`, `font`, `mono`, `size-primary` for the chat and
+`size-secondary` for everything around it, the only two sizes of text but `size-title`, the title of
+the page, each read floored, every icon at the primary size, `width`, `bubble-width`,
+`sidebar-width` within `sidebar-min` and `sidebar-max`; every scrollbar thin, its thumb a line. A
+token of a value of its own is a key of `css`, typed by its default, a color, a length or a font,
+and `show css` lists them with their defaults; a derived one follows the tokens it reads, and only a
+sheet sets it alone. `show style` lists the style of the page, one rule per line, a rule of a
+component with its scoping class, the name of the component, `svelte-composer` for
 `Composer.svelte`, so a selector read there aims at that component alone; named sheets restyle
 anything over it. The sidebar follows its edge for the whole drag, within those bounds, it closes
 once the pointer goes below half the least width, and opens again once it reaches that width, from
 the left of the page too; the browser keeps both, the width and whether it is closed.
 
 ```
-show style | include :root              ! the tokens and their defaults
-set css sheet accent ':root { --accent: oklch(0.6 0.2 250) }'
-set css sheet theme ':root { --bg: #faf9f5; --fg: #141413 }'
-set css sheet wide ':root { --width: 64rem }'
+show css                                ! the tokens and their defaults
+set css accent 'oklch(0.6 0.2 250)'
+set css bg #faf9f5
+set css fg #141413                      ! with bg, a light theme
+set css width 64rem
+no css bg                               ! back to the background of the page
 set css sheet input 'form.svelte-composer { max-width: 64rem }'  ! the composer alone
-no css theme                            ! back to the colors of the page
 ```
 
 ## Site defaults

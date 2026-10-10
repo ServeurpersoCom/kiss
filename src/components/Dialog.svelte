@@ -81,7 +81,7 @@
 	}
 	button {
 		font: inherit;
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--fg);
 		background: var(--bg);
 		border: 1px solid var(--line);

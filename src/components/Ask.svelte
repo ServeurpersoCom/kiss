@@ -118,7 +118,7 @@
 		gap: 0.4rem;
 		padding: 0.4rem 0 0.4rem 0.9rem;
 		border-left: 2px solid var(--accent);
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 	}
 	.head {
 		color: var(--accent-text);

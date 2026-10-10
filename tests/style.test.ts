@@ -34,19 +34,24 @@ describe('style', () => {
 		expect(new Set(names).size).toBe(names.length);
 	});
 
-	it('holds every css sheet off while a question stands, whatever it sets meanwhile', async () => {
-		const sheet = [...document.head.querySelectorAll('style')].at(-1)!;
+	it('holds every token and css sheet off while a question stands, whatever it sets meanwhile', async () => {
+		const media = () => [...document.head.querySelectorAll('style')].slice(-2).map((s) => s.media);
 		const config = { names: () => ['cover'], get: () => '.svelte-ask { display: none }' };
 		css.apply(config as unknown as Config);
-		expect(sheet.media).toBe('');
+		expect(media()).toEqual(['', '']);
 		const sent = send('/import');
 		await vi.waitFor(() => expect(app.asks[0]?.kind).toBe('pick'));
-		expect(sheet.media).toBe('not all');
+		expect(media()).toEqual(['not all', 'not all']);
 		css.apply(config as unknown as Config);
-		expect(sheet.media).toBe('not all');
+		expect(media()).toEqual(['not all', 'not all']);
 		stop(app.current!.id);
 		await sent;
 		expect(app.asks).toEqual([]);
-		expect(sheet.media).toBe('');
+		expect(media()).toEqual(['', '']);
+	});
+
+	it('reads every size of text floored, so no size hides what the thread shows', () => {
+		const read = Object.values(sources).filter((s) => /var\(--size-/.test(s));
+		expect(read).toEqual([]);
 	});
 });

@@ -15,7 +15,8 @@ you     use the qwen on http://pod:8080/v1 and go light
 
 KiSS    set endpoints url pod http://pod:8080/v1
         set chat model pod/qwen3:8b
-        set css sheet theme ':root { --bg: #faf9f5; --fg: #141413 }'
+        set css bg #faf9f5
+        set css fg #141413
 
         Allow this change?
         + set chat model pod/qwen3:8b
@@ -64,7 +65,8 @@ The model configures the page, so KiSS guards what it can reach.
 - **Per model parameters**, sent only when set, under their OpenAI names.
 - **Rendering that holds up**: Markdown, LaTeX, code highlighted in 192 languages, for the
   thinking as for the reply, or either plain in monospace.
-- **Restyle anything** with named CSS sheets, just by asking.
+- **Restyle anything**, just by asking: every token of the page is a key, `set css bg #faf9f5`,
+  and named CSS sheets go over it.
 
 ## Quick start
 

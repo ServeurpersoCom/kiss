@@ -98,7 +98,7 @@
 		max-height: 7.5rem;
 		overflow-y: auto;
 		margin: 0 auto 0.5rem;
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 	}
 	.hints button {
 		width: auto;

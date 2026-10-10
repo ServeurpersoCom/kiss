@@ -78,7 +78,7 @@
 	header {
 		padding: 0 0.75rem;
 		font-weight: 700;
-		font-size: var(--size-title);
+		font-size: var(--text-title);
 		color: var(--accent-text);
 	}
 	button {
@@ -109,7 +109,7 @@
 	   first letter capital */
 	.group {
 		padding: 0.9rem 0.75rem 0.3rem;
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--fg-dim);
 	}
 	.group::first-letter {
@@ -134,7 +134,7 @@
 		padding: 0.5rem 0 0.5rem 0.75rem;
 		white-space: nowrap;
 		overflow: hidden;
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 	}
 	/* a title too long fades out instead of losing letters to an ellipsis: its
 	   letters drawn in a gradient of the text color, an ordinary paint that

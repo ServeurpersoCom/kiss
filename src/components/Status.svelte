@@ -22,7 +22,7 @@
 <style>
 	/* what the system does now, in figures that keep their width */
 	.status {
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 		color: var(--fg-dim);
 		font-variant-numeric: tabular-nums;
 	}

@@ -94,7 +94,7 @@
 	details {
 		color: var(--fg-dim);
 		font-family: var(--mono);
-		font-size: var(--size-secondary);
+		font-size: var(--text-secondary);
 	}
 	summary {
 		cursor: pointer;

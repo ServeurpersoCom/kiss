@@ -6,7 +6,7 @@ import { didYouMean } from './near.js';
 const URL_PROTOCOLS = ['http:', 'https:'];
 // a value that reads back as one token without quotes, a pipe opening a filter
 const BARE_VALUE = /^[^\s"'|][^\s|]*$/;
-const WORD = /^[a-z][a-z0-9_]*$/;
+const WORD = /^[a-z][a-z0-9_]*(-[a-z0-9]+)*$/;
 
 // a stored key is the key, then the item name for a named key
 export function stored(key: string, name?: string): string {
@@ -62,6 +62,9 @@ function check(def: Key, raw: string): Value {
 			if (!URL_PROTOCOLS.includes(url.protocol)) throw new Error(`"${raw}" is not http or https`);
 			return raw.replace(/\/+$/, '');
 		}
+		case 'css':
+			if (!CSS.supports(def.property!, raw)) throw new Error(`"${raw}" is not a ${def.property}`);
+			return raw;
 	}
 }
 
@@ -174,7 +177,7 @@ export class KeySchema implements Schema {
 			if (def.named && words.length === 2) return [...config.names(module), '<name>'];
 			if (!value || words.length !== (def.named ? 3 : 2)) return [];
 			if (def.kind === 'enum') return [...(def.values ?? [])];
-			return [`<${def.kind}>`];
+			return [`<${def.property ?? def.kind}>`];
 		} catch {
 			return [];
 		}
