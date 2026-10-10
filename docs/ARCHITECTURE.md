@@ -144,7 +144,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   `endpoints`, `tools`, `saves`, `models`, but an acronym, `css`, `mcp`: its singular, a prefix
   of it, names it too.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
-  replaces it only when every line succeeds, and answers with what changed.
+  replaces it only when every line succeeds, and answers with what changed; it always answers,
+  `! no change` when it writes nothing and changes nothing, so a request never ends in silence.
 - One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model
   neither starts, nor runs another line, nor replaces anything.
 - The line under a turn and what the turn spent measure the system alone: the time the user takes
@@ -358,9 +359,10 @@ file on a click only, so the model never puts one on the disk by itself. `import
 a card the user picks from and reads it by what it holds: a JSON file adds its conversations whose
 id is new, the others skipped and told; any other file runs its lines as more lines of the batch,
 whole or not at all, with the rights of whoever asked, the firewall included, the way lines pasted
-after a `/` run. Neither changes a conversation, the one shown included: an export reads the
-conversations as they settled, without the call that exports them, and an import only adds. To keep
-an export out of the context, edit the message that asked for it.
+after a `/` run, its output opening with `! ran 5 lines of the file`; a file that holds nothing
+fails. Neither changes a conversation, the one shown included: an export reads the conversations as
+they settled, without the call that exports them, and an import only adds. To keep an export out of
+the context, edit the message that asked for it.
 
 ```
 show conversations

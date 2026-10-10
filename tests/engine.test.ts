@@ -698,6 +698,16 @@ describe('the conversations', () => {
 			'+ set chat system "from a file"'
 		);
 		expect(k.settings.get('display tools')).toBe('open');
+		expect((await k.run('import', 'user', shelf(list, conf))).text).toBe(
+			'! ran 2 lines of the file'
+		);
+		expect((await k.run('import', 'user', shelf(list, '! only a note\n'))).text).toBe(
+			'% the file holds no line'
+		);
+		expect((await k.run('import', 'user', shelf(list, serialize([])))).text).toBe(
+			'% the file holds no conversation'
+		);
+		expect((await k.run('set display tools open', 'user')).text).toBe('! no change');
 		const broken = 'set chat system other\nbogus';
 		expect((await k.run('import', 'user', shelf(list, broken))).text).toContain('file line 2:');
 		expect(k.settings.get('chat system')).toBe('from a file');

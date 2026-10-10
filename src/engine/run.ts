@@ -109,7 +109,7 @@ let queue: Promise<unknown> = Promise.resolve();
 // them only when all of them succeed: a batch applies whole or not at all, and
 // answers with what it changed; a command that writes the archive runs alone;
 // once the signal aborts, the batch neither starts, nor runs another line, nor
-// replaces anything
+// replaces anything; a batch that writes nothing and changes nothing says so
 export function run(text: string, role: Role, scope: Scope = {}): Promise<Outcome> {
 	const result = queue.then(() => batch(text, role, scope));
 	queue = result.catch(() => undefined);
@@ -209,7 +209,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	for (const m of modules) {
 		if (changed.some((k) => k.startsWith(m.name + ' '))) m.apply?.(running);
 	}
-	return { ok: true, text: [...out, ...diff].join('\n') };
+	return { ok: true, text: [...out, ...diff].join('\n') || comment('no change') };
 }
 
 // the change as the page sees it: every value resolved through the layers,

@@ -16,6 +16,6 @@ export default {
 		const lines = typeof args.lines === 'string' ? args.lines : '';
 		if (!lines.trim()) return { ok: false, text: ERROR_PREFIX + 'no lines to run' };
 		const result = await ctx.cli(lines);
-		return { ok: result.ok, text: result.text || 'ok', args: { lines: ctx.redact(lines) } };
+		return { ok: result.ok, text: result.text, args: { lines: ctx.redact(lines) } };
 	}
 } satisfies Tool;
