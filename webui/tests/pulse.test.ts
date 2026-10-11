@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chunk, close, held, line, mark, pulse, stats, summary } from '../src/lib/pulse.js';
+import { chunk, close, held, line, mark, pulse, retry, stats, summary } from '../src/lib/pulse.js';
 
 describe('the line of a turn', () => {
 	it('prepares, then waits for the endpoint, its clock from the request on', () => {
@@ -30,6 +30,14 @@ describe('the line of a turn', () => {
 		p.round = 2;
 		mark(p, 'running', 'config', 400);
 		expect(line(p, 447)).toBe('Round 2 - Running config - 47 ms');
+	});
+
+	it('asks the endpoint again, its clock running since it first failed', () => {
+		const p = pulse(0);
+		mark(p, 'waiting', 'hf', 10);
+		retry(p, 'hf', 429, 1, 10, 200);
+		retry(p, 'hf', 503, 2, 10, 2300);
+		expect(line(p, 3400)).toBe('Retrying hf - Error 503 - Attempt 2/10 - 3,200 ms');
 	});
 
 	it('restarts its clock only when the phase or its name changes', () => {

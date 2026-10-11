@@ -7,6 +7,9 @@ import chatProtocol from '../protocols/chat.js';
 // protocol the endpoint speaks
 
 const UNAUTHORIZED = [401, 403];
+// the statuses of an endpoint busy or down for a while: a timeout, too many
+// requests, a server or gateway error, overloaded
+const TRANSIENT = [408, 429, 500, 502, 503, 504, 529];
 const NOT_FOUND = 404;
 // the commands that fix an endpoint which refuses the key, or is no LLM
 const KEY_FIX = `${SLASH}set endpoints key <name> <key>`;
@@ -21,18 +24,27 @@ const protocols = Object.values(files).map((f) => f.default);
 export const PROTOCOLS: readonly string[] = protocols.map((p) => p.name);
 export const DEFAULT_PROTOCOL = chatProtocol.name;
 
-// an endpoint: a remote server and the protocol it speaks
+// an endpoint: a remote server, the protocol it speaks, the times a reply is
+// asked again and the seconds between two of them
 export interface Endpoint extends Remote {
 	protocol: Protocol;
+	retries: number;
+	pause: number;
 }
 
 // every endpoint that has a url, sorted by name, each with its protocol
 export function endpoints(config: ConfigReader): Endpoint[] {
 	return remotes(config, 'endpoints').map((r) => ({
 		...r,
-		protocol: protocols.find((p) => p.name === config.get('endpoints protocol', r.name))!
+		protocol: protocols.find((p) => p.name === config.get('endpoints protocol', r.name))!,
+		retries: Number(config.get('endpoints retries', r.name)),
+		pause: Number(config.get('endpoints pause', r.name))
 	}));
 }
+
+// what the stream of a reply tells while it is asked again: the status that
+// passes, the attempt about to be made, and how many the endpoint takes
+export type Retrying = (status: number, attempt: number, attempts: number) => void;
 
 // what an endpoint answered wrong, with the command that fixes it when the
 // configuration is the cause
@@ -169,6 +181,49 @@ export async function pick(
 	return { endpoint, model: value.slice(cut + MODEL_SEPARATOR.length) };
 }
 
+// the milliseconds before a reply is asked again: as long as Retry-After says,
+// in seconds or as a date, when the endpoint lets the page read it and asks no
+// more than the retries and their pauses take in all; else the pause
+function delay(res: Response, endpoint: Endpoint): number {
+	const pause = endpoint.pause * 1000;
+	const after = res.headers.get('retry-after') ?? '';
+	const seconds = Number(after);
+	const asked = after && !Number.isNaN(seconds) ? seconds * 1000 : Date.parse(after) - Date.now();
+	return asked >= 0 && asked <= endpoint.retries * pause ? asked : pause;
+}
+
+// the time given, or less when the signal aborts
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(resolve, ms);
+		signal.addEventListener('abort', () => (clearTimeout(timer), reject(signal.reason)), {
+			once: true
+		});
+	});
+}
+
+// the body of a reply, asked again while the endpoint answers a status that
+// passes, as many times as it takes; nothing streamed yet, nothing repeats
+async function opened(
+	endpoint: Endpoint,
+	init: RequestInit,
+	signal: AbortSignal,
+	retrying: Retrying
+) {
+	for (let attempt = 1; ; attempt++) {
+		const answer = await request(endpoint, endpoint.protocol.path, init, signal, async (res) => {
+			if (attempt <= endpoint.retries && TRANSIENT.includes(res.status)) return res;
+			if (!res.ok || !res.body) throw await failure(res);
+			if (res.headers.get('content-type')?.includes('html')) throw notAnLlm(res);
+			return res.body;
+		});
+		if (!(answer instanceof Response)) return answer;
+		await answer.body?.cancel();
+		retrying(answer.status, attempt, endpoint.retries);
+		await sleep(delay(answer, endpoint), signal);
+	}
+}
+
 // one delta per server sent event, read by the protocol of the endpoint from
 // the data of the event, up to the event that ends the stream, which may carry
 // the last count: a stream closed before it is cut short, never a finished
@@ -176,7 +231,8 @@ export async function pick(
 export async function* chat(
 	endpoint: Endpoint,
 	req: Request,
-	signal: AbortSignal
+	signal: AbortSignal,
+	retrying: Retrying
 ): AsyncGenerator<Delta> {
 	const { protocol } = endpoint;
 	const init = {
@@ -184,11 +240,7 @@ export async function* chat(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(protocol.body(req))
 	};
-	const stream = await request(endpoint, protocol.path, init, signal, async (res) => {
-		if (!res.ok || !res.body) throw await failure(res);
-		if (res.headers.get('content-type')?.includes('html')) throw notAnLlm(res);
-		return res.body;
-	});
+	const stream = await opened(endpoint, init, signal, retrying);
 	const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 	const read = protocol.reader();
 	let buffer = '';

@@ -13,7 +13,13 @@ export default {
 		headers: { kind: 'string', named: true },
 		// seconds the endpoint has to start answering: a model list, the start of
 		// a reply, which then streams until it ends or the turn stops
-		timeout: { kind: 'number', min: 0.1, default: '120', named: true }
+		timeout: { kind: 'number', min: 0.1, default: '120', named: true },
+		// the times a reply is asked again while the endpoint answers a status
+		// that passes, 0 never
+		retries: { kind: 'number', min: 0, integer: true, default: '10', named: true },
+		// seconds between two of them, unless the endpoint asks for a wait the
+		// retries and their pauses hold in all
+		pause: { kind: 'number', min: 0, default: '2', named: true }
 	},
 	validate(config) {
 		return rules(config, 'endpoints');

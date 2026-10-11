@@ -48,6 +48,9 @@ modules
     key <name> <secret>
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        120
+    retries <name> <count>          10, a reply asked again on 408, 429, 5xx, 529
+    pause <name> <seconds>          2, between two, or Retry-After when it asks no more than
+                                    retries times pause
   mcp
     url <name> <url>                guarded
     key <name> <secret>

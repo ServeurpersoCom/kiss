@@ -5,7 +5,7 @@ import { aggregate, connecting } from './mcp.js';
 import prompts from './prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
-import { chunk, close, mark, stats, type Pulse } from './pulse.js';
+import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
 import { run, settings } from '../engine/run.js';
@@ -134,7 +134,9 @@ export async function turn(
 			// the calls of the round by the index the stream gives them
 			const calls = new Map<number, Call>();
 			let usage: number | undefined;
-			for await (const d of chat(endpoint, request, signal)) {
+			const retrying = (status: number, attempt: number, attempts: number) =>
+				retry(p, endpoint.name, status, attempt, attempts, performance.now());
+			for await (const d of chat(endpoint, request, signal, retrying)) {
 				const now = performance.now();
 				if (d.usage !== undefined) usage = d.usage;
 				chunk(p, !!(d.reasoning || d.content || d.calls), now);

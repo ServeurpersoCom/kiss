@@ -2,9 +2,10 @@ import type { Stats } from './types.js';
 import { capital } from './config.js';
 
 // what a turn does now, as the system spends it: preparing a round, its model
-// and its tools, waiting for the endpoint, streaming its thinking, its text or
-// a call, or running a tool
-export type Phase = 'preparing' | 'waiting' | 'thinking' | 'writing' | 'calling' | 'running';
+// and its tools, waiting for the endpoint, asking it again, streaming its
+// thinking, its text or a call, or running a tool
+export type Phase =
+	'preparing' | 'waiting' | 'retrying' | 'thinking' | 'writing' | 'calling' | 'running';
 
 // the clock of one turn, in milliseconds of performance.now(); the time the
 // user takes on a question is taken out of it, so it measures the system alone
@@ -14,6 +15,11 @@ export interface Pulse {
 	phase: Phase;
 	// the endpoint waited for, or the tool called or run
 	name: string;
+	// while the endpoint is asked again: the status it answered, the attempt
+	// made and how many it takes
+	status: number;
+	attempt: number;
+	attempts: number;
 	// when the phase began
 	since: number;
 	// when the turn began
@@ -33,6 +39,9 @@ export function pulse(now: number): Pulse {
 		round: 1,
 		phase: 'preparing',
 		name: '',
+		status: 0,
+		attempt: 0,
+		attempts: 0,
 		since: now,
 		start: now,
 		first: NaN,
@@ -49,6 +58,21 @@ export function mark(p: Pulse, phase: Phase, name: string, now: number): void {
 	p.phase = phase;
 	p.name = name;
 	p.since = now;
+}
+
+// the endpoint asked again, the clock running since it first failed
+export function retry(
+	p: Pulse,
+	name: string,
+	status: number,
+	attempt: number,
+	attempts: number,
+	now: number
+): void {
+	mark(p, 'retrying', name, now);
+	p.status = status;
+	p.attempt = attempt;
+	p.attempts = attempts;
 }
 
 // a chunk of the stream, holding a token or not
@@ -94,6 +118,7 @@ const rate = (n: number, time: number): string => `${((n * 1000) / time).toFixed
 const PHASES: Record<Phase, string> = {
 	preparing: 'preparing',
 	waiting: 'waiting for',
+	retrying: 'retrying',
 	thinking: 'thinking',
 	writing: 'writing',
 	calling: 'calling',
@@ -105,7 +130,9 @@ const PHASES: Record<Phase, string> = {
 // rate, from its second token, between its first chunk and its last
 export function line(p: Pulse, now: number): string {
 	const parts = p.round > 1 ? [`round ${p.round}`] : [];
-	parts.push(p.name ? `${PHASES[p.phase]} ${p.name}` : p.phase, ms(now - p.since));
+	parts.push(p.name ? `${PHASES[p.phase]} ${p.name}` : p.phase);
+	if (p.phase === 'retrying') parts.push(`error ${p.status}`, `attempt ${p.attempt}/${p.attempts}`);
+	parts.push(ms(now - p.since));
 	if (p.phase === 'thinking' || p.phase === 'writing') {
 		parts.push(tokens(p.tokens));
 		if (p.tokens > 1) parts.push(rate(p.tokens - 1, p.last - p.first));
