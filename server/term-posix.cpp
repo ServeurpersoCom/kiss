@@ -17,9 +17,10 @@ static void restore() {
 }
 
 // bytes as typed, no echo and no line discipline; Ctrl-C reaches the console
-// as a byte, output keeps its newline translation
+// as a byte, output keeps its newline translation; a process in the
+// background of its terminal leaves it alone, which would stop it
 bool term_raw() {
-    if (!isatty(STDIN_FILENO) || tcgetattr(STDIN_FILENO, &g_saved) != 0) {
+    if (!isatty(STDIN_FILENO) || tcgetpgrp(STDIN_FILENO) != getpgrp() || tcgetattr(STDIN_FILENO, &g_saved) != 0) {
         return false;
     }
     termios raw = g_saved;

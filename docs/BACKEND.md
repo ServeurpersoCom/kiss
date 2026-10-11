@@ -75,7 +75,7 @@ server/tools/            one file per tool source, registered by existing
 server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
 server/listener.cpp|h    the socket, moved at once when server host or server port changes
 server/http.cpp|h        the routes and the checks of Host, Origin and the key
-server/console.cpp|h     the console of the interactive mode, opened when stdin is a terminal
+server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
 server/term.h            the terminal of the console, per OS: raw mode, a key, the width
 server/log.cpp|h         the log: [Module] Line
 server/process.cpp|h     spawn, pipes, tree kill, per OS
@@ -204,9 +204,9 @@ bash of WSL, is one more line.
 
 ## Running
 
-`server` takes no argument. Its stdin tells how it runs: a terminal opens the console, anything
-else, `/dev/null` under systemd, a Windows service, `nohup` or `< /dev/null`, runs it as a daemon
-that leaves stdin alone. Its log goes to stderr, one line per event in the form of every GGML project
+`server` takes no argument. Its stdin tells how it runs: a terminal it runs in the foreground of
+opens the console; anything else, `/dev/null` under systemd, a Windows service, `nohup`,
+`< /dev/null` or a start with `&` from a shell, runs it as a daemon that leaves stdin alone. Its log goes to stderr, one line per event in the form of every GGML project
 of the house, `[Module] Line`, and opens on the version:
 
 ```

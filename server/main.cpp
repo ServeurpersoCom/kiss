@@ -2,8 +2,8 @@
 // site configuration and the MCP of the machine
 //
 // The server starts on server.conf of the directory it runs in, over the
-// defaults it embeds, then listens; a stdin that is a terminal opens the
-// console, any other runs it as a daemon. It takes no argument.
+// defaults it embeds, then listens; a terminal it runs in the foreground of
+// opens the console, anything else runs it as a daemon. It takes no argument.
 
 #include "console.h"
 #include "engine/engine.h"
