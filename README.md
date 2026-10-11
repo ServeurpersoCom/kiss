@@ -1,11 +1,12 @@
 # KiSS
 
-**The chat UI with no settings panel. You talk; the model sets up the page.**
+**A web harness with no settings panel. You talk; the model sets up the page.**
 
-One HTML file, no backend, no account. Give it one endpoint, yourself or through the `kiss.conf` of
-the site, and the model bootstraps the rest: other endpoints, MCP servers, tools, style, typed by
-the model itself in a CLI modeled on Cisco IOS. Anything that opens a way out of the page waits for
-your yes, and a key goes from your keyboard to the page, never through the model.
+One HTML file, no account, plus an optional C++ server per machine. Give it one endpoint, yourself
+or through the `kiss.conf` of the site, and the model bootstraps the rest: other endpoints, MCP
+servers, tools, style, typed by the model itself in a CLI modeled on Cisco IOS. Anything that opens
+a way out of the page waits for your yes, and a key goes from your keyboard to the page, never
+through the model.
 
 ```
 you     add Hugging Face, I have a token, and go light
@@ -88,6 +89,9 @@ style all go through it, for the model as for you.
   question off, and a key never follows a URL the model wrote.
 - **The firewall reads the effect**, not the command: whatever spells a change, the diff decides.
 - **Every MCP tool starts in consent**, each call shown with its real arguments.
+
+What the model reaches on your computer is yours to watch: a command runs with the rights of the
+user who starts the server.
 
 ## Quick start
 
