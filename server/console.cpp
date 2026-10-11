@@ -1,7 +1,6 @@
 // console.cpp: the console of the interactive mode, as on a Cisco router: a
 // line editor with its history, Tab to complete a word and ? to list what may
-// follow, the log passing above the line being typed; a stdin that is no
-// terminal reads by lines
+// follow, the log passing above the line being typed
 
 #include "console.h"
 
@@ -11,7 +10,6 @@
 #include "term.h"
 
 #include <csignal>
-#include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -357,16 +355,8 @@ static void editor() {
     }
 }
 
-// a stdin that is no terminal: a line at a time, each answered in turn
-static void lines() {
-    std::string line;
-    log_console(prompt());
-    while (std::getline(std::cin, line)) {
-        log_console(engine_run(line, ENGINE_ADMIN).text + "\n");
-        log_console(prompt());
-    }
-}
-
 void console_start() {
-    std::thread(term_raw() ? editor : lines).detach();
+    if (term_raw()) {
+        std::thread(editor).detach();
+    }
 }

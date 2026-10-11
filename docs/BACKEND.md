@@ -75,7 +75,8 @@ server/tools/            one file per tool source, registered by existing
 server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
 server/listener.cpp|h    the socket, moved at once when server host or server port changes
 server/http.cpp|h        the routes and the checks of Host, Origin and the key
-server/console.cpp|h     the console of the interactive mode
+server/console.cpp|h     the console of the interactive mode, opened when stdin is a terminal
+server/term.h            the terminal of the console, per OS: raw mode, a key, the width
 server/log.cpp|h         the log: [Module] Line
 server/process.cpp|h     spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
@@ -203,9 +204,10 @@ bash of WSL, is one more line.
 
 ## Running
 
-`server` takes no option but `--console`. Without it, the server runs as a systemd unit or a
-Windows service runs it, stdin left alone. Its log goes to stderr, one line per event in the form of
-every GGML project of the house, `[Module] Line`, and opens on the version:
+`server` takes no argument. Its stdin tells how it runs: a terminal opens the console, anything
+else, `/dev/null` under systemd, a Windows service, `nohup` or `< /dev/null`, runs it as a daemon
+that leaves stdin alone. Its log goes to stderr, one line per event in the form of every GGML project
+of the house, `[Module] Line`, and opens on the version:
 
 ```
 [Server] KiSS Operating System, server 5633ee7 (2026-10-11) on linux
@@ -215,7 +217,7 @@ every GGML project of the house, `[Module] Line`, and opens on the version:
 
 `server log verbose` adds every MCP request and every tool call, at once, no restart.
 
-`--console` opens the interactive mode, as the console port of a Cisco router: the prompt names the
+The console is the interactive mode, as the console port of a Cisco router: the prompt names the
 server, each line runs as a batch of the administrator, and the log passes above the line being
 typed, which it never cuts.
 
@@ -241,8 +243,6 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
 - Left and Right, Home and End or Ctrl-A and Ctrl-E move; Backspace and Delete erase a character,
   Ctrl-U the line before the cursor, Ctrl-K the line after it; Up and Down walk the history.
 - Ctrl-C drops the line, Ctrl-D on an empty line stops the server.
-
-A stdin that is no terminal, a pipe or a file, is read a line at a time, each answered in turn.
 
 ## Tools
 

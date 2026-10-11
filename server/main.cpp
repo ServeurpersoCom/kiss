@@ -2,7 +2,8 @@
 // site configuration and the MCP of the machine
 //
 // The server starts on server.conf of the directory it runs in, over the
-// defaults it embeds, then listens. --console opens the interactive mode.
+// defaults it embeds, then listens; a stdin that is a terminal opens the
+// console, any other runs it as a daemon. It takes no argument.
 
 #include "console.h"
 #include "engine/engine.h"
@@ -26,14 +27,9 @@ static void on_signal(int) {
 int main(int argc, char ** argv) {
     utf8_init(&argc, &argv);
 
-    bool console = false;
-    for (int i = 1; i < argc; i++) {
-        if (std::string(argv[i]) == "--console") {
-            console = true;
-        } else {
-            fprintf(stderr, "usage: %s [--console]\n", argv[0]);
-            return 1;
-        }
+    if (argc > 1) {
+        fprintf(stderr, "usage: %s\n", argv[0]);
+        return 1;
     }
 
     log_info("Server", "%s, %s", ENGINE_SYSTEM, engine_component("", KISS_VERSION).c_str());
@@ -57,8 +53,6 @@ int main(int argc, char ** argv) {
     signal(SIGPIPE, SIG_IGN);
 #endif
 
-    if (console) {
-        console_start();
-    }
+    console_start();
     return listener_run() ? 0 : 1;
 }

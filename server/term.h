@@ -2,7 +2,7 @@
 // term.h: the terminal of the console: raw mode, one byte at a time, its width
 
 // puts the terminal in raw mode, restored when the process exits; false when
-// stdin is no terminal, a pipe or a file, which the console reads by lines
+// stdin is no terminal
 bool term_raw();
 
 // the next byte typed, -1 once stdin ends
