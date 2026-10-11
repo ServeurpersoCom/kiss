@@ -13,7 +13,7 @@
 
 struct yyjson_val;
 
-// the text of a result, or an image as base64 with its MIME type
+// the text of a result, and an image as base64 with its MIME type
 struct tool_result {
     tool_result(std::string t, bool e) : text(std::move(t)), error(e) {}
 

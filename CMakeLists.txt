@@ -26,6 +26,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 # cpp-httplib: the HTTP server
 add_subdirectory(vendor/cpp-httplib)
 
+# stb: the images view decodes, resizes and encodes
+add_subdirectory(vendor/stb)
+
 # yyjson (MIT, fast JSON parser and writer): every JSON the server reads or
 # writes
 add_library(yyjson STATIC vendor/yyjson/yyjson.c)
@@ -65,7 +68,7 @@ else()
     target_compile_options(server PRIVATE -Wall -Wextra -Wshadow -Wconversion
                            -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion)
 endif()
-target_link_libraries(server PRIVATE httplib yyjson Threads::Threads)
+target_link_libraries(server PRIVATE httplib yyjson stb Threads::Threads)
 if(WIN32)
     target_link_libraries(server PRIVATE ws2_32)
 endif()

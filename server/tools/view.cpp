@@ -1,6 +1,7 @@
 // view.cpp: the view tool: a directory two levels deep with the size of each
 // entry, an image as an image block, a text file with numbered lines
 
+#include "image.h"
 #include "output.h"
 #include "tools.h"
 #include "utf8.h"
@@ -21,9 +22,11 @@ static const size_t CHUNK = 65536;
 static const int TICK_MS = 1000;
 
 struct viewer {
-    std::string cwd;
-    size_t      output;
-    size_t      image;
+    std::string  cwd;
+    size_t       output;
+    // the bytes of an image file view reads at most
+    size_t       image;
+    image_limits limits;
 };
 
 // calls tick once a second at most; false once the client is gone
@@ -147,21 +150,9 @@ static std::string base64(const std::string & in) {
     return out;
 }
 
-// the MIME type of an image by its first bytes, empty for anything else
-static const char * image_type(const std::string & head) {
-    if (head.compare(0, 8, "\x89PNG\r\n\x1a\n") == 0) {
-        return "image/png";
-    }
-    if (head.compare(0, 3, "\xff\xd8\xff") == 0) {
-        return "image/jpeg";
-    }
-    if (head.compare(0, 6, "GIF87a") == 0 || head.compare(0, 6, "GIF89a") == 0) {
-        return "image/gif";
-    }
-    if (head.size() >= 12 && head.compare(0, 4, "RIFF") == 0 && head.compare(8, 4, "WEBP") == 0) {
-        return "image/webp";
-    }
-    return "";
+// an image as the result tells it: its type, its size and its bytes
+static std::string described(const std::string & mime, int w, int h, size_t bytes) {
+    return mime + " " + std::to_string(w) + "x" + std::to_string(h) + ", " + std::to_string(bytes) + " bytes";
 }
 
 // the lines first to last of a text file, numbered, last -1 for the end of
@@ -170,8 +161,7 @@ static tool_result
 file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last, bool ranged, ticker & t) {
     std::string head(std::min<uintmax_t>(size, CHUNK), '\0');
     head.resize(fread(&head[0], 1, head.size(), f));
-    const std::string mime = image_type(head);
-    if (!mime.empty()) {
+    if (!image_type(head).empty()) {
         if (size > v.image) {
             return { "Image larger than " + std::to_string(v.image) + " bytes", true };
         }
@@ -180,7 +170,17 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
         for (size_t got; (got = fread(buf, 1, sizeof(buf), f)) > 0;) {
             data.append(buf, got);
         }
-        return { base64(data), std::string(mime) };
+        const image_sent sent = image_fit(data, v.limits);
+        if (!sent.error.empty()) {
+            return { sent.error, true };
+        }
+        tool_result r(base64(sent.data), sent.mime);
+        r.text = "Image " + described(sent.source_mime, sent.source_width, sent.source_height, data.size());
+        if (sent.made) {
+            r.text += ", sent as " + described(sent.mime, sent.width, sent.height, sent.data.size());
+            r.text += sent.transparent ? ", its transparency laid on white" : "";
+        }
+        return r;
     }
     if (memchr(head.data(), '\0', head.size())) {
         return { "Binary file", true };
@@ -278,22 +278,26 @@ static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & t
 
 static std::vector<tool> view_tool(const engine_reader & config) {
     viewer v;
-    v.cwd    = config.get("server cwd").value_or("");
-    v.output = (size_t) std::stoull(config.get("view output").value_or("0"));
-    v.image  = (size_t) std::stoull(config.get("view image").value_or("0"));
+    v.cwd            = config.get("server cwd").value_or("");
+    v.output         = (size_t) std::stoull(config.get("view output").value_or("0"));
+    v.image          = (size_t) std::stoull(config.get("view image").value_or("0"));
+    v.limits.pixels  = (size_t) std::stoull(config.get("view pixels").value_or("0"));
+    v.limits.side    = std::stoi(config.get("view side").value_or("0"));
+    v.limits.quality = std::stoi(config.get("view quality").value_or("0"));
 
     tool t;
-    t.suffix      = "view";
-    t.description = "Views a file or a directory on " + std::string(engine_platform()) + ", the path relative to " +
-                    v.cwd +
-                    " or absolute. A directory lists every entry two levels deep with the size of all it holds, "
-                    "hidden entries and the content of node_modules left out. A PNG, JPEG, GIF or WebP image of " +
-                    std::to_string(v.image) +
-                    " bytes at most comes back as an image. A text file comes back with numbered lines, the head "
-                    "and the tail of " +
-                    std::to_string(v.output) +
-                    " bytes at most, then its line count; view_range picks lines [start, end], end -1 being the "
-                    "last. Another binary file is refused.";
+    t.suffix = "view";
+    t.description =
+        "Views a file or a directory on " + std::string(engine_platform()) + ", the path relative to " + v.cwd +
+        " or absolute. A directory lists every entry two levels deep with the size of all it holds, "
+        "hidden entries and the content of node_modules left out. A PNG, JPEG, GIF or WebP image of " +
+        std::to_string(v.image) + " bytes at most comes back as an image, " + std::to_string(v.limits.side) +
+        " px on its longest side at most: one larger, or turned by its EXIF, is resized as a JPEG, "
+        "its proportions kept, and the text says so. A text file comes back with numbered lines, the head "
+        "and the tail of " +
+        std::to_string(v.output) +
+        " bytes at most, then its line count; view_range picks lines [start, end], end -1 being the "
+        "last. Another binary file is refused.";
     t.input = R"({"type":"object","properties":{)"
               R"("description":{"type":"string","description":"Why I need to view this, written first"},)"
               R"("path":{"type":"string","description":"The file or the directory"},)"

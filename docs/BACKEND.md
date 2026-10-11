@@ -41,7 +41,10 @@ modules
     output <item> <bytes>           65536
   view
     output <bytes>                  65536
-    image <bytes>                   20971520
+    image <bytes>                   52428800, an image file read at most
+    pixels <count>                  100000000, decoded at most
+    side <pixels>                   1920, the longest side sent
+    quality <1..100>                85, of a JPEG made again
 
 tools
   <hostname>_config                 description lines
@@ -85,9 +88,10 @@ server/term.h            the terminal of the console, per OS: raw mode, a key, t
 server/log.cpp|h         the log: [Module] Line
 server/process.cpp|h     spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
+server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
 server/server.conf       the defaults the binary embeds
-vendor/                  cpp-httplib, yyjson
+vendor/                  cpp-httplib, yyjson, stb
 tools/public/            index.html.gz, the page the binary embeds
 tools/xxd.cmake          embeds a file as a C array
 tools/version.cmake      the git commit of the build
@@ -100,6 +104,10 @@ format.sh                clang-format over the C++, vendors excluded
 Every file has one source: the binary embeds `webui/public/kiss.conf` and `server/server.conf` as
 they are. `tools/public/index.html.gz` is the one built file under git, so a C++ developer builds
 the server with CMake alone; the page build writes it, gzipped deterministically.
+
+The stb headers of Sean Barrett, which llama.cpp uses as well, decode, resize and encode images;
+their implementations compile once in `vendor/stb/stb.c`, the decoder reading PNG, JPEG and GIF
+only.
 
 There is no process library in the vendors. sheredom/subprocess.h, which llama.cpp uses, offers no
 process group on POSIX and no Job Object nor suspended start on Windows, so it kills the direct child
@@ -193,7 +201,10 @@ configuration therefore lists every candidate shell and each machine serves the 
 | `shells timeout <item>` | number | seconds a call may run                                          |
 | `shells output <item>`  | number | bytes of output a call returns                                  |
 | `view output`           | number | bytes of text `view` returns, its head and its tail             |
-| `view image`            | number | bytes of an image `view` returns at most                        |
+| `view image`            | number | bytes of an image file `view` reads at most                     |
+| `view pixels`           | number | pixels an image may declare before it is decoded                |
+| `view side`             | number | the longest side of an image sent, in pixels                    |
+| `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
@@ -214,7 +225,10 @@ macos set shells command bash bash -s
 windows set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 set view output 65536
-set view image 20971520
+set view image 52428800
+set view pixels 100000000
+set view side 1920
+set view quality 85
 ```
 
 Every shell carries its own `timeout`, 290 seconds, and `output`, 65536 bytes, as `bash` shows.
@@ -335,8 +349,16 @@ KiSS, a machine is open to the model for reading only.
 - A directory lists every entry two levels deep, sorted by path, each with the size of all it
   holds, as `find` and `du -sh` would: hidden entries and the content of `node_modules` stay out.
   The last line counts the entries.
-- A PNG, JPEG, GIF or WebP image, known by its first bytes, comes back as an image block, up to
-  `view image` bytes.
+- A PNG, JPEG, GIF or WebP image, known by its first bytes, comes back as an image block. A JPEG
+  that fits `view side` goes as it is. Any other image is made a JPEG of `view quality` that fits
+  it: resized in linear light with the same scale on both sides, turned as its EXIF says, a
+  transparent one laid on white. A text block before it tells the image read and the image sent,
+  `Image image/png 6000x4000, 47087504 bytes, sent as image/jpeg 1920x1280, 292632 bytes`, so the
+  model knows what it sees. A WebP goes as it is when it fits, and is refused when it does not.
+- Before anything decodes it, an image is refused past `view image` bytes, or when its header
+  declares more than `view pixels` pixels, so neither a huge file nor a small one that inflates
+  holds the memory of the machine. A photo of 50 MB reaches the model in a few hundred KB, well
+  within the 5 MiB a request may weigh on the Hugging Face router.
 - A text file comes back with numbered lines, `N<tab>line`, then `300 lines`, or
   `Lines 10-20 of 300` for a range. Past `view output`, the head and the tail stay, as for a shell.
   The file streams through, so its size costs time and never memory.
