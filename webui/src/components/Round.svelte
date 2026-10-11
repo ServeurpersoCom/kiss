@@ -29,10 +29,12 @@
 		return typeof value === 'string' ? value : JSON.stringify(value);
 	}
 
-	// what a folded call shows: the argument the display picks for its tool,
-	// else the first one, on its first line
+	// what a folded call shows: the argument the tools module names for its
+	// tool, else the one the display names for every tool, else the first one,
+	// on its first line
 	function preview(c: Call, all: [string, unknown][]): string {
-		const picked = all.find(([k]) => k === display.preview[c.name]) ?? all[0];
+		const named = display.preview[c.name] ?? display.argument;
+		const picked = all.find(([k]) => k === named) ?? all[0];
 		return picked ? text(picked[1]).split('\n')[0] : '';
 	}
 </script>

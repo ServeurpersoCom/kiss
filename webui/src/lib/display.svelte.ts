@@ -12,12 +12,14 @@ export const [MARKDOWN, PLAIN] = RENDERS;
 export const BLOCKS = ['thinking', 'reply'] as const;
 export type Block = (typeof BLOCKS)[number];
 
-// how the thread shows a turn: how the thinking and the tool calls fold and
-// how each block of text renders, from the display module, and the argument
-// each tool shows folded, by tool name, from the tools module
+// how the thread shows a turn: how the thinking and the tool calls fold, how
+// each block of text renders and the argument every folded call shows, from
+// the display module, and the argument a tool shows instead, by tool name,
+// from the tools module
 export const display = $state({
 	thinking: CLOSED as Fold,
 	tools: CLOSED as Fold,
 	render: Object.fromEntries(BLOCKS.map((b) => [b, MARKDOWN])) as Record<Block, Render>,
+	argument: '',
 	preview: {} as Record<string, string>
 });

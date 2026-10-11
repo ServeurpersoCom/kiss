@@ -21,7 +21,7 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                     "A set or no line may open with linux, macos or windows to hold on that platform only. "
                     "Secrets are written in server.conf, never here.";
     t.input = R"({"type":"object","properties":{)"
-              R"("description":{"type":"string","description":"Why I'm configuring the server"},)"
+              R"("description":{"type":"string","description":"Why I'm configuring the server, written first"},)"
               R"("lines":{"type":"string","description":"CLI lines, one per line"}},)"
               R"("required":["description","lines"],"additionalProperties":false})";
     t.call  = call;

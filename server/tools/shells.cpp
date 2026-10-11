@@ -61,7 +61,7 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
                         "ends after " + std::to_string(s.timeout) +
                         " seconds, and every process it leaves running ends with it.";
         t.input = R"({"type":"object","properties":{)"
-                  R"("description":{"type":"string","description":"Why I'm running this command"},)"
+                  R"("description":{"type":"string","description":"Why I'm running this command, written first"},)"
                   R"("command":{"type":"string","description":"The command to run, as the shell reads it on stdin"}},)"
                   R"("required":["description","command"],"additionalProperties":false})";
         t.call  = [s](yyjson_val * args, const tool_tick & tick) {

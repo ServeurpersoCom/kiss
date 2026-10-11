@@ -21,7 +21,8 @@ export default {
 			named: true,
 			guard: true
 		},
-		// the argument a call of the tool shows folded; unset, its first one
+		// the argument a call of the tool shows folded, by its name, over the
+		// one display preview names for every tool
 		preview: { kind: 'string', named: true }
 	},
 	apply(config) {

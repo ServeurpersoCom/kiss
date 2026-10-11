@@ -330,6 +330,19 @@ describe('the display', () => {
 		const { display } = await import('../src/lib/display.svelte.js');
 		expect(display.render).toEqual({ thinking: 'markdown', reply: 'plain' });
 	});
+
+	it('previews the description of every folded call, a tool of its own over it', async () => {
+		const k = await page();
+		const { display } = await import('../src/lib/display.svelte.js');
+		expect(k.settings.get('display preview')).toBe('description');
+		expect(display.argument).toBe('description');
+		await k.run('set display preview query\nset tools preview config lines', 'user');
+		expect(display.argument).toBe('query');
+		expect(display.preview).toEqual({ config: 'lines' });
+		await k.run('no display preview\nno tools preview config', 'user');
+		expect(display.argument).toBe('description');
+		expect(display.preview).toEqual({});
+	});
 });
 
 describe('the headers of a server', () => {

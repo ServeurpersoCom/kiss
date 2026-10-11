@@ -256,9 +256,11 @@ A description holds the OS, the shell, its command line and the working director
 the life of the process, so the tool list stays the same from turn to turn and the prompt cache of
 the model holds.
 
-Every tool takes `description` first, why the call is made, then what it does: a model writes the
-why before the what, and KiSS shows the first argument of a folded call, so the why shows with no
-setting. The schema of a tool is its law: a key outside it, a required key missing or a required
+Every tool takes `description` first, why the call is made, then what it does: its schema lists it
+first and says so, for a model to write the why before the what. A model still writes its arguments
+in the order it likes, so KiSS shows `description` on a folded call by its name, wherever it stands:
+`display preview description` is its default, which `tools preview <tool>` overrides for one tool.
+The schema of a tool is its law: a key outside it, a required key missing or a required
 string empty refuses the call before it runs, with `Unknown argument <key>` or
 `<Key> argument required`, so a misnamed argument never runs as if it were absent.
 

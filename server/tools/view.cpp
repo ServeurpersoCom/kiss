@@ -295,7 +295,7 @@ static std::vector<tool> view_tool(const engine_reader & config) {
                     " bytes at most, then its line count; view_range picks lines [start, end], end -1 being the "
                     "last. Another binary file is refused.";
     t.input = R"({"type":"object","properties":{)"
-              R"("description":{"type":"string","description":"Why I need to view this"},)"
+              R"("description":{"type":"string","description":"Why I need to view this, written first"},)"
               R"("path":{"type":"string","description":"The file or the directory"},)"
               R"("view_range":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2,)"
               R"("description":"Lines [start, end] of a text file, from 1, end -1 for the last"}},)"

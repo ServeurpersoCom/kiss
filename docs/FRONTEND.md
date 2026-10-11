@@ -39,6 +39,7 @@ modules
     tools closed|open|inference     closed
     render thinking|reply markdown|plain
                                     markdown
+    preview <argument>              description, the argument every folded call shows
   endpoints
     url <name> <url>                guarded
     protocol <name> chat|messages|responses
@@ -67,7 +68,7 @@ modules
   tools                             show tools lists them, by who serves them
     rounds <count>                  25
     use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
-    preview <tool> <argument>       the first argument
+    preview <tool> <argument>       display preview, the argument of this tool over it
 
 tools
   config                            lines
@@ -219,7 +220,7 @@ opens on a URL, written as it is; what a server answers goes as it came.
 | Module      | Keys                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------ |
 | `chat`      | `model`, `system`                                                                                |
-| `display`   | `thinking`, `tools`, `render <thinking or reply>`                                                |
+| `display`   | `thinking`, `tools`, `render <thinking or reply>`, `preview`                                     |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `headers <name>`, `timeout <name>` |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `headers <name>`, `timeout <name>`                    |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                             |
@@ -483,7 +484,9 @@ set mcp key sandbox                      ! a masked field asks for the token
 show tools                               ! every tool, by who serves it
 show tools | include bash                ! the settings of the tools named bash
 set tools use str_replace off            ! the model never sees it
-set tools preview bash_tool description  ! what a folded call shows
+set display preview description          ! the argument every folded call shows, the default
+set tools preview bash_tool command      ! the one of a tool over it; a call without it shows
+                                         ! its first argument
 no tools bash_tool                       ! every setting of that tool, gone
 set tools rounds 25                      ! the tool rounds a turn takes at most
 set mcp timeout sandbox 600              ! the seconds a call may take, 310 by default

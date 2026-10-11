@@ -12,9 +12,10 @@ export default {
 	parameters: {
 		type: 'object',
 		properties: {
+			description: { type: 'string', description: "Why I'm configuring the page, written first" },
 			lines: { type: 'string', description: 'one or more CLI lines, one command per line' }
 		},
-		required: ['lines']
+		required: ['description', 'lines']
 	},
 	stored(ctx, args) {
 		return { ...args, lines: ctx.redact(text(args)) };
