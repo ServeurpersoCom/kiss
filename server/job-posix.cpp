@@ -1,10 +1,10 @@
-// process-posix.cpp: the process layer of Linux and macOS: posix_spawn in a
+// job-posix.cpp: the job layer of Linux and macOS: posix_spawn in a
 // process group of its own, so SIGKILL to the group ends every descendant
 
 #if !defined(_WIN32)
 
+#    include "job.h"
 #    include "output.h"
-#    include "process.h"
 
 #    include <fcntl.h>
 #    include <poll.h>
@@ -39,14 +39,14 @@ static bool pipe_private(int fd[2]) {
 #    endif
 }
 
-process_result process_run(const std::string &           line,
-                           const std::string &           cwd,
-                           const std::string &           input,
-                           int                           timeout_s,
-                           size_t                        budget,
-                           const std::function<bool()> & tick) {
-    process_result                 r;
-    const std::vector<std::string> argv = process_argv(line);
+job_result job_run(const std::string &           line,
+                   const std::string &           cwd,
+                   const std::string &           input,
+                   int                           timeout_s,
+                   size_t                        budget,
+                   const std::function<bool()> & tick) {
+    job_result                     r;
+    const std::vector<std::string> argv = job_argv(line);
     if (argv.empty()) {
         r.error = "no command";
         return r;

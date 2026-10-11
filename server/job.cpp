@@ -1,6 +1,6 @@
-// process.cpp: what the process layer shares between the platforms
+// job.cpp: what the job layer shares between the platforms
 
-#include "process.h"
+#include "job.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -14,7 +14,7 @@ static const char         PATH_SEPARATOR = ':';
 static const char * const EXECUTABLE[]   = { "" };
 #endif
 
-std::vector<std::string> process_argv(const std::string & line) {
+std::vector<std::string> job_argv(const std::string & line) {
     std::vector<std::string> argv;
     std::string              word;
     bool                     quoted = false, open = false;
@@ -44,8 +44,8 @@ static bool runnable(const std::filesystem::path & p) {
     return std::filesystem::is_regular_file(p, ec);
 }
 
-std::string process_find(const std::string & line) {
-    const std::vector<std::string> argv = process_argv(line);
+std::string job_find(const std::string & line) {
+    const std::vector<std::string> argv = job_argv(line);
     if (argv.empty()) {
         return "";
     }

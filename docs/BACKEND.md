@@ -86,7 +86,7 @@ server/http.cpp|h        the routes and the checks of Host, Origin and the key
 server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
 server/term.h            the terminal of the console, per OS: raw mode, a key, the width
 server/log.cpp|h         the log: [Module] Line
-server/process.cpp|h     spawn, pipes, tree kill, per OS
+server/job.cpp|h         spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
 server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
@@ -112,7 +112,7 @@ only.
 
 There is no process library in the vendors. sheredom/subprocess.h, which llama.cpp uses, offers no
 process group on POSIX and no Job Object nor suspended start on Windows, so it kills the direct child
-only and grandchildren outlive a timeout. `process.cpp` owns that layer.
+only and grandchildren outlive a timeout. `job.cpp` owns that layer.
 
 ## Configuration
 

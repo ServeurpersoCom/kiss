@@ -1,10 +1,10 @@
-// process-windows.cpp: the process layer on Windows: the command in a job
-// object, so terminating the job ends every descendant
+// job-windows.cpp: the job layer of Windows: the command in a Job Object, so
+// terminating the job ends every descendant
 
 #if defined(_WIN32)
 
+#    include "job.h"
 #    include "output.h"
-#    include "process.h"
 #    include "utf8.h"
 
 #    include <chrono>
@@ -106,14 +106,14 @@ static bool pipe_for_child(HANDLE & parent, HANDLE & child, bool child_reads) {
     return true;
 }
 
-process_result process_run(const std::string &           line,
-                           const std::string &           cwd,
-                           const std::string &           input,
-                           int                           timeout_s,
-                           size_t                        budget,
-                           const std::function<bool()> & tick) {
-    process_result    r;
-    const std::string program = process_find(line);
+job_result job_run(const std::string &           line,
+                   const std::string &           cwd,
+                   const std::string &           input,
+                   int                           timeout_s,
+                   size_t                        budget,
+                   const std::function<bool()> & tick) {
+    job_result        r;
+    const std::string program = job_find(line);
     if (program.empty()) {
         r.error = "no such program";
         return r;

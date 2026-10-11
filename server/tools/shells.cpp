@@ -1,7 +1,7 @@
 // shells.cpp: one tool per shell whose program is found, named after it: the
 // command on stdin, the merged output back with the exit code and the duration
 
-#include "process.h"
+#include "job.h"
 #include "tools.h"
 #include "yyjson.h"
 
@@ -23,11 +23,11 @@ static tool_result ended(tool_result r, const std::string & outcome, log_level l
 }
 
 static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tick) {
-    yyjson_val *         command = yyjson_obj_get(args, "command");
-    const auto           t0      = std::chrono::steady_clock::now();
-    const process_result r       = process_run(
-        s.command, s.cwd, std::string(yyjson_get_str(command), yyjson_get_len(command)), s.timeout, s.output, tick);
-    const long long ms =
+    yyjson_val *     command = yyjson_obj_get(args, "command");
+    const auto       t0      = std::chrono::steady_clock::now();
+    const job_result r       = job_run(s.command, s.cwd, std::string(yyjson_get_str(command), yyjson_get_len(command)),
+                                       s.timeout, s.output, tick);
+    const long long  ms =
         (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
     if (!r.started) {
@@ -54,7 +54,7 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
     const std::string cwd = config.get("server cwd").value_or("");
     for (const std::string & name : config.names("shells")) {
         const std::string command = config.get("shells command", name).value_or("");
-        if (process_find(command).empty()) {
+        if (job_find(command).empty()) {
             continue;
         }
         shell s;

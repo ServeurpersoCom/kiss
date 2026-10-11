@@ -4,8 +4,8 @@
 // out, the log says so
 
 #include "engine/engine.h"
+#include "job.h"
 #include "log.h"
-#include "process.h"
 
 // a shell names a tool, so its name is a word a tool name takes
 static bool tool_word(const std::string & s) {
@@ -27,7 +27,7 @@ static std::string validate(const engine_reader & config) {
                 return std::string("shells ") + key + " " + shell + " is not set";
             }
         }
-        if (process_argv(config.get("shells command", shell).value_or("")).empty()) {
+        if (job_argv(config.get("shells command", shell).value_or("")).empty()) {
             return "shells command " + shell + " names no program";
         }
     }
@@ -37,10 +37,10 @@ static std::string validate(const engine_reader & config) {
 static void apply(const engine_reader & config) {
     for (const std::string & shell : config.names("shells")) {
         const std::string command = config.get("shells command", shell).value_or("");
-        const std::string program = process_find(command);
+        const std::string program = job_find(command);
         if (program.empty()) {
             log_info("Shells", "Shell %s left out, %s is found nowhere", shell.c_str(),
-                     process_argv(command).front().c_str());
+                     job_argv(command).front().c_str());
         } else {
             log_info("Shells", "Shell %s runs %s", shell.c_str(), program.c_str());
         }
