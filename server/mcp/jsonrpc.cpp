@@ -1,6 +1,6 @@
-// rpc.cpp: the JSON-RPC answers of the MCP
+// jsonrpc.cpp: the JSON-RPC answers of the MCP
 
-#include "mcp/rpc.h"
+#include "mcp/jsonrpc.h"
 
 #include <cstdlib>
 
@@ -26,12 +26,12 @@ static yyjson_mut_val * response(yyjson_mut_doc * doc, yyjson_val * id) {
     return root;
 }
 
-void rpc_error(httplib::Response & res,
-               int                 status,
-               yyjson_val *        id,
-               int                 code,
-               const std::string & message,
-               const rpc_build &   data) {
+void jsonrpc_error(httplib::Response &   res,
+                   int                   status,
+                   yyjson_val *          id,
+                   int                   code,
+                   const std::string &   message,
+                   const jsonrpc_build & data) {
     yyjson_mut_doc * doc  = yyjson_mut_doc_new(nullptr);
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * err  = yyjson_mut_obj_add_obj(doc, root, "error");
@@ -43,7 +43,7 @@ void rpc_error(httplib::Response & res,
     send(res, status, doc);
 }
 
-static yyjson_mut_doc * result(yyjson_val * id, bool modern, const rpc_build & body) {
+static yyjson_mut_doc * result(yyjson_val * id, bool modern, const jsonrpc_build & body) {
     yyjson_mut_doc * doc  = yyjson_mut_doc_new(nullptr);
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * out  = yyjson_mut_obj_add_obj(doc, root, "result");
@@ -54,10 +54,10 @@ static yyjson_mut_doc * result(yyjson_val * id, bool modern, const rpc_build & b
     return doc;
 }
 
-void rpc_result(httplib::Response & res, yyjson_val * id, bool modern, const rpc_build & body) {
+void jsonrpc_result(httplib::Response & res, yyjson_val * id, bool modern, const jsonrpc_build & body) {
     send(res, 200, result(id, modern, body));
 }
 
-std::string rpc_result_json(yyjson_val * id, bool modern, const rpc_build & body) {
+std::string jsonrpc_result_json(yyjson_val * id, bool modern, const jsonrpc_build & body) {
     return text(result(id, modern, body));
 }

@@ -4,7 +4,7 @@
 
 #include "engine/engine.h"
 #include "log.h"
-#include "mcp/rpc.h"
+#include "mcp/jsonrpc.h"
 #include "tools.h"
 
 #include <algorithm>
@@ -40,7 +40,7 @@ static std::vector<tool> listed(std::string & server) {
 
 void method_discover(httplib::Response & res, yyjson_val * id, const std::string & version) {
     const std::string server = engine_get("server hostname").value_or("");
-    rpc_result(res, id, true, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+    jsonrpc_result(res, id, true, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc, out, "supportedVersions");
         for (const char * v : MODERN_VERSIONS) {
             yyjson_mut_arr_add_str(doc, list, v);
@@ -64,7 +64,7 @@ void method_initialize(httplib::Response & res, yyjson_val * id, yyjson_val * pa
             chosen = v;
         }
     }
-    rpc_result(res, id, false, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+    jsonrpc_result(res, id, false, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_obj_add_strncpy(doc, out, "protocolVersion", chosen.c_str(), chosen.size());
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc, out, "capabilities");
         yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, caps, "tools"), "listChanged", false);
@@ -75,7 +75,7 @@ void method_initialize(httplib::Response & res, yyjson_val * id, yyjson_val * pa
 void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
     std::string             server;
     const std::vector<tool> tools = listed(server);
-    rpc_result(res, id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+    jsonrpc_result(res, id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc, out, "tools");
         for (const tool & t : tools) {
             const std::string name = server + "_" + t.suffix;
@@ -95,7 +95,7 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
 
 // the result of a tool call
 static std::string call_json(yyjson_val * id, bool modern, const tool_result & r) {
-    return rpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+    return jsonrpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
         if (!r.text.empty() || r.image.empty()) {
             yyjson_mut_val * block = yyjson_mut_arr_add_obj(doc, content);
@@ -228,5 +228,5 @@ void method_tools_call(const httplib::Request &            req,
         return;
     }
     log_error("MCP", "Call %s: refused, no such tool", called.c_str());
-    rpc_error(res, 200, id, RPC_INVALID_PARAMS, "unknown tool \"" + called + "\"");
+    jsonrpc_error(res, 200, id, JSONRPC_INVALID_PARAMS, "unknown tool \"" + called + "\"");
 }
