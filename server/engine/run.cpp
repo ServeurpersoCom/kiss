@@ -23,6 +23,10 @@ const char * engine_platform() {
 #endif
 }
 
+std::string engine_component(const std::string & name, const std::string & version) {
+    return "server " + (name.empty() ? "" : name + " ") + version + " on " + engine_platform();
+}
+
 // the running configuration over the defaults, the version, and the lock that
 // lets one batch run at a time
 static layer       g_running;
@@ -236,4 +240,31 @@ std::optional<std::string> engine_get(const std::string & key, const std::string
 void engine_with(const std::function<void(const engine_reader &)> & read) {
     std::lock_guard<std::mutex> lock(g_mutex);
     read(reader(g_running));
+}
+
+std::vector<std::string> engine_next(const std::string & head) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    try {
+        const auto [line, spec] = split_filter(head);
+        if (spec) {
+            return trim(*spec).empty() ? filter_names() : words_t{};
+        }
+        words_t words    = tokenize(line);
+        bool    platform = false;
+        for (const char * p : PLATFORMS) {
+            if (!words.empty() && lower(words[0]) == p) {
+                words.erase(words.begin());
+                platform = true;
+                break;
+            }
+        }
+        words_t next = next_words(words);
+        if (words.empty() && !platform) {
+            next.insert(next.end(), std::begin(PLATFORMS), std::end(PLATFORMS));
+        }
+        return next;
+    } catch (...) {
+        // a line still being typed may not read yet: nothing follows it
+        return {};
+    }
 }

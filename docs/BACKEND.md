@@ -47,7 +47,7 @@ tools
 ## The server
 
 `server` is an MCP server over Streamable HTTP and a process launcher. One runs on each machine that
-works for the model: a laptop, a pod, a VM, a Windows box. A KiSS page drives as many as its
+works for the model: a GPU server, a Windows box, a laptop. A KiSS page drives as many as its
 `kiss.conf` names, each under its own name, so the page never changes when a machine joins.
 
 The C++ holds mechanisms only: HTTP, MCP, the process layer of each OS, decoding and truncation of
@@ -208,7 +208,7 @@ Windows service runs it, stdin left alone. Its log goes to stderr, one line per 
 every GGML project of the house, `[Module] Line`, and opens on the version:
 
 ```
-[Server] KiSS server 5633ee7 (2026-10-11) on linux
+[Server] KiSS Operating System, server 5633ee7 (2026-10-11) on linux
 [Server] Listening on http://127.0.0.1:8089
 [Engine] Configured by an MCP client
 ```
@@ -216,21 +216,37 @@ every GGML project of the house, `[Module] Line`, and opens on the version:
 `server log verbose` adds every MCP request and every tool call, at once, no restart.
 
 `--console` opens the interactive mode, as the console port of a Cisco router: the prompt names the
-server, each line runs as a batch of the administrator, and the log arrives on the same console
-between the commands.
+server, each line runs as a batch of the administrator, and the log passes above the line being
+typed, which it never cuts.
 
 ```
-pod# set server port 9000
+[Server] KiSS Operating System, server 5633ee7 (2026-10-11) on linux
+[Server] Listening on http://127.0.0.1:8089
+forge# show version
+! KiSS Operating System
+! server forge 5633ee7 (2026-10-11) on linux
+forge# set server port 9000
 [Engine] Configured by the administrator
 - set server port 8089
 + set server port 9000
-pod# copy run start
+forge# copy run start
 ! copied running-config to startup-config
 ```
 
+The line is edited as in a shell, and completes as IOS does, from the words the engine reads:
+
+- Tab completes the word when one word fits, else the start every fitting word shares, else lists
+  them; `?` lists what may follow, or the words the word typed starts, and leaves the line as it is.
+  Ctrl-V types the next key as it is, a `?` in a value.
+- Left and Right, Home and End or Ctrl-A and Ctrl-E move; Backspace and Delete erase a character,
+  Ctrl-U the line before the cursor, Ctrl-K the line after it; Up and Down walk the history.
+- Ctrl-C drops the line, Ctrl-D on an empty line stops the server.
+
+A stdin that is no terminal, a pipe or a file, is read a line at a time, each answered in turn.
+
 ## Tools
 
-A tool name is `<server name>_<item>`: `pod_bash`, `monstre_powershell`, `pod_view`. The server name
+A tool name is `<server name>_<item>`: `forge_bash`, `studio_powershell`, `nomad_zsh`. The server name
 is the host name lowercased with every character outside `[a-z0-9]` made `_`, which keeps the name
 valid for every model API. Two machines never collide, and KiSS filters a tool by its name with
 `set tools use <tool> off`.
@@ -363,7 +379,7 @@ Since the script travels on stdin, ssh and container engines forward it unchange
 configuration:
 
 ```
-set shells command gpu ssh -T -o BatchMode=yes root@pod bash -s
+set shells command gpu ssh -T -o BatchMode=yes root@forge bash -s
 set shells command box podman exec -i sandbox bash -s
 ```
 
@@ -382,6 +398,10 @@ The server is stateless and speaks both eras on `POST /mcp`:
   2025-11-25, as the protocol states.
 
 Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools/call`, `ping`.
+
+The `serverInfo` of either era names the server by `server name`, its title `KiSS Operating System`,
+its version, and as its description the line it gives of itself in `show version`:
+`server forge 5633ee7 (2026-10-11) on linux`. KiSS lists that line in its own `show version`.
 
 ## HTTP and security
 
@@ -410,8 +430,8 @@ the default configuration live inside it.
 
 ## Batches
 
-Each batch ends with a test from end to end on the pod, a KiSS page running a command through the
-binary.
+Each batch ends with a test from end to end on a Linux machine, a KiSS page running a command
+through the binary.
 
 1. Skeleton: the engine with the `server` module, `server.conf` with layers and prefixes, HTTP,
    page, security, MCP of both eras, the config tool, the console and the log.

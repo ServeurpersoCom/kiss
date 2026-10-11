@@ -84,6 +84,19 @@ struct engine_result {
 // the platform this server runs on: linux, macos or windows
 const char * engine_platform();
 
+// the words that may follow the start of a line, as Tab and ? of the console
+// complete it: a platform, the commands, their keys and items, a filter after
+// a pipe; a word in <> names what to type
+std::vector<std::string> engine_next(const std::string & head);
+
+// the system, as a router names its own
+constexpr const char * ENGINE_SYSTEM = "KiSS Operating System";
+
+// the line a server gives of itself, in show version, in its MCP serverInfo
+// and in show version of the page: server forge 5633ee7 (2026-10-11) on linux,
+// the name left out when empty
+std::string engine_component(const std::string & name, const std::string & version);
+
 // the defaults the binary embeds: set lines, platform prefixes allowed, below
 // every other layer; returns what it refuses, empty when it takes them all
 std::string engine_defaults(const std::string & text);

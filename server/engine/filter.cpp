@@ -8,12 +8,17 @@
 // port; every filter takes a pattern, the rest of the line as written, a
 // regular expression that minds case; count tells how many lines match in the
 // words of IOS, as a note
+const words_t & filter_names() {
+    static const words_t names = { "begin", "count", "exclude", "include" };
+    return names;
+}
+
 filter_t compile_filter(const std::string & spec) {
-    static const words_t names   = { "begin", "count", "exclude", "include" };
-    const std::string    trimmed = trim(spec);
-    const std::string    word    = trimmed.substr(0, trimmed.find_first_of(" \t"));
-    const std::string    pattern = trim(trimmed.substr(word.size()));
-    words_t              hits;
+    const words_t &   names   = filter_names();
+    const std::string trimmed = trim(spec);
+    const std::string word    = trimmed.substr(0, trimmed.find_first_of(" \t"));
+    const std::string pattern = trim(trimmed.substr(word.size()));
+    words_t           hits;
     for (const std::string & n : names) {
         if (starts_with(n, lower(word))) {
             hits.push_back(n);

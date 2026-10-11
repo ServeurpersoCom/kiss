@@ -8,8 +8,9 @@ static step_t compile_show_version(const std::string &, const words_t & args) {
     if (!args.empty()) {
         fail(beyond({ "show", "version" }, args));
     }
-    return [](context &) {
-        return comment("KiSS server " + engine_version() + ", " + engine_platform());
+    return [](context & ctx) {
+        const std::string name = reader(ctx.draft).get("server name", "").value_or("");
+        return comment(ENGINE_SYSTEM) + "\n" + comment(engine_component(name, engine_version()));
     };
 }
 

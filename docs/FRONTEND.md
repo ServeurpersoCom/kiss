@@ -494,6 +494,18 @@ so WebSocket and stdio servers stay out of reach. A server must allow the origin
 (CORS). A call runs until it answers, within the timeout of its server, or until the turn is
 stopped; connecting and listing the tools take five seconds at most.
 
+`show version` names the system, the page, then every KiSS server the page reaches, by the line
+each gives of itself in its `serverInfo`, as a router lists its components; another MCP server
+gives none:
+
+```
+! KiSS Operating System
+! page 8f7bdeb (2026-10-11)
+! server forge c6a4f05 (2026-10-11) on linux
+! server studio c6a4f05 (2026-10-11) on windows
+! server nomad c6a4f05 (2026-10-11) on macos
+```
+
 A call waits 310 seconds by default, ten more than the 290 a shell of the KiSS server runs at most,
 as BACKEND.md sets it: the server ends its own run first and the model reads why. The two figures
 miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds the gap is meant.

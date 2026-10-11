@@ -1,7 +1,7 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { ConfigReader, Image, Outcome, Tool } from './types.js';
-import { MCP_CONNECT_TIMEOUT_MS, NAME, capital } from './config.js';
+import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
 import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
 
@@ -20,11 +20,19 @@ interface Connection {
 
 const connections = new Map<string, Connection>();
 
-// what the server answered, or did not
+// what the server answered, or did not; a KiSS server also gives the line it
+// writes of itself, server forge 5633ee7 (2026-10-11) on linux
 interface Served {
 	server: string;
 	tools?: Tool[];
+	system?: string;
 	error?: string;
+}
+
+// the line a KiSS server gives of itself, none from any other server
+function system(client: Client): { system?: string } {
+	const info = client.getServerVersion();
+	return info?.title === SYSTEM && info.description ? { system: info.description } : {};
 }
 
 function drop(name: string): void {
@@ -128,7 +136,9 @@ export async function served(config: ConfigReader, down: Map<string, string>): P
 			const error = down.get(signature(r));
 			if (error !== undefined) return { server: r.name, error };
 			try {
-				return { server: r.name, tools: await connection(r).tools };
+				const c = connection(r);
+				const tools = await c.tools;
+				return { server: r.name, tools, ...system(await c.client) };
 			} catch (e) {
 				down.set(signature(r), (e as Error).message);
 				return { server: r.name, error: (e as Error).message };

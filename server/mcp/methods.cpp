@@ -17,9 +17,11 @@ static void server_info(yyjson_mut_doc *    doc,
                         yyjson_mut_val *    info,
                         const std::string & name,
                         const std::string & version) {
+    const std::string component = engine_component(name, version);
     yyjson_mut_obj_add_strncpy(doc, info, "name", name.c_str(), name.size());
-    yyjson_mut_obj_add_str(doc, info, "title", "KiSS server");
+    yyjson_mut_obj_add_str(doc, info, "title", ENGINE_SYSTEM);
     yyjson_mut_obj_add_strncpy(doc, info, "version", version.c_str(), version.size());
+    yyjson_mut_obj_add_strncpy(doc, info, "description", component.c_str(), component.size());
 }
 
 // the tools and the server name of one same configuration

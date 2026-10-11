@@ -1,5 +1,7 @@
 // the name the page shows
 export const NAME = 'KiSS';
+// the system, as a router names its own; a KiSS server gives it as its title
+export const SYSTEM = `${NAME} Operating System`;
 // the scoping class of a component is its name, svelte-composer for
 // Composer.svelte, so show css tells whose a rule is and a style sheet aims at
 // one component by the selector it reads there

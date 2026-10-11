@@ -5,15 +5,15 @@ describe('the line of a turn', () => {
 	it('prepares, then waits for the endpoint, its clock from the request on', () => {
 		const p = pulse(0);
 		expect(line(p, 3)).toBe('Preparing - 3 ms');
-		mark(p, 'waiting', 'pod', 10);
-		expect(line(p, 852)).toBe('Waiting for pod - 842 ms');
+		mark(p, 'waiting', 'forge', 10);
+		expect(line(p, 852)).toBe('Waiting for forge - 842 ms');
 	});
 
 	it('streams its tokens, their rate from the second one, between first and last chunk', () => {
 		const p = pulse(0);
-		mark(p, 'waiting', 'pod', 0);
+		mark(p, 'waiting', 'forge', 0);
 		chunk(p, false, 100);
-		expect(line(p, 150)).toBe('Waiting for pod - 150 ms');
+		expect(line(p, 150)).toBe('Waiting for forge - 150 ms');
 		chunk(p, true, 100);
 		mark(p, 'thinking', '', 100);
 		expect(line(p, 100)).toBe('Thinking - 0 ms - 1 token');

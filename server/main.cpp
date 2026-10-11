@@ -36,7 +36,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    log_info("Server", "KiSS server %s on %s", KISS_VERSION, engine_platform());
+    log_info("Server", "%s, %s", ENGINE_SYSTEM, engine_component("", KISS_VERSION).c_str());
 
     const std::string refused =
         engine_defaults(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));

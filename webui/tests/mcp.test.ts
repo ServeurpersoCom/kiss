@@ -22,8 +22,26 @@ interface Declared {
 
 const PNG = 'iVBORw0KGgo=';
 
-function server(tools: Declared[]): Server {
-	const s = new Server({ name: 'fixture', version: '1.0.0' }, { capabilities: { tools: {} } });
+// what a server says of itself
+interface Info {
+	name: string;
+	version: string;
+	title?: string;
+	description?: string;
+}
+
+const FIXTURE: Info = { name: 'fixture', version: '1.0.0' };
+
+// a KiSS server: its system as its title, the line it writes of itself
+const FORGE: Info = {
+	name: 'forge',
+	version: 'c6a4f05 (2026-10-11)',
+	title: 'KiSS Operating System',
+	description: 'server forge c6a4f05 (2026-10-11) on linux'
+};
+
+function server(tools: Declared[], info = FIXTURE): Server {
+	const s = new Server(info, { capabilities: { tools: {} } });
 	s.setRequestHandler('tools/list', () => ({
 		tools: tools.map((t) => ({
 			name: t.name,
@@ -43,19 +61,19 @@ function server(tools: Declared[]): Server {
 }
 
 // the shape of mcp.js: one stateless server and transport per POST, 2025 era
-function legacy(tools: Declared[]) {
+function legacy(tools: Declared[], info = FIXTURE) {
 	return async (req: Request) => {
 		const transport = new WebStandardStreamableHTTPServerTransport({
 			sessionIdGenerator: undefined
 		});
-		await server(tools).connect(transport);
+		await server(tools, info).connect(transport);
 		return transport.handleRequest(req);
 	};
 }
 
 // a 2026 era endpoint
-function modern(tools: Declared[]) {
-	const handler = createMcpHandler(() => server(tools));
+function modern(tools: Declared[], info = FIXTURE) {
+	const handler = createMcpHandler(() => server(tools, info));
 	return (req: Request) => handler.fetch(req);
 }
 
@@ -200,6 +218,24 @@ describe('an MCP server', () => {
 		expect(p.bodies[1].tools).toEqual(p.bodies[0].tools);
 	});
 
+	it('of KiSS shows in show version with the line it gives of itself, in either era', async () => {
+		const p = await page(
+			{ a: legacy(SHELL, FORGE), b: modern(SHELL, FORGE), c: modern(SHELL) },
+			[]
+		);
+		await p.engine.run(
+			'set mcp url a http://a/mcp\nset mcp url b http://b/mcp\nset mcp url c http://c/mcp',
+			'user'
+		);
+		const lines = (await p.engine.run('show version', 'user')).text.split('\n');
+		expect(lines[0]).toBe('! KiSS Operating System');
+		expect(lines[1]).toMatch(/^! page /);
+		expect(lines.slice(2)).toEqual([
+			'! server forge c6a4f05 (2026-10-11) on linux',
+			'! server forge c6a4f05 (2026-10-11) on linux'
+		]);
+	});
+
 	it('carries the key as a bearer token', async () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
@@ -278,8 +314,8 @@ describe('an MCP server', () => {
 			throw new TypeError('fetch failed: down');
 		};
 		const p = await page({ down }, [
-			stream([call('config', { lines: 'show version' })]),
-			stream([call('config', { lines: 'show version' })]),
+			stream([call('config', { lines: 'show display' })]),
+			stream([call('config', { lines: 'show display' })]),
 			stream([{ content: 'ok' }]),
 			stream([{ content: 'again' }])
 		]);
