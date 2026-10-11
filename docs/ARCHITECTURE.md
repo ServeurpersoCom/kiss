@@ -544,7 +544,7 @@ set endpoints url prod https://example.com/v1
 ## Build
 
 ```
-./build.sh
+./buildwebui.sh
 ```
 
 It installs, formats, type checks, runs the laws, then builds `dist/index.html`.

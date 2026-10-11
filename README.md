@@ -92,7 +92,7 @@ style all go through it, for the model as for you.
 ## Quick start
 
 ```
-./build.sh
+./buildwebui.sh
 npm run preview
 ```
 

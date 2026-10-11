@@ -35,7 +35,9 @@ server/public/           index.html.gz, versioned, and kiss.conf
 server/vendor/           cpp-httplib, yyjson
 server/xxd.cmake         embeds the page and the default server.conf
 CMakeLists.txt           add_subdirectory(server)
-build.sh                 builds the page, gzips it into server/public/, builds the server
+buildwebui.sh            builds the page and gzips it into server/public/, optional and run first
+build.sh                 builds the server with CMake alone
+format.sh                clang-format over the C++, vendors excluded
 ```
 
 `server/public/index.html.gz` is versioned so a C++ developer builds the server with CMake alone.
