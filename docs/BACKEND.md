@@ -127,7 +127,7 @@ configuration therefore lists every candidate shell and each machine serves the 
 | `server cwd`            | string | working directory of every tool, the start directory by default |
 | `server log`            | enum   | `info` or `verbose`                                             |
 | `shells command <item>` | string | command line that runs a script read on stdin                   |
-| `shells timeout <item>` | number | seconds a call may run, and the bound of the `timeout` argument |
+| `shells timeout <item>` | number | seconds a call may run                                          |
 | `shells output <item>`  | number | bytes of output a call returns                                  |
 | `files use`             | enum   | `on` or `off`, the three file tools                             |
 | `files read`            | number | bytes `view` returns at most                                    |
@@ -197,10 +197,29 @@ A description holds the OS, the shell, its command line and the working director
 the life of the process, so the tool list stays the same from turn to turn and the prompt cache of
 the model holds.
 
+Every tool takes `description` first, why the call is made, then what it does: a model writes the
+why before the what, and KiSS shows the first argument of a folded call, so the why shows with no
+setting. The schema of a tool is its law: a key outside it, a required key missing or a required
+string empty refuses the call before it runs, with `Unknown argument <key>` or
+`<Key> argument required`, so a misnamed argument never runs as if it were absent.
+
+A result is plain text in sentences, no prompt and no `!`: the CLI is the config tool alone. The
+model wrote the call and keeps it in its context, so a result never echoes it.
+
 ### Shell tools
 
-One tool per shell item that starts. Its arguments are `script`, the script to run, and `timeout`,
-seconds bounded by the item.
+One tool per shell item that starts. Its arguments are `description` and `command`, the command to
+run, which the shell reads on stdin. The result is the output, then its last line, the exit code and
+the duration:
+
+```
+hello
+Exit code 0 (12 ms)
+```
+
+A code other than 0 marks the result as an error, as do `Killed after 290 s`, `Cancelled` and
+`Cannot start <command>: <reason>`. The run ends after the `timeout` of the item; the model has no
+timeout of its own to set.
 
 ### File tools
 
@@ -213,10 +232,11 @@ Paths are UTF-8, relative to `server cwd` or absolute.
 
 ### The config tool
 
-`<name>_config` runs a batch of CLI lines on the engine and answers with its output and its change,
-as the `config` tool of KiSS does. KiSS configures every backend from the page through it, under the
-consent firewall when the model calls it, and any other MCP client gets the same CLI. A change of
-`server host` or `server port` moves the listener at once, once the address is checked free.
+`<name>_config` takes `description` and `lines`, runs the lines as a batch of CLI on the engine and
+answers with its output and its change, as the `config` tool of KiSS does. KiSS configures every
+backend from the page through it, under the consent firewall when the model calls it, and any other
+MCP client gets the same CLI. A change of `server host` or `server port` moves the listener at once,
+once the address is checked free.
 
 A secret never crosses the context of the model. It reaches the server three ways: `server.conf`,
 the console, and MCP elicitation: a `set` line of a secret without its value answers with a request
@@ -266,11 +286,9 @@ CLIXML, a native program reading stdin to its end, 20000 lines, and a timeout en
   says. Each run of bytes that stays invalid becomes one U+FFFD, so the JSON is always valid and a
   binary output stays close to the size read.
 - Past the `output` budget, the server keeps the head, where the command shows what it does, and the
-  tail, where builds report their errors, both cut on line ends, and writes between them one line
-  with the number of bytes left out. The pipe is drained to the end either way, so the child never
-  blocks on a full pipe.
-- The output ends on one status line: `! exit N`, `! killed after N s` or `! cancelled`, the last two
-  marking the result as an error.
+  tail, where builds report their errors, both cut on line ends, and writes between them one line,
+  `Long output with N bytes hidden from context`. The pipe is drained to the end either way, so the
+  child never blocks on a full pipe.
 
 ### Long calls and cancel
 
@@ -285,7 +303,7 @@ after the Stop.
 
 A shell runs 290 seconds at most by default and KiSS waits 310 on a call, as FRONTEND.md sets it:
 ten below 300 on one side, ten above on the other. The server ends the run first and the model reads
-`! killed after 290 s`, never a timeout of the page; figures that do not fall on 300 say the gap is
+`Killed after 290 s`, never a timeout of the page; figures that do not fall on 300 say the gap is
 meant. A shell given more needs `set mcp timeout` raised past it in KiSS.
 
 ### Remote hosts and containers

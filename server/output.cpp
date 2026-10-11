@@ -34,7 +34,8 @@ std::string output_buffer::text() const {
     const std::string first = end == std::string::npos ? head + "\n" : head.substr(0, end + 1);
     const std::string final = begin == std::string::npos ? last : last.substr(begin + 1);
     const size_t      left  = count - std::min(head.size(), first.size()) - final.size();
-    return output_utf8(first) + "! " + std::to_string(left) + " bytes left out\n" + output_utf8(final);
+    return output_utf8(first) + "Long output with " + std::to_string(left) + " bytes hidden from context\n" +
+           output_utf8(final);
 }
 
 // the length of the UTF-8 sequence that starts at s[i], 0 when it is invalid

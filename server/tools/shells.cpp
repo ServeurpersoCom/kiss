@@ -1,9 +1,11 @@
 // shells.cpp: one tool per shell whose program is found, named after it: the
-// script on stdin, the merged output and the exit status back
+// command on stdin, the merged output back with the exit code and the duration
 
 #include "process.h"
 #include "tools.h"
 #include "yyjson.h"
+
+#include <chrono>
 
 // a shell as its tool runs it
 struct shell {
@@ -14,31 +16,27 @@ struct shell {
 };
 
 static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tick) {
-    yyjson_val * script = yyjson_obj_get(args, "script");
-    if (!yyjson_is_str(script)) {
-        return { "script is the text of the script, as the shell reads it on stdin", true };
-    }
-    yyjson_val * asked   = yyjson_obj_get(args, "timeout");
-    int          timeout = s.timeout;
-    if (yyjson_is_int(asked) && yyjson_get_sint(asked) > 0 && yyjson_get_sint(asked) < s.timeout) {
-        timeout = (int) yyjson_get_sint(asked);
-    }
-    const process_result r = process_run(s.command, s.cwd, std::string(yyjson_get_str(script), yyjson_get_len(script)),
-                                         timeout, s.output, tick);
+    yyjson_val *         command = yyjson_obj_get(args, "command");
+    const auto           t0      = std::chrono::steady_clock::now();
+    const process_result r       = process_run(
+        s.command, s.cwd, std::string(yyjson_get_str(command), yyjson_get_len(command)), s.timeout, s.output, tick);
+    const long long ms =
+        (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
     if (!r.started) {
-        return { "! cannot start " + s.command + ": " + r.error, true };
+        return { "Cannot start " + s.command + ": " + r.error, true };
     }
     std::string text = r.output;
     if (!text.empty() && text.back() != '\n') {
         text += '\n';
     }
     if (r.cancelled) {
-        return { text + "! cancelled", true };
+        return { text + "Cancelled", true };
     }
     if (r.timed_out) {
-        return { text + "! killed after " + std::to_string(timeout) + " s", true };
+        return { text + "Killed after " + std::to_string(s.timeout) + " s", true };
     }
-    return { text + "! exit " + std::to_string(r.exit_code), false };
+    return { text + "Exit code " + std::to_string(r.exit_code) + " (" + std::to_string(ms) + " ms)", r.exit_code != 0 };
 }
 
 static std::vector<tool> shell_tools(const engine_reader & config) {
@@ -57,14 +55,15 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
 
         tool t;
         t.suffix      = name;
-        t.description = "Runs a script with " + command + " on " + engine_platform() + ", in " + cwd +
-                        ". The script goes on stdin; stdout and stderr come back merged, the head and the tail of " +
-                        std::to_string(s.output) + " bytes at most, then the exit status. The run ends after " +
-                        "timeout seconds, " + std::to_string(s.timeout) +
-                        " at most and by default, and every process it leaves running ends with it.";
-        t.input = R"({"type":"object","properties":{"script":{"type":"string","description":)"
-                  R"("the script, as the shell reads it on stdin"},"timeout":{"type":"integer","description":)"
-                  R"("seconds the run may take"}},"required":["script"]})";
+        t.description = "Runs a command with " + command + " on " + engine_platform() + ", in " + cwd +
+                        ". The command goes on stdin; stdout and stderr come back merged, the head and the tail of " +
+                        std::to_string(s.output) + " bytes at most, then the exit code and the duration. The run " +
+                        "ends after " + std::to_string(s.timeout) +
+                        " seconds, and every process it leaves running ends with it.";
+        t.input = R"({"type":"object","properties":{)"
+                  R"("description":{"type":"string","description":"Why I'm running this command"},)"
+                  R"("command":{"type":"string","description":"The command to run, as the shell reads it on stdin"}},)"
+                  R"("required":["description","command"],"additionalProperties":false})";
         t.call  = [s](yyjson_val * args, const tool_tick & tick) {
             return run(s, args, tick);
         };

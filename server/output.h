@@ -12,7 +12,7 @@ struct output_buffer {
 
     void add(const char * data, size_t size);
 
-    // the head, a line that counts the bytes left out when there are, and the
+    // the head, a line that counts the bytes hidden when there are, and the
     // tail, as valid UTF-8
     std::string text() const;
 

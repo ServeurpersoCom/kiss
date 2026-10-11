@@ -22,7 +22,8 @@ using tool_tick = std::function<bool()>;
 struct tool {
     std::string                                                           suffix;
     std::string                                                           description;
-    // the JSON schema of the arguments
+    // the JSON schema of the arguments, description first, so a model writes
+    // why before what and a folded call shows it
     std::string                                                           input;
     std::function<tool_result(yyjson_val * args, const tool_tick & tick)> call;
 };
@@ -38,3 +39,8 @@ bool tools_register(tool_source source);
 
 // every tool the configuration serves
 std::vector<tool> tools_list(const engine_reader & config);
+
+// the arguments against the schema of the tool: no key outside its
+// properties, every required key present, a required string not empty;
+// the message of the first failure, empty when they hold
+std::string tools_check(const tool & t, yyjson_val * args);

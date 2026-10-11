@@ -117,6 +117,12 @@ void method_tools_call(const httplib::Request &            req,
             continue;
         }
         log_verbose("Mcp", "Call %s", called.c_str());
+        const std::string refused = tools_check(t, args);
+        if (!refused.empty()) {
+            log_verbose("Mcp", "Call %s refused, %s", called.c_str(), refused.c_str());
+            res.set_content(call_json(id, modern, { refused, true }), "application/json");
+            return;
+        }
         if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
             const tool_result r = t.call(args, [&req]() { return !req.is_connection_closed(); });
             if (req.is_connection_closed()) {
