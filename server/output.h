@@ -6,9 +6,14 @@
 #include <cstddef>
 #include <string>
 
+// the text a run of bytes that is not UTF-8 stands for, empty when it stands
+// for none
+typedef std::string (*output_decode)(const std::string & run);
+
 struct output_buffer {
-    // the head keeps the first half of the budget, the tail the last half
-    explicit output_buffer(size_t budget);
+    // the head keeps the first half of the budget, the tail the last half;
+    // decode reads the runs that are not UTF-8, none when null
+    explicit output_buffer(size_t budget, output_decode decode = nullptr);
 
     void add(const char * data, size_t size);
 
@@ -21,15 +26,17 @@ struct output_buffer {
     bool truncated() const { return count > head_max + tail.size(); }
 
   private:
-    size_t      head_max;
-    size_t      tail_max;
-    std::string head;
+    size_t        head_max;
+    size_t        tail_max;
+    output_decode decode;
+    std::string   head;
     // the last bytes read, a ring that starts at start once full
-    std::string tail;
-    size_t      start = 0;
-    size_t      count = 0;
+    std::string   tail;
+    size_t        start = 0;
+    size_t        count = 0;
 };
 
-// the text with every run of invalid UTF-8 bytes replaced by one U+FFFD, so
-// binary output stays close to the size read
-std::string output_utf8(const std::string & text);
+// the text with every run of invalid UTF-8 bytes replaced by what decode
+// reads in it, or by one U+FFFD when it reads nothing, so binary output stays
+// close to the size read
+std::string output_utf8(const std::string & text, output_decode decode = nullptr);

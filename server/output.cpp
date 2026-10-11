@@ -4,7 +4,10 @@
 
 #include <algorithm>
 
-output_buffer::output_buffer(size_t budget) : head_max(budget / 2), tail_max(budget - budget / 2) {}
+output_buffer::output_buffer(size_t budget, output_decode runs) :
+    head_max(budget / 2),
+    tail_max(budget - budget / 2),
+    decode(runs) {}
 
 void output_buffer::add(const char * data, size_t size) {
     count += size;
@@ -25,7 +28,7 @@ void output_buffer::add(const char * data, size_t size) {
 std::string output_buffer::text() const {
     const std::string last = tail.substr(start) + tail.substr(0, start);
     if (!truncated()) {
-        return output_utf8(head + last);
+        return output_utf8(head + last, decode);
     }
     // both cuts fall on line ends when the kept bytes hold one, so no line and
     // no UTF-8 sequence comes out split
@@ -34,8 +37,8 @@ std::string output_buffer::text() const {
     const std::string first = end == std::string::npos ? head + "\n" : head.substr(0, end + 1);
     const std::string final = begin == std::string::npos ? last : last.substr(begin + 1);
     const size_t      left  = count - std::min(head.size(), first.size()) - final.size();
-    return output_utf8(first) + "Long output with " + std::to_string(left) + " bytes hidden from context\n" +
-           output_utf8(final);
+    return output_utf8(first, decode) + "Long output with " + std::to_string(left) + " bytes hidden from context\n" +
+           output_utf8(final, decode);
 }
 
 // the length of the UTF-8 sequence that starts at s[i], 0 when it is invalid
@@ -70,23 +73,25 @@ static size_t sequence(const std::string & s, size_t i) {
     return n;
 }
 
-std::string output_utf8(const std::string & text) {
+std::string output_utf8(const std::string & text, output_decode decode) {
     std::string out;
     out.reserve(text.size());
-    bool invalid = false;
-    for (size_t i = 0; i < text.size();) {
-        const size_t n = sequence(text, i);
+    std::string run;
+    for (size_t i = 0; i <= text.size();) {
+        const size_t n = i < text.size() ? sequence(text, i) : 1;
         if (n == 0) {
-            if (!invalid) {
-                out += "\xEF\xBF\xBD";
-            }
-            invalid = true;
-            i++;
-        } else {
-            out.append(text, i, n);
-            invalid = false;
-            i += n;
+            run += text[i++];
+            continue;
         }
+        if (!run.empty()) {
+            const std::string read = decode ? decode(run) : "";
+            out += read.empty() ? "\xEF\xBF\xBD" : read;
+            run.clear();
+        }
+        if (i < text.size()) {
+            out.append(text, i, n);
+        }
+        i += n;
     }
     return out;
 }

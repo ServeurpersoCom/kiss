@@ -98,6 +98,7 @@ tools/version.cmake      the git commit of the build
 CMakeLists.txt           the server, built without npm, into build/server
 buildwebui.sh            builds the page in webui/ and gzips it into tools/public/, optional, first
 build.sh                 builds the server with CMake alone
+build.cmd                the same on Windows, with Visual Studio Build Tools and Ninja
 format.sh                clang-format over the C++, vendors excluded
 ```
 
