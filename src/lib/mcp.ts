@@ -39,7 +39,7 @@ function connect(remote: Remote): Promise<Client> {
 		{ name: 'kiss', title: NAME, version: __KISS_VERSION__ },
 		{ versionNegotiation: { mode: 'auto' } }
 	);
-	const transport = new StreamableHTTPClientTransport(new URL(remote.url), {
+	const transport = new StreamableHTTPClientTransport(new URL(remote.url, location.href), {
 		requestInit: { headers: headers(remote) }
 	});
 	return client.connect(transport, { timeout: MCP_CONNECT_TIMEOUT_MS }).then(() => client);

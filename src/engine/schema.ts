@@ -53,9 +53,11 @@ function check(def: Key, raw: string): Value {
 			}
 			return raw;
 		case 'url': {
+			// a relative URL resolves against the page and is kept as typed, so it
+			// follows the page wherever it is served
 			let url: URL;
 			try {
-				url = new URL(raw);
+				url = new URL(raw, location.href);
 			} catch {
 				throw new Error(`"${raw}" is not a URL`);
 			}

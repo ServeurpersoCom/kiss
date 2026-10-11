@@ -158,9 +158,15 @@ async function page(
 	return { engine, bodies, auth, methods, asked, verdicts, go };
 }
 
+// the address the page is served at, against which a relative URL resolves
+function serve(url: string): void {
+	(window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(url);
+}
+
 beforeEach(() => {
 	localStorage.clear();
 	vi.unstubAllGlobals();
+	serve('http://kiss/');
 });
 
 describe('an MCP server', () => {
@@ -202,6 +208,21 @@ describe('an MCP server', () => {
 		);
 		expect(p.auth.length).toBeGreaterThan(0);
 		expect(p.auth.every((a) => a === 'Bearer sk-mcp')).toBe(true);
+	});
+
+	it('at a relative URL resolves against the page, which keeps the URL as typed', async () => {
+		serve('http://kiss/app/');
+		const paths: string[] = [];
+		const p = await page(
+			{ kiss: (req) => (paths.push(new URL(req.url).pathname), modern(SHELL)(req)) },
+			[]
+		);
+		await p.engine.run('set mcp url a mcp\nset mcp url b /mcp', 'user');
+		expect((await p.engine.run('show running-config', 'user')).text).toContain(
+			'set mcp url a mcp\nset mcp url b /mcp'
+		);
+		await p.engine.run('show tools', 'user');
+		expect([...new Set(paths)].sort()).toEqual(['/app/mcp', '/mcp']);
 	});
 
 	it('answers a call with its text, its images and its error flag', async () => {
