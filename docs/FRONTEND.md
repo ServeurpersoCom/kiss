@@ -3,6 +3,76 @@
 The reference of the frontend: how the page is built, the CLI it runs on, and the laws its tests
 hold.
 
+## Commands
+
+```
+commands
+  set <module> <key> [name] <value>
+  no <module> <key> [name]
+  no <module> <name>
+  show <module> [key] [name]
+  show <module> <name>
+  show running-config [all]
+  show startup-config
+  show saves
+  show diff <config> <config>
+  show css
+  show title
+  show conversations
+  show version
+  copy <config> <config>
+  erase <id>|all|<config>
+  export [<id>|all|<config>]
+  import
+  title <title>
+  <command> | begin|count|exclude|include <pattern>
+
+  <config>                running-config, startup-config or a save by its name
+  <model>                 endpoint/model, as show models lists it
+
+modules
+  chat
+    model <model>                   the one model of the one endpoint
+    system <text>                   none
+  display
+    thinking closed|open|inference  closed
+    tools closed|open|inference     closed
+    render thinking|reply markdown|plain
+                                    markdown
+  endpoints
+    url <name> <url>                guarded
+    protocol <name> chat|messages|responses
+                                    chat
+    key <name> <secret>
+    headers <name> <Name: value; ...>
+    timeout <name> <seconds>        120
+  mcp
+    url <name> <url>                guarded
+    key <name> <secret>
+    headers <name> <Name: value; ...>
+    timeout <name> <seconds>        310
+  models                            show models lists them, by endpoint
+    temperature <model> <number>
+    top_p <model> <0..1>
+    top_k <model> <integer>
+    min_p <model> <0..1>
+    max_tokens <model> <integer>
+    presence_penalty <model> <-2..2>
+    frequency_penalty <model> <-2..2>
+    seed <model> <integer>
+    reasoning_effort <model> <word>
+  style
+    <token> <value>                 show style lists them; bg, fg, accent set a theme
+    sheet <name> <css>
+  tools                             show tools lists them, by who serves them
+    rounds <count>                  25
+    use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
+    preview <tool> <argument>       the first argument
+
+tools
+  config                            lines
+```
+
 ## The page
 
 The whole app is one file, `webui/dist/index.html`, built by Vite with every script, style and font

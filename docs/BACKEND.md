@@ -3,6 +3,43 @@
 The reference of the backend: one binary, `server`, that runs commands and edits files on the machine
 it runs on, for KiSS or any other MCP client.
 
+## Commands
+
+```
+commands
+  [linux|macos|windows] set <module> <key> [item] <value>
+  [linux|macos|windows] no <module> <key> [item]
+  [linux|macos|windows] no <module> <item>
+  show <module> [key] [item]
+  show <module> <item>
+  show running-config [all]
+  show startup-config
+  show version
+  copy running-config startup-config
+  copy startup-config running-config
+  <command> | begin|count|exclude|include <pattern>
+
+  [linux|macos|windows]   platform override: the line holds on that platform only
+                          and wins over the same line without it
+
+modules
+  server
+    host <address>                  127.0.0.1
+    port <1..65535>                 8089
+    name <word>                     the host name
+    key <secret>                    required off loopback
+    cwd <path>                      the start directory
+    log info|verbose                info
+  shells
+    command <item> <line>           linux bash, macos zsh bash, windows powershell, pwsh
+    timeout <item> <seconds>        290
+    output <item> <bytes>           65536
+
+tools
+  <name>_config                     description lines
+  <name>_<shell>                    description command
+```
+
 ## The server
 
 `server` is an MCP server over Streamable HTTP and a process launcher. One runs on each machine that
@@ -102,7 +139,7 @@ A value resolves through layers, the first that holds it winning:
 2. `server/server.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
 3. the fallback of the key: the host name for `server name`, the start directory for `server cwd`.
 
-### One file for every machine
+### Platform overrides
 
 A `set` or `no` line may start with `linux`, `macos` or `windows`; it then holds on that platform
 only, and it wins over the same line without a prefix. Lines without a prefix hold everywhere. The
