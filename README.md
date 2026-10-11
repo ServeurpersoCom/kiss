@@ -93,14 +93,15 @@ style all go through it, for the model as for you.
 
 ```
 ./build.sh
-build/bin/server
+build/server
 ```
 
 The server serves the page on http://127.0.0.1:8089/ and the MCP of the machine beside it, as
 `docs/BACKEND.md` describes. `./buildwebui.sh` rebuilds the page first, when it changes.
 
-To host the page alone, copy `dist/index.html` to any static web server, with an optional `kiss.conf`
-beside it: `set` lines that give a fresh page its endpoints.
+It starts on `server.conf` of the directory it runs in, and serves `kiss.conf` of that directory to
+the page when there is one. To host the page alone, copy `webui/dist/index.html` to any static web
+server, with an optional `kiss.conf` beside it: `set` lines that give a fresh page its endpoints.
 
 ## Built with itself
 

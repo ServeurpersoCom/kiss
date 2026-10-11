@@ -4,21 +4,21 @@ The reference: how the page is built, the CLI it runs on, and the laws its tests
 
 ## The page
 
-The whole app is one file, `dist/index.html`, built by Vite with every script, style and font
-inlined. It talks to an OpenAI compatible endpoint and to MCP servers straight from the browser;
-there is no backend of its own.
+The whole app is one file, `webui/dist/index.html`, built by Vite with every script, style and font
+inlined. It talks to an OpenAI compatible endpoint and to MCP servers straight from the browser; the
+KiSS server of `server/`, described in `BACKEND.md`, is one MCP server among others.
 
 ```
-src/engine/      the CLI: parse, schema, values, registry, run, archive
-src/commands/    one file per command, registered by existing
-src/modules/     one file per module: its keys, rules, checks, how it applies to the page
-src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
-src/protocols/   one file per protocol an endpoint speaks: chat, messages, responses
-src/lib/         the page side: agent, api, mcp, state, conversation, db
-src/components/  thread, message, round, ask, dialog, composer, sidebar
-src/markdown/    the remark and rehype stack and its incremental renderer
-src/tokens.css   the tokens of the page, read as the keys of style
-tests/           the laws, under vitest and happy-dom
+webui/src/engine/      the CLI: parse, schema, values, registry, run, archive
+webui/src/commands/    one file per command, registered by existing
+webui/src/modules/     one file per module: its keys, rules, checks, how it applies to the page
+webui/src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
+webui/src/protocols/   one file per protocol an endpoint speaks: chat, messages, responses
+webui/src/lib/         the page side: agent, api, mcp, state, conversation, db
+webui/src/components/  thread, message, round, ask, dialog, composer, sidebar
+webui/src/markdown/    the remark and rehype stack and its incremental renderer
+webui/src/tokens.css   the tokens of the page, read as the keys of style
+webui/tests/           the laws, under vitest and happy-dom
 ```
 
 A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing. A command
@@ -534,8 +534,9 @@ set style sheet input 'form.svelte-composer { max-width: 64rem }'  ! the compose
 
 An optional `kiss.conf` next to `index.html` gives a site its defaults, for instance the LLM a
 fresh page talks to. It holds `set` lines only, read at every page load, below every save of the
-user. Put it in `public/kiss.conf` to have the build copy it into `dist/`; that file is ignored by
-git. Anyone who can load the page can read it, so a key set there is public.
+user. `webui/public/kiss.conf` is the default the build copies into `webui/dist/` and the KiSS
+server embeds: its backend at the relative URL `/mcp`. A site replaces it with its own. Anyone who
+can load the page can read it, so a key set there is public.
 
 ```
 set endpoints url prod https://example.com/v1
@@ -547,4 +548,5 @@ set endpoints url prod https://example.com/v1
 ./buildwebui.sh
 ```
 
-It installs, formats, type checks, runs the laws, then builds `dist/index.html`.
+It installs, formats, type checks, runs the laws, then builds `webui/dist/index.html` and its gzip
+`tools/public/index.html.gz`, which the server embeds.

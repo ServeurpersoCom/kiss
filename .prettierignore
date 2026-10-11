@@ -1,5 +1,0 @@
-dist/
-package-lock.json
-.clang-format
-build/
-server/vendor/

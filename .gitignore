@@ -1,4 +1,5 @@
-dist
-node_modules
-public/kiss.conf
-build
+/build
+/kiss.conf
+/server.conf
+webui/dist
+webui/node_modules

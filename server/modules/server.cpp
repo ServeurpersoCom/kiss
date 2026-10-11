@@ -1,10 +1,11 @@
 // server.cpp: the server module: where the server listens, the name its
-// tools carry, the key a client sends, and the working directory of the tools
+// tools carry, the key a client sends, the working directory of the tools and
+// how much the log says
 
-#include "../server.h"
-
-#include "../engine.h"
-#include "../tools.h"
+#include "engine/engine.h"
+#include "listener.h"
+#include "log.h"
+#include "tools.h"
 
 #include <filesystem>
 #include <system_error>
@@ -58,19 +59,22 @@ static std::string validate(const engine_reader & config) {
     if (!tool_word(name)) {
         return "server name \"" + name + "\" takes a-z, 0-9 and _ only, as a tool name does";
     }
-    if (name.size() + 1 + tools_suffix_max() > TOOL_NAME_MAX) {
-        return "server name \"" + name + "\" makes tool names longer than " + std::to_string(TOOL_NAME_MAX);
+    for (const tool & t : tools_list(config)) {
+        if (name.size() + 1 + t.suffix.size() > TOOL_NAME_MAX) {
+            return "server name \"" + name + "\" makes " + name + "_" + t.suffix + " longer than " +
+                   std::to_string(TOOL_NAME_MAX);
+        }
     }
     const auto host = config.get("server host");
     const auto port = config.get("server port");
     if (!host || !port) {
         return "server host and server port are set";
     }
-    if (!server_loopback(*host) && !config.get("server key")) {
+    if (!listener_loopback(*host) && !config.get("server key")) {
         return "listening on " + *host + " requires server key";
     }
     std::string why;
-    if (!server_bindable(*host, std::stoi(*port), why)) {
+    if (!listener_bindable(*host, std::stoi(*port), why)) {
         return "cannot listen on " + *host + " port " + *port + ": " + why;
     }
     const std::string cwd = config.get("server cwd").value_or("");
@@ -82,25 +86,33 @@ static std::string validate(const engine_reader & config) {
 }
 
 static void apply(const engine_reader & config) {
-    server_listen(*config.get("server host"), std::stoi(*config.get("server port")));
+    log_verbosity(config.get("server log") == std::string("verbose"));
+    listener_move(*config.get("server host"), std::stoi(*config.get("server port")));
 }
 
 static engine_module make_server() {
-    engine_module m;
-    m.name = "server";
     engine_key port("port", ENGINE_NUMBER);
     port.min     = 1;
     port.max     = 65535;
     port.integer = true;
+
     engine_key name("name", ENGINE_STRING);
     name.fallback = host_name;
+
     engine_key cwd("cwd", ENGINE_STRING);
     cwd.fallback = start_directory;
-    m.keys       = {
-        { "host", ENGINE_STRING },
-        port, name, { "key",  ENGINE_SECRET },
-        cwd,
-    };
+
+    engine_key log("log", ENGINE_ENUM);
+    log.values = { "info", "verbose" };
+
+    engine_module m;
+    m.name = "server";
+    m.keys.push_back(engine_key("host", ENGINE_STRING));
+    m.keys.push_back(port);
+    m.keys.push_back(name);
+    m.keys.push_back(engine_key("key", ENGINE_SECRET));
+    m.keys.push_back(cwd);
+    m.keys.push_back(log);
     m.validate = validate;
     m.apply    = apply;
     return m;

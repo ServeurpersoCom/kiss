@@ -20,7 +20,7 @@ function gitVersion(): string {
 	}
 }
 
-// deterministic gzip of the inlined index.html into server/public/index.html.gz,
+// deterministic gzip of the inlined index.html into ../tools/public/index.html.gz,
 // which the server embeds: the .gz is committed so the server builds without
 // npm, and its timestamp and OS bytes are zeroed for a reproducible output
 function kissGzip() {
@@ -35,7 +35,7 @@ function kissGzip() {
 			compressed[6] = 0;
 			compressed[7] = 0;
 			compressed[9] = 0; // OS
-			const publicDir = resolve(__dirname, 'server', 'public');
+			const publicDir = resolve(__dirname, '..', 'tools', 'public');
 			mkdirSync(publicDir, { recursive: true });
 			writeFileSync(resolve(publicDir, 'index.html.gz'), compressed);
 			console.log(

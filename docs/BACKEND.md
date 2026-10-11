@@ -19,32 +19,40 @@ The binary also serves the KiSS page, so one download gives a working harness: s
 
 ## The repository
 
-Front and back are one project and peers:
+Front and back are one project and peers, `webui/` and `server/`, laid out alike: the same
+`engine/`, `commands/`, `modules/` and `tools/` on both sides, a file per concept. A feature adds a
+file; no file grows with the features.
 
 ```
-src/ ...                 the page, as described in ARCHITECTURE.md
-server/CMakeLists.txt    the server, built without npm
-server/server.cpp|h      main: command line, startup-config, HTTP routes and their checks
-server/engine.cpp|h      the CLI: grammar, schema, layers, commands, batch, as in the page
+webui/                   the page, as ARCHITECTURE.md describes it
+webui/public/kiss.conf   the site configuration the page and the server serve by default
+server/main.cpp          the start: defaults, startup-config, console, listener
+server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run
+server/commands/         one file per command, registered by existing
 server/modules/          one file per module: its keys, rules, how it applies to the server
-server/mcp.cpp|h         the MCP methods of both eras, stateless
-server/tools.cpp|h       the tools: one per shell item, view, str_replace, create_file, config
+server/tools/            one file per tool source, registered by existing
+server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
+server/listener.cpp|h    the socket, moved at once when server host or server port changes
+server/http.cpp|h        the routes and the checks of Host, Origin and the key
+server/console.cpp|h     the console of the interactive mode
+server/log.cpp|h         the log: [Module] Line
 server/process.cpp|h     spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
-server/defaults.conf     the defaults the binary embeds
-server/public/           index.html.gz, versioned, and the kiss.conf the binary serves
-server/vendor/           cpp-httplib, yyjson
-server/xxd.cmake         embeds the page, its kiss.conf and defaults.conf
-server/version.cmake     the git commit of the build
-CMakeLists.txt           add_subdirectory(server)
-buildwebui.sh            builds the page and gzips it into server/public/, optional and run first
+server/server.conf       the defaults the binary embeds
+vendor/                  cpp-httplib, yyjson
+tools/public/            index.html.gz, the page the binary embeds
+tools/xxd.cmake          embeds a file as a C array
+tools/version.cmake      the git commit of the build
+CMakeLists.txt           the server, built without npm, into build/server
+buildwebui.sh            builds the page in webui/ and gzips it into tools/public/, optional, first
 build.sh                 builds the server with CMake alone
 format.sh                clang-format over the C++, vendors excluded
 ```
 
-`server/public/index.html.gz` is versioned so a C++ developer builds the server with CMake alone;
-the page build writes it, gzipped deterministically. The binary lands in `build/bin/server`.
+Every file has one source: the binary embeds `webui/public/kiss.conf` and `server/server.conf` as
+they are. `tools/public/index.html.gz` is the one built file under git, so a C++ developer builds
+the server with CMake alone; the page build writes it, gzipped deterministically.
 
 There is no process library in the vendors. sheredom/subprocess.h, which llama.cpp uses, offers no
 process group on POSIX and no Job Object nor suspended start on Windows, so it kills the direct child
@@ -81,15 +89,17 @@ knows no module by name, so a module joins without a change to the engine.
 `server.conf` holds set lines in the grammar of `kiss.conf`: a module, a key, the item name for a
 collection, then the value. `!` starts a comment, `no` removes an item or a value.
 
-The startup-config is the file named by `server -c path`, or `server.conf` next to the binary. At
-start it runs as a batch of the administrator, and a line it refuses stops the server with the
-reason. The lines given by `server -s` then run as one more batch. The result is the running
-configuration, in memory; `copy running-config startup-config` writes it back to the file whole.
+The startup-config is `server.conf` of the directory the server runs in: the root of the repository
+during development, where git ignores it, the working directory of a systemd unit, the directory of
+a prebuilt binary. Several servers run on one machine from several directories. At start the file
+runs as a batch of the administrator, and a line it refuses stops the server with the reason. The
+result is the running configuration, in memory; `copy running-config startup-config` writes it
+back to the file whole.
 
 A value resolves through layers, the first that holds it winning:
 
 1. the running configuration;
-2. `defaults.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
+2. `server/server.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
 3. the fallback of the key: the host name for `server name`, the start directory for `server cwd`.
 
 ### One file for every machine
@@ -106,9 +116,6 @@ A line without a prefix on a key this platform holds changes it for this platfor
 An item whose program is not found on the PATH stays out, with one line in the log. The default
 configuration therefore lists every candidate shell and each machine serves the ones it has.
 
-`server --show` prints every key with its value on this machine, defaults included, the output of
-`show running-config all`, then exits.
-
 ### Modules
 
 | key                     | kind   | meaning                                                         |
@@ -118,6 +125,7 @@ configuration therefore lists every candidate shell and each machine serves the 
 | `server name`           | string | prefix of every tool name, the host name by default             |
 | `server key`            | secret | bearer key, required off loopback                               |
 | `server cwd`            | string | working directory of every tool, the start directory by default |
+| `server log`            | enum   | `info` or `verbose`                                             |
 | `shells command <item>` | string | command line that runs a script read on stdin                   |
 | `shells timeout <item>` | number | seconds a call may run, and the bound of the `timeout` argument |
 | `shells output <item>`  | number | bytes of output a call returns                                  |
@@ -127,10 +135,10 @@ configuration therefore lists every candidate shell and each machine serves the 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
 
-### defaults.conf
+### The defaults
 
 ```
-! defaults.conf: the defaults the KiSS server embeds
+! server.conf: the defaults the KiSS server embeds
 set server host 127.0.0.1
 set server port 8089
 linux set shells command bash bash -s
@@ -146,6 +154,33 @@ set files use on
 Each OS gets a default that works: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1 on
 Windows, and PowerShell 7 wherever it is installed. A shell the default leaves out, Git Bash or the
 bash of WSL, is one more line.
+
+## Running
+
+`server` takes no option but `--console`. Without it, the server runs as a systemd unit or a
+Windows service runs it, stdin left alone. Its log goes to stderr, one line per event in the form of
+every GGML project of the house, `[Module] Line`, and opens on the version:
+
+```
+[Server] KiSS server 5633ee7 (2026-10-11) on linux
+[Server] Listening on http://127.0.0.1:8089
+[Engine] Configured by an MCP client
+```
+
+`server log verbose` adds every MCP request and every tool call, at once, no restart.
+
+`--console` opens the interactive mode, as the console port of a Cisco router: the prompt names the
+server, each line runs as a batch of the administrator, and the log arrives on the same console
+between the commands.
+
+```
+pod# set server port 9000
+[Engine] Configured by the administrator
+- set server port 8089
++ set server port 9000
+pod# copy run start
+! copied running-config to startup-config
+```
 
 ## Tools
 
@@ -178,6 +213,13 @@ Paths are UTF-8, relative to `server cwd` or absolute.
 as the `config` tool of KiSS does. KiSS configures every backend from the page through it, under the
 consent firewall when the model calls it, and any other MCP client gets the same CLI. A change of
 `server host` or `server port` moves the listener at once, once the address is checked free.
+
+A secret never crosses the context of the model. It reaches the server three ways: `server.conf`,
+the console, and MCP elicitation: a `set` line of a secret without its value answers with a request
+for input in url mode, which KiSS opens in the secure window of its own secrets, and the value goes
+from the user to the server alone. The model reads that the user typed it. A line that writes the
+value of a secret itself is refused, since a model wrote it. The same elicitation, in form mode,
+carries the questions and confirmations the server asks the user.
 
 ## The shell contract
 
@@ -257,8 +299,9 @@ Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools
 ## HTTP and security
 
 - `GET /` serves the embedded page, `GET /kiss.conf` the site configuration, `POST /mcp` the MCP.
-  The site configuration names the backend by a relative URL, `set mcp url local /mcp`, so the page
-  reaches the server that serves it on any port and behind any proxy or path prefix.
+  The site configuration is `kiss.conf` of the directory the server runs in, else the one it
+  embeds, which names the backend by a relative URL, `set mcp url local /mcp`, so the page reaches
+  the server that serves it on any port and behind any proxy or path prefix.
 - On a loopback address, `Host` must name loopback and the port, against DNS rebinding.
 - A request without `Origin` (a CLI client) or from the origin of the page itself needs no key.
 - A request from any other origin needs the key: a page served elsewhere sends it as `mcp key`,
@@ -284,7 +327,7 @@ Each batch ends with a test from end to end on the pod, a KiSS page running a co
 binary.
 
 1. Skeleton: the engine with the `server` module, `server.conf` with layers and prefixes, HTTP,
-   page, security, MCP of both eras, the config tool, `server --show`.
+   page, security, MCP of both eras, the config tool, the console and the log.
 2. Process layer on POSIX and the shell tools, output repair and truncation, SSE and cancel.
 3. File tools.
 4. Windows: process layer, OEM decoding, the PowerShell bootstrap, checked on Windows 10 and 11.

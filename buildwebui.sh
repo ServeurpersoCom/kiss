@@ -1,6 +1,8 @@
 #!/bin/bash
 
-npm ci
+cd webui
+rm -rf node_modules
+npm install
 npm run format
 npm run check
 npm test

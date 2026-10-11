@@ -98,3 +98,7 @@ engine_result engine_run(const std::string & text, engine_role role);
 
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");
+
+// reads the running configuration under the lock of the engine, for a reader
+// that needs several values of one same configuration
+void engine_with(const std::function<void(const engine_reader &)> & read);

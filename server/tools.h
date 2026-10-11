@@ -1,6 +1,9 @@
 #pragma once
-// tools.h: the tools the server serves over MCP, each named after the server:
-// <server name>_<suffix>
+// tools.h: the tools the server serves over MCP, each named after the server,
+// <server name>_<suffix>; a file in tools/ registers its source by existing,
+// which gives its tools from the configuration it reads
+
+#include "engine/engine.h"
 
 #include <string>
 #include <vector>
@@ -21,10 +24,13 @@ struct tool {
 };
 
 // a tool name stays within what every model API takes
-static const size_t TOOL_NAME_MAX = 64;
+constexpr size_t TOOL_NAME_MAX = 64;
 
-// the tools the running configuration serves
-std::vector<tool> tools_list(const std::string & server);
+using tool_source = std::vector<tool> (*)(const engine_reader & config);
 
-// the longest suffix a tool takes, which bounds the server name
-size_t tools_suffix_max();
+bool tools_register(tool_source source);
+
+#define SERVER_TOOLS(source) static const bool server_tools_##source = tools_register(source)
+
+// every tool the configuration serves
+std::vector<tool> tools_list(const engine_reader & config);
