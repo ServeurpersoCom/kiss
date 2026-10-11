@@ -1,6 +1,6 @@
 # KiSS server
 
-The reference of the backend: one binary, `server`, that runs commands and edits files on the machine
+The reference of the backend: one binary, `server`, that runs commands and views files on the machine
 it runs on, for KiSS or any other MCP client.
 
 ## Commands
@@ -34,10 +34,14 @@ modules
     command <item> <line>           linux bash, macos zsh bash, windows powershell, pwsh
     timeout <item> <seconds>        290
     output <item> <bytes>           65536
+  view
+    output <bytes>                  65536
+    image <bytes>                   5242880
 
 tools
   <name>_config                     description lines
   <name>_<shell>                    description command
+  <name>_view                       description path [view_range]
 ```
 
 ## The server
@@ -118,7 +122,7 @@ runs the config tool, whose lines a model may write, so it writes no secret: a s
 context of the model.
 
 A module registers itself by existing, with its keys, its rules and what it applies: `server`
-rebinds its socket, `shells` rebuilds the tool list, `files` turns its tools on or off. The engine
+rebinds its socket, `shells` rebuilds the tool list, `view` bounds what its tool returns. The engine
 knows no module by name, so a module joins without a change to the engine.
 
 ### server.conf
@@ -166,8 +170,8 @@ configuration therefore lists every candidate shell and each machine serves the 
 | `shells command <item>` | string | command line that runs a script read on stdin                   |
 | `shells timeout <item>` | number | seconds a call may run                                          |
 | `shells output <item>`  | number | bytes of output a call returns                                  |
-| `files use`             | enum   | `on` or `off`, the three file tools                             |
-| `files read`            | number | bytes `view` returns at most                                    |
+| `view output`           | number | bytes of text `view` returns, its head and its tail             |
+| `view image`            | number | bytes of an image `view` returns at most                        |
 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
@@ -186,7 +190,8 @@ macos set shells command zsh zsh -s
 macos set shells command bash bash -s
 windows set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
-set files use on
+set view output 65536
+set view image 5242880
 ```
 
 Every shell carries its own `timeout`, 290 seconds, and `output`, 65536 bytes, as `bash` shows.
@@ -258,14 +263,23 @@ A code other than 0 marks the result as an error, as do `Killed after 290 s`, `C
 `Cannot start <command>: <reason>`. The run ends after the `timeout` of the item; the model has no
 timeout of its own to set.
 
-### File tools
+### The view tool
 
-- `view`: a text file with numbered lines and an optional line range, a directory two levels deep,
-  or an image returned as an image block.
-- `str_replace`: replaces one exact string, which must occur exactly once.
-- `create_file`: writes a file, creating its parent directories.
+`<name>_view` takes `description`, `path`, relative to `server cwd` or absolute, and `view_range`,
+the lines `[start, end]` of a text file, from 1, `end` -1 for the last. It is the one file tool:
+every OS creates and edits files through its shell, while `view` gives the model what a shell gives
+badly, an image it sees and a text it can cite by line. With `view` on and every other tool off in
+KiSS, a machine is open to the model for reading only.
 
-Paths are UTF-8, relative to `server cwd` or absolute.
+- A directory lists every entry two levels deep, sorted by path, each with the size of all it
+  holds, as `find` and `du -sh` would: hidden entries and the content of `node_modules` stay out.
+  The last line counts the entries.
+- A PNG, JPEG, GIF or WebP image, known by its first bytes, comes back as an image block, up to
+  `view image` bytes.
+- A text file comes back with numbered lines, `N<tab>line`, then `300 lines`, or
+  `Lines 10-20 of 300` for a range. Past `view output`, the head and the tail stay, as for a shell.
+  The file streams through, so its size costs time and never memory.
+- Another binary file, one with a NUL byte near its start, is refused with `Binary file`.
 
 ### The config tool
 
@@ -353,10 +367,10 @@ set shells command gpu ssh -T -o BatchMode=yes root@pod bash -s
 set shells command box podman exec -i sandbox bash -s
 ```
 
-The OpenSSH client ships with Linux, macOS and Windows 10 and later. Two limits hold: the file tools
-work on the machine that runs `server`, and ending a local ssh without a terminal does not end the
-remote process, so a remote item wraps its shell in `timeout` on the remote side. A machine that needs
-file tools or a reliable tree kill runs its own `server`.
+The OpenSSH client ships with Linux, macOS and Windows 10 and later. Two limits hold: `view` works on
+the machine that runs `server`, and ending a local ssh without a terminal does not end the remote
+process, so a remote item wraps its shell in `timeout` on the remote side. A machine that needs `view`
+or a reliable tree kill runs its own `server`.
 
 ## MCP
 
@@ -402,7 +416,7 @@ binary.
 1. Skeleton: the engine with the `server` module, `server.conf` with layers and prefixes, HTTP,
    page, security, MCP of both eras, the config tool, the console and the log.
 2. Process layer on POSIX and the shell tools, output repair and truncation, SSE and cancel.
-3. File tools.
+3. The view tool.
 4. Windows: process layer, OEM decoding, the PowerShell bootstrap, checked on Windows 10 and 11.
 5. Static builds of the three platforms.
 6. The storage tool for conversations and configuration, called by KiSS and never by the model.

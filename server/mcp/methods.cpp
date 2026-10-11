@@ -92,8 +92,14 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_result & r
     return rpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
         yyjson_mut_val * block   = yyjson_mut_arr_add_obj(doc, content);
-        yyjson_mut_obj_add_str(doc, block, "type", "text");
-        yyjson_mut_obj_add_strncpy(doc, block, "text", r.text.c_str(), r.text.size());
+        if (r.image.empty()) {
+            yyjson_mut_obj_add_str(doc, block, "type", "text");
+            yyjson_mut_obj_add_strncpy(doc, block, "text", r.text.c_str(), r.text.size());
+        } else {
+            yyjson_mut_obj_add_str(doc, block, "type", "image");
+            yyjson_mut_obj_add_strncpy(doc, block, "data", r.image.c_str(), r.image.size());
+            yyjson_mut_obj_add_strncpy(doc, block, "mimeType", r.mime.c_str(), r.mime.size());
+        }
         yyjson_mut_obj_add_bool(doc, out, "isError", r.error);
     });
 }

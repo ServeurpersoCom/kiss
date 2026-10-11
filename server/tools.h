@@ -7,13 +7,21 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct yyjson_val;
 
+// the text of a result, or an image as base64 with its MIME type
 struct tool_result {
+    tool_result(std::string t, bool e) : text(std::move(t)), error(e) {}
+
+    tool_result(std::string data, std::string type) : error(false), image(std::move(data)), mime(std::move(type)) {}
+
     std::string text;
     bool        error;
+    std::string image;
+    std::string mime;
 };
 
 // called every second while a tool runs, false once the client is gone
