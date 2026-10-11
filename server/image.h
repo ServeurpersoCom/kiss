@@ -1,7 +1,8 @@
 #pragma once
 // image.h: an image as a model is sent it: known by its first bytes, a JPEG
-// that fits goes as it is, any other comes back as a JPEG that fits, its
-// proportions and its orientation kept, a transparent one laid on white
+// that fits goes as it is, an opaque PNG that fits too when it weighs less than
+// its JPEG, any other comes back as a JPEG that fits, its proportions and its
+// orientation kept, a transparent one laid on white
 
 #include <cstddef>
 #include <string>

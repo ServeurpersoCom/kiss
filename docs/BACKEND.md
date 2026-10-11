@@ -351,8 +351,9 @@ KiSS, a machine is open to the model for reading only.
   holds, as `find` and `du -sh` would: hidden entries and the content of `node_modules` stay out.
   The last line counts the entries.
 - A PNG, JPEG, GIF or WebP image, known by its first bytes, comes back as an image block. A JPEG
-  that fits `view side` goes as it is. Any other image is made a JPEG of `view quality` that fits
-  it: resized in linear light with the same scale on both sides, turned as its EXIF says, a
+  that fits `view side` goes as it is, and an opaque PNG that fits too when it weighs less than its
+  JPEG, as a drawing or a screenshot does. Any other image is made a JPEG of `view quality` that
+  fits it: resized in linear light with the same scale on both sides, turned as its EXIF says, a
   transparent one laid on white. A text block before it tells the image read and the image sent,
   `Image image/png 6000x4000, 47087504 bytes, sent as image/jpeg 1920x1280, 292632 bytes`, so the
   model knows what it sees. A WebP goes as it is when it fits, and is refused when it does not.

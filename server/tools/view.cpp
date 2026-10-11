@@ -168,6 +168,9 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
         std::string data = head;
         char        buf[CHUNK];
         for (size_t got; (got = fread(buf, 1, sizeof(buf), f)) > 0;) {
+            if (!t.alive()) {
+                return { "Cancelled", true };
+            }
             data.append(buf, got);
         }
         const image_sent sent = image_fit(data, v.limits);

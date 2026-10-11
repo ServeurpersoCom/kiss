@@ -1,5 +1,6 @@
 // image.cpp: an image as a model is sent it, with stb: decoded, resized in
-// linear light, turned as its EXIF says, laid on white, encoded as JPEG
+// linear light, turned as its EXIF says, laid on white, encoded as JPEG, an
+// opaque PNG that fits kept when it weighs less than its JPEG
 
 #include "image.h"
 
@@ -199,7 +200,10 @@ image_sent image_fit(const std::string & bytes, const image_limits & limits) {
         out.error = std::string("Cannot decode the image: ") + stbi_failure_reason();
         return out;
     }
-    out.transparent = channels == 2 || channels == 4;
+    const size_t count = (size_t) w * (size_t) h;
+    for (size_t i = 0; i < count && !out.transparent; i++) {
+        out.transparent = pixels.get()[i * 4 + 3] < 255;
+    }
 
     // the same scale on both sides, the source resized as it lies, turned after
     const double scale = std::min(1.0, (double) limits.side / std::max(upright_w, upright_h));
@@ -230,6 +234,14 @@ image_sent image_fit(const std::string & bytes, const image_limits & limits) {
     if (!stbi_write_jpg_to_func(append, &out.data, out.width, out.height, 3, rgb.data(), limits.quality)) {
         out.error = "Cannot encode the image";
         out.data.clear();
+        return out;
+    }
+    // a PNG that needs no change goes as it is when its JPEG weighs more,
+    // lossless and lighter, a drawing or a screenshot most of the time
+    if (out.source_mime == "image/png" && orientation == 1 && fits && !out.transparent &&
+        bytes.size() <= out.data.size()) {
+        out.data = bytes;
+        out.mime = out.source_mime;
         return out;
     }
     out.mime = "image/jpeg";
