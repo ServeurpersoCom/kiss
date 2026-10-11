@@ -70,7 +70,7 @@ modules
     <token> <value>                 show style lists them; bg, fg, accent set a theme
     sheet <name> <css>
   tools                             show tools lists them, by who serves them
-    rounds <count>                  25
+    rounds <count>                  100
     use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
     preview <tool> <argument>       display preview, the argument of this tool over it
 
@@ -499,7 +499,7 @@ set display preview description          ! the argument every folded call shows,
 set tools preview bash_tool command      ! the one of a tool over it; a call without it shows
                                          ! its first argument
 no tools bash_tool                       ! every setting of that tool, gone
-set tools rounds 25                      ! the tool rounds a turn takes at most
+set tools rounds 200                     ! the tool rounds a turn takes at most, 100 by default
 set mcp timeout sandbox 600              ! the seconds a call may take, 310 by default
 ```
 

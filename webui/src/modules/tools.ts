@@ -10,7 +10,7 @@ export default {
 	name: 'tools',
 	keys: {
 		// the rounds of tool calls a turn takes at most
-		rounds: { kind: 'number', min: 1, integer: true, default: '25' },
+		rounds: { kind: 'number', min: 1, integer: true, default: '100' },
 		// off, the model never sees the tool; consent, each call asks the user,
 		// always turning it on; the tools of KiSS are on, their changes ask
 		use: {
