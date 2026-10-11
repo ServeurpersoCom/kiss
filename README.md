@@ -92,12 +92,15 @@ style all go through it, for the model as for you.
 ## Quick start
 
 ```
-./buildwebui.sh
-npm run preview
+./build.sh
+build/bin/server
 ```
 
-To host it, copy `dist/index.html` to any static web server, with an optional `kiss.conf` beside
-it: `set` lines that give a fresh page its endpoints.
+The server serves the page on http://127.0.0.1:8089/ and the MCP of the machine beside it, as
+`docs/BACKEND.md` describes. `./buildwebui.sh` rebuilds the page first, when it changes.
+
+To host the page alone, copy `dist/index.html` to any static web server, with an optional `kiss.conf`
+beside it: `set` lines that give a fresh page its endpoints.
 
 ## Built with itself
 

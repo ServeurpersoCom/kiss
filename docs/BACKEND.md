@@ -24,23 +24,27 @@ Front and back are one project and peers:
 ```
 src/ ...                 the page, as described in ARCHITECTURE.md
 server/CMakeLists.txt    the server, built without npm
-server/server.cpp        main: command line, startup-config, HTTP
-server/engine/           the CLI: parse, schema, values, run, registry, as in the page
+server/server.cpp|h      main: command line, startup-config, HTTP routes and their checks
+server/engine.cpp|h      the CLI: grammar, schema, layers, commands, batch, as in the page
 server/modules/          one file per module: its keys, rules, how it applies to the server
 server/mcp.cpp|h         the MCP methods of both eras, stateless
 server/tools.cpp|h       the tools: one per shell item, view, str_replace, create_file, config
 server/process.cpp|h     spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
-server/public/           index.html.gz, versioned, and kiss.conf
+server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
+server/defaults.conf     the defaults the binary embeds
+server/public/           index.html.gz, versioned, and the kiss.conf the binary serves
 server/vendor/           cpp-httplib, yyjson
-server/xxd.cmake         embeds the page and the default server.conf
+server/xxd.cmake         embeds the page, its kiss.conf and defaults.conf
+server/version.cmake     the git commit of the build
 CMakeLists.txt           add_subdirectory(server)
 buildwebui.sh            builds the page and gzips it into server/public/, optional and run first
 build.sh                 builds the server with CMake alone
 format.sh                clang-format over the C++, vendors excluded
 ```
 
-`server/public/index.html.gz` is versioned so a C++ developer builds the server with CMake alone.
+`server/public/index.html.gz` is versioned so a C++ developer builds the server with CMake alone;
+the page build writes it, gzipped deterministically. The binary lands in `build/bin/server`.
 
 There is no process library in the vendors. sheredom/subprocess.h, which llama.cpp uses, offers no
 process group on POSIX and no Job Object nor suspended start on Windows, so it kills the direct child
@@ -59,8 +63,14 @@ A batch compiles every line before the first one runs, runs them on a draft of t
 configuration, checks the rules of every module on the draft, then replaces the running
 configuration and applies the modules whose keys changed. A failure at any step applies nothing.
 
-The running configuration lives in memory; the startup-config is `server.conf`, and `write` saves
-the running configuration there. A secret never prints: `show` writes `<removed>` in its place.
+The commands are those of the page that fit a server: `set`, `no`, `show <module>`,
+`show running-config [all]`, `show startup-config`, `show version`, and `copy` between the
+running-config and the startup-config. A line takes a filter after a pipe, `begin`, `count`,
+`exclude` or `include`, as IOS does. A secret never prints: `show` writes `! server key is set`.
+
+Two roles send batches. The administrator writes `server.conf` and the command line. An MCP client
+runs the config tool, whose lines a model may write, so it writes no secret: a secret would cross the
+context of the model.
 
 A module registers itself by existing, with its keys, its rules and what it applies: `server`
 rebinds its socket, `shells` rebuilds the tool list, `files` turns its tools on or off. The engine
@@ -71,27 +81,33 @@ knows no module by name, so a module joins without a change to the engine.
 `server.conf` holds set lines in the grammar of `kiss.conf`: a module, a key, the item name for a
 collection, then the value. `!` starts a comment, `no` removes an item or a value.
 
+The startup-config is the file named by `server -c path`, or `server.conf` next to the binary. At
+start it runs as a batch of the administrator, and a line it refuses stops the server with the
+reason. The lines given by `server -s` then run as one more batch. The result is the running
+configuration, in memory; `copy running-config startup-config` writes it back to the file whole.
+
 A value resolves through layers, the first that holds it winning:
 
-1. the set lines given on the command line, `server -s "set server port 9000"`;
-2. the file named by `server -c path`, or `server.conf` next to the binary when it exists;
-3. the default `server.conf` embedded in the binary;
-4. the default of the key in the schema.
-
-A `no` line in a higher layer removes an item a lower layer defines.
+1. the running configuration;
+2. `defaults.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
+3. the fallback of the key: the host name for `server name`, the start directory for `server cwd`.
 
 ### One file for every machine
 
-A line may start with `linux`, `macos` or `windows`; it then holds on that platform only, and it wins
-over the same line without a prefix. Lines without a prefix hold everywhere. The same `server.conf`
-is copied unchanged to every machine, and prefixes appear only where platforms truly differ: paths,
-and shells that exist on one OS only.
+A `set` or `no` line may start with `linux`, `macos` or `windows`; it then holds on that platform
+only, and it wins over the same line without a prefix. Lines without a prefix hold everywhere. The
+same `server.conf` is copied unchanged to every machine, and prefixes appear only where platforms
+truly differ: paths, and shells that exist on one OS only.
+
+Each machine keeps the lines of the other platforms as they are and writes them back with its own,
+so a `copy running-config startup-config` on Linux leaves the Windows lines of the file untouched.
+A line without a prefix on a key this platform holds changes it for this platform.
 
 An item whose program is not found on the PATH stays out, with one line in the log. The default
 configuration therefore lists every candidate shell and each machine serves the ones it has.
 
-`server --show` prints the running configuration of this machine with the prefixes resolved and the
-secret values replaced by `<removed>`.
+`server --show` prints every key with its value on this machine, defaults included, the output of
+`show running-config all`, then exits.
 
 ### Modules
 
@@ -111,10 +127,10 @@ secret values replaced by `<removed>`.
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
 
-### The default server.conf
+### defaults.conf
 
 ```
-! server.conf: defaults of the KiSS server, set lines only
+! defaults.conf: the defaults the KiSS server embeds
 set server host 127.0.0.1
 set server port 8089
 linux set shells command bash bash -s
@@ -160,7 +176,8 @@ Paths are UTF-8, relative to `server cwd` or absolute.
 
 `<name>_config` runs a batch of CLI lines on the engine and answers with its output and its change,
 as the `config` tool of KiSS does. KiSS configures every backend from the page through it, under the
-consent firewall when the model calls it, and any other MCP client gets the same CLI.
+consent firewall when the model calls it, and any other MCP client gets the same CLI. A change of
+`server host` or `server port` moves the listener at once, once the address is checked free.
 
 ## The shell contract
 

@@ -3,6 +3,9 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { execSync } from 'child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { gzipSync } from 'zlib';
+import { resolve } from 'path';
 import type { Plugin as CssPlugin } from 'postcss';
 import { scope } from './src/lib/config';
 
@@ -15,6 +18,31 @@ function gitVersion(): string {
 	} catch {
 		return 'unknown';
 	}
+}
+
+// deterministic gzip of the inlined index.html into server/public/index.html.gz,
+// which the server embeds: the .gz is committed so the server builds without
+// npm, and its timestamp and OS bytes are zeroed for a reproducible output
+function kissGzip() {
+	return {
+		name: 'kiss:gzip',
+		apply: 'build' as const,
+		closeBundle() {
+			const html = readFileSync(resolve(__dirname, 'dist', 'index.html'));
+			const compressed = gzipSync(html, { level: 9 });
+			compressed[4] = 0; // mtime
+			compressed[5] = 0;
+			compressed[6] = 0;
+			compressed[7] = 0;
+			compressed[9] = 0; // OS
+			const publicDir = resolve(__dirname, 'server', 'public');
+			mkdirSync(publicDir, { recursive: true });
+			writeFileSync(resolve(publicDir, 'index.html.gz'), compressed);
+			console.log(
+				`  index.html: ${html.length} bytes -> index.html.gz: ${compressed.length} bytes`
+			);
+		}
+	};
 }
 
 // KaTeX lists each font as woff2, woff and ttf; every browser KiSS runs on reads
@@ -43,7 +71,12 @@ const layers: CssPlugin = {
 };
 
 export default defineConfig({
-	plugins: [svelte({ compilerOptions: { cssHash: scope } }), viteSingleFile(), katexWoff2Only()],
+	plugins: [
+		svelte({ compilerOptions: { cssHash: scope } }),
+		viteSingleFile(),
+		katexWoff2Only(),
+		kissGzip()
+	],
 
 	css: {
 		postcss: { plugins: [layers] }
