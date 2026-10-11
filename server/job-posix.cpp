@@ -39,6 +39,16 @@ static bool pipe_private(int fd[2]) {
 #    endif
 }
 
+// the working directory of the spawn, under the POSIX name macOS 26 gives it
+// and the _np name glibc gives it
+static void spawn_chdir(posix_spawn_file_actions_t * actions, const std::string & cwd) {
+#    if defined(__APPLE__)
+    posix_spawn_file_actions_addchdir(actions, cwd.c_str());
+#    else
+    posix_spawn_file_actions_addchdir_np(actions, cwd.c_str());
+#    endif
+}
+
 job_result job_run(const std::string &           line,
                    const std::string &           cwd,
                    const std::string &           input,
@@ -68,7 +78,7 @@ job_result job_run(const std::string &           line,
     posix_spawn_file_actions_adddup2(&actions, in[0], 0);
     posix_spawn_file_actions_adddup2(&actions, out[1], 1);
     posix_spawn_file_actions_adddup2(&actions, out[1], 2);
-    posix_spawn_file_actions_addchdir_np(&actions, cwd.c_str());
+    spawn_chdir(&actions, cwd);
 
     // a group of its own, the signals the server ignores back to their default
     // and none blocked, so a pipeline of the script dies of SIGPIPE as usual
