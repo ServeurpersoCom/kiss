@@ -121,10 +121,10 @@ export interface Config extends ConfigReader {
 	// stored keys set in the session only, sorted: what a save keeps
 	values(): Record<string, Value>;
 	// replaces every key set in the session; returns the keys dropped because no
-	// module declares them anymore
+	// module declares them anymore or their key no longer takes their value
 	load(values: Record<string, Value>): string[];
 	// keys set in a session over the values the site gives, as they would run:
-	// every stored key, sorted
+	// every stored key, sorted, what load drops left out
 	over(values: Record<string, Value>): Record<string, Value>;
 }
 
@@ -383,8 +383,9 @@ export interface Delta {
 
 // how an endpoint speaks: a file of protocols/, named as endpoints protocol
 // takes it; the path it posts a request to, the path that lists its models
-// and whether a request reads what it lists of its model, the headers that
-// carry the key, the parameters of models it never sends, the body of a
+// and whether a request reads what it lists of its model, the headers of a
+// request, its own with the key and those of the endpoint over them, the
+// parameters of models it never sends, the body of a
 // request, the event that ends a stream, and a reader of one stream, which
 // tells what the data of each event adds, none for an event that adds nothing
 export interface Protocol {
@@ -392,7 +393,7 @@ export interface Protocol {
 	path: string;
 	models: string;
 	described: boolean;
-	auth(key: string): Record<string, string>;
+	auth(key: string, headers: Record<string, string>): Record<string, string>;
 	drops: readonly string[];
 	body(request: Request): object;
 	last: string;

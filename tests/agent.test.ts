@@ -284,6 +284,15 @@ describe('a turn', () => {
 		expect(p.reply.rounds).toEqual([]);
 		expect(p.engine.settings.get('display thinking')).toBe('closed');
 	});
+
+	it('names the endpoint and the line of a stream that does not read', async () => {
+		const garbled = () =>
+			new Response('data: {"choices"\n\n', { headers: { 'content-type': 'text/event-stream' } });
+		const p = await page([garbled]);
+		await expect(p.go()).rejects.toThrow(
+			'http://m/v1 sent a line that does not read: data: {"choices"'
+		);
+	});
 });
 
 describe('the messages protocol', () => {
@@ -302,14 +311,15 @@ describe('the messages protocol', () => {
 			[
 				answer([block(0, { type: 'text', text: '' }), delta(0, { type: 'text_delta', text: 'ok' })])
 			],
-			`${MESSAGES}\nset endpoints key m sk-a\nset chat system be brief`
+			`${MESSAGES}\nset endpoints key m sk-a\nset chat system be brief\nset endpoints headers m 'Anthropic-Beta: other'`
 		);
 		await p.go();
 		expect(p.requests[0].url).toBe('http://m/v1/messages');
 		expect(p.requests[0].headers).toMatchObject({
 			'x-api-key': 'sk-a',
-			'anthropic-beta': 'thinking-binding-controls-2026-08-01'
+			'anthropic-beta': 'thinking-binding-controls-2026-08-01,other'
 		});
+		expect(p.requests[0].headers).not.toHaveProperty('Anthropic-Beta');
 		expect(p.requests[0].headers).not.toHaveProperty('Authorization');
 		const body = p.bodies[0] as unknown as Record<string, unknown>;
 		expect(body).toMatchObject({

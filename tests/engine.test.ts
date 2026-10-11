@@ -1001,13 +1001,32 @@ describe('erase and copy', () => {
 		expect(k.settings.get('chat system')).toBe('green');
 		await k.run('copy first running-config', 'user');
 		expect(k.settings.get('chat system')).toBe('blue');
-		// an item no key takes anymore goes as an unknown key does
-		const values = { 'chat system': 'old', 'privilege level gone': 'allow' };
+		// a key no module declares anymore, or a value its key no longer takes,
+		// goes, at boot as in a copy, and what stays runs
+		const values = {
+			'chat system': 'old',
+			'privilege level gone': 'allow',
+			'endpoints url a': 'http://a/v1',
+			'endpoints protocol a': 'zz'
+		};
 		localStorage.setItem('kiss.saves', JSON.stringify([{ name: 'old', date: '', values }]));
+		localStorage.setItem('kiss.startup', JSON.stringify(values));
 		const later = await page();
-		expect((await later.run('show diff old run', 'user')).text).toBe('- set chat system old');
+		expect((await later.run('show running-config', 'user')).text).toBe(
+			'set chat system old\nset endpoints url a http://a/v1'
+		);
+		expect((await later.run('show diff old run', 'user')).text).toBe('! no difference');
+		await later.run('erase running-config', 'user', shelf([]));
 		expect((await later.run('copy old running-config', 'user')).text).toBe(
-			'! dropped unknown keys: privilege level gone\n- set chat system ""\n+ set chat system old'
+			[
+				'! dropped what no key takes: privilege level gone, endpoints protocol a',
+				'- set chat system ""',
+				'+ set chat system old',
+				'+ set endpoints url a http://a/v1'
+			].join('\n')
+		);
+		expect((await later.run('show endpoints protocol a', 'user')).text).toBe(
+			'set endpoints protocol a chat'
 		);
 	});
 });

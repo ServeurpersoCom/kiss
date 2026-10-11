@@ -17,11 +17,10 @@ export function values(ctx: Context, name: string): Record<string, Value> {
 	return ctx.archive.find(name).values;
 }
 
-// a configuration as it runs: its values over kiss.conf, sorted, the keys no
-// module declares anymore left out
+// a configuration as it runs: its values over kiss.conf, sorted, a key no
+// module declares anymore or a value its key no longer takes left out
 export function effective(ctx: Context, name: string): Record<string, Value> {
-	const all = Object.entries(ctx.config.over(values(ctx, name)));
-	return Object.fromEntries(all.filter(([k]) => ctx.schema.known(k)));
+	return ctx.config.over(values(ctx, name));
 }
 
 // a configuration as the lines that show it, or with secrets the lines that
@@ -72,7 +71,7 @@ export default {
 		const copied = values(ctx, from);
 		if (to === RUNNING_CONFIG) {
 			const dropped = ctx.config.load(copied);
-			return dropped.length ? comment(`dropped unknown keys: ${dropped.join(' ')}`) : '';
+			return dropped.length ? comment(`dropped what no key takes: ${dropped.join(', ')}`) : '';
 		}
 		if (ctx.role === 'llm') {
 			if (!ctx.confirm) throw new Error('nobody is here to confirm the copy');

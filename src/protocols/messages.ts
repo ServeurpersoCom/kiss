@@ -12,6 +12,7 @@ const NAME = 'messages';
 const VERSION = '2023-06-01';
 // the parameters of models sent as they are named
 const CARRIED = ['temperature', 'top_p', 'top_k'] as const;
+const BETA = 'anthropic-beta';
 const BINDING = 'thinking-binding-controls-2026-08-01';
 const THINKING = {
 	type: 'adaptive',
@@ -102,12 +103,19 @@ export default {
 	path: '/messages',
 	models: '/models?limit=1000',
 	described: true,
-	auth: (key) => ({
-		...(key ? { 'x-api-key': key } : {}),
-		'anthropic-version': VERSION,
-		'anthropic-beta': BINDING,
-		'anthropic-dangerous-direct-browser-access': 'true'
-	}),
+	// the betas of the endpoint join the one the binding of thinking needs,
+	// as the API takes a list of them, instead of replacing it
+	auth(key, headers) {
+		const beta = Object.keys(headers).find((n) => n.toLowerCase() === BETA);
+		const { [beta ?? BETA]: theirs, ...rest } = headers;
+		return {
+			...(key ? { 'x-api-key': key } : {}),
+			'anthropic-version': VERSION,
+			'anthropic-dangerous-direct-browser-access': 'true',
+			...rest,
+			[BETA]: theirs ? `${BINDING},${theirs}` : BINDING
+		};
+	},
 	drops: ['min_p', 'presence_penalty', 'frequency_penalty', 'seed'],
 	body(r) {
 		const p = r.parameters;

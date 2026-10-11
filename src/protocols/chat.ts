@@ -62,7 +62,7 @@ export default {
 	path: '/chat/completions',
 	models: '/models',
 	described: true,
-	auth: bearer,
+	auth: (key, headers) => ({ ...bearer(key), ...headers }),
 	drops: [],
 	// one system message, first, as every template takes it
 	body: (r) => ({

@@ -87,7 +87,7 @@ async function request<T>(
 	try {
 		const res = await fetch(`${endpoint.url}${path}`, {
 			...init,
-			headers: { ...endpoint.protocol.auth(endpoint.key), ...endpoint.headers, ...init.headers },
+			headers: { ...endpoint.protocol.auth(endpoint.key, endpoint.headers), ...init.headers },
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
 			// a network or CORS failure: nothing answers at that URL
@@ -201,7 +201,12 @@ export async function* chat(
 			const line = buffer.slice(0, nl).trim();
 			buffer = buffer.slice(nl + 1);
 			if (!line.startsWith(DATA)) continue;
-			const d = read(line.slice(DATA.length).trim());
+			let d: Delta | undefined;
+			try {
+				d = read(line.slice(DATA.length).trim());
+			} catch {
+				throw new Error(`${endpoint.url} sent a line that does not read: ${line}`);
+			}
 			if (!d) continue;
 			if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);
 			yield d;

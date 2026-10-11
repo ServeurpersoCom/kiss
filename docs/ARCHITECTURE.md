@@ -234,8 +234,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuses the line with its error. `chat model` names an endpoint of the configuration, the model
   left to the endpoint. A model names an endpoint, and holds no parameter its protocol never sends.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
-  known items only, `display render`, `tools use`, and a copy says so; a line naming one
-  fails.
+  known items only, `display render`, `tools use`, or a value its key no longer takes, at boot, in a
+  copy and wherever it shows, and a copy says so; a line naming one fails.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue;
   every endpoint lists at once, one that fails beside the others.
 - A copy from `running-config` warns when no model answers the chat: `chat model` empty with more
@@ -319,7 +319,9 @@ those turned off left out; a server that fails, or a name served twice, becomes 
 model, which tells the user, the note kept until the turn ends, so what the model did about a server
 stays explained once the server is back. Each round streams its thinking, its text and its calls,
 the arguments of a call read as the stream writes them, their JSON closed where it stops; a round
-that calls nothing ends the turn, at most `tools rounds` of them. Every round reads the
+that calls nothing ends the turn, at most `tools rounds` of them, which the model may raise like any
+free key, a cost shown in its change. A line of the stream that does not read stops the turn naming
+the endpoint and the line. Every round reads the
 configuration as it stands, so a tool a call turns on is offered from the next round on, as is a
 model, a system prompt or a parameter a call changes. A tool in `consent` asks before its call, and
 a turn stopped keeps what settled.
@@ -337,6 +339,7 @@ reads the line its result keeps of each, `Image image/png, 4096 bytes`.
   follow its results in one user message; `architecture.input_modalities` in the list, as
   llama-server and Hugging Face give it, says whether the model sees them.
 - `messages`: the Messages API of Anthropic, the key in `x-api-key` with the headers a page needs,
+  the betas the headers of the endpoint name joining its own,
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
   tool streaming its arguments, the images of a call in its result, unless
   `capabilities.image_input` says otherwise. A signed block is bound to the system, the tools and

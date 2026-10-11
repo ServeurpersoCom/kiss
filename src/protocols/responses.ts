@@ -54,7 +54,7 @@ export default {
 	path: '/responses',
 	models: '/models',
 	described: false,
-	auth: bearer,
+	auth: (key, headers) => ({ ...bearer(key), ...headers }),
 	drops: ['top_k', 'min_p', 'presence_penalty', 'frequency_penalty', 'seed'],
 	body(r) {
 		const p = r.parameters;

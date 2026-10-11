@@ -71,13 +71,31 @@ export class Values implements Config {
 	}
 
 	load(values: Record<string, Value>): string[] {
-		const entries = Object.entries(values);
-		this.map = new Map(entries.filter(([k]) => this.schema.known(k)));
-		return entries.filter(([k]) => !this.schema.known(k)).map(([k]) => k);
+		const kept: [string, Value][] = [];
+		const dropped: string[] = [];
+		for (const [k, v] of Object.entries(values)) {
+			const value = this.taken(k, v);
+			if (value === undefined) dropped.push(k);
+			else kept.push([k, value]);
+		}
+		this.map = new Map(kept);
+		return dropped;
+	}
+
+	// a stored value as its key reads it now, none when no module declares the
+	// key anymore or the key no longer takes the value
+	private taken(stored: string, value: Value): Value | undefined {
+		if (!this.schema.known(stored)) return undefined;
+		try {
+			return this.schema.parse(unstore(stored)[0], value);
+		} catch {
+			return undefined;
+		}
 	}
 
 	over(values: Record<string, Value>): Record<string, Value> {
-		const layer = new Values(this.schema, this.site, new Map(Object.entries(values)));
+		const layer = new Values(this.schema, this.site);
+		layer.load(values);
 		return Object.fromEntries(layer.stored().map((k) => [k, layer.get(...unstore(k))!]));
 	}
 
