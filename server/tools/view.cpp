@@ -289,18 +289,16 @@ static std::vector<tool> view_tool(const engine_reader & config) {
     v.limits.quality = std::stoi(config.get("view quality").value_or("0"));
 
     tool t;
-    t.suffix = "view";
-    t.description =
-        "Views a file or a directory on " + std::string(engine_platform()) + ", the path relative to " + v.cwd +
-        " or absolute. A directory lists every entry two levels deep with the size of all it holds, "
-        "hidden entries and the content of node_modules left out. A PNG, JPEG, GIF or WebP image of " +
-        std::to_string(v.image) + " bytes at most comes back as an image, " + std::to_string(v.limits.side) +
-        " px on its longest side at most: one larger, or turned by its EXIF, is resized as a JPEG, "
-        "its proportions kept, and the text says so. A text file comes back with numbered lines, the head "
-        "and the tail of " +
-        std::to_string(v.output) +
-        " bytes at most, then its line count; view_range picks lines [start, end], end -1 being the "
-        "last. Another binary file is refused.";
+    t.suffix      = "view";
+    t.description = "Supports viewing text, images, and directory listings on " +
+                    config.get("server hostname").value_or("") +
+                    ".\n\n"
+                    "Supported path types:\n"
+                    "- Directories: Lists files and directories up to 2 levels deep, ignoring hidden items and "
+                    "node_modules\n"
+                    "- Image files (PNG, JPEG, GIF, WebP): Displays the image visually\n"
+                    "- Text files: Displays numbered lines. You can optionally specify a view_range to see specific "
+                    "lines.";
     t.input = R"({"type":"object","properties":{)"
               R"("description":{"type":"string","description":"Why I need to view this, written first"},)"
               R"("path":{"type":"string","description":"The file or the directory"},)"

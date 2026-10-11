@@ -65,16 +65,12 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
 
         tool t;
         t.suffix      = name;
-        t.description = "Runs a command with " + command + " on " + engine_platform() + ", in " + cwd +
-                        ". The command goes on stdin; stdout and stderr come back merged, the head and the tail of " +
-                        std::to_string(s.output) + " bytes at most, then the exit code and the duration. The run " +
-                        "ends after " + std::to_string(s.timeout) +
-                        " seconds, and every process it leaves running ends with it.";
-        t.input = R"({"type":"object","properties":{)"
-                  R"("description":{"type":"string","description":"Why I'm running this command, written first"},)"
-                  R"("command":{"type":"string","description":"The command to run, as the shell reads it on stdin"}},)"
-                  R"("required":["description","command"],"additionalProperties":false})";
-        t.call  = [s](yyjson_val * args, const tool_tick & tick) {
+        t.description = "Run a " + name + " command on " + config.get("server hostname").value_or("");
+        t.input       = R"({"type":"object","properties":{)"
+                        R"("description":{"type":"string","description":"Why I'm running this command, written first"},)"
+                        R"("command":{"type":"string","description":"The command to run, as the shell reads it on stdin"}},)"
+                        R"("required":["description","command"],"additionalProperties":false})";
+        t.call        = [s](yyjson_val * args, const tool_tick & tick) {
             return run(s, args, tick);
         };
         tools.push_back(t);

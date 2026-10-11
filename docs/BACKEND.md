@@ -309,9 +309,9 @@ is by default the one of the machine, lowercased with every character outside `[
 which keeps the name valid for every model API. Two machines never collide, and KiSS filters a tool by its name with
 `set tools use <tool> off`.
 
-A description holds the OS, the shell, its command line and the working directory. It is fixed for
-the life of the process, so the tool list stays the same from turn to turn and the prompt cache of
-the model holds.
+A description is short: what the tool does and the machine it acts on, `Run a bash command on
+forge`. A cut output, a timeout or a resized image, the result tells. Only the hostname changes it,
+so the tool list stays the same from turn to turn and the prompt cache of the model holds.
 
 Every tool takes `description` first, why the call is made, then what it does: its schema lists it
 first and says so, for a model to write the why before the what. A model still writes its arguments
