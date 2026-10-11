@@ -535,7 +535,7 @@ set style sheet input 'form.svelte-composer { max-width: 64rem }'  ! the compose
 An optional `kiss.conf` next to `index.html` gives a site its defaults, for instance the LLM a
 fresh page talks to. It holds `set` lines only, read at every page load, below every save of the
 user. `webui/public/kiss.conf` is the default the build copies into `webui/dist/` and the KiSS
-server embeds: its backend at the relative URL `/mcp`. A site replaces it with its own. Anyone who
+server embeds: its backend at the relative URL `mcp`. A site replaces it with its own. Anyone who
 can load the page can read it, so a key set there is public.
 
 ```

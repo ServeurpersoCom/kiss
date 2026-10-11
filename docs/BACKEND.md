@@ -300,7 +300,7 @@ Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools
 
 - `GET /` serves the embedded page, `GET /kiss.conf` the site configuration, `POST /mcp` the MCP.
   The site configuration is `kiss.conf` of the directory the server runs in, else the one it
-  embeds, which names the backend by a relative URL, `set mcp url local /mcp`, so the page reaches
+  embeds, which names the backend by a relative URL, `set mcp url local mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
 - On a loopback address, `Host` must name loopback and the port, against DNS rebinding.
 - A request without `Origin` (a CLI client) or from the origin of the page itself needs no key.
