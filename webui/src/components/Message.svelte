@@ -131,7 +131,7 @@
 		<div class="command">
 			<div class="head">
 				{CLI}
-				<button onclick={() => dismiss(message.id)} disabled={busy} aria-label="Close">
+				<button onclick={() => dismiss(message.id)} aria-label="Close">
 					<Icon name="close" />
 				</button>
 			</div>

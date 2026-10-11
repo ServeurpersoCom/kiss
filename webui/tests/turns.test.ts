@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant, Grant, ToolContext, Verdict } from '../src/lib/types.js';
 import type { Pulse } from '../src/lib/pulse.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
-import { app, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
+import { app, dismiss, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 
 // a turn of the model the test holds: it writes, asks, ends or fails when
 // told, and stops with its signal
@@ -171,5 +171,22 @@ describe('the error of a turn', () => {
 			expect(last(id).error).toBe(shown);
 			held.length = 0;
 		}
+	});
+});
+
+describe('a slash command during a turn', () => {
+	it('closes while the model answers, the answer ending whole in its conversation', async () => {
+		newChat();
+		const sent = send('one');
+		await vi.waitFor(() => expect(held).toHaveLength(1));
+		const id = app.current!.id;
+		await send('/show version');
+		const cli = app.current!.entries.find((e) => e.role === 'cli')!;
+		await dismiss(cli.id);
+		expect(app.current!.entries.some((e) => e.role === 'cli')).toBe(false);
+		held[0].reply.rounds.push({ reasoning: '', text: 'done', calls: [] });
+		held[0].end();
+		await sent;
+		expect(last(id).rounds[0].text).toBe('done');
 	});
 });
