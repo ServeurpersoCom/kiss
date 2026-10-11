@@ -1,6 +1,7 @@
 // console.cpp: the console of the interactive mode, as on a Cisco router: a
 // line editor with its history, Tab to complete a word and ? to list what may
-// follow, the log passing above the line being typed
+// follow, the log passing above the line being typed; exit, quit, Ctrl-C and
+// Ctrl-D on an empty line stop the server
 
 #include "console.h"
 
@@ -9,6 +10,7 @@
 #include "log.h"
 #include "term.h"
 
+#include <algorithm>
 #include <csignal>
 #include <string>
 #include <thread>
@@ -46,6 +48,10 @@ static const int CTRL_U    = 21;
 static const int CTRL_V    = 22;
 static const int ESCAPE    = 27;
 static const int BACKSPACE = 127;
+
+// the words that stop the server, the console's own: the engine never reads
+// them, so no MCP client stops it
+static const words_t QUIT = { "exit", "quit" };
 
 // the prompt names the server, as a router names its host: forge#
 static std::string prompt() {
@@ -230,12 +236,22 @@ static words_t matching(const words_t & next, const std::string & word) {
     return out;
 }
 
+// what may follow the words before the cursor: the words of the engine, and
+// at the start of the line the words that stop the server
+static words_t next_of(const std::string & head) {
+    words_t next = engine_next(head);
+    if (trim(head).empty()) {
+        next.insert(next.end(), QUIT.begin(), QUIT.end());
+    }
+    return next;
+}
+
 // Tab: the word the only match spells, else the start every match shares,
 // else the matches listed
 static void complete() {
     std::string head, word;
     split_word(head, word);
-    const words_t hits = matching(engine_next(head), word);
+    const words_t hits = matching(next_of(head), word);
     if (hits.empty()) {
         return;
     }
@@ -264,7 +280,7 @@ static void complete() {
 static void help() {
     std::string head, word;
     split_word(head, word);
-    const words_t next  = engine_next(head);
+    const words_t next  = next_of(head);
     const words_t words = word.empty() ? next : matching(next, word);
     below(words.empty() ? std::string(ERROR_PREFIX) + "nothing may follow" : join(words, "  "));
 }
@@ -284,6 +300,10 @@ static void editor() {
         if (c == ENTER || c == '\n') {
             const std::string line = g_text;
             leave("");
+            if (std::find(QUIT.begin(), QUIT.end(), lower(trim(line))) != QUIT.end()) {
+                raise(SIGTERM);
+                return;
+            }
             if (!trim(line).empty()) {
                 if (history.empty() || history.back() != line) {
                     history.push_back(line);
@@ -296,12 +316,8 @@ static void editor() {
             complete();
         } else if (c == '?') {
             help();
-        } else if (c == CTRL_C) {
-            leave("^C");
-            at = history.size();
-            show("");
-        } else if (c == CTRL_D && g_text.empty()) {
-            leave("");
+        } else if (c == CTRL_C || (c == CTRL_D && g_text.empty())) {
+            leave(c == CTRL_C ? "^C" : "");
             raise(SIGTERM);
             return;
         } else if (c == KEY_UP && at > 0) {

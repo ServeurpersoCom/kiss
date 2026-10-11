@@ -242,7 +242,8 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
   Ctrl-V types the next key as it is, a `?` in a value.
 - Left and Right, Home and End or Ctrl-A and Ctrl-E move; Backspace and Delete erase a character,
   Ctrl-U the line before the cursor, Ctrl-K the line after it; Up and Down walk the history.
-- Ctrl-C drops the line, Ctrl-D on an empty line stops the server.
+- `exit` and `quit`, Ctrl-C, and Ctrl-D on an empty line stop the server. They are words of the
+  console, not of the CLI, so no MCP client can stop it.
 
 ## Tools
 
