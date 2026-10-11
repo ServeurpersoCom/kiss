@@ -154,10 +154,22 @@ A value resolves through layers, the first that holds it winning:
 
 ### Platform overrides
 
-A `set` or `no` line may start with `linux`, `macos` or `windows`; it then holds on that platform
-only, and it wins over the same line without a prefix. Lines without a prefix hold everywhere. The
-same `server.conf` is copied unchanged to every machine, and prefixes appear only where platforms
-truly differ: paths, and shells that exist on one OS only.
+One `server.conf` serves every machine: it is copied unchanged to `forge`, `studio` and `nomad`, and
+each reads the lines that hold for it. A `set` or `no` line may start with `linux`, `macos` or
+`windows`; it then holds on that platform only, and wins over the same line without a prefix. Lines
+without a prefix hold everywhere, and prefixes appear only where platforms truly differ: paths, and
+shells that exist on one OS only.
+
+```
+set server port 8089
+set server cwd /srv/work
+windows set server cwd D:\work
+macos set server cwd /Users/me/work
+linux set shells timeout bash 600
+```
+
+All three listen on 8089. `forge`, on Linux, works in `/srv/work` and gives its builds ten minutes;
+`studio`, on Windows, works in `D:\work`; `nomad`, on macOS, in `/Users/me/work`.
 
 Each machine keeps the lines of the other platforms as they are and writes them back with its own,
 so a `copy running-config startup-config` on Linux leaves the Windows lines of the file untouched.
