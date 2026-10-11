@@ -108,8 +108,9 @@ server, with an optional `kiss.conf` beside it: `set` lines that give a fresh pa
 KiSS is developed with KiSS, by a variety of models, Claude, GPT, Qwen, GLM and more, working in a
 rootless container they reach through MCP.
 
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the engine, the grammar, the firewall, and every law
-the tests hold.
+[docs/FRONTEND.md](docs/FRONTEND.md): the page, its engine, the grammar, the firewall, and every
+law the tests hold. [docs/BACKEND.md](docs/BACKEND.md): the server, its configuration, its tools and
+its MCP.
 
 ## License
 

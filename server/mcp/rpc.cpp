@@ -4,12 +4,18 @@
 
 #include <cstdlib>
 
-static void send(httplib::Response & res, int status, yyjson_mut_doc * doc) {
-    char * json = yyjson_mut_write(doc, 0, nullptr);
-    res.status  = status;
-    res.set_content(json ? json : "{}", "application/json");
+static std::string text(yyjson_mut_doc * doc) {
+    size_t            len  = 0;
+    char *            json = yyjson_mut_write(doc, 0, &len);
+    const std::string out  = json ? std::string(json, len) : "{}";
     free(json);
     yyjson_mut_doc_free(doc);
+    return out;
+}
+
+static void send(httplib::Response & res, int status, yyjson_mut_doc * doc) {
+    res.status = status;
+    res.set_content(text(doc), "application/json");
 }
 
 static yyjson_mut_val * response(yyjson_mut_doc * doc, yyjson_val * id) {
@@ -37,7 +43,7 @@ void rpc_error(httplib::Response & res,
     send(res, status, doc);
 }
 
-void rpc_result(httplib::Response & res, yyjson_val * id, bool modern, const rpc_build & body) {
+static yyjson_mut_doc * result(yyjson_val * id, bool modern, const rpc_build & body) {
     yyjson_mut_doc * doc  = yyjson_mut_doc_new(nullptr);
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * out  = yyjson_mut_obj_add_obj(doc, root, "result");
@@ -45,5 +51,13 @@ void rpc_result(httplib::Response & res, yyjson_val * id, bool modern, const rpc
         yyjson_mut_obj_add_str(doc, out, "resultType", "complete");
     }
     body(doc, out);
-    send(res, 200, doc);
+    return doc;
+}
+
+void rpc_result(httplib::Response & res, yyjson_val * id, bool modern, const rpc_build & body) {
+    send(res, 200, result(id, modern, body));
+}
+
+std::string rpc_result_json(yyjson_val * id, bool modern, const rpc_build & body) {
+    return text(result(id, modern, body));
 }

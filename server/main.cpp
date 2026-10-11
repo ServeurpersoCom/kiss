@@ -52,6 +52,10 @@ int main(int argc, char ** argv) {
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
+#if !defined(_WIN32)
+    // a script that closes its stdin early fails the write, not the server
+    signal(SIGPIPE, SIG_IGN);
+#endif
 
     if (console) {
         console_start();

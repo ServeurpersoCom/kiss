@@ -87,23 +87,64 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
     });
 }
 
-void method_tools_call(httplib::Response & res, yyjson_val * id, bool modern, yyjson_val * params) {
+// the result of a tool call
+static std::string call_json(yyjson_val * id, bool modern, const tool_result & r) {
+    return rpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+        yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
+        yyjson_mut_val * block   = yyjson_mut_arr_add_obj(doc, content);
+        yyjson_mut_obj_add_str(doc, block, "type", "text");
+        yyjson_mut_obj_add_strncpy(doc, block, "text", r.text.c_str(), r.text.size());
+        yyjson_mut_obj_add_bool(doc, out, "isError", r.error);
+    });
+}
+
+// a client that takes SSE gets a comment every tick while the tool runs, then
+// the result as one event; the first write that fails ends the tool. Any other
+// client gets the result as JSON, the tool ending once its socket closes. The
+// stream outlives the handler, so it holds the request document.
+void method_tools_call(const httplib::Request &            req,
+                       httplib::Response &                 res,
+                       const std::shared_ptr<yyjson_doc> & body,
+                       yyjson_val *                        id,
+                       bool                                modern,
+                       yyjson_val *                        params) {
     yyjson_val *      name   = yyjson_obj_get(params, "name");
     const std::string called = yyjson_is_str(name) ? yyjson_get_str(name) : "";
+    yyjson_val *      args   = yyjson_obj_get(params, "arguments");
     std::string       server;
     for (const tool & t : listed(server)) {
         if (called != server + "_" + t.suffix) {
             continue;
         }
-        const tool_result r = t.call(yyjson_obj_get(params, "arguments"));
-        log_verbose("Mcp", "Call %s, %s", called.c_str(), r.error ? "error" : "done");
-        rpc_result(res, id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
-            yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
-            yyjson_mut_val * block   = yyjson_mut_arr_add_obj(doc, content);
-            yyjson_mut_obj_add_str(doc, block, "type", "text");
-            yyjson_mut_obj_add_strncpy(doc, block, "text", r.text.c_str(), r.text.size());
-            yyjson_mut_obj_add_bool(doc, out, "isError", r.error);
-        });
+        log_verbose("Mcp", "Call %s", called.c_str());
+        if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
+            const tool_result r = t.call(args, [&req]() { return !req.is_connection_closed(); });
+            if (req.is_connection_closed()) {
+                log_verbose("Mcp", "Call %s cancelled, the client is gone", called.c_str());
+                return;
+            }
+            log_verbose("Mcp", "Call %s %s", called.c_str(), r.error ? "failed" : "done");
+            res.set_content(call_json(id, modern, r), "application/json");
+            return;
+        }
+        res.set_header("Cache-Control", "no-cache");
+        res.set_chunked_content_provider(
+            "text/event-stream", [body, t, called, id, args, modern](size_t, httplib::DataSink & sink) {
+                bool              gone = false;
+                const tool_result r    = t.call(args, [&]() {
+                    gone = gone || !sink.write(":\n\n", 3);
+                    return !gone;
+                });
+                if (gone) {
+                    log_verbose("Mcp", "Call %s cancelled, the client is gone", called.c_str());
+                    return false;
+                }
+                log_verbose("Mcp", "Call %s %s", called.c_str(), r.error ? "failed" : "done");
+                const std::string event = "event: message\ndata: " + call_json(id, modern, r) + "\n\n";
+                sink.write(event.data(), event.size());
+                sink.done();
+                return true;
+            });
         return;
     }
     rpc_error(res, 200, id, RPC_INVALID_PARAMS, "unknown tool \"" + called + "\"");

@@ -1,6 +1,7 @@
-# KiSS architecture
+# KiSS page
 
-The reference: how the page is built, the CLI it runs on, and the laws its tests hold.
+The reference of the frontend: how the page is built, the CLI it runs on, and the laws its tests
+hold.
 
 ## The page
 
@@ -415,13 +416,17 @@ set tools use str_replace off            ! the model never sees it
 set tools preview bash_tool description  ! what a folded call shows
 no tools bash_tool                       ! every setting of that tool, gone
 set tools rounds 25                      ! the tool rounds a turn takes at most
-set mcp timeout sandbox 300              ! the seconds a call may take
+set mcp timeout sandbox 600              ! the seconds a call may take, 310 by default
 ```
 
 The key goes as `Authorization: Bearer <token>`. A browser cannot set that header on a WebSocket,
 so WebSocket and stdio servers stay out of reach. A server must allow the origin of the page
 (CORS). A call runs until it answers, within the timeout of its server, or until the turn is
 stopped; connecting and listing the tools take five seconds at most.
+
+A call waits 310 seconds by default, ten more than the 290 a shell of the KiSS server runs at most,
+as BACKEND.md sets it: the server ends its own run first and the model reads why. The two figures
+miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds the gap is meant.
 
 ## Conversations
 

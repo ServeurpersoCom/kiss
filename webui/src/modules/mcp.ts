@@ -13,7 +13,7 @@ export default {
 		// sent with every request, Name: value pairs split by ;
 		headers: { kind: 'string', named: true },
 		// seconds a call of a tool may take, until the turn stops at the latest
-		timeout: { kind: 'number', min: 0.1, default: '300', named: true }
+		timeout: { kind: 'number', min: 0.1, default: '310', named: true }
 	},
 	validate(config) {
 		return rules(config, 'mcp');

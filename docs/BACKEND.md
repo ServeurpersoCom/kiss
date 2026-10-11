@@ -24,7 +24,7 @@ Front and back are one project and peers, `webui/` and `server/`, laid out alike
 file; no file grows with the features.
 
 ```
-webui/                   the page, as ARCHITECTURE.md describes it
+webui/                   the page, as FRONTEND.md describes it
 webui/public/kiss.conf   the site configuration the page and the server serve by default
 server/main.cpp          the start: defaults, startup-config, console, listener
 server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run
@@ -141,14 +141,18 @@ A command line splits into arguments on spaces, double quotes grouping. On Windo
 ! server.conf: the defaults the KiSS server embeds
 set server host 127.0.0.1
 set server port 8089
+set server log info
 linux set shells command bash bash -s
+linux set shells timeout bash 290
+linux set shells output bash 65536
 macos set shells command zsh zsh -s
 macos set shells command bash bash -s
-windows set shells command powershell powershell -NoProfile -NonInteractive -Command <boot>
-set shells command pwsh pwsh -NoProfile -NonInteractive -Command <boot>
+windows set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
+set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 set files use on
 ```
 
+Every shell carries its own `timeout`, 290 seconds, and `output`, 65536 bytes, as `bash` shows.
 `<boot>` stands for the PowerShell bootstrap below, written in full in the file.
 
 Each OS gets a default that works: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1 on
@@ -259,16 +263,30 @@ CLIXML, a native program reading stdin to its end, 20000 lines, and a timeout en
 
 - Valid UTF-8 passes unchanged. On Windows, output that is not valid UTF-8 is decoded from the OEM
   code page of the machine (`GetOEMCP`), since some native programs write it whatever the console
-  says. What stays invalid becomes U+FFFD, so the JSON is always valid.
+  says. Each run of bytes that stays invalid becomes one U+FFFD, so the JSON is always valid and a
+  binary output stays close to the size read.
 - Past the `output` budget, the server keeps the head, where the command shows what it does, and the
-  tail, where builds report their errors, and writes between them one line with the number of bytes
-  left out. The pipe is drained to the end either way, so the child never blocks on a full pipe.
+  tail, where builds report their errors, both cut on line ends, and writes between them one line
+  with the number of bytes left out. The pipe is drained to the end either way, so the child never
+  blocks on a full pipe.
+- The output ends on one status line: `! exit N`, `! killed after N s` or `! cancelled`, the last two
+  marking the result as an error.
 
 ### Long calls and cancel
 
 A `tools/call` answers as an SSE stream. While the process runs, the server writes an SSE comment
 every second: proxies keep the connection open, and the first write that fails means the client is
-gone, the user pressed Stop, so the server ends the tree. One mechanism, nothing to track.
+gone, the user pressed Stop, so the server ends the tree. One mechanism, nothing to track. Both eras
+of the SDK abort that stream on a cancel. A client that does not accept SSE gets plain JSON, and the
+tree ends once its socket closes.
+
+A reverse proxy notices a client gone at its own pace: through Apache the tree ends a few seconds
+after the Stop.
+
+A shell runs 290 seconds at most by default and KiSS waits 310 on a call, as FRONTEND.md sets it:
+ten below 300 on one side, ten above on the other. The server ends the run first and the model reads
+`! killed after 290 s`, never a timeout of the page; figures that do not fall on 300 say the gap is
+meant. A shell given more needs `set mcp timeout` raised past it in KiSS.
 
 ### Remote hosts and containers
 

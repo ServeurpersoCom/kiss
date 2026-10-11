@@ -4,7 +4,7 @@
 #include "tools.h"
 #include "yyjson.h"
 
-static tool_result call(yyjson_val * args) {
+static tool_result call(yyjson_val * args, const tool_tick &) {
     yyjson_val * lines = yyjson_obj_get(args, "lines");
     if (!yyjson_is_str(lines)) {
         return { "lines is a string of CLI lines, one per line", true };

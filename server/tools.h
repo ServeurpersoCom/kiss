@@ -5,6 +5,7 @@
 
 #include "engine/engine.h"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -15,12 +16,15 @@ struct tool_result {
     bool        error;
 };
 
+// called every second while a tool runs, false once the client is gone
+using tool_tick = std::function<bool()>;
+
 struct tool {
-    std::string suffix;
-    std::string description;
+    std::string                                                           suffix;
+    std::string                                                           description;
     // the JSON schema of the arguments
-    std::string input;
-    tool_result (*call)(yyjson_val * args);
+    std::string                                                           input;
+    std::function<tool_result(yyjson_val * args, const tool_tick & tick)> call;
 };
 
 // a tool name stays within what every model API takes

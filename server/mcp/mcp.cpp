@@ -52,14 +52,13 @@ static bool modern_request(const httplib::Request & req,
 }
 
 void mcp_post(const httplib::Request & req, httplib::Response & res, const std::string & version) {
-    yyjson_doc * body = yyjson_read(req.body.c_str(), req.body.size(), 0);
+    const std::shared_ptr<yyjson_doc> body(yyjson_read(req.body.c_str(), req.body.size(), 0), yyjson_doc_free);
     if (!body) {
         rpc_error(res, 400, nullptr, RPC_PARSE_ERROR, "the body is no JSON");
         return;
     }
-    std::unique_ptr<yyjson_doc, void (*)(yyjson_doc *)> owner(body, yyjson_doc_free);
 
-    yyjson_val * root = yyjson_doc_get_root(body);
+    yyjson_val * root = yyjson_doc_get_root(body.get());
     if (!yyjson_is_obj(root)) {
         rpc_error(res, 400, nullptr, RPC_INVALID_REQUEST, "the body is one JSON-RPC request or notification");
         return;
@@ -122,7 +121,7 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     } else if (method == "tools/list") {
         method_tools_list(res, id, modern);
     } else if (method == "tools/call") {
-        method_tools_call(res, id, modern, params);
+        method_tools_call(req, res, body, id, modern, params);
     } else {
         rpc_error(res, modern ? 404 : 200, id, RPC_METHOD_NOT_FOUND, "unknown method " + method);
     }
