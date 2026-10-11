@@ -824,6 +824,31 @@ describe('a model', () => {
 	});
 });
 
+describe('IOS words', () => {
+	it('take a value by any prefix that names one only, the config keeping it whole', async () => {
+		const k = await page();
+		expect((await k.run('set display tools op', 'user')).ok).toBe(true);
+		expect(k.settings.get('display tools')).toBe('open');
+		expect((await k.run('show running-config', 'user')).text).toContain('set display tools open');
+		expect((await k.run('set tools use config o', 'user')).text).toContain(
+			'ambiguous value "o": off on'
+		);
+	});
+
+	it('write memory, or write alone, as copy running-config startup-config', async () => {
+		const k = await page();
+		await k.run('set display tools open', 'user');
+		expect((await k.run('wr mem', 'user')).text).toBe('! copied running-config to startup-config');
+		expect((await k.run('show startup-config', 'user')).text).toContain('set display tools open');
+		await k.run('set display thinking open', 'user');
+		expect((await k.run('write', 'user')).ok).toBe(true);
+		expect((await k.run('show startup-config', 'user')).text).toContain(
+			'set display thinking open'
+		);
+		expect((await k.run('write disk', 'user')).text).toContain('unknown write "disk", use memory');
+	});
+});
+
 describe('a copy', () => {
 	it('warns when no model answers the chat, and once of an endpoint that fails', async () => {
 		const k = await page();

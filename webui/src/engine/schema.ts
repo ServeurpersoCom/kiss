@@ -47,11 +47,13 @@ function check(def: Key, raw: string): Value {
 			if (def.max !== undefined && n > def.max) throw new Error(`"${raw}" is above ${def.max}`);
 			return String(n);
 		}
-		case 'enum':
-			if (!def.values?.includes(raw)) {
-				throw new Error(`"${raw}" is not one of ${def.values?.join(' ')}`);
-			}
-			return raw;
+		case 'enum': {
+			// a value may be any prefix that names one value only, as IOS reads
+			// it, and is kept whole
+			const value = raw ? pick(raw, def.values ?? [], 'value') : undefined;
+			if (!value) throw new Error(`"${raw}" is not one of ${def.values?.join(' ')}`);
+			return value;
+		}
 		case 'url': {
 			// a relative URL resolves against the page and is kept as typed, so it
 			// follows the page wherever it is served

@@ -7,6 +7,10 @@
 #include "mcp/rpc.h"
 #include "tools.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
+
 static const char * const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo";
 
 // a result the server does not keep: the tools follow the configuration, so a
@@ -24,18 +28,18 @@ static void server_info(yyjson_mut_doc *    doc,
     yyjson_mut_obj_add_strncpy(doc, info, "description", component.c_str(), component.size());
 }
 
-// the tools and the server name of one same configuration
+// the tools and the server hostname of one same configuration
 static std::vector<tool> listed(std::string & server) {
     std::vector<tool> tools;
     engine_with([&](const engine_reader & config) {
-        server = config.get("server name").value_or("");
+        server = config.get("server hostname").value_or("");
         tools  = tools_list(config);
     });
     return tools;
 }
 
 void method_discover(httplib::Response & res, yyjson_val * id, const std::string & version) {
-    const std::string server = engine_get("server name").value_or("");
+    const std::string server = engine_get("server hostname").value_or("");
     rpc_result(res, id, true, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc, out, "supportedVersions");
         for (const char * v : MODERN_VERSIONS) {
@@ -51,7 +55,7 @@ void method_discover(httplib::Response & res, yyjson_val * id, const std::string
 
 // a version the server does not speak gets its latest, as the protocol states
 void method_initialize(httplib::Response & res, yyjson_val * id, yyjson_val * params, const std::string & version) {
-    const std::string server = engine_get("server name").value_or("");
+    const std::string server = engine_get("server hostname").value_or("");
     yyjson_val *      asked  = yyjson_obj_get(params, "protocolVersion");
     const std::string want   = yyjson_is_str(asked) ? yyjson_get_str(asked) : "";
     std::string       chosen = LEGACY_VERSIONS[0];
@@ -106,6 +110,65 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_result & r
     });
 }
 
+// a text on one line, its line breaks made spaces
+static std::string one_line(std::string s) {
+    for (char & c : s) {
+        if (c == '\n' || c == '\r') {
+            c = ' ';
+        }
+    }
+    return s;
+}
+
+// a call as the log tells it: its why as it starts and, in detail, every
+// other argument, a text by its first line; then how it ended, in how long
+struct call_log {
+    std::string                           tool;
+    std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+
+    void start(yyjson_val * args) const {
+        yyjson_val * why = yyjson_obj_get(args, "description");
+        log_info("Mcp", "Call %s: %s", tool.c_str(), one_line(yyjson_get_str(why)).c_str());
+        size_t       i, n;
+        yyjson_val * key;
+        yyjson_val * value;
+        yyjson_obj_foreach(args, i, n, key, value) {
+            if (value == why) {
+                continue;
+            }
+            std::string shown;
+            if (yyjson_is_str(value)) {
+                const std::string text  = yyjson_get_str(value);
+                const size_t      lines = (size_t) std::count(text.begin(), text.end(), '\n') + 1;
+                shown = text.substr(0, text.find('\n')) + (lines > 1 ? " (" + std::to_string(lines) + " lines)" : "");
+            } else {
+                char * json = yyjson_val_write(value, 0, nullptr);
+                shown       = json ? json : "";
+                free(json);
+            }
+            log_debug("Mcp", "Call %s: %s %s", tool.c_str(), yyjson_get_str(key), shown.c_str());
+        }
+    }
+
+    long long ms() const {
+        return (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
+    }
+
+    void end(const tool_result & r, const char * how) const {
+        const std::string outcome = !r.outcome.empty() ? r.outcome : r.error ? "failed" : "done";
+        if (r.level == LOG_ERROR) {
+            log_error("Mcp", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
+        } else {
+            log_info("Mcp", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
+        }
+        const size_t bytes = r.image.empty() ? r.text.size() : r.image.size();
+        log_debug("Mcp", "Call %s: %zu bytes back %s", tool.c_str(), bytes, how);
+    }
+
+    void gone() const { log_info("Mcp", "Call %s: cancelled in %lld ms, the client is gone", tool.c_str(), ms()); }
+};
+
 // a client that takes SSE gets a comment every tick while the tool runs, then
 // the result as one event; the first write that fails ends the tool. Any other
 // client gets the result as JSON, the tool ending once its socket closes. The
@@ -124,36 +187,37 @@ void method_tools_call(const httplib::Request &            req,
         if (called != server + "_" + t.suffix) {
             continue;
         }
-        log_verbose("Mcp", "Call %s", called.c_str());
         const std::string refused = tools_check(t, args);
         if (!refused.empty()) {
-            log_verbose("Mcp", "Call %s refused, %s", called.c_str(), refused.c_str());
+            log_error("Mcp", "Call %s: refused, %s", called.c_str(), refused.c_str());
             res.set_content(call_json(id, modern, { refused, true }), "application/json");
             return;
         }
+        const call_log log{ called };
+        log.start(args);
         if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
             const tool_result r = t.call(args, [&req]() { return !req.is_connection_closed(); });
             if (req.is_connection_closed()) {
-                log_verbose("Mcp", "Call %s cancelled, the client is gone", called.c_str());
+                log.gone();
                 return;
             }
-            log_verbose("Mcp", "Call %s %s", called.c_str(), r.error ? "failed" : "done");
+            log.end(r, "as JSON");
             res.set_content(call_json(id, modern, r), "application/json");
             return;
         }
         res.set_header("Cache-Control", "no-cache");
         res.set_chunked_content_provider(
-            "text/event-stream", [body, t, called, id, args, modern](size_t, httplib::DataSink & sink) {
+            "text/event-stream", [body, t, log, id, args, modern](size_t, httplib::DataSink & sink) {
                 bool              gone = false;
                 const tool_result r    = t.call(args, [&]() {
                     gone = gone || !sink.write(":\n\n", 3);
                     return !gone;
                 });
                 if (gone) {
-                    log_verbose("Mcp", "Call %s cancelled, the client is gone", called.c_str());
+                    log.gone();
                     return false;
                 }
-                log_verbose("Mcp", "Call %s %s", called.c_str(), r.error ? "failed" : "done");
+                log.end(r, "by SSE");
                 const std::string event = "event: message\ndata: " + call_json(id, modern, r) + "\n\n";
                 sink.write(event.data(), event.size());
                 sink.done();
@@ -161,5 +225,6 @@ void method_tools_call(const httplib::Request &            req,
             });
         return;
     }
+    log_error("Mcp", "Call %s: refused, no such tool", called.c_str());
     rpc_error(res, 200, id, RPC_INVALID_PARAMS, "unknown tool \"" + called + "\"");
 }

@@ -9,7 +9,7 @@ static step_t compile_show_version(const std::string &, const words_t & args) {
         fail(beyond({ "show", "version" }, args));
     }
     return [](context & ctx) {
-        const std::string name = reader(ctx.draft).get("server name", "").value_or("");
+        const std::string name = reader(ctx.draft).get("server hostname", "").value_or("");
         return comment(ENGINE_SYSTEM) + "\n" + comment(engine_component(name, engine_version()));
     };
 }

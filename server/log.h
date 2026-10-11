@@ -5,20 +5,32 @@
 #include <functional>
 #include <string>
 
-void log_info(const char * module, const char * fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 2, 3)))
-#endif
-    ;
+// the levels of a line, each printing those before it: what fails, what
+// happens, and the detail of it
+enum log_level { LOG_ERROR, LOG_INFO, LOG_DEBUG };
 
-// a line only the verbose log prints: every request, every change
-void log_verbose(const char * module, const char * fmt, ...)
-#if defined(__GNUC__)
-    __attribute__((format(printf, 2, 3)))
-#endif
-    ;
+// their names, as server log takes them
+constexpr const char * LOG_LEVELS[] = { "errors", "informational", "debugging" };
 
-void log_verbosity(bool verbose);
+#if defined(__GNUC__)
+#    define LOG_FORMAT __attribute__((format(printf, 2, 3)))
+#else
+#    define LOG_FORMAT
+#endif
+
+void log_error(const char * module, const char * fmt, ...) LOG_FORMAT;
+void log_info(const char * module, const char * fmt, ...) LOG_FORMAT;
+void log_debug(const char * module, const char * fmt, ...) LOG_FORMAT;
+
+// the most detailed level the log prints
+void log_level_set(log_level level);
+
+// the bytes of the last lines the log keeps for show logging, as IOS keeps
+// them with logging buffered; 0 keeps none
+void log_buffer_set(size_t bytes);
+
+// the lines the log keeps, oldest first
+std::string log_buffered();
 
 // text of the console, on stdout, never in the middle of a log line, above the
 // line the console edits

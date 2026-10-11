@@ -13,11 +13,12 @@ static tool_result call(yyjson_val * args, const tool_tick &) {
 static std::vector<tool> config_tool(const engine_reader & config) {
     tool t;
     t.suffix      = "config";
-    t.description = "Runs lines of the CLI of the KiSS server " + config.get("server name").value_or("") + " on " +
+    t.description = "Runs lines of the CLI of the KiSS server " + config.get("server hostname").value_or("") + " on " +
                     engine_platform() +
                     ", one command per line, as one batch that applies whole or not at all, the way Cisco IOS "
                     "reads them: set <module> <key> [item] <value>, no <module> <key> [item], show <module>, "
-                    "show running-config [all], show startup-config, copy running-config startup-config. "
+                    "show running-config [all], show startup-config, show version, show logging, "
+                    "copy running-config startup-config or write memory. "
                     "A set or no line may open with linux, macos or windows to hold on that platform only. "
                     "Secrets are written in server.conf, never here.";
     t.input = R"({"type":"object","properties":{)"

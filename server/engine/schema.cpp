@@ -139,10 +139,15 @@ static std::string check(const engine_key & def, const std::string & raw) {
                 return number(n);
             }
         case ENGINE_ENUM:
-            if (std::find(def.values.begin(), def.values.end(), raw) == def.values.end()) {
-                fail("\"" + raw + "\" is not one of " + join(def.values, " "));
+            {
+                // a value may be any prefix that names one value only, as IOS
+                // reads it, and is kept whole
+                const std::string value = raw.empty() ? "" : pick(raw, def.values, "value");
+                if (value.empty()) {
+                    fail("\"" + raw + "\" is not one of " + join(def.values, " "));
+                }
+                return value;
             }
-            return raw;
     }
     fail("unknown kind");
 }

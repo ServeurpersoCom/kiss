@@ -21,6 +21,7 @@ commands
   show conversations
   show version
   copy <config> <config>
+  write [memory]
   erase <id>|all|<config>
   export [<id>|all|<config>]
   import
@@ -128,7 +129,8 @@ line, nor replaces anything.
 ### Words
 
 Each word may be any prefix that names one word only, the way Cisco IOS reads a line; an exact word
-always wins. Right after `set`, `no` or `show`, the words of longer commands and the names of the
+always wins. The value of an enum reads the same, `set display tools op` setting `open`, and the
+configuration keeps the whole word. Right after `set`, `no` or `show`, the words of longer commands and the names of the
 modules compete, so `show d` is ambiguous between `diff` and `display`. A module named as a word of
 a longer command could never be told from it, so the registry refuses it.
 
@@ -234,9 +236,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line takes one filter, after its first pipe outside quotes, as IOS does: the pattern is the rest
   of the line as written, so `| include ^set (tools|style)` reads whole; an output comes whole, as
   long as it is, the filter narrowing it.
-- A command, module, key or filter word may be any prefix that names one word only; right after
-  `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between `diff`
-  and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
+- A command, module, key or filter word, or the value of an enum, may be any prefix that names one
+  word only; right after `set`, `no` or `show`, command and module words compete, `show d` being
+  ambiguous between `diff` and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
   `tools`, `saves`, `models`, its singular, a prefix of it, naming it too; an acronym, `mcp`, or a
   whole, `display`, `style`, keeps its one name.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that

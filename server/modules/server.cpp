@@ -1,6 +1,6 @@
-// server.cpp: the server module: where the server listens, the name its
-// tools carry, the key a client sends, the working directory of the tools and
-// how much the log says
+// server.cpp: the server module: where the server listens, its hostname,
+// which its tools carry, the key a client sends, the working directory of the
+// tools, how much the log says and how much of it show logging keeps
 
 #include "engine/engine.h"
 #include "listener.h"
@@ -55,13 +55,13 @@ static bool tool_word(const std::string & s) {
 }
 
 static std::string validate(const engine_reader & config) {
-    const std::string name = config.get("server name").value_or("");
+    const std::string name = config.get("server hostname").value_or("");
     if (!tool_word(name)) {
-        return "server name \"" + name + "\" takes a-z, 0-9 and _ only, as a tool name does";
+        return "server hostname \"" + name + "\" takes a-z, 0-9 and _ only, as a tool name does";
     }
     for (const tool & t : tools_list(config)) {
         if (name.size() + 1 + t.suffix.size() > TOOL_NAME_MAX) {
-            return "server name \"" + name + "\" makes " + name + "_" + t.suffix + " longer than " +
+            return "server hostname \"" + name + "\" makes " + name + "_" + t.suffix + " longer than " +
                    std::to_string(TOOL_NAME_MAX);
         }
     }
@@ -86,7 +86,13 @@ static std::string validate(const engine_reader & config) {
 }
 
 static void apply(const engine_reader & config) {
-    log_verbosity(config.get("server log") == std::string("verbose"));
+    const std::string level = config.get("server log").value_or("");
+    for (int l = LOG_ERROR; l <= LOG_DEBUG; l++) {
+        if (level == LOG_LEVELS[l]) {
+            log_level_set((log_level) l);
+        }
+    }
+    log_buffer_set((size_t) std::stoull(config.get("server buffered").value_or("0")));
     listener_move(*config.get("server host"), std::stoi(*config.get("server port")));
 }
 
@@ -96,23 +102,29 @@ static engine_module make_server() {
     port.max     = 65535;
     port.integer = true;
 
-    engine_key name("name", ENGINE_STRING);
-    name.fallback = host_name;
+    engine_key hostname("hostname", ENGINE_STRING);
+    hostname.fallback = host_name;
 
     engine_key cwd("cwd", ENGINE_STRING);
     cwd.fallback = start_directory;
 
     engine_key log("log", ENGINE_ENUM);
-    log.values = { "info", "verbose" };
+    log.values = { std::begin(LOG_LEVELS), std::end(LOG_LEVELS) };
+
+    // the bytes of the last lines of the log show logging keeps, 0 none
+    engine_key buffered("buffered", ENGINE_NUMBER);
+    buffered.min     = 0;
+    buffered.integer = true;
 
     engine_module m;
     m.name = "server";
     m.keys.push_back(engine_key("host", ENGINE_STRING));
     m.keys.push_back(port);
-    m.keys.push_back(name);
+    m.keys.push_back(hostname);
     m.keys.push_back(engine_key("key", ENGINE_SECRET));
     m.keys.push_back(cwd);
     m.keys.push_back(log);
+    m.keys.push_back(buffered);
     m.validate = validate;
     m.apply    = apply;
     return m;

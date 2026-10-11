@@ -1,9 +1,10 @@
 #pragma once
 // tools.h: the tools the server serves over MCP, each named after the server,
-// <server name>_<suffix>; a file in tools/ registers its source by existing,
+// <server hostname>_<suffix>; a file in tools/ registers its source by existing,
 // which gives its tools from the configuration it reads
 
 #include "engine/engine.h"
+#include "log.h"
 
 #include <functional>
 #include <string>
@@ -22,6 +23,10 @@ struct tool_result {
     bool        error;
     std::string image;
     std::string mime;
+    // how the call ended as the log tells it, when the tool says more than
+    // done or failed, and the level of that line
+    std::string outcome;
+    log_level   level = LOG_INFO;
 };
 
 // called every second while a tool runs, false once the client is gone

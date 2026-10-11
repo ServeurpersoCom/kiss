@@ -55,7 +55,7 @@ static const words_t QUIT = { "exit", "quit" };
 
 // the prompt names the server, as a router names its host: forge#
 static std::string prompt() {
-    return engine_get("server name").value_or("") + "# ";
+    return engine_get("server hostname").value_or("") + "# ";
 }
 
 // the columns of UTF-8 text, one per character

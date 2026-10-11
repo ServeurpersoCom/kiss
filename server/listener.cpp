@@ -96,7 +96,7 @@ bool listener_run() {
         httplib::Server   server;
         http_routes(server);
         if (!server.bind_to_port(host, port)) {
-            log_info("Server", "Cannot listen on %s port %d", host.c_str(), port);
+            log_error("Server", "Cannot listen on %s port %d", host.c_str(), port);
             return false;
         }
         {

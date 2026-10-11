@@ -15,9 +15,12 @@ commands
   show running-config [all]
   show startup-config
   show version
+  show logging
   copy running-config startup-config
   copy startup-config running-config
+  write [memory]
   <command> | begin|count|exclude|include <pattern>
+  exit, quit                        the console only: stop the server
 
   [linux|macos|windows]   platform override: the line holds on that platform only
                           and wins over the same line without it
@@ -26,10 +29,12 @@ modules
   server
     host <address>                  127.0.0.1
     port <1..65535>                 8089
-    name <word>                     the host name
+    hostname <word>                 the host name
     key <secret>                    required off loopback
     cwd <path>                      the start directory
-    log info|verbose                info
+    log errors|informational|debugging
+                                    debugging
+    buffered <bytes>                65536, the log show logging keeps
   shells
     command <item> <line>           linux bash, macos zsh bash, windows powershell, pwsh
     timeout <item> <seconds>        290
@@ -39,9 +44,9 @@ modules
     image <bytes>                   5242880
 
 tools
-  <name>_config                     description lines
-  <name>_<shell>                    description command
-  <name>_view                       description path [view_range]
+  <hostname>_config                 description lines
+  <hostname>_<shell>                description command
+  <hostname>_view                   description path [view_range]
 ```
 
 ## The server
@@ -107,15 +112,17 @@ only and grandchildren outlive a timeout. `process.cpp` owns that layer.
 The configuration runs on the engine of the page, rewritten in C++: the same words, the same
 batches, the same laws. A key is two fixed words, a module then a key; a key of a collection takes
 the item name next, and the value comes last. Each word may be any prefix that names one word only,
-the way Cisco IOS reads a line.
+the way Cisco IOS reads a line, the value of an enum too: `set server log inf` sets
+`informational`, and the configuration keeps the whole word.
 
 A batch compiles every line before the first one runs, runs them on a draft of the running
 configuration, checks the rules of every module on the draft, then replaces the running
 configuration and applies the modules whose keys changed. A failure at any step applies nothing.
 
 The commands are those of the page that fit a server: `set`, `no`, `show <module>`,
-`show running-config [all]`, `show startup-config`, `show version`, and `copy` between the
-running-config and the startup-config. A line takes a filter after a pipe, `begin`, `count`,
+`show running-config [all]`, `show startup-config`, `show version`, `copy` between the
+running-config and the startup-config, and `write memory`, or `write` alone, IOS's way to save; and
+one of its own, `show logging`. A line takes a filter after a pipe, `begin`, `count`,
 `exclude` or `include`, as IOS does. A secret never prints: `show` writes `! server key is set`.
 
 Two roles send batches. The administrator writes `server.conf` and the command line. An MCP client
@@ -142,7 +149,7 @@ A value resolves through layers, the first that holds it winning:
 
 1. the running configuration;
 2. `server/server.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
-3. the fallback of the key: the host name for `server name`, the start directory for `server cwd`.
+3. the fallback of the key: the host name for `server hostname`, the start directory for `server cwd`.
 
 ### Platform overrides
 
@@ -164,10 +171,11 @@ configuration therefore lists every candidate shell and each machine serves the 
 | ----------------------- | ------ | --------------------------------------------------------------- |
 | `server host`           | string | address to listen on                                            |
 | `server port`           | number | port to listen on                                               |
-| `server name`           | string | prefix of every tool name, the host name by default             |
+| `server hostname`       | string | the prompt and the prefix of every tool name, as IOS's hostname |
 | `server key`            | secret | bearer key, required off loopback                               |
 | `server cwd`            | string | working directory of every tool, the start directory by default |
-| `server log`            | enum   | `info` or `verbose`                                             |
+| `server log`            | enum   | `errors`, `informational` or `debugging`, what the log tells    |
+| `server buffered`       | number | bytes of the last lines of the log `show logging` keeps         |
 | `shells command <item>` | string | command line that runs a script read on stdin                   |
 | `shells timeout <item>` | number | seconds a call may run                                          |
 | `shells output <item>`  | number | bytes of output a call returns                                  |
@@ -183,7 +191,8 @@ A command line splits into arguments on spaces, double quotes grouping. On Windo
 ! server.conf: the defaults the KiSS server embeds
 set server host 127.0.0.1
 set server port 8089
-set server log info
+set server log debugging
+set server buffered 65536
 linux set shells command bash bash -s
 linux set shells timeout bash 290
 linux set shells output bash 65536
@@ -206,16 +215,36 @@ bash of WSL, is one more line.
 
 `server` takes no argument. Its stdin tells how it runs: a terminal it runs in the foreground of
 opens the console; anything else, `/dev/null` under systemd, a Windows service, `nohup`,
-`< /dev/null` or a start with `&` from a shell, runs it as a daemon that leaves stdin alone. Its log goes to stderr, one line per event in the form of every GGML project
-of the house, `[Module] Line`, and opens on the version:
+`< /dev/null` or a start with `&` from a shell, runs it as a daemon that leaves stdin alone.
+
+Its log goes to stderr, one line per event in the form of every GGML project of the house,
+`[Module] Line`, and opens on the version. A server tells everything that happens, as the console
+of a router does by default: `server log` sets how much, at once, no restart.
+
+- `errors`: what fails or is refused, a request without its key, a call refused or killed, a
+  listener that cannot bind.
+- `informational`, and the above: the events, a client that connects, each call with its why as it starts
+  and its outcome with its duration as it ends, each change of the configuration.
+- `debugging`, the default, and the above: the detail, each request with its method, address and era,
+  every other argument of a call, a text by its first line, and the bytes a call sends back.
+
+`show logging` prints the last lines of the log, as IOS keeps them with `logging buffered`:
+`server buffered` sets how many bytes stay, every line of the start included, so the console, KiSS
+through the config tool, and the model asked to diagnose read what happened without the terminal of
+the machine.
 
 ```
 [Server] KiSS Operating System, server 5633ee7 (2026-10-11) on linux
 [Server] Listening on http://127.0.0.1:8089
-[Engine] Configured by an MCP client
+[Mcp] server/discover from 192.168.1.20, 2026-07-28
+[Mcp] Client kiss 5633ee7 connects from 192.168.1.20
+[Mcp] tools/call from 192.168.1.20, 2026-07-28
+[Mcp] Call forge_bash: Builds the server
+[Mcp] Call forge_bash: command cd kiss && ./build.sh (2 lines)
+[Mcp] Call forge_bash: exit 0 in 5321 ms
+[Mcp] Call forge_bash: 1838 bytes back by SSE
+[Http] Refused 203.0.113.7: the key is missing or wrong
 ```
-
-`server log verbose` adds every MCP request and every tool call, at once, no restart.
 
 The console is the interactive mode, as the console port of a Cisco router: the prompt names the
 server, each line runs as a batch of the administrator, and the log passes above the line being
@@ -247,8 +276,8 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
 
 ## Tools
 
-A tool name is `<server name>_<item>`: `forge_bash`, `studio_powershell`, `nomad_zsh`. The server name
-is the host name lowercased with every character outside `[a-z0-9]` made `_`, which keeps the name
+A tool name is `<hostname>_<item>`: `forge_bash`, `studio_powershell`, `nomad_zsh`. The hostname
+is by default the one of the machine, lowercased with every character outside `[a-z0-9]` made `_`, which keeps the name
 valid for every model API. Two machines never collide, and KiSS filters a tool by its name with
 `set tools use <tool> off`.
 
@@ -402,7 +431,7 @@ The server is stateless and speaks both eras on `POST /mcp`:
 
 Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools/call`, `ping`.
 
-The `serverInfo` of either era names the server by `server name`, its title `KiSS Operating System`,
+The `serverInfo` of either era names the server by its hostname, its title `KiSS Operating System`,
 its version, and as its description the line it gives of itself in `show version`:
 `server forge 5633ee7 (2026-10-11) on linux`. KiSS lists that line in its own `show version`.
 

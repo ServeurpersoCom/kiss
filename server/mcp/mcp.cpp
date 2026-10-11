@@ -15,6 +15,7 @@
 #include <memory>
 
 static const char * const PROTOCOL_VERSION_META = "io.modelcontextprotocol/protocolVersion";
+static const char * const CLIENT_INFO_META      = "io.modelcontextprotocol/clientInfo";
 
 static bool modern_version(const std::string & v) {
     for (const char * m : MODERN_VERSIONS) {
@@ -51,6 +52,14 @@ static bool modern_request(const httplib::Request & req,
     return true;
 }
 
+// a client that opens its connection, as its clientInfo names it
+static void connected(const httplib::Request & req, yyjson_val * info) {
+    yyjson_val * name    = yyjson_obj_get(info, "name");
+    yyjson_val * version = yyjson_obj_get(info, "version");
+    log_info("Mcp", "Client %s %s connects from %s", yyjson_is_str(name) ? yyjson_get_str(name) : "unnamed",
+             yyjson_is_str(version) ? yyjson_get_str(version) : "", req.remote_addr.c_str());
+}
+
 void mcp_post(const httplib::Request & req, httplib::Response & res, const std::string & version) {
     const std::shared_ptr<yyjson_doc> body(yyjson_read(req.body.c_str(), req.body.size(), 0), yyjson_doc_free);
     if (!body) {
@@ -74,7 +83,8 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     yyjson_val *      claim  = yyjson_obj_get(yyjson_obj_get(params, "_meta"), PROTOCOL_VERSION_META);
     const std::string header = req.get_header_value("MCP-Protocol-Version");
     const bool        modern = claim != nullptr;
-    log_verbose("Mcp", "%s %s", modern ? "Request" : "Legacy request", method.c_str());
+    const std::string era    = yyjson_is_str(claim) ? yyjson_get_str(claim) : header.empty() ? "2025" : header;
+    log_debug("Mcp", "%s from %s, %s", method.c_str(), req.remote_addr.c_str(), era.c_str());
 
     if (modern) {
         if (!yyjson_is_str(claim)) {
@@ -112,6 +122,10 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
         return;
     }
 
+    if (method == "server/discover" || method == "initialize") {
+        connected(req, modern ? yyjson_obj_get(yyjson_obj_get(params, "_meta"), CLIENT_INFO_META) :
+                                yyjson_obj_get(params, "clientInfo"));
+    }
     if (method == "ping") {
         rpc_result(res, id, modern, [](yyjson_mut_doc *, yyjson_mut_val *) {});
     } else if (modern && method == "server/discover") {

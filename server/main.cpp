@@ -37,12 +37,12 @@ int main(int argc, char ** argv) {
     const std::string refused =
         engine_defaults(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));
     if (!refused.empty()) {
-        log_info("Server", "The embedded defaults refuse:\n%s", refused.c_str());
+        log_error("Server", "The embedded defaults refuse:\n%s", refused.c_str());
         return 1;
     }
     const engine_result started = engine_start(STARTUP_FILE, KISS_VERSION);
     if (!started.ok) {
-        log_info("Server", "Cannot start on %s:\n%s", STARTUP_FILE, started.text.c_str());
+        log_error("Server", "Cannot start on %s:\n%s", STARTUP_FILE, started.text.c_str());
         return 1;
     }
 

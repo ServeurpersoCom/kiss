@@ -15,6 +15,13 @@ struct shell {
     size_t      output;
 };
 
+// a result with how the call ended, as the log tells it
+static tool_result ended(tool_result r, const std::string & outcome, log_level level) {
+    r.outcome = outcome;
+    r.level   = level;
+    return r;
+}
+
 static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *         command = yyjson_obj_get(args, "command");
     const auto           t0      = std::chrono::steady_clock::now();
@@ -24,19 +31,22 @@ static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tic
         (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
     if (!r.started) {
-        return { "Cannot start " + s.command + ": " + r.error, true };
+        return ended({ "Cannot start " + s.command + ": " + r.error, true }, "cannot start", LOG_ERROR);
     }
     std::string text = r.output;
     if (!text.empty() && text.back() != '\n') {
         text += '\n';
     }
     if (r.cancelled) {
-        return { text + "Cancelled", true };
+        return ended({ text + "Cancelled", true }, "cancelled", LOG_INFO);
     }
     if (r.timed_out) {
-        return { text + "Killed after " + std::to_string(s.timeout) + " s", true };
+        const std::string after = std::to_string(s.timeout) + " s";
+        return ended({ text + "Killed after " + after, true }, "killed after " + after, LOG_ERROR);
     }
-    return { text + "Exit code " + std::to_string(r.exit_code) + " (" + std::to_string(ms) + " ms)", r.exit_code != 0 };
+    const std::string code = std::to_string(r.exit_code);
+    return ended({ text + "Exit code " + code + " (" + std::to_string(ms) + " ms)", r.exit_code != 0 }, "exit " + code,
+                 LOG_INFO);
 }
 
 static std::vector<tool> shell_tools(const engine_reader & config) {
