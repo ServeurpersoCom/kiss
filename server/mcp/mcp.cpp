@@ -56,7 +56,7 @@ static bool modern_request(const httplib::Request & req,
 static void connected(const httplib::Request & req, yyjson_val * info) {
     yyjson_val * name    = yyjson_obj_get(info, "name");
     yyjson_val * version = yyjson_obj_get(info, "version");
-    log_info("Mcp", "Client %s %s connects from %s", yyjson_is_str(name) ? yyjson_get_str(name) : "unnamed",
+    log_info("MCP", "Client %s %s connects from %s", yyjson_is_str(name) ? yyjson_get_str(name) : "unnamed",
              yyjson_is_str(version) ? yyjson_get_str(version) : "", req.remote_addr.c_str());
 }
 
@@ -84,7 +84,7 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     const std::string header = req.get_header_value("MCP-Protocol-Version");
     const bool        modern = claim != nullptr;
     const std::string era    = yyjson_is_str(claim) ? yyjson_get_str(claim) : header.empty() ? "2025" : header;
-    log_debug("Mcp", "%s from %s, %s", method.c_str(), req.remote_addr.c_str(), era.c_str());
+    log_debug("MCP", "%s from %s, %s", method.c_str(), req.remote_addr.c_str(), era.c_str());
 
     if (modern) {
         if (!yyjson_is_str(claim)) {

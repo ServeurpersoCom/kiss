@@ -41,7 +41,7 @@ modules
     output <item> <bytes>           65536
   view
     output <bytes>                  65536
-    image <bytes>                   5242880
+    image <bytes>                   20971520
 
 tools
   <hostname>_config                 description lines
@@ -149,7 +149,8 @@ A value resolves through layers, the first that holds it winning:
 
 1. the running configuration;
 2. `server/server.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
-3. the fallback of the key: the host name for `server hostname`, the start directory for `server cwd`.
+3. the fallback of the key: the host name of the machine for `server hostname`, the start directory
+   for `server cwd`.
 
 ### Platform overrides
 
@@ -201,7 +202,7 @@ macos set shells command bash bash -s
 windows set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 set view output 65536
-set view image 5242880
+set view image 20971520
 ```
 
 Every shell carries its own `timeout`, 290 seconds, and `output`, 65536 bytes, as `bash` shows.
@@ -223,10 +224,10 @@ of a router does by default: `server log` sets how much, at once, no restart.
 
 - `errors`: what fails or is refused, a request without its key, a call refused or killed, a
   listener that cannot bind.
-- `informational`, and the above: the events, a client that connects, each call with its why as it starts
-  and its outcome with its duration as it ends, each change of the configuration.
-- `debugging`, the default, and the above: the detail, each request with its method, address and era,
-  every other argument of a call, a text by its first line, and the bytes a call sends back.
+- `informational`, and the above: the events, a client that connects, each call with its why as it
+  starts and its outcome with its duration as it ends, each change of the configuration.
+- `debugging`, the default, and the above: the detail, each request with its method, address and
+  era, every other argument of a call, a text by its first line, and the bytes a call sends back.
 
 `show logging` prints the last lines of the log, as IOS keeps them with `logging buffered`:
 `server buffered` sets how many bytes stay, every line of the start included, so the console, KiSS
@@ -236,14 +237,14 @@ the machine.
 ```
 [Server] KiSS Operating System, server 5633ee7 (2026-10-11) on linux
 [Server] Listening on http://127.0.0.1:8089
-[Mcp] server/discover from 192.168.1.20, 2026-07-28
-[Mcp] Client kiss 5633ee7 connects from 192.168.1.20
-[Mcp] tools/call from 192.168.1.20, 2026-07-28
-[Mcp] Call forge_bash: Builds the server
-[Mcp] Call forge_bash: command cd kiss && ./build.sh (2 lines)
-[Mcp] Call forge_bash: exit 0 in 5321 ms
-[Mcp] Call forge_bash: 1838 bytes back by SSE
-[Http] Refused 203.0.113.7: the key is missing or wrong
+[MCP] server/discover from 192.168.1.20, 2026-07-28
+[MCP] Client kiss 5633ee7 connects from 192.168.1.20
+[MCP] tools/call from 192.168.1.20, 2026-07-28
+[MCP] Call forge_bash: Builds the server
+[MCP] Call forge_bash: command cd kiss && ./build.sh (2 lines)
+[MCP] Call forge_bash: exit 0 in 5321 ms
+[MCP] Call forge_bash: 1838 bytes back by SSE
+[HTTP] Refused 203.0.113.7: the key is missing or wrong
 ```
 
 The console is the interactive mode, as the console port of a Cisco router: the prompt names the
@@ -277,8 +278,8 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
 ## Tools
 
 A tool name is `<hostname>_<item>`: `forge_bash`, `studio_powershell`, `nomad_zsh`. The hostname
-is by default the one of the machine, lowercased with every character outside `[a-z0-9]` made `_`, which keeps the name
-valid for every model API. Two machines never collide, and KiSS filters a tool by its name with
+is by default the one of the machine, lowercased with every character outside `[a-z0-9]` made `_`,
+which keeps the name valid for every model API. Two machines never collide, and KiSS filters a tool by its name with
 `set tools use <tool> off`.
 
 A description holds the OS, the shell, its command line and the working directory. It is fixed for

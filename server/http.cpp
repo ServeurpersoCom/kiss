@@ -103,7 +103,7 @@ void http_routes(httplib::Server & server) {
 
     server.set_pre_routing_handler([](const httplib::Request & req, httplib::Response & res) {
         if (!host_allowed(req)) {
-            log_error("Http", "Refused %s: Host %s names no loopback address of this server", req.remote_addr.c_str(),
+            log_error("HTTP", "Refused %s: Host %s names no loopback address of this server", req.remote_addr.c_str(),
                       req.get_header_value("Host").c_str());
             res.status = 403;
             res.set_content("Host names no loopback address of this server\n", "text/plain");
@@ -148,7 +148,7 @@ void http_routes(httplib::Server & server) {
         cors(req, res);
         std::string why;
         if (!authorized(req, why)) {
-            log_error("Http", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
+            log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
             res.status = 401;
             res.set_header("WWW-Authenticate", "Bearer");
             res.set_content(why + "\n", "text/plain");

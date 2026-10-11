@@ -187,6 +187,7 @@ command = "set" key [ value ]                a secret left out is asked
         | "show conversations"
         | "show diff" config config
         | "copy" config config               alone; the model writes another config once confirmed
+        | "write" [ "memory" ]               alone, IOS's copy running-config startup-config
         | "title" value                      the title of this conversation
         | "export" [ "all" | config | id ] alone on its line
         | "import"                           alone on its line
@@ -200,8 +201,9 @@ pattern = the rest of the line as written    a regular expression minding case, 
 ```
 
 One verb per gesture: `set` and `no` write a line of the configuration, `copy` a configuration
-whole, `erase` removes a configuration or conversations whole, `title` writes the conversation,
-`import` adds conversations, and `show` reads every one of them.
+whole, `write memory` the running-config to the startup-config as IOS saves, `erase` removes a
+configuration or conversations whole, `title` writes the conversation, `import` adds
+conversations, and `show` reads every one of them.
 
 Every line stands alone, a key named whole, so the CLI has no mode to enter or leave and no line
 depends on another. An output by group writes each header as a note before its lines, so a whole

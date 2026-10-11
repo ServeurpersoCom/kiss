@@ -128,7 +128,7 @@ struct call_log {
 
     void start(yyjson_val * args) const {
         yyjson_val * why = yyjson_obj_get(args, "description");
-        log_info("Mcp", "Call %s: %s", tool.c_str(), one_line(yyjson_get_str(why)).c_str());
+        log_info("MCP", "Call %s: %s", tool.c_str(), one_line(yyjson_get_str(why)).c_str());
         size_t       i, n;
         yyjson_val * key;
         yyjson_val * value;
@@ -146,7 +146,7 @@ struct call_log {
                 shown       = json ? json : "";
                 free(json);
             }
-            log_debug("Mcp", "Call %s: %s %s", tool.c_str(), yyjson_get_str(key), shown.c_str());
+            log_debug("MCP", "Call %s: %s %s", tool.c_str(), yyjson_get_str(key), shown.c_str());
         }
     }
 
@@ -158,15 +158,15 @@ struct call_log {
     void end(const tool_result & r, const char * how) const {
         const std::string outcome = !r.outcome.empty() ? r.outcome : r.error ? "failed" : "done";
         if (r.level == LOG_ERROR) {
-            log_error("Mcp", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
+            log_error("MCP", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
         } else {
-            log_info("Mcp", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
+            log_info("MCP", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
         }
         const size_t bytes = r.image.empty() ? r.text.size() : r.image.size();
-        log_debug("Mcp", "Call %s: %zu bytes back %s", tool.c_str(), bytes, how);
+        log_debug("MCP", "Call %s: %zu bytes back %s", tool.c_str(), bytes, how);
     }
 
-    void gone() const { log_info("Mcp", "Call %s: cancelled in %lld ms, the client is gone", tool.c_str(), ms()); }
+    void gone() const { log_info("MCP", "Call %s: cancelled in %lld ms, the client is gone", tool.c_str(), ms()); }
 };
 
 // a client that takes SSE gets a comment every tick while the tool runs, then
@@ -189,7 +189,7 @@ void method_tools_call(const httplib::Request &            req,
         }
         const std::string refused = tools_check(t, args);
         if (!refused.empty()) {
-            log_error("Mcp", "Call %s: refused, %s", called.c_str(), refused.c_str());
+            log_error("MCP", "Call %s: refused, %s", called.c_str(), refused.c_str());
             res.set_content(call_json(id, modern, { refused, true }), "application/json");
             return;
         }
@@ -225,6 +225,6 @@ void method_tools_call(const httplib::Request &            req,
             });
         return;
     }
-    log_error("Mcp", "Call %s: refused, no such tool", called.c_str());
+    log_error("MCP", "Call %s: refused, no such tool", called.c_str());
     rpc_error(res, 200, id, RPC_INVALID_PARAMS, "unknown tool \"" + called + "\"");
 }
