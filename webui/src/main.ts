@@ -2,7 +2,7 @@ import { mount } from 'svelte';
 import './tokens.css';
 import App from './App.svelte';
 import { defaults, run, start } from './engine/run.js';
-import { restore } from './lib/state.svelte.js';
+import { restore, unlock } from './lib/state.svelte.js';
 import { SITE_CONFIG_URL } from './lib/config.js';
 
 // a missing site configuration is the common case; a static server may answer
@@ -20,3 +20,7 @@ await restore();
 if (import.meta.env.DEV) Object.assign(globalThis, { kiss: run });
 
 mount(App, { target: document.getElementById('app')! });
+
+// a server that takes no request without its key asks the user for it as the
+// page opens
+void unlock();

@@ -12,10 +12,12 @@ import {
 	parse,
 	path,
 	serialize,
-	stored
+	stored,
+	uuid
 } from './conversation.js';
 import { EndpointError } from './api.js';
-import { redact, run } from '../engine/run.js';
+import { locked } from './mcp.js';
+import { redact, run, settings } from '../engine/run.js';
 import { hold } from '../modules/style.js';
 import { held, pulse, type Pulse } from './pulse.js';
 
@@ -157,7 +159,7 @@ const library: Library = {
 function current(title: string): Conversation {
 	if (app.current) return app.current;
 	app.conversations.unshift({
-		id: crypto.randomUUID(),
+		id: uuid(),
 		title: title.slice(0, TITLE_LENGTH),
 		updated: Date.now(),
 		entries: [],
@@ -178,11 +180,24 @@ function explain(error: Error): string {
 	return capital(error.message);
 }
 
-// a line typed in the open conversation, after the entry the thread ends on
-export async function send(text: string): Promise<void> {
+// a line typed in the open conversation, after the entry the thread ends on;
+// whether it went through
+export async function send(text: string): Promise<boolean> {
 	const cli = text.startsWith(SLASH);
 	const conversation = current(cli ? '' : text);
-	await enter(conversation, conversation.leaf, text);
+	return enter(conversation, conversation.leaf, text);
+}
+
+// every MCP server that takes no request without the right key asks the user
+// for it, as the line set mcp key <name> does, again while the key is wrong,
+// until the user gives none
+export async function unlock(): Promise<void> {
+	const given = new Set<string>();
+	for (;;) {
+		const name = (await locked(settings)).find((n) => !given.has(n));
+		if (name === undefined) return;
+		if (!(await send(`${SLASH}set mcp key ${name}`))) given.add(name);
+	}
 }
 
 // an entry of the user edited: the line enters as a new version beside it, so
@@ -228,7 +243,7 @@ async function enter(
 	conversation: Conversation,
 	parent: string | null,
 	text: string
-): Promise<void> {
+): Promise<boolean> {
 	if (text.startsWith(SLASH)) {
 		const input = text.slice(SLASH.length);
 		const result = await run(input, 'user', { ...reach(conversation.id), conversation });
@@ -239,12 +254,13 @@ async function enter(
 			ok: result.ok
 		});
 		await save(conversation);
-		return;
+		return result.ok;
 	}
 	// a conversation with no title yet takes it from its first message
 	if (!conversation.title) conversation.title = text.slice(0, TITLE_LENGTH);
 	const user = append(conversation, parent, { role: 'user', text });
 	await answer(conversation, user.id);
+	return true;
 }
 
 // the model answers a message of the user from the path up to it, the very

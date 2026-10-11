@@ -53,10 +53,24 @@ function index(c: Conversation): Map<string, Entry> {
 	return new Map(c.entries.map((e) => [e.id, e]));
 }
 
+// the bits of a UUID that say it is random, version 4 of RFC 9562
+const UUID_VERSION = 0x40;
+const UUID_VARIANT = 0x80;
+
+// a random UUID from getRandomValues, which a page served over plain HTTP has
+// too, unlike randomUUID
+export function uuid(): string {
+	const b = crypto.getRandomValues(new Uint8Array(16));
+	b[6] = (b[6] & 0x0f) | UUID_VERSION;
+	b[8] = (b[8] & 0x3f) | UUID_VARIANT;
+	const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+	return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 // a message entering the conversation after an entry, none for a first one; the
 // leaf moves to it; returns the entry as the conversation holds it
 export function append(c: Conversation, parent: string | null, message: Message): Entry {
-	c.entries.push({ ...message, id: crypto.randomUUID(), parent, time: Date.now() });
+	c.entries.push({ ...message, id: uuid(), parent, time: Date.now() });
 	const entry = c.entries[c.entries.length - 1];
 	c.leaf = entry.id;
 	return entry;

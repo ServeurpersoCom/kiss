@@ -1,4 +1,4 @@
-import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { Client, SdkHttpError, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { ConfigReader, Image, Outcome, Tool } from './types.js';
 import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
@@ -20,13 +20,18 @@ interface Connection {
 
 const connections = new Map<string, Connection>();
 
+// the HTTP status of a server that takes no request without the right key
+const UNAUTHORIZED = 401;
+
 // what the server answered, or did not; a KiSS server also gives the line it
-// writes of itself, server forge 5633ee7 (2026-10-11) on linux
+// writes of itself, server forge 5633ee7 (2026-10-11) on linux; locked, it
+// answered that it takes no request without the right key
 interface Served {
 	server: string;
 	tools?: Tool[];
 	system?: string;
 	error?: string;
+	locked?: boolean;
 }
 
 // the line a KiSS server gives of itself, none from any other server
@@ -141,10 +146,16 @@ export async function served(config: ConfigReader, down: Map<string, string>): P
 				return { server: r.name, tools, ...system(await c.client) };
 			} catch (e) {
 				down.set(signature(r), (e as Error).message);
-				return { server: r.name, error: (e as Error).message };
+				const locked = e instanceof SdkHttpError && e.status === UNAUTHORIZED;
+				return { server: r.name, error: (e as Error).message, ...(locked ? { locked } : {}) };
 			}
 		})
 	);
+}
+
+// the servers that take no request without the right key, by name
+export async function locked(config: ConfigReader): Promise<string[]> {
+	return (await served(config, new Map())).filter((s) => s.locked).map((s) => s.server);
 }
 
 // the tools the model sees: the given ones, then those of every server, each

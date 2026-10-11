@@ -261,6 +261,46 @@ describe('an MCP server', () => {
 		expect([...new Set(paths)].sort()).toEqual(['/app/mcp', '/mcp']);
 	});
 
+	it('asks the user the key it takes no request without, again while the key is wrong', async () => {
+		const open = modern(SHELL);
+		const p = await page(
+			{
+				lock: (req) =>
+					req.headers.get('authorization') === 'Bearer good'
+						? open(req)
+						: Promise.resolve(new Response('the key is missing or wrong', { status: 401 }))
+			},
+			[]
+		);
+		await p.engine.run('set mcp url local http://lock/mcp', 'user');
+		vi.doMock('../src/lib/db.js', () => ({
+			listConversations: async () => [],
+			putConversations: async () => {},
+			deleteConversations: async () => {}
+		}));
+		const state = await import('../src/lib/state.svelte.js');
+		const unlocked = state.unlock();
+		for (const value of ['bad', 'good']) {
+			await vi.waitFor(() => expect(state.app.asks[0]?.kind).toBe('secret'));
+			const ask = state.app.asks[0];
+			if (ask.kind === 'secret') ask.settle(value);
+		}
+		await unlocked;
+		const cli = state.app.current!.entries.map((e) => (e.role === 'cli' ? e.output : ''));
+		expect(cli).toEqual([
+			'! the user typed mcp key local\n+ ! mcp key local is set',
+			'! the user typed mcp key local\n! mcp key local changed'
+		]);
+		expect((await p.engine.run('show tools', 'user')).text).toContain('bash_tool');
+		await p.engine.run('no mcp key local', 'user');
+		const refused = state.unlock();
+		await vi.waitFor(() => expect(state.app.asks[0]?.kind).toBe('secret'));
+		const ask = state.app.asks[0];
+		if (ask.kind === 'secret') ask.settle(null);
+		await refused;
+		expect(state.app.asks).toEqual([]);
+	});
+
 	it('takes no url another server has, a relative one resolved against the page', async () => {
 		serve('http://kiss/app/');
 		const p = await page({ kiss: modern(SHELL) }, []);

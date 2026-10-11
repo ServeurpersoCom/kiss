@@ -30,6 +30,9 @@ vi.mock('../src/lib/db.js', () => ({
 	deleteConversations: async () => {}
 }));
 
+// a random UUID, version 4
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
 const call = (tool: string): Grant => ({ kind: 'call', tool, args: '{}' });
 
 // two conversations, each with a turn the model writes now
@@ -61,6 +64,25 @@ beforeEach(() => {
 	held.length = 0;
 	app.conversations = [];
 	app.asks = [];
+});
+
+describe('a page served over plain HTTP', () => {
+	it('names its conversations and entries without randomUUID, which it lacks', async () => {
+		const random = globalThis.crypto;
+		vi.stubGlobal('crypto', { getRandomValues: (a: Uint8Array) => random.getRandomValues(a) });
+		try {
+			newChat();
+			const sent = send('one');
+			await vi.waitFor(() => expect(held).toHaveLength(1));
+			held[0].end();
+			await sent;
+		} finally {
+			vi.unstubAllGlobals();
+		}
+		const ids = [app.current!.id, ...app.current!.entries.map((e) => e.id)];
+		for (const id of ids) expect(id).toMatch(UUID);
+		expect(new Set(ids).size).toBe(3);
+	});
 });
 
 describe('turns in several conversations', () => {

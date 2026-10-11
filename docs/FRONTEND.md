@@ -171,6 +171,10 @@ the brackets tell it is no value, and a `set` refuses it as one. A line that ask
 written, so the history tells who gave the secret. A secret replaced reads as one line,
 `! mcp key sandbox changed`.
 
+As the page opens, an MCP server that takes no request without its key, a KiSS server off loopback,
+asks the user for it the same way: the page runs `set mcp key <name>`, again while the key is
+wrong, until the user gives none.
+
 ## The CLI
 
 The user types it after a `/`, and the model sends it through its tool.
