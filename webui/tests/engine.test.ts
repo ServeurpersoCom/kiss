@@ -38,9 +38,17 @@ function held() {
 // the user lets every change the model asks for, once
 const grant = async () => ONCE;
 
+// a test runs offline: a request it does not answer itself fails as an
+// unreachable host does, and never leaves the machine
 beforeEach(() => {
 	localStorage.clear();
 	vi.unstubAllGlobals();
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async () => {
+			throw new TypeError('offline');
+		})
+	);
 	vi.doUnmock('../src/lib/config.js');
 });
 

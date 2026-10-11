@@ -97,6 +97,7 @@ export default defineConfig({
 		// a time zone ahead of UTC, so a law tells local time from UTC
 		env: { TZ: 'Europe/Paris' },
 		include: ['tests/*.test.ts'],
+		setupFiles: ['tests/setup.ts'],
 		// the tokens of the page, which the style module reads as its keys
 		css: { include: [/tokens\.css/] }
 	}
