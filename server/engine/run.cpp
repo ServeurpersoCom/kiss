@@ -258,11 +258,14 @@ std::vector<std::string> engine_next(const std::string & head) {
                 break;
             }
         }
-        words_t next = next_words(words);
-        if (words.empty() && !platform) {
-            next.insert(next.end(), std::begin(PLATFORMS), std::end(PLATFORMS));
+        if (words.empty()) {
+            words_t first = platform ? scoped_words() : next_words(words);
+            if (!platform) {
+                first.insert(first.end(), std::begin(PLATFORMS), std::end(PLATFORMS));
+            }
+            return first;
         }
-        return next;
+        return next_words(words);
     } catch (...) {
         // a line still being typed may not read yet: nothing follows it
         return {};

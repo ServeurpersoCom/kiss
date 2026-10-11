@@ -157,3 +157,14 @@ words_t next_words(const words_t & words) {
     std::stable_partition(out.begin(), out.end(), [](const std::string & s) { return s[0] != '<'; });
     return out;
 }
+
+words_t scoped_words() {
+    words_t out;
+    for (const command & c : commands()) {
+        if (c.scoped && std::find(out.begin(), out.end(), c.path[0]) == out.end()) {
+            out.push_back(c.path[0]);
+        }
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}

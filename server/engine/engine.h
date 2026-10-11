@@ -85,8 +85,8 @@ struct engine_result {
 const char * engine_platform();
 
 // the words that may follow the start of a line, as Tab and ? of the console
-// complete it: a platform, the commands, their keys and items, a filter after
-// a pipe; a word in <> names what to type
+// complete it: a platform, the commands, set and no alone after a platform,
+// their keys and items, a filter after a pipe; a word in <> names what to type
 std::vector<std::string> engine_next(const std::string & head);
 
 // the system, as a router names its own

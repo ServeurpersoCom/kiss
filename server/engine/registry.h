@@ -41,3 +41,6 @@ std::pair<const command *, words_t> resolve(const words_t & words);
 // what may follow the words: path words while the path goes on, then the
 // arguments the command proposes
 words_t next_words(const words_t & words);
+
+// the first words of the commands a platform may open, set and no
+words_t scoped_words();
