@@ -34,9 +34,9 @@ function object(text: string): Record<string, unknown> | null {
 
 // runs one call and writes its outcome into it; a call reaches a tool not off
 // as the configuration stands when it goes, whatever the round offered; it
-// takes its arguments as its tool keeps them, and is stored as sent before it reaches its tool, so a
-// stop or a page closed while it runs leaves it stopped, whatever the tool
-// answers
+// takes its arguments as its tool keeps them, and is stored as sent before it
+// reaches its tool, so a stop or a page closed while it runs leaves it
+// stopped, whatever the tool answers
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
 	const tool = tools.find((t) => t.name === c.name && settings.get('tools use', t.name) !== OFF);
 	const args = object(c.args);
@@ -44,13 +44,13 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 		// what no tool reads, or what does not read, cannot be masked, so none
 		// of it is kept
 		c.args = '{}';
-		c.result = tool ? 'the arguments are not a JSON object' : `unknown tool "${c.name}"`;
+		c.result = tool ? 'The arguments are not a JSON object' : `Unknown tool "${c.name}"`;
 		c.ok = false;
 		return;
 	}
 	if (tool.stored) c.args = JSON.stringify(tool.stored(ctx, args));
 	if (!(await allowed(ctx, c))) {
-		c.result = 'the user refused the call';
+		c.result = 'The user refused the call';
 		c.ok = false;
 		return;
 	}
@@ -170,7 +170,7 @@ export async function turn(
 				await call(tools, ctx, c);
 			}
 		}
-		reply.error = `stopped after ${r} tool rounds`;
+		reply.error = `Stopped after ${r} tool rounds`;
 	} finally {
 		reply.rounds = settled(reply.rounds);
 		const spent = stats(p, performance.now());

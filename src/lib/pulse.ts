@@ -1,4 +1,5 @@
 import type { Stats } from './types.js';
+import { capital } from './config.js';
 
 // what a turn does now, as the system spends it: preparing a round, its model
 // and its tools, waiting for the endpoint, streaming its thinking, its text or
@@ -98,9 +99,6 @@ const PHASES: Record<Phase, string> = {
 	calling: 'calling',
 	running: 'running'
 };
-
-// a part of a line, its first letter capital
-const capital = (part: string): string => part[0].toUpperCase() + part.slice(1);
 
 // the line of a turn at a moment, each of its parts capital: its round from the
 // second on, the phase and its clock, and while it streams its tokens and their

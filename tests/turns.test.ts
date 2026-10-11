@@ -4,20 +4,21 @@ import type { Pulse } from '../src/lib/pulse.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 import { app, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 
-// a turn of the model the test holds: it writes, asks and ends when told, and
-// stops with its signal
+// a turn of the model the test holds: it writes, asks, ends or fails when
+// told, and stops with its signal
 interface Held {
 	reply: Assistant;
 	ctx: ToolContext;
 	pulse: Pulse;
 	end(): void;
+	fail(error: Error): void;
 }
 const held = vi.hoisted(() => [] as Held[]);
 
 vi.mock('../src/lib/agent.js', () => ({
 	turn: (_: unknown, reply: Assistant, ctx: ToolContext, signal: AbortSignal, pulse: Pulse) =>
 		new Promise<void>((end, fail) => {
-			held.push({ reply, ctx, pulse, end });
+			held.push({ reply, ctx, pulse, end, fail });
 			signal.addEventListener('abort', () => fail(signal.reason));
 		})
 }));
@@ -80,7 +81,7 @@ describe('turns in several conversations', () => {
 		const { first, second, sent } = await two();
 		stop(first);
 		await vi.waitFor(() => expect(Object.keys(app.replies)).toEqual([second]));
-		expect(last(first).error).toBe('stopped');
+		expect(last(first).error).toBe('Stopped');
 		held[1].end();
 		await sent;
 		expect(last(second).error).toBeUndefined();
@@ -152,5 +153,23 @@ describe('an edit', () => {
 		await vi.waitFor(() => expect(held).toHaveLength(2));
 		held[1].end();
 		await edited;
+	});
+});
+
+describe('the error of a turn', () => {
+	it('opens with a capital, but on a URL written as it is', async () => {
+		for (const [message, shown] of [
+			['chat model is not set -> /show models', 'Chat model is not set -> /show models'],
+			['http://m/v1 does not answer', 'http://m/v1 does not answer']
+		]) {
+			newChat();
+			const sent = send('go');
+			await vi.waitFor(() => expect(held).toHaveLength(1));
+			const id = app.current!.id;
+			held[0].fail(new Error(message));
+			await sent;
+			expect(last(id).error).toBe(shown);
+			held.length = 0;
+		}
 	});
 });

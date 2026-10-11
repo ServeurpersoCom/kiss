@@ -217,7 +217,7 @@ describe('an MCP server', () => {
 		const calls = t.reply.rounds.flatMap((r) => r.calls);
 		expect(calls[0]).toMatchObject({ result: 'ran ls', ok: true });
 		expect(calls[1]).toMatchObject({
-			result: 'shot\n! image image/png, 8 bytes',
+			result: 'shot\nImage image/png, 8 bytes',
 			ok: true,
 			images: [{ mime: 'image/png', data: PNG }]
 		});
@@ -478,7 +478,7 @@ describe('an MCP server', () => {
 		const t = await p.go();
 		await t.done;
 		expect(t.reply.rounds.flatMap((r) => r.calls).map((c) => c.result)).toEqual([
-			'the user refused the call',
+			'The user refused the call',
 			'ran two',
 			'ran three',
 			'ran four'

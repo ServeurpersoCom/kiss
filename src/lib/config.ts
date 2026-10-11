@@ -25,6 +25,11 @@ export const ERROR_PREFIX = '% ';
 export const COMMENT_PREFIX = '!';
 // a line of output that is not a command: a heading, a note, a warning
 export const comment = (text: string): string => `${COMMENT_PREFIX} ${text}`;
+// a line of the page to the user or the model, its first letter capital, but
+// for one that opens on a URL, written as it is
+const URL_START = /^[a-z][a-z0-9+.-]*:\/\//;
+export const capital = (text: string): string =>
+	URL_START.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1);
 // a line of the composer opening with it runs on the CLI
 export const SLASH = '/';
 // the name of the command line: the head of a command, and what reads in place

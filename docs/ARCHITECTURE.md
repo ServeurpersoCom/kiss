@@ -139,8 +139,11 @@ listing reads goes in notes: the saves with their dates, the conversations by id
 was sent in marked `*`, the version, the words that may follow a line that stops short, and `count`
 in the words of IOS, `! number of lines which match regexp = 12`; `show css` alone writes the rules
 of the page as they are, under its notes by component.
-The CLI writes its words as they are, in lower case, keys and values verbatim, and the page writes
-its prose with a capital.
+
+Two rules hold every word KiSS writes. The CLI is the same with itself: its words as they are, in
+lower case, keys and values verbatim. Everything else the page tells the user or the model opens
+with a capital, the result of a call KiSS writes, the error of a turn, the status line, unless it
+opens on a URL, written as it is; what a server answers goes as it came.
 
 | Module      | Keys                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------ |
@@ -327,7 +330,7 @@ whatever it is. A round keeps what its protocol needs back and nothing else rebu
 thinking block, an encrypted reasoning item, and sends it back to that protocol only. The images a
 call answers with go to the model with its result, every round, in the form its protocol takes,
 when the list of the endpoint says the model sees them or says nothing; a model that does not
-reads the line its result keeps of each, `! image image/png, 4096 bytes`.
+reads the line its result keeps of each, `Image image/png, 4096 bytes`.
 
 - `chat`, by default: the chat completions of OpenAI, the open standard of llama.cpp, vLLM and
   Hugging Face, the key as a bearer token. A tool message holds text only, so the images of a round

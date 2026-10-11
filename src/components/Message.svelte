@@ -263,9 +263,6 @@
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
-	.error::first-letter {
-		text-transform: uppercase;
-	}
 	/* the icons under a message, shown while the message is hovered or holds
 	   the focus, their place kept; always shown under the last message, under
 	   one being edited, and where nothing hovers */

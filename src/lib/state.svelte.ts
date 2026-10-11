@@ -1,6 +1,6 @@
 import type { Assistant, Conversation, Grant, Library, Verdict } from './types.js';
 import { REFUSE } from './types.js';
-import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH } from './config.js';
+import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH, capital } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
 import { turn } from './agent.js';
 import {
@@ -169,11 +169,13 @@ function current(title: string): Conversation {
 	return conversation;
 }
 
-// what went wrong, with the command that fixes it when the endpoint is the cause
+// what went wrong, with the command that fixes it when the endpoint is the
+// cause, as the page tells it, its first letter capital
 function explain(error: Error): string {
-	if (error.name === 'AbortError') return 'stopped';
-	if (error instanceof EndpointError && error.fix) return `${error.message} -> ${error.fix}`;
-	return error.message;
+	if (error.name === 'AbortError') return 'Stopped';
+	if (error instanceof EndpointError && error.fix)
+		return capital(`${error.message} -> ${error.fix}`);
+	return capital(error.message);
 }
 
 // a line typed in the open conversation, after the entry the thread ends on

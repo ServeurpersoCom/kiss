@@ -26,7 +26,7 @@ export function source(m: Message): string {
 }
 
 // the outcome of a call stopped once sent: its tool may have acted
-export const STOPPED = 'stopped before it answered: the tool may have acted';
+export const STOPPED = 'Stopped before it answered: the tool may have acted';
 
 // what of a turn holds once it stops or leaves the page: the calls that ran,
 // those sent as stopped, with the arguments they went with, and the rounds

@@ -174,7 +174,7 @@ describe('a turn', () => {
 		expect(p.bodies[0]).not.toHaveProperty('temperature');
 		expect(p.bodies[1]).toMatchObject({ temperature: 0.3 });
 		expect(p.bodies).toHaveLength(2);
-		expect(p.reply.error).toBe('stopped after 2 tool rounds');
+		expect(p.reply.error).toBe('Stopped after 2 tool rounds');
 	});
 
 	it('hides a tool turned off from the next round, and refuses its calls', async () => {
@@ -188,7 +188,7 @@ describe('a turn', () => {
 		expect(names(0)).toContain('config');
 		expect(names(1)).not.toContain('config');
 		expect(p.reply.rounds[1].calls[0]).toMatchObject({
-			result: 'unknown tool "config"',
+			result: 'Unknown tool "config"',
 			ok: false
 		});
 	});
@@ -198,7 +198,7 @@ describe('a turn', () => {
 		await p.engine.run('set tools rounds 1', 'user');
 		await p.go();
 		expect(p.bodies).toHaveLength(1);
-		expect(p.reply.error).toBe('stopped after 1 tool rounds');
+		expect(p.reply.error).toBe('Stopped after 1 tool rounds');
 	});
 
 	it('sends every round as one assistant message and its results', async () => {
@@ -584,7 +584,7 @@ describe('the images of a call', () => {
 								id: 'c1',
 								name: 'shot',
 								args: '{}',
-								result: '! image image/png, 3 bytes',
+								result: 'Image image/png, 3 bytes',
 								ok: true,
 								images: [{ mime: 'image/png', data: 'AAAA' }]
 							}
@@ -605,7 +605,7 @@ describe('the images of a call', () => {
 		expect(tail({ architecture: { input_modalities: ['text', 'image'] } })[1]).toEqual(shown);
 		expect(tail({ architecture: { input_modalities: ['text'] } })[1]).toMatchObject({
 			role: 'tool',
-			content: '! image image/png, 3 bytes'
+			content: 'Image image/png, 3 bytes'
 		});
 
 		const result = (info?: Record<string, unknown>) =>
@@ -615,18 +615,18 @@ describe('the images of a call', () => {
 				}
 			).messages[2].content[0].content;
 		expect(result()).toEqual([
-			{ type: 'text', text: '! image image/png, 3 bytes' },
+			{ type: 'text', text: 'Image image/png, 3 bytes' },
 			{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
 		]);
 		expect(result({ capabilities: { image_input: { supported: false } } })).toBe(
-			'! image image/png, 3 bytes'
+			'Image image/png, 3 bytes'
 		);
 
 		const input = (
 			responses.body(request()) as unknown as { input: { type?: string; output?: unknown }[] }
 		).input;
 		expect(input.find((i) => i.type === 'function_call_output')?.output).toEqual([
-			{ type: 'input_text', text: '! image image/png, 3 bytes' },
+			{ type: 'input_text', text: 'Image image/png, 3 bytes' },
 			{ type: 'input_image', image_url: URL }
 		]);
 	});

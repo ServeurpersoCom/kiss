@@ -1,7 +1,7 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { ConfigReader, Image, Outcome, Tool } from './types.js';
-import { MCP_CONNECT_TIMEOUT_MS, NAME, comment } from './config.js';
+import { MCP_CONNECT_TIMEOUT_MS, NAME, capital } from './config.js';
 import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
 
@@ -52,7 +52,8 @@ function bytes(base64: string): number {
 }
 
 // the content blocks as the model reads them: text as is, every other block a
-// line naming it; images also go to the user, and to the model that sees them
+// line naming it; images also go to the user, and to the model that sees them,
+// their line telling the one that does not
 function outcome(result: CallToolResult): Outcome {
 	const lines: string[] = [];
 	const images: Image[] = [];
@@ -60,8 +61,8 @@ function outcome(result: CallToolResult): Outcome {
 		if (block.type === 'text') lines.push(block.text);
 		else if (block.type === 'image') {
 			images.push({ mime: block.mimeType, data: block.data });
-			lines.push(comment(`image ${block.mimeType}, ${bytes(block.data)} bytes`));
-		} else lines.push(comment(`${block.type} content`));
+			lines.push(`Image ${block.mimeType}, ${bytes(block.data)} bytes`);
+		} else lines.push(capital(`${block.type} content`));
 	}
 	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
 }
