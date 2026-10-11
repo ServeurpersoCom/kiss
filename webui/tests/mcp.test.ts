@@ -261,6 +261,16 @@ describe('an MCP server', () => {
 		expect([...new Set(paths)].sort()).toEqual(['/app/mcp', '/mcp']);
 	});
 
+	it('takes no url another server has, a relative one resolved against the page', async () => {
+		serve('http://kiss/app/');
+		const p = await page({ kiss: modern(SHELL) }, []);
+		await p.engine.run('set mcp url local mcp', 'user');
+		expect((await p.engine.run('set mcp url pod http://kiss/app/mcp', 'user')).text).toContain(
+			'mcp pod has the url of mcp local'
+		);
+		expect((await p.engine.run('set mcp url pod /mcp', 'user')).ok).toBe(true);
+	});
+
 	it('answers a call with its text, its images and its error flag', async () => {
 		const p = await page({ a: legacy(SHELL) }, [
 			stream([call('bash_tool', { description: 'list', text: 'ls' })]),

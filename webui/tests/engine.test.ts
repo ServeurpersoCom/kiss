@@ -242,19 +242,19 @@ describe('a secret', () => {
 describe('a filter', () => {
 	it('takes the rest of the line as its pattern, as IOS does, and the output comes whole', async () => {
 		const k = await page();
-		const urls = Array.from({ length: 250 }, (_, i) => `set endpoints url e${i} http://e/v1`);
+		const urls = Array.from({ length: 250 }, (_, i) => `set endpoints url e${i} http://e/v${i}`);
 		await k.run(urls.join('\n'), 'user');
 		const all = (await k.run('show running-config', 'llm')).text.split('\n');
 		expect(all).toHaveLength(250);
 		const run = async (filter: string) =>
 			(await k.run(`show running-config | ${filter}`, 'llm')).text;
 		expect(await run('include url e(7|42) http')).toBe(
-			'set endpoints url e42 http://e/v1\nset endpoints url e7 http://e/v1'
+			'set endpoints url e42 http://e/v42\nset endpoints url e7 http://e/v7'
 		);
-		expect(await run('inc url e7 | x')).toBe('set endpoints url e7 http://e/v1');
+		expect(await run('inc url e7 | x')).toBe('set endpoints url e7 http://e/v7');
 		expect(await run('count http')).toBe('! number of lines which match regexp = 250');
 		expect(await run('cou url e1')).toBe('! number of lines which match regexp = 111');
-		expect(await run('begin url e99 ')).toBe('set endpoints url e99 http://e/v1');
+		expect(await run('begin url e99 ')).toBe('set endpoints url e99 http://e/v99');
 		expect(await run('include url E99')).toBe('! no line matches');
 		expect(await run('exclude url e[0-9]+ ')).toBe('! no line matches');
 		expect(await run('include (')).toBe('% "(" is not a pattern');
@@ -380,6 +380,9 @@ describe('the headers of a server', () => {
 		);
 		expect((await k.run("set mcp headers m 'x: 1'\nset mcp url m http://m/mcp", 'user')).ok).toBe(
 			true
+		);
+		expect((await k.run('set endpoints url c http://a/v1', 'user')).text).toContain(
+			'endpoints c has the url of endpoints a'
 		);
 		const asked = user(REFUSE);
 		expect((await k.run("set endpoints headers b 'x: 2'", 'llm', asked)).ok).toBe(true);

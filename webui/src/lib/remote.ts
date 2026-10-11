@@ -43,12 +43,18 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 		}));
 }
 
-// the rules of such a module: every item has a url, and its headers are
-// Name: value pairs
+// the rules of such a module: every item has a url of its own, a relative one
+// resolved against the page, since the same server reached twice serves the
+// same names twice, and its headers are Name: value pairs
 export function rules(config: ConfigReader, module: string): string | null {
 	const names = config.names(module).filter((n) => !config.get(`${module} url`, n));
 	if (names.length) return `${module} ${names.join(' ')} has no url`;
+	const owner = new Map<string, string>();
 	for (const name of config.names(module)) {
+		const url = new URL(String(config.get(`${module} url`, name)), location.href).href;
+		const first = owner.get(url);
+		if (first) return `${module} ${name} has the url of ${module} ${first}`;
+		owner.set(url, name);
 		const text = String(config.get(`${module} headers`, name) ?? '');
 		const bad = pairs(text).find(([n, v]) => !n || !v);
 		if (bad) return `${module} headers ${name}: "${bad[1] || bad[0]}" is not Name: value`;
