@@ -181,17 +181,6 @@ export async function pick(
 	return { endpoint, model: value.slice(cut + MODEL_SEPARATOR.length) };
 }
 
-// the milliseconds before a reply is asked again: as long as Retry-After says,
-// in seconds or as a date, when the endpoint lets the page read it and asks no
-// more than the retries and their pauses take in all; else the pause
-function delay(res: Response, endpoint: Endpoint): number {
-	const pause = endpoint.pause * 1000;
-	const after = res.headers.get('retry-after') ?? '';
-	const seconds = Number(after);
-	const asked = after && !Number.isNaN(seconds) ? seconds * 1000 : Date.parse(after) - Date.now();
-	return asked >= 0 && asked <= endpoint.retries * pause ? asked : pause;
-}
-
 // the time given, or less when the signal aborts
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
 	return new Promise((resolve, reject) => {
@@ -220,7 +209,7 @@ async function opened(
 		if (!(answer instanceof Response)) return answer;
 		await answer.body?.cancel();
 		retrying(answer.status, attempt, endpoint.retries);
-		await sleep(delay(answer, endpoint), signal);
+		await sleep(endpoint.pause * 1000, signal);
 	}
 }
 

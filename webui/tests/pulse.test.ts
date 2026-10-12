@@ -35,9 +35,9 @@ describe('the line of a turn', () => {
 	it('asks the endpoint again, its clock running since it first failed', () => {
 		const p = pulse(0);
 		mark(p, 'waiting', 'hf', 10);
-		retry(p, 'hf', 429, 1, 10, 200);
-		retry(p, 'hf', 503, 2, 10, 2300);
-		expect(line(p, 3400)).toBe('Retrying hf - Error 503 - Attempt 2/10 - 3,200 ms');
+		retry(p, 'hf', 429, 1, 1800, 200);
+		retry(p, 'hf', 429, 2, 1800, 2300);
+		expect(line(p, 3400)).toBe('Retrying hf - Error 429 - Attempt 2/1800 - 3,200 ms');
 	});
 
 	it('restarts its clock only when the phase or its name changes', () => {

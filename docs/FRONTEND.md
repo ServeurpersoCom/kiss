@@ -48,9 +48,8 @@ modules
     key <name> <secret>
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        120
-    retries <name> <count>          10, a reply asked again on 408, 429, 5xx, 529
-    pause <name> <seconds>          2, between two, or Retry-After when it asks no more than
-                                    retries times pause
+    retries <name> <count>          1800, a reply asked again on 408, 429, 5xx, 529
+    pause <name> <seconds>          2, between two
   mcp
     url <name> <url>                guarded
     key <name> <secret>
@@ -70,7 +69,7 @@ modules
     <token> <value>                 show style lists them; bg, fg, accent set a theme
     sheet <name> <css>
   tools                             show tools lists them, by who serves them
-    rounds <count>                  100
+    rounds <count>                  1000
     use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
     preview <tool> <argument>       display preview, the argument of this tool over it
 
@@ -465,14 +464,20 @@ The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `pres
 reads it. A reply streams until it ends or the turn is stopped. Several conversations answer at
 once, each turn in its own; a server running one model at a time loads them in turn.
 
-One line under the turn says what the system does now, each of its parts capital, redrawn at every
-frame of the screen, in milliseconds: `Preparing - 12 ms` while a round reads its model and gathers
-its tools, `Waiting for local - 842 ms` until the first chunk, thinking or writing with the tokens
-and their rate, `Writing - 3,518 ms - 177 tokens - 51.3 t/s`, calling a tool while its call streams,
-`Running config - 47 ms` while it runs, after `Round 2 - ` from the second round on. It hides while
-a question of the turn stands, as the time the user takes is none of the system. A request asks the
-endpoint to count its tokens, `stream_options` of OpenAI, one per chunk counting until it does. Once
-the turn ends, what it spent stays with its answer, beside its time:
+One line under the turn says what the system does now, redrawn at every frame of the screen:
+
+- `Preparing - 12 ms` while a round reads its model and gathers its tools
+- `Waiting for local - 842 ms` until the first chunk
+- `Retrying hf - Error 429 - Attempt 2/1800 - 3,200 ms` while a busy endpoint is asked again
+- `Thinking - 1,040 ms - 52 tokens - 50.0 t/s` while the model reasons
+- `Writing - 3,518 ms - 177 tokens - 51.3 t/s` while it answers
+- `Calling config - 312 ms` while a call streams
+- `Running config - 47 ms` while the tool runs
+- `Round 2 - Running config - 47 ms` from the second round on
+
+It hides while a question of the turn stands, as the time the user takes is none of the system. A
+request asks the endpoint to count its tokens, `stream_options` of OpenAI, one per chunk counting
+until it does. Once the turn ends, what it spent stays with its answer, beside its time:
 `1,204 tokens - 51.3 t/s - 23,512 ms`, the rate over the generation alone, the last figure the whole
 time of the system.
 
@@ -499,7 +504,7 @@ set display preview description          ! the argument every folded call shows,
 set tools preview bash_tool command      ! the one of a tool over it; a call without it shows
                                          ! its first argument
 no tools bash_tool                       ! every setting of that tool, gone
-set tools rounds 200                     ! the tool rounds a turn takes at most, 100 by default
+set tools rounds 2000                    ! the tool rounds a turn takes at most, 1000 by default
 set mcp timeout sandbox 600              ! the seconds a call may take, 310 by default
 ```
 

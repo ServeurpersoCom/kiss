@@ -320,22 +320,6 @@ describe('an MCP server', () => {
 		await expect(u.done).rejects.toThrow('answers 429 busy');
 	});
 
-	it('waits as Retry-After asks while the retries and their pauses hold it, else the pause', async () => {
-		const after = (seconds: string) =>
-			new Response('', { status: 429, headers: { 'retry-after': seconds } });
-		const p = await page({}, [after('0'), stream([{ content: 'ok' }])]);
-		await p.engine.run('set endpoints pause m 60', 'user');
-		const t = await p.go();
-		await t.done;
-		expect(t.reply.rounds[0].text).toBe('ok');
-		await p.engine.run('set endpoints pause m 0', 'user');
-		const replies = [after('3600'), stream([{ content: 'again' }])];
-		vi.stubGlobal('fetch', async () => replies.shift()!);
-		const u = await p.go();
-		await u.done;
-		expect(u.reply.rounds[0].text).toBe('again');
-	});
-
 	it('takes no url another server has, a relative one resolved against the page', async () => {
 		serve('http://kiss/app/');
 		const p = await page({ kiss: modern(SHELL) }, []);
