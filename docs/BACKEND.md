@@ -173,7 +173,8 @@ A value resolves through layers, the first that holds it winning:
 
 One `server.conf` serves every machine: it is copied unchanged to `forge`, `studio` and `nomad`.
 What differs from one machine to another is found on each, never written per OS: a shell whose
-program is not found on the PATH stays out, with one line in the log. The default configuration
+program is not found on the PATH stays out, the log and `show shells` saying which, `! shell zsh
+left out, zsh is found nowhere`, `! shell bash runs /usr/bin/bash`. The default configuration
 therefore lists every candidate shell and each machine serves the ones it has.
 
 ### Modules

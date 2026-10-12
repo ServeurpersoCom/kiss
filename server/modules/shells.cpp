@@ -1,9 +1,10 @@
 // shells.cpp: the shells module: a collection of shells, each a command line
 // that runs a script read on stdin, with the seconds a run may take and the
 // bytes of output it returns; a shell whose program is found nowhere stays
-// out, the log says so
+// out, as the log and show shells say
 
 #include "engine/engine.h"
+#include "engine/text.h"
 #include "job.h"
 #include "log.h"
 
@@ -34,17 +35,21 @@ static std::string validate(const engine_reader & config) {
     return "";
 }
 
+// what a shell does on this machine: the program it runs, or why it stays out
+static std::string found(const engine_reader & config, const std::string & shell) {
+    const std::string command = config.get("shells command", shell).value_or("");
+    const std::string program = job_find(command);
+    return program.empty() ? "left out, " + job_argv(command).front() + " is found nowhere" : "runs " + program;
+}
+
 static void apply(const engine_reader & config) {
     for (const std::string & shell : config.names("shells")) {
-        const std::string command = config.get("shells command", shell).value_or("");
-        const std::string program = job_find(command);
-        if (program.empty()) {
-            log_info("Shells", "Shell %s left out, %s is found nowhere", shell.c_str(),
-                     job_argv(command).front().c_str());
-        } else {
-            log_info("Shells", "Shell %s runs %s", shell.c_str(), program.c_str());
-        }
+        log_info("Shells", "Shell %s %s", shell.c_str(), found(config, shell).c_str());
     }
+}
+
+static words_t notes(const engine_reader & config, const std::string & shell) {
+    return { comment("shell " + shell + " " + found(config, shell)) };
 }
 
 static engine_module make_shells() {
@@ -72,6 +77,7 @@ static engine_module make_shells() {
     m.keys.push_back(output);
     m.validate = validate;
     m.apply    = apply;
+    m.notes    = notes;
     return m;
 }
 

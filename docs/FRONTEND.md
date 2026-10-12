@@ -404,8 +404,10 @@ heads of the cards and of the commands, the answers and the error of a turn read
 page.
 
 ```
-set tools use bash_tool consent          ! each call asks, until always
-set mcp key sandbox                      ! no value: a masked field asks for it
+! each call asks, until always
+set tools use bash_tool consent
+! no value: a masked field asks for it
+set mcp key sandbox
 ```
 
 ## A turn
@@ -467,12 +469,15 @@ server sends the headers it is given besides, `Name: value` pairs split by `;`, 
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 
 ```
-show models                              ! every model, by endpoint, with its settings
+! every model, by endpoint, with its settings
+show models
 set chat model prod/qwen3:8b
 set models temperature prod/qwen3:8b 0.6
 set models reasoning_effort prod/qwen3:8b high
-no models prod/qwen3:8b                  ! every setting of that model, gone
-set endpoints timeout prod 300           ! the seconds to start answering, 120 by default
+! every setting of that model, gone
+no models prod/qwen3:8b
+! the seconds to start answering, 120 by default
+set endpoints timeout prod 300
 ```
 
 The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `presence_penalty`,
@@ -527,16 +532,24 @@ model, and to let a route take a url the model gives it.
 
 ```
 set mcp url sandbox https://example.com/mcp
-set mcp key sandbox                      ! a masked field asks for the token
-show tools                               ! every tool, by who serves it
-show tools | include bash                ! the settings of the tools named bash
-set tools use str_replace off            ! the model never sees it
-set display preview description          ! the argument every folded call shows, the default
-set tools preview bash_tool command      ! the one of a tool over it; a call without it shows
-                                         ! its first argument
-no tools bash_tool                       ! every setting of that tool, gone
-set tools rounds 2000                    ! the tool rounds a turn takes at most, 1000 by default
-set mcp timeout sandbox 600              ! the seconds a call may take, 310 by default
+! a masked field asks for the token
+set mcp key sandbox
+! every tool, by who serves it
+show tools
+! the settings of the tools named bash
+show tools | include bash
+! the model never sees it
+set tools use str_replace off
+! the argument every folded call shows, the default
+set display preview description
+! the one of a tool over it; a call without it shows its first argument
+set tools preview bash_tool command
+! every setting of that tool, gone
+no tools bash_tool
+! the tool rounds a turn takes at most, 1000 by default
+set tools rounds 2000
+! the seconds a call may take, 310 by default
+set mcp timeout sandbox 600
 ```
 
 The key goes as `Authorization: Bearer <token>`. A browser cannot set that header on a WebSocket,
@@ -601,14 +614,21 @@ keep an export out of the context, edit the message that asked for it.
 
 ```
 show conversations
-export                                   ! this conversation
-export 3f2a                              ! another, by a prefix of its id
-export running-config                    ! a configuration, secrets included
-export conversations                     ! every conversation
+! this conversation
+export
+! another, by a prefix of its id
+export 3f2a
+! a configuration, secrets included
+export running-config
+! every conversation
+export conversations
 import
-erase 3f2a                               ! once the user confirms it
-erase conversations                      ! every one but the pinned ones
-erase work                               ! a save
+! once the user confirms it
+erase 3f2a
+! every one but the pinned ones
+erase conversations
+! a save
+erase work
 ```
 
 One file format holds one conversation or many, marked `kiss`, every branch, every id and every pin
@@ -658,14 +678,19 @@ again once it reaches that width, from the left of the page too; the browser kee
 and whether it is closed.
 
 ```
-show style                              ! the tokens and their defaults
+! the tokens and their defaults
+show style
 set style accent 'oklch(0.6 0.2 250)'
 set style bg #faf9f5
-set style fg #141413                    ! with bg, a light theme
+! with bg, a light theme
+set style fg #141413
 set style width 64rem
-no style bg                             ! back to the background of the page
-show css | include composer             ! the rules of the composer
-set style sheet input 'form.svelte-composer { max-width: 64rem }'  ! the composer alone
+! back to the background of the page
+no style bg
+! the rules of the composer
+show css | include composer
+! the composer alone
+set style sheet input 'form.svelte-composer { max-width: 64rem }'
 ```
 
 ## Site defaults
