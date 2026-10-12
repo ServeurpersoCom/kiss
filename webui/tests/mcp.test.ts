@@ -14,10 +14,15 @@ interface Body {
 	tools: { function: { name: string } }[];
 }
 
+// what a call asked again carries: the answers of the user
+interface Again {
+	inputResponses?: Record<string, unknown>;
+}
+
 // a tool as mcp.js declares one: a raw JSON schema with a description argument
 interface Declared {
 	name: string;
-	run: (args: Record<string, unknown>, signal: AbortSignal) => Promise<object>;
+	run: (args: Record<string, unknown>, signal: AbortSignal, again: Again) => Promise<object>;
 }
 
 const PNG = 'iVBORw0KGgo=';
@@ -55,7 +60,8 @@ function server(tools: Declared[], info = FIXTURE): Server {
 	}));
 	s.setRequestHandler('tools/call', (req, ctx) => {
 		const tool = tools.find((t) => t.name === req.params.name)!;
-		return tool.run(req.params.arguments ?? {}, ctx.mcpReq.signal) as never;
+		const again = { inputResponses: ctx.mcpReq.inputResponses };
+		return tool.run(req.params.arguments ?? {}, ctx.mcpReq.signal, again) as never;
 	});
 	return s;
 }
@@ -79,6 +85,24 @@ function modern(tools: Declared[], info = FIXTURE) {
 
 const text = (t: string) => async () => ({ content: [{ type: 'text', text: t }] });
 
+// a call that asks the user for a secret before it is asked again with it
+const asking = () => ({
+	resultType: 'input_required',
+	inputRequests: {
+		secrets: {
+			method: 'elicitation/create',
+			params: {
+				mode: 'form',
+				message: 'Type it',
+				requestedSchema: {
+					type: 'object',
+					properties: { token: { type: 'string' } },
+					required: ['token']
+				}
+			}
+		}
+	}
+});
 const SHELL: Declared[] = [
 	{
 		name: 'bash_tool',
@@ -164,6 +188,7 @@ async function page(
 			cli: (l) => engine.run(l, 'llm', { signal: stop.signal, grant }),
 			redact: engine.redact,
 			grant,
+			secret: async (key, note) => (keys.push(key), notes.push(note), secrets.shift() ?? null),
 			keep: async () => void (kept.rounds = settled(reply.rounds))
 		};
 		const user: Message[] = [{ role: 'user', text: 'go' }];
@@ -173,7 +198,13 @@ async function page(
 	// what the model asked the user, answered by the verdicts in order, once past them
 	const asked: Grant[] = [];
 	const verdicts: Verdict[] = [];
-	return { engine, bodies, auth, methods, asked, verdicts, go };
+	// the secrets the user types, in order, none once past them, and the keys
+	// they were asked for
+	const secrets: string[] = [];
+	const keys: string[] = [];
+	// the notes of the servers that asked
+	const notes: string[] = [];
+	return { engine, bodies, auth, methods, asked, verdicts, secrets, keys, notes, go };
 }
 
 // the address the page is served at, against which a relative URL resolves
@@ -328,6 +359,64 @@ describe('an MCP server', () => {
 			'mcp pod has the url of mcp local'
 		);
 		expect((await p.engine.run('set mcp url pod /mcp', 'user')).ok).toBe(true);
+	});
+
+	it('asks the user for the secrets a server wants, then asks the call again with them', async () => {
+		// the answers each call carried, none on a first call
+		const answers: unknown[] = [];
+		const ASK: Declared = {
+			name: 'ask',
+			run: async (_args, _signal, again) => {
+				answers.push(again.inputResponses ?? null);
+				if (!again.inputResponses) return asking();
+				const { action, content } = again.inputResponses.secrets as {
+					action: string;
+					content?: { token: string };
+				};
+				return { content: [{ type: 'text', text: content?.token ?? action }], isError: !content };
+			}
+		};
+		const p = await page({ a: modern([ASK]) }, [
+			stream([call('ask', { description: 'key' })]),
+			stream([call('ask', { description: 'key' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		p.secrets.push('s3cret');
+		const t = await p.go();
+		await t.done;
+		expect(p.keys).toEqual(['token of a', 'token of a']);
+		expect(p.notes).toEqual(['Type it', 'Type it']);
+		expect(answers).toEqual([
+			null,
+			{ secrets: { action: 'accept', content: { token: 's3cret' } } },
+			null,
+			{ secrets: { action: 'cancel' } }
+		]);
+		const calls = t.reply.rounds.flatMap((r) => r.calls);
+		expect(calls[0]).toMatchObject({ result: 's3cret', ok: true });
+		expect(calls[1]).toMatchObject({ result: 'cancel', ok: false });
+	});
+
+	it('keeps a secret typed for a server out of the model and the conversation', async () => {
+		const SECRET = 's3cret-kept';
+		const KEEP: Declared = {
+			name: 'keep',
+			run: async (_args, _signal, again) =>
+				again.inputResponses ? { content: [{ type: 'text', text: 'kept' }] } : asking()
+		};
+		const p = await page({ a: modern([KEEP]) }, [
+			stream([call('keep', { description: 'key' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		p.secrets.push(SECRET);
+		const t = await p.go();
+		await t.done;
+		expect(t.reply.rounds.flatMap((r) => r.calls)[0]).toMatchObject({ result: 'kept', ok: true });
+		expect(JSON.stringify(p.bodies)).not.toContain(SECRET);
+		expect(JSON.stringify(t.reply)).not.toContain(SECRET);
+		expect(JSON.stringify(t.kept)).not.toContain(SECRET);
 	});
 
 	it('answers a call with its text, its images and its error flag', async () => {

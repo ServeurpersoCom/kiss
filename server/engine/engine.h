@@ -3,10 +3,9 @@
 //
 // A key is two fixed words, a module then a key; a key of a collection takes
 // the item name next, and the value comes last. Each word may be any prefix
-// that names one word only, the way Cisco IOS reads a line. A line may open
-// with a platform, linux, macos or windows: it then holds on that platform
-// only and wins over the same line without one, so one server.conf serves
-// every machine.
+// that names one word only, the way Cisco IOS reads a line. One server.conf
+// serves every machine: what differs is found on each, a shell its program
+// lacks staying out.
 //
 // A batch compiles every line before the first one runs, runs them on a draft
 // of the running configuration, checks the rules of every module on the
@@ -14,6 +13,7 @@
 // whose keys changed. A failure at any step applies nothing.
 
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -76,17 +76,31 @@ bool engine_register(engine_module (*make)());
 
 #define ENGINE_MODULE(make) static const bool engine_registered_##make = engine_register(make)
 
-struct engine_result {
-    bool        ok;
-    std::string text;
+// a secret the user is to type: its stored key, and the url of its item, where
+// it goes, when its module has one
+struct engine_ask {
+    std::string key;
+    std::string to;
 };
+
+// what a batch answers: whether it holds and what it printed; a batch an MCP
+// client sends with a set line of a secret and no value applies nothing and
+// names in asks the secrets the user is to type, the text left empty
+struct engine_result {
+    bool                    ok;
+    std::string             text;
+    std::vector<engine_ask> asks;
+};
+
+// the values the user typed, by stored key: mcp key deepwiki
+using engine_typed = std::map<std::string, std::string>;
 
 // the platform this server runs on: linux, macos or windows
 const char * engine_platform();
 
 // the words that may follow the start of a line, as Tab and ? of the console
-// complete it: a platform, the commands, set and no alone after a platform,
-// their keys and items, a filter after a pipe; a word in <> names what to type
+// complete it: the commands, their keys and items, a filter after a pipe; a
+// word in <> names what to type
 std::vector<std::string> engine_next(const std::string & head);
 
 // the system, as a router names its own
@@ -97,8 +111,8 @@ constexpr const char * ENGINE_SYSTEM = "KiSS Operating System";
 // the name left out when empty
 std::string engine_component(const std::string & name, const std::string & version);
 
-// the defaults the binary embeds: set lines, platform prefixes allowed, below
-// every other layer; returns what it refuses, empty when it takes them all
+// the defaults the binary embeds: set lines, below every other layer; returns
+// what it refuses, empty when it takes them all
 std::string engine_defaults(const std::string & text);
 
 // the startup-config: the file server.conf runs as a batch of the
@@ -106,8 +120,9 @@ std::string engine_defaults(const std::string & text);
 // writes it back
 engine_result engine_start(const std::string & path, const std::string & version);
 
-// one batch at a time, whoever sends it
-engine_result engine_run(const std::string & text, engine_role role);
+// one batch at a time, whoever sends it; typed fills the set lines of secrets
+// written without their value
+engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed = {});
 
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");

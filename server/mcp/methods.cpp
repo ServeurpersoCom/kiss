@@ -11,7 +11,11 @@
 #include <chrono>
 #include <cstdlib>
 
-static const char * const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo";
+static const char * const SERVER_INFO_META         = "io.modelcontextprotocol/serverInfo";
+static const char * const CLIENT_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities";
+
+// the one input a call asks for: a form of the secrets the user is to type
+static const char * const SECRETS_FORM = "secrets";
 
 // a result the server does not keep: the tools follow the configuration, so a
 // client asks again rather than caching
@@ -93,8 +97,33 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
     });
 }
 
+// a call that asks the user for secrets: an input_required result whose one
+// form has a text field per stored key, the call coming again with them
+static std::string asked_json(yyjson_val * id, const tool_result & r) {
+    return jsonrpc_input_required_json(id, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+        yyjson_mut_val * form =
+            yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "inputRequests"), SECRETS_FORM);
+        yyjson_mut_obj_add_str(doc, form, "method", "elicitation/create");
+        yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc, form, "params");
+        yyjson_mut_obj_add_str(doc, params, "mode", "form");
+        yyjson_mut_obj_add_strncpy(doc, params, "message", r.text.c_str(), r.text.size());
+        yyjson_mut_val * schema = yyjson_mut_obj_add_obj(doc, params, "requestedSchema");
+        yyjson_mut_obj_add_str(doc, schema, "type", "object");
+        yyjson_mut_val * properties = yyjson_mut_obj_add_obj(doc, schema, "properties");
+        yyjson_mut_val * required   = yyjson_mut_obj_add_arr(doc, schema, "required");
+        for (const std::string & key : r.asks) {
+            yyjson_mut_val * field = yyjson_mut_obj_add_obj(doc, properties, key.c_str());
+            yyjson_mut_obj_add_str(doc, field, "type", "string");
+            yyjson_mut_arr_add_strcpy(doc, required, key.c_str());
+        }
+    });
+}
+
 // the result of a tool call
 static std::string call_json(yyjson_val * id, bool modern, const tool_result & r) {
+    if (!r.asks.empty()) {
+        return asked_json(id, r);
+    }
     return jsonrpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
         if (!r.text.empty() || r.image.empty()) {
@@ -171,10 +200,41 @@ struct call_log {
     void gone() const { log_info("MCP", "Call %s: cancelled in %lld ms, the client is gone", tool.c_str(), ms()); }
 };
 
+// whether a client of the 2026-07-28 era shows a form to the user, as the
+// capabilities of its request declare: elicitation with form, or with no mode
+static bool takes_forms(yyjson_val * params) {
+    yyjson_val * caps        = yyjson_obj_get(yyjson_obj_get(params, "_meta"), CLIENT_CAPABILITIES_META);
+    yyjson_val * elicitation = yyjson_obj_get(caps, "elicitation");
+    return elicitation && (yyjson_obj_get(elicitation, "form") || !yyjson_obj_get(elicitation, "url"));
+}
+
+// the secrets the user typed into the form of an earlier call, when the call
+// comes again with its answer; false when they gave none
+static bool answered(yyjson_val * params, engine_typed & typed) {
+    yyjson_val * form = yyjson_obj_get(yyjson_obj_get(params, "inputResponses"), SECRETS_FORM);
+    if (!form) {
+        return true;
+    }
+    yyjson_val * action = yyjson_obj_get(form, "action");
+    if (!yyjson_is_str(action) || std::string(yyjson_get_str(action)) != "accept") {
+        return false;
+    }
+    size_t       i, n;
+    yyjson_val * key;
+    yyjson_val * value;
+    yyjson_obj_foreach(yyjson_obj_get(form, "content"), i, n, key, value) {
+        if (yyjson_is_str(value)) {
+            typed[yyjson_get_str(key)] = yyjson_get_str(value);
+        }
+    }
+    return true;
+}
+
 // a client that takes SSE gets a comment every tick while the tool runs, then
 // the result as one event; the first write that fails ends the tool. Any other
 // client gets the result as JSON, the tool ending once its socket closes. The
-// stream outlives the handler, so it holds the request document.
+// stream outlives the handler, so it holds the request document. A call that
+// asks the user for secrets comes again with them in its inputResponses.
 void method_tools_call(const httplib::Request &            req,
                        httplib::Response &                 res,
                        const std::shared_ptr<yyjson_doc> & body,
@@ -195,10 +255,27 @@ void method_tools_call(const httplib::Request &            req,
             res.set_content(call_json(id, modern, { refused, true }), "application/json");
             return;
         }
+        engine_typed typed;
+        const bool   given = answered(params, typed);
+        const bool   forms = modern && takes_forms(params);
+        const auto   run   = [t, args, typed, given, forms](const tool_tick & tick) -> tool_result {
+            if (!given) {
+                return { "The user typed no secret", true };
+            }
+            const tool_result r = t.call(args, typed, tick);
+            if (!r.asks.empty() && !forms) {
+                return {
+                    "This client shows the user no form to type a secret: it goes in server.conf or on the "
+                        "console of the server",
+                    true
+                };
+            }
+            return r;
+        };
         const call_log log{ called };
         log.start(args);
         if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
-            const tool_result r = t.call(args, [&req]() { return !req.is_connection_closed(); });
+            const tool_result r = run([&req]() { return !req.is_connection_closed(); });
             if (req.is_connection_closed()) {
                 log.gone();
                 return;
@@ -209,9 +286,9 @@ void method_tools_call(const httplib::Request &            req,
         }
         res.set_header("Cache-Control", "no-cache");
         res.set_chunked_content_provider(
-            "text/event-stream", [body, t, log, id, args, modern](size_t, httplib::DataSink & sink) {
+            "text/event-stream", [body, run, log, id, modern](size_t, httplib::DataSink & sink) {
                 bool              gone = false;
-                const tool_result r    = t.call(args, [&]() {
+                const tool_result r    = run([&]() {
                     gone = gone || !sink.write(":\n\n", 3);
                     return !gone;
                 });

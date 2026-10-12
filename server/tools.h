@@ -19,26 +19,30 @@ struct tool_result {
 
     tool_result(std::string data, std::string type) : error(false), image(std::move(data)), mime(std::move(type)) {}
 
-    std::string text;
-    bool        error;
-    std::string image;
-    std::string mime;
+    std::string              text;
+    bool                     error;
+    std::string              image;
+    std::string              mime;
     // how the call ended as the log tells it, when the tool says more than
     // done or failed, and the level of that line
-    std::string outcome;
-    log_level   level = LOG_INFO;
+    std::string              outcome;
+    log_level                level = LOG_INFO;
+    // the stored keys of the secrets the user is to type before the call is
+    // asked again with them, its text telling what to type
+    std::vector<std::string> asks;
 };
 
 // called every second while a tool runs, false once the client is gone
 using tool_tick = std::function<bool()>;
 
 struct tool {
-    std::string                                                           suffix;
-    std::string                                                           description;
+    std::string                                                                                       suffix;
+    std::string                                                                                       description;
     // the JSON schema of the arguments, description first, so a model writes
     // why before what and a folded call shows it
-    std::string                                                           input;
-    std::function<tool_result(yyjson_val * args, const tool_tick & tick)> call;
+    std::string                                                                                       input;
+    // typed holds the secrets the user typed when the call is asked again
+    std::function<tool_result(yyjson_val * args, const engine_typed & typed, const tool_tick & tick)> call;
 };
 
 // a tool name stays within what every model API takes

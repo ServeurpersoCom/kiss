@@ -230,16 +230,12 @@ bool secret(const std::string & s) {
     return def && def->kind == ENGINE_SECRET;
 }
 
-std::string prefixed(const std::string & platform, const std::string & line) {
-    return platform.empty() ? line : platform + " " + line;
+std::string set_line(const std::string & s, const std::string & v) {
+    return "set " + s + " " + quote(v);
 }
 
-std::string set_line(const std::string & platform, const std::string & s, const std::string & v) {
-    return prefixed(platform, "set " + s + " " + quote(v));
-}
-
-std::string show_line(const std::string & platform, const std::string & s, const std::string & v) {
-    return secret(s) ? comment(prefixed(platform, s + " is set")) : set_line(platform, s, v);
+std::string show_line(const std::string & s, const std::string & v) {
+    return secret(s) ? comment(s + " is set") : set_line(s, v);
 }
 
 const std::vector<engine_module> & schema_modules() {

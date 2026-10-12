@@ -5,7 +5,7 @@
 #include "engine/schema.h"
 
 // what the server starts with: server.conf as it reads now
-static step_t compile_show_startup(const std::string &, const words_t & args) {
+static step_t compile_show_startup(const words_t & args) {
     if (!args.empty()) {
         fail(beyond({ "show", STARTUP_CONFIG }, args));
     }
@@ -18,7 +18,7 @@ static step_t compile_show_startup(const std::string &, const words_t & args) {
 static command make_show_startup() {
     return {
         { "show", STARTUP_CONFIG },
-        false, false, compile_show_startup, nullptr
+        false, compile_show_startup, nullptr
     };
 }
 

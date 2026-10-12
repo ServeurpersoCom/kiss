@@ -94,6 +94,9 @@
 			</div>
 		{:else}
 			<div class="head">Value of {ask.key}</div>
+			{#if ask.note}
+				<div class="note">{ask.note}</div>
+			{/if}
 			<input
 				{@attach focused}
 				bind:value

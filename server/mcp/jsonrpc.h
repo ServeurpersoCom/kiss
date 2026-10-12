@@ -25,9 +25,12 @@ void jsonrpc_error(httplib::Response &   res,
                    const std::string &   message,
                    const jsonrpc_build & data = nullptr);
 
-// a result; one of the 2026-07-28 era says it is complete, the server never
-// asking the client for input in the middle of a request
+// a result; one of the 2026-07-28 era says it is complete
 void jsonrpc_result(httplib::Response & res, yyjson_val * id, bool modern, const jsonrpc_build & body);
 
 // the same result as JSON text, for an answer sent as an SSE event
 std::string jsonrpc_result_json(yyjson_val * id, bool modern, const jsonrpc_build & body);
+
+// a result of the 2026-07-28 era that asks the client for input before the
+// request is asked again, as JSON text
+std::string jsonrpc_input_required_json(yyjson_val * id, const jsonrpc_build & body);

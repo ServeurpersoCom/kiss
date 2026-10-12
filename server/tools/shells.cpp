@@ -70,7 +70,7 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
                         R"("description":{"type":"string","description":"Why I'm running this command, written first"},)"
                         R"("command":{"type":"string","description":"The command to run, as the shell reads it on stdin"}},)"
                         R"("required":["description","command"],"additionalProperties":false})";
-        t.call        = [s](yyjson_val * args, const tool_tick & tick) {
+        t.call        = [s](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
             return run(s, args, tick);
         };
         tools.push_back(t);

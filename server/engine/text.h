@@ -13,7 +13,6 @@ constexpr const char * PIPE           = "|";
 constexpr const char * RUNNING_CONFIG = "running-config";
 constexpr const char * STARTUP_CONFIG = "startup-config";
 constexpr const char * ALL            = "all";
-constexpr const char * PLATFORMS[]    = { "linux", "macos", "windows" };
 
 // a command that misses words: a lone line lists what may follow instead of
 // failing

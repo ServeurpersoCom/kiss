@@ -5,7 +5,7 @@
 #include "engine/run.h"
 #include "log.h"
 
-static step_t compile_show_logging(const std::string &, const words_t & args) {
+static step_t compile_show_logging(const words_t & args) {
     if (!args.empty()) {
         fail(beyond({ "show", "logging" }, args));
     }
@@ -22,7 +22,7 @@ static step_t compile_show_logging(const std::string &, const words_t & args) {
 static command make_show_logging() {
     return {
         { "show", "logging" },
-        false, false, compile_show_logging, nullptr
+        false, compile_show_logging, nullptr
     };
 }
 

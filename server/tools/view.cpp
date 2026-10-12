@@ -310,7 +310,7 @@ static std::vector<tool> view_tool(const engine_reader & config) {
               R"("view_range":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2,)"
               R"("description":"Lines [start, end] of a text file, from 1, end -1 for the last"}},)"
               R"("required":["description","path"],"additionalProperties":false})";
-    t.call  = [v](yyjson_val * args, const tool_tick & tick) {
+    t.call  = [v](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
         return view(v, args, tick);
     };
     return { t };

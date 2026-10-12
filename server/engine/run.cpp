@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <mutex>
+#include <set>
 #include <stdexcept>
+#include <tuple>
 
 const char * engine_platform() {
 #if defined(_WIN32)
@@ -49,28 +51,15 @@ struct step {
 // a line as the schema alone reads it: the command and its arguments checked,
 // its filter compiled; a lone line that stops short lists what may follow it
 static step compile(const std::string & text, bool alone) {
-    const auto [head, spec] = split_filter(text);
-    words_t     words       = tokenize(head);
-    std::string platform;
-    if (!words.empty()) {
-        for (const char * p : PLATFORMS) {
-            if (lower(words[0]) == p) {
-                platform = p;
-                words.erase(words.begin());
-                break;
-            }
-        }
-    }
+    const auto [head, spec]       = split_filter(text);
+    const words_t           words = tokenize(head);
     std::optional<filter_t> filter;
     if (spec) {
         filter = compile_filter(*spec);
     }
     try {
         const auto [cmd, args] = resolve(words);
-        if (!platform.empty() && !cmd->scoped) {
-            fail(platform + " opens a set or a no line only");
-        }
-        return { cmd->compile(platform, args), filter };
+        return { cmd->compile(args), filter };
     } catch (const incomplete &) {
         const std::string next = join(next_words(words), " ");
         if (!alone) {
@@ -78,6 +67,79 @@ static step compile(const std::string & text, bool alone) {
         }
         return { [next](context &) { return comment(next); }, filter };
     }
+}
+
+// the key an item names where it sends its secrets by
+static const char * const URL_KEY = "url";
+
+// the url of the item of a stored key, in the draft, when its module has one
+static std::string url_of(const layer & draft, const std::string & s) {
+    const auto        parts  = unstore(s);
+    const std::string module = parts.first.substr(0, parts.first.find(' '));
+    if (parts.second.empty() || !find_key(module + " " + URL_KEY)) {
+        return "";
+    }
+    return reader(draft).get(module + " " + URL_KEY, parts.second).value_or("");
+}
+
+static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) {
+    std::vector<engine_ask> out;
+    for (const std::string & s : keys) {
+        out.push_back({ s, url_of(draft, s) });
+    }
+    return out;
+}
+
+// what a layer sends: every secret of an item with a url, with that url and
+// its value
+using sending = std::set<std::tuple<std::string, std::string, std::string>>;
+
+static sending sent(const layer & l) {
+    sending out;
+    for (const engine_module & m : schema_modules()) {
+        const std::string url = m.name + " " + URL_KEY;
+        if (!find_key(url)) {
+            continue;
+        }
+        for (const auto & kv : l) {
+            const auto parts = unstore(kv.first);
+            if (parts.first != url) {
+                continue;
+            }
+            for (const engine_key & k : m.keys) {
+                const auto held = l.find(stored(m.name + " " + k.name, parts.second));
+                if (k.kind == ENGINE_SECRET && held != l.end()) {
+                    out.insert({ held->first, kv.second, held->second });
+                }
+            }
+        }
+    }
+    return out;
+}
+
+// on the lines of an MCP client, a secret goes only where it went before, in
+// the running-config or the startup-config, or where the user saw it go as
+// they typed it: a key a model moves or restores by a copy reaches no url the
+// model wrote
+static std::string moved_secret(const layer & before, const layer & draft, const engine_typed & typed) {
+    sending known = sent(before);
+    try {
+        const sending startup = sent(startup_layer());
+        known.insert(startup.begin(), startup.end());
+    } catch (const std::runtime_error &) {
+        // a startup-config that does not read vouches for nothing
+    }
+    for (const auto & t : sent(draft)) {
+        const std::string & sk = std::get<0>(t);
+        const auto          ty = typed.find(sk);
+        if (known.count(t) || (ty != typed.end() && schema_parse(unstore(sk).first, ty->second) == std::get<2>(t))) {
+            continue;
+        }
+        const auto parts = unstore(sk);
+        return parts.first.substr(0, parts.first.find(' ')) + " " + parts.second + " would send its secret to " +
+               std::get<1>(t) + ", where only the administrator or the user typing it sends it";
+    }
+    return "";
 }
 
 static engine_result failed(std::optional<size_t> line, bool alone, const std::string & message) {
@@ -92,14 +154,22 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
     if (!alone) {
         text += std::string("\n") + ERROR_PREFIX + "nothing applied";
     }
-    return { false, text };
+    return { false, text, {} };
 }
 
 // every line compiles before the first one runs, then runs on a copy of the
 // target, which it replaces only when all of them succeed and the rules of
 // every module hold; the batch answers with what it changed, and on the
-// running configuration the modules whose keys changed apply
-static engine_result batch(layer & target, const std::string & text, engine_role role, bool running) {
+// running configuration the modules whose keys changed apply. A secret left
+// to ask for stops it once every line ran, before the rules: the values the
+// user types decide them. A batch of an MCP client moves no secret. A save
+// writes the draft as the batch leaves it, once the rules hold and before it
+// replaces the target
+static engine_result batch(layer &              target,
+                           const std::string &  text,
+                           engine_role          role,
+                           bool                 running,
+                           const engine_typed & typed) {
     words_t lines = split_lines(text);
     if (lines.empty()) {
         lines.push_back("");
@@ -114,7 +184,8 @@ static engine_result batch(layer & target, const std::string & text, engine_role
         }
     }
     layer   draft = target;
-    context ctx{ draft, role };
+    words_t asks;
+    context ctx{ draft, role, typed, asks };
     words_t out;
     for (size_t i = 0; i < steps.size(); i++) {
         try {
@@ -130,6 +201,15 @@ static engine_result batch(layer & target, const std::string & text, engine_role
             return failed(i, alone, e.what());
         }
     }
+    if (!asks.empty()) {
+        return { true, "", asked(draft, asks) };
+    }
+    if (role == ENGINE_MCP) {
+        const std::string reason = moved_secret(target, draft, typed);
+        if (!reason.empty()) {
+            return failed(std::nullopt, alone, reason);
+        }
+    }
     words_t broken;
     for (const engine_module & m : schema_modules()) {
         const std::string reason = m.validate ? m.validate(reader(draft)) : "";
@@ -139,6 +219,13 @@ static engine_result batch(layer & target, const std::string & text, engine_role
     }
     if (!broken.empty()) {
         return failed(std::nullopt, alone, join(broken, "\n"));
+    }
+    if (ctx.save) {
+        try {
+            out.push_back(archive_write(draft));
+        } catch (const std::runtime_error & e) {
+            return failed(std::nullopt, alone, e.what());
+        }
     }
     const words_t               change = diff(target, draft);
     const std::set<std::string> keys   = changed(target, draft);
@@ -151,7 +238,7 @@ static engine_result batch(layer & target, const std::string & text, engine_role
         }
     }
     out.insert(out.end(), change.begin(), change.end());
-    return { true, out.empty() ? comment("no change") : join(out, "\n") };
+    return { true, out.empty() ? comment("no change") : join(out, "\n"), {} };
 }
 
 layer startup_layer() {
@@ -161,7 +248,7 @@ layer startup_layer() {
     if (!found) {
         return startup;
     }
-    const engine_result r = batch(startup, text, ENGINE_ADMIN, false);
+    const engine_result r = batch(startup, text, ENGINE_ADMIN, false, {});
     if (!r.ok) {
         fail(archive_path() + ":\n" + r.text);
     }
@@ -174,15 +261,7 @@ std::string engine_defaults(const std::string & text) {
     words_t                     problems;
     for (const std::string & line : split_lines(text)) {
         try {
-            words_t     words = tokenize(line);
-            std::string platform;
-            for (const char * p : PLATFORMS) {
-                if (!words.empty() && lower(words[0]) == p) {
-                    platform = p;
-                    words.erase(words.begin());
-                    break;
-                }
-            }
+            const words_t words = tokenize(line);
             if (words.empty() || lower(words[0]) != "set") {
                 fail("the defaults hold set lines only");
             }
@@ -190,7 +269,7 @@ std::string engine_defaults(const std::string & text) {
             if (kw.rest.empty()) {
                 fail(kw.key + " misses its value");
             }
-            scope(defaults, platform)[stored(kw.key, kw.item)] = schema_parse(kw.key, join(kw.rest, " "));
+            defaults[stored(kw.key, kw.item)] = schema_parse(kw.key, join(kw.rest, " "));
         } catch (const std::runtime_error & e) {
             problems.push_back(line + ": " + e.what());
         } catch (const incomplete &) {
@@ -210,22 +289,22 @@ engine_result engine_start(const std::string & path, const std::string & version
     try {
         g_running = startup_layer();
     } catch (const std::runtime_error & e) {
-        return { false, e.what() };
+        return { false, e.what(), {} };
     }
     for (const engine_module & m : schema_modules()) {
         if (m.apply) {
             m.apply(reader(g_running));
         }
     }
-    return { true, "" };
+    return { true, "", {} };
 }
 
 // a batch that changes the running configuration says who changed it, as IOS
 // logs a configuration from the console
-engine_result engine_run(const std::string & text, engine_role role) {
+engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const layer                 before = g_running;
-    const engine_result         r      = batch(g_running, text, role, true);
+    const engine_result         r      = batch(g_running, text, role, true, typed);
     if (r.ok && !(before == g_running)) {
         log_info("Engine", "Configured by %s", role == ENGINE_ADMIN ? "the administrator" : "an MCP client");
     }
@@ -249,23 +328,7 @@ std::vector<std::string> engine_next(const std::string & head) {
         if (spec) {
             return trim(*spec).empty() ? filter_names() : words_t{};
         }
-        words_t words    = tokenize(line);
-        bool    platform = false;
-        for (const char * p : PLATFORMS) {
-            if (!words.empty() && lower(words[0]) == p) {
-                words.erase(words.begin());
-                platform = true;
-                break;
-            }
-        }
-        if (words.empty()) {
-            words_t first = platform ? scoped_words() : next_words(words);
-            if (!platform) {
-                first.insert(first.end(), std::begin(PLATFORMS), std::end(PLATFORMS));
-            }
-            return first;
-        }
-        return next_words(words);
+        return next_words(tokenize(line));
     } catch (...) {
         // a line still being typed may not read yet: nothing follows it
         return {};

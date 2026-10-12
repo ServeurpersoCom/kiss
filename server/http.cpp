@@ -1,5 +1,6 @@
-// http.cpp: the routes of the server: the page, its site configuration and
-// the MCP, behind the checks of Host, Origin and the key
+// http.cpp: the routes of the server: the page, its site configuration, the
+// MCP and the MCP servers it relays, behind the checks of Host, Origin and the
+// key
 
 #include "http.h"
 
@@ -9,6 +10,7 @@
 #include "listener.h"
 #include "log.h"
 #include "mcp/mcp.h"
+#include "proxy.h"
 #include "version.h"
 
 #include <fstream>
@@ -16,6 +18,9 @@
 
 // the site configuration a directory gives the page it serves
 static const char * const SITE_FILE = "kiss.conf";
+
+// the path of a relayed MCP server, its route name captured
+static const char * const ROUTE_PATH = R"(/mcp/([a-z0-9_-]+))";
 
 // the name and the port of a Host header: example.com:8089, [::1]:8089
 static void host_header(const std::string & value, std::string & name, std::string & port) {
@@ -165,4 +170,30 @@ void http_routes(httplib::Server & server) {
     };
     server.Get("/mcp", refuse);
     server.Delete("/mcp", refuse);
+
+    // a relayed server may keep a session, which a page reads by its headers
+    server.Options(ROUTE_PATH, [](const httplib::Request & req, httplib::Response & res) {
+        cors(req, res);
+        res.status = 204;
+        res.set_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers",
+                       "Authorization, Content-Type, Accept, MCP-Protocol-Version, Mcp-Method, Mcp-Name, "
+                       "Mcp-Session-Id, Last-Event-ID");
+    });
+    const auto relay = [](const httplib::Request & req, httplib::Response & res) {
+        cors(req, res);
+        res.set_header("Access-Control-Expose-Headers", "Mcp-Session-Id, MCP-Protocol-Version");
+        std::string why;
+        if (!authorized(req, why)) {
+            log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
+            res.status = 401;
+            res.set_header("WWW-Authenticate", "Bearer");
+            res.set_content(why + "\n", "text/plain");
+            return;
+        }
+        proxy(req, res, req.matches[1]);
+    };
+    server.Post(ROUTE_PATH, relay);
+    server.Get(ROUTE_PATH, relay);
+    server.Delete(ROUTE_PATH, relay);
 }

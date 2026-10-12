@@ -1,6 +1,16 @@
-import { Client, SdkHttpError, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import type { CallToolResult } from '@modelcontextprotocol/client';
-import type { ConfigReader, Image, Outcome, Tool } from './types.js';
+import {
+	Client,
+	SdkHttpError,
+	StreamableHTTPClientTransport,
+	isInputRequiredResult
+} from '@modelcontextprotocol/client';
+import type {
+	CallToolRequest,
+	CallToolResult,
+	InputRequest,
+	InputRequiredResult
+} from '@modelcontextprotocol/client';
+import type { ConfigReader, Image, Outcome, Tool, ToolContext } from './types.js';
 import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
 import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
@@ -22,6 +32,15 @@ const connections = new Map<string, Connection>();
 
 // the HTTP status of a server that takes no request without the right key
 const UNAUTHORIZED = 401;
+
+// the one input a server may ask of KiSS: a form whose fields are secrets,
+// text each typed in the masked field of the page; the user gives them all,
+// or leaving one cancels the form
+const ELICITATION = 'elicitation/create';
+const FORM_MODE = 'form';
+const TEXT_FIELD = 'string';
+const ACTIONS = ['accept', 'cancel'] as const;
+const [ACCEPT, CANCEL] = ACTIONS;
 
 // what the server answered, or did not; a KiSS server also gives the line it
 // writes of itself, server forge 5633ee7 (2026-10-11) on linux; locked, it
@@ -46,11 +65,16 @@ function drop(name: string): void {
 	void c?.client.then((client) => client.close()).catch(() => undefined);
 }
 
-// a 2026 server speaks its own era, a 2025 one answers the initialize handshake
+// a 2026 server speaks its own era, a 2025 one answers the initialize handshake;
+// a server may ask the user for secrets, which a call answers itself
 function connect(remote: Remote): Promise<Client> {
 	const client = new Client(
 		{ name: 'kiss', title: NAME, version: __KISS_VERSION__ },
-		{ versionNegotiation: { mode: 'auto' } }
+		{
+			versionNegotiation: { mode: 'auto' },
+			capabilities: { elicitation: { form: {} } },
+			inputRequired: { autoFulfill: false }
+		}
 	);
 	const transport = new StreamableHTTPClientTransport(new URL(remote.url, location.href), {
 		requestInit: { headers: headers(remote) }
@@ -80,6 +104,56 @@ function outcome(result: CallToolResult): Outcome {
 	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
 }
 
+// what the user answers to a form of a server, each of its fields typed out
+// of the sight of the model under the message of the server; an input other
+// than a form of text fields is none KiSS answers
+async function answer(ctx: ToolContext, server: string, input: InputRequest): Promise<object> {
+	const params = (input.params ?? {}) as {
+		mode?: string;
+		message?: string;
+		requestedSchema?: { properties?: Record<string, { type?: string }> };
+	};
+	if (input.method !== ELICITATION || (params.mode ?? FORM_MODE) !== FORM_MODE) {
+		throw new Error(`asks for ${input.method} ${params.mode ?? ''}, which KiSS does not answer`);
+	}
+	const fields = Object.entries(params.requestedSchema?.properties ?? {});
+	if (!fields.length) throw new Error('asks for a form with no field');
+	const other = fields.find(([, schema]) => schema.type !== TEXT_FIELD);
+	if (other) throw new Error(`asks for ${other[0]}, a field KiSS does not answer: only text`);
+	const content: Record<string, string> = {};
+	for (const [field] of fields) {
+		const value = await ctx.secret(`${field} of ${server}`, params.message ?? '');
+		if (value === null) return { action: CANCEL };
+		content[field] = value;
+	}
+	return { action: ACCEPT, content };
+}
+
+// a call to a tool of a server, asked again with the answers of the user each
+// time the server asks them for secrets; every round asks the user, so one
+// that asks nothing is an error, and a stopped turn asks nothing more
+async function called(
+	ctx: ToolContext,
+	remote: Remote,
+	client: Client,
+	params: CallToolRequest['params']
+): Promise<Outcome> {
+	const options = { signal: ctx.signal, timeout: remote.timeout * 1000, allowInputRequired: true };
+	let result: CallToolResult | InputRequiredResult = await client.callTool(params, options);
+	while (isInputRequiredResult(result)) {
+		const inputs = Object.entries(result.inputRequests ?? {});
+		if (!inputs.length) throw new Error('asks to be called again for nothing');
+		const inputResponses: Record<string, object> = {};
+		for (const [key, input] of inputs) {
+			ctx.signal.throwIfAborted();
+			inputResponses[key] = await answer(ctx, remote.name, input);
+		}
+		const again = { ...params, inputResponses, requestState: result.requestState };
+		result = await client.callTool(again as CallToolRequest['params'], options);
+	}
+	return outcome(result);
+}
+
 // a server as the configuration names it: its name, url, key, headers and
 // timeout; a change of any makes it another server
 const signature = (remote: Remote): string => JSON.stringify(remote);
@@ -97,12 +171,7 @@ function connection(remote: Remote): Connection {
 			parameters: t.inputSchema,
 			async run(ctx, args) {
 				try {
-					return outcome(
-						await c.callTool(
-							{ name: t.name, arguments: args },
-							{ signal: ctx.signal, timeout: remote.timeout * 1000 }
-						)
-					);
+					return await called(ctx, remote, c, { name: t.name, arguments: args });
 				} catch (e) {
 					if (ctx.signal.aborted) throw e;
 					drop(remote.name);

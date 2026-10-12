@@ -43,21 +43,26 @@ void jsonrpc_error(httplib::Response &   res,
     send(res, status, doc);
 }
 
-static yyjson_mut_doc * result(yyjson_val * id, bool modern, const jsonrpc_build & body) {
+// a result, its resultType when the era has one
+static yyjson_mut_doc * result(yyjson_val * id, const char * type, const jsonrpc_build & body) {
     yyjson_mut_doc * doc  = yyjson_mut_doc_new(nullptr);
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * out  = yyjson_mut_obj_add_obj(doc, root, "result");
-    if (modern) {
-        yyjson_mut_obj_add_str(doc, out, "resultType", "complete");
+    if (type) {
+        yyjson_mut_obj_add_str(doc, out, "resultType", type);
     }
     body(doc, out);
     return doc;
 }
 
 void jsonrpc_result(httplib::Response & res, yyjson_val * id, bool modern, const jsonrpc_build & body) {
-    send(res, 200, result(id, modern, body));
+    send(res, 200, result(id, modern ? "complete" : nullptr, body));
 }
 
 std::string jsonrpc_result_json(yyjson_val * id, bool modern, const jsonrpc_build & body) {
-    return text(result(id, modern, body));
+    return text(result(id, modern ? "complete" : nullptr, body));
+}
+
+std::string jsonrpc_input_required_json(yyjson_val * id, const jsonrpc_build & body) {
+    return text(result(id, "input_required", body));
 }

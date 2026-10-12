@@ -9,9 +9,15 @@
 #include <functional>
 #include <utility>
 
+// what a step runs on: the draft, who sends the batch, the secrets the user
+// typed, the stored keys of the secrets still to ask for, and whether the
+// batch writes server.conf once it holds
 struct context {
-    layer &     draft;
-    engine_role role;
+    layer &              draft;
+    engine_role          role;
+    const engine_typed & typed;
+    words_t &            asks;
+    bool                 save = false;
 };
 
 using step_t = std::function<std::string(context &)>;
@@ -21,10 +27,8 @@ struct command {
     // its first argument names a module, so after its path the name of a
     // module competes with the words of longer commands
     bool    module;
-    // whether a platform may open its line
-    bool    scoped;
     // the step the arguments spell, checked before any line runs
-    step_t (*compile)(const std::string & platform, const words_t & args);
+    step_t (*compile)(const words_t & args);
     // candidates for the next argument; a candidate in <> names what to type
     words_t (*complete)(const words_t & args);
 };
@@ -41,6 +45,3 @@ std::pair<const command *, words_t> resolve(const words_t & words);
 // what may follow the words: path words while the path goes on, then the
 // arguments the command proposes
 words_t next_words(const words_t & words);
-
-// the first words of the commands a platform may open, set and no
-words_t scoped_words();

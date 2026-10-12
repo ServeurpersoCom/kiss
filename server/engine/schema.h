@@ -39,8 +39,7 @@ key_words schema_read(const words_t & words);
 words_t schema_next(const engine_reader & config, const words_t & words, bool value, bool items);
 
 bool        secret(const std::string & s);
-std::string prefixed(const std::string & platform, const std::string & line);
 // the line that sets a key, a secret with its value
-std::string set_line(const std::string & platform, const std::string & s, const std::string & v);
+std::string set_line(const std::string & s, const std::string & v);
 // the line that shows a key, a secret out of view
-std::string show_line(const std::string & platform, const std::string & s, const std::string & v);
+std::string show_line(const std::string & s, const std::string & v);

@@ -26,7 +26,7 @@ import { held, pulse, type Pulse } from './pulse.js';
 // to read, or a yes
 type Asking =
 	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
-	| { kind: 'secret'; key: string; settle(value: string | null): void }
+	| { kind: 'secret'; key: string; note?: string; settle(value: string | null): void }
 	| { kind: 'offer'; name: string; text: string; settle(saved: boolean): void }
 	| { kind: 'pick'; settle(text: string | null): void }
 	| { kind: 'confirm'; question: string; settle(yes: boolean): void };
@@ -290,6 +290,7 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 		cli: (lines: string) => run(lines, 'llm', { ...reach(id), signal, conversation, grant }),
 		redact,
 		grant,
+		secret: reach(id).secret,
 		keep: () => save(conversation)
 	};
 	try {
@@ -335,8 +336,8 @@ function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Pr
 function reach(from: string) {
 	return {
 		conversations: library,
-		secret: (key: string): Promise<string | null> =>
-			pose(from, (settle) => ({ kind: 'secret', key, settle })),
+		secret: (key: string, note?: string): Promise<string | null> =>
+			pose(from, (settle) => ({ kind: 'secret', key, note, settle })),
 		offer: (name: string, text: string): Promise<boolean> =>
 			pose(from, (settle) => ({ kind: 'offer', name, text, settle })),
 		pick: (): Promise<string | null> => pose(from, (settle) => ({ kind: 'pick', settle })),

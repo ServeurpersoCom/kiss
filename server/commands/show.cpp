@@ -22,7 +22,7 @@ static words_t effective_lines(const engine_module & m,
         }
         const auto value = config.get(key, only_item);
         if (value) {
-            out.push_back(show_line("", stored(key, only_item), *value));
+            out.push_back(show_line(stored(key, only_item), *value));
         } else if (!only_key.empty() && (!only_item.empty() || !k.named)) {
             out.push_back(comment(stored(key, only_item) + " is not set"));
         }
@@ -57,7 +57,7 @@ static words_t next_key_or_item(const words_t & args) {
 
 // show server, show server port: the word after a collection names a key when
 // it names one, else an item
-static step_t compile_show(const std::string &, const words_t & args) {
+static step_t compile_show(const words_t & args) {
     if (args.empty()) {
         throw incomplete();
     }
@@ -90,7 +90,7 @@ static step_t compile_show(const std::string &, const words_t & args) {
 }
 
 static command make_show() {
-    return { { "show" }, true, false, compile_show, next_key_or_item };
+    return { { "show" }, true, compile_show, next_key_or_item };
 }
 
 ENGINE_COMMAND(make_show);

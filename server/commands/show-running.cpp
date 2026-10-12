@@ -7,8 +7,8 @@
 
 // IOS show running-config: every line the running configuration holds, as the
 // line that sets it, which copy writes to server.conf; all, every key of every
-// module with its value on this platform, defaults included
-static step_t compile_show_running(const std::string &, const words_t & args) {
+// module with its value, defaults included
+static step_t compile_show_running(const words_t & args) {
     if (!args.empty() && !starts_with(ALL, lower(args[0]))) {
         fail(beyond({ "show", RUNNING_CONFIG }, args));
     }
@@ -36,7 +36,7 @@ static words_t next_show_running(const words_t & args) {
 static command make_show_running() {
     return {
         { "show", RUNNING_CONFIG },
-        false, false, compile_show_running, next_show_running
+        false, compile_show_running, next_show_running
     };
 }
 

@@ -1,12 +1,27 @@
 // config.cpp: the config tool, a batch of CLI lines on the engine, as the
 // config tool of KiSS runs them on the page
 
+#include "engine/text.h"
 #include "tools.h"
 #include "yyjson.h"
 
-static tool_result call(yyjson_val * args, const tool_tick &) {
+// a batch that writes a secret without its value asks the user to type it,
+// telling where each one goes, then runs again with what they typed
+static tool_result call(yyjson_val * args, const engine_typed & typed, const tool_tick &) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
-    const engine_result r     = engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP);
+    const engine_result r = engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP, typed);
+    if (!r.asks.empty()) {
+        words_t keys, told;
+        for (const engine_ask & a : r.asks) {
+            keys.push_back(a.key);
+            told.push_back(a.to.empty() ? a.key : a.key + " sent to " + a.to);
+        }
+        tool_result asked(
+            "Type " + join(told, ", ") + " for the KiSS server " + engine_get("server hostname").value_or(""), false);
+        asked.asks    = keys;
+        asked.outcome = "asks the user for " + join(keys, ", ");
+        return asked;
+    }
     return { r.text, !r.ok };
 }
 
@@ -19,8 +34,8 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                     "reads them: set <module> <key> [item] <value>, no <module> <key> [item], show <module>, "
                     "show running-config [all], show startup-config, show version, show logging, "
                     "copy running-config startup-config or write memory. "
-                    "A set or no line may open with linux, macos or windows to hold on that platform only. "
-                    "Secrets are written in server.conf, never here.";
+                    "A secret takes no value here: set <module> <key> [item] alone asks the user to type it, out of "
+                    "your sight.";
     t.input = R"({"type":"object","properties":{)"
               R"("description":{"type":"string","description":"Why I'm configuring the server, written first"},)"
               R"("lines":{"type":"string","description":"CLI lines, one per line"}},)"

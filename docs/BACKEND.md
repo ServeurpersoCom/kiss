@@ -7,9 +7,9 @@ it runs on, for KiSS or any other MCP client.
 
 ```
 commands
-  [linux|macos|windows] set <module> <key> [item] <value>
-  [linux|macos|windows] no <module> <key> [item]
-  [linux|macos|windows] no <module> <item>
+  set <module> <key> [item] <value>
+  no <module> <key> [item]
+  no <module> <item>
   show <module> [key] [item]
   show <module> <item>
   show running-config [all]
@@ -22,9 +22,6 @@ commands
   <command> | begin|count|exclude|include <pattern>
   exit, quit                        the console only: stop the server
 
-  [linux|macos|windows]   platform override: the line holds on that platform only
-                          and wins over the same line without it
-
 modules
   server
     host <address>                  127.0.0.1
@@ -36,7 +33,7 @@ modules
                                     debugging
     buffered <bytes>                65536, the log show logging keeps
   shells
-    command <item> <line>           linux bash, macos zsh bash, windows powershell, pwsh
+    command <item> <line>           bash, zsh, powershell, pwsh, where found
     timeout <item> <seconds>        290
     output <item> <bytes>           65536
   view
@@ -45,6 +42,11 @@ modules
     pixels <count>                  100000000, decoded at most
     side <pixels>                   1920, the longest side sent
     quality <1..100>                85, of a JPEG made again
+  mcp
+    url <item> <url>                a server relayed at mcp/<item>
+    key <item> <secret>
+    headers <item> <Name: value; ...>
+    timeout <item> <seconds>        300
 
 tools
   <hostname>_config                 description lines
@@ -83,6 +85,7 @@ server/tools/            one file per tool source, registered by existing
 server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
 server/listener.cpp|h    the socket, moved at once when server host or server port changes
 server/http.cpp|h        the routes and the checks of Host, Origin and the key
+server/proxy.cpp|h       the relay of the MCP servers the mcp module names
 server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
 server/term.h            the terminal of the console, per OS: raw mode, a key, the width
 server/log.cpp|h         the log: [Module] Line
@@ -91,7 +94,7 @@ server/output.cpp|h      UTF-8 repair and head plus tail truncation
 server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
 server/server.conf       the defaults the binary embeds
-vendor/                  cpp-httplib, yyjson, stb
+vendor/                  cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
 tools/public/            index.html.gz, the page the binary embeds
 tools/xxd.cmake          embeds a file as a C array
 tools/version.cmake      the git commit of the build
@@ -128,15 +131,17 @@ A batch compiles every line before the first one runs, runs them on a draft of t
 configuration, checks the rules of every module on the draft, then replaces the running
 configuration and applies the modules whose keys changed. A failure at any step applies nothing.
 
-The commands are those of the page that fit a server: `set`, `no`, `show <module>`,
-`show running-config [all]`, `show startup-config`, `show version`, `copy` between the
-running-config and the startup-config, and `write memory`, or `write` alone, IOS's way to save; and
-one of its own, `show logging`. A line takes a filter after a pipe, `begin`, `count`,
-`exclude` or `include`, as IOS does. A secret never prints: `show` writes `! server key is set`.
+The commands are those of the page that fit a server: `set`, `no`, `show <module>`, `show
+running-config [all]`, `show startup-config`, `show version`, `copy` between the running-config and
+the startup-config, and `write memory`, or `write` alone, IOS's way to save; and one of its own,
+`show logging`. A save writes the configuration as its batch leaves it, once the batch holds, so a
+batch that fails or waits for a secret writes nothing. A line takes a filter after a pipe, `begin`,
+`count`, `exclude` or `include`, as IOS does. A secret never prints: `show` writes `! server key is
+set`.
 
 Two roles send batches. The administrator writes `server.conf` and the command line. An MCP client
-runs the config tool, whose lines a model may write, so it writes no secret: a secret would cross the
-context of the model.
+runs the config tool, whose lines a model may write, so it writes no value of a secret: `set` of a
+secret alone asks the user to type it.
 
 A module registers itself by existing, with its keys, its rules and what it applies: `server`
 rebinds its socket, `shells` rebuilds the tool list, `view` bounds what its tool returns. The engine
@@ -161,31 +166,12 @@ A value resolves through layers, the first that holds it winning:
 3. the fallback of the key: the host name of the machine for `server hostname`, the start directory
    for `server cwd`.
 
-### Platform overrides
+### One file for every machine
 
-One `server.conf` serves every machine: it is copied unchanged to `forge`, `studio` and `nomad`, and
-each reads the lines that hold for it. A `set` or `no` line may start with `linux`, `macos` or
-`windows`; it then holds on that platform only, and wins over the same line without a prefix. Lines
-without a prefix hold everywhere, and prefixes appear only where platforms truly differ: paths, and
-shells that exist on one OS only.
-
-```
-set server port 8089
-set server cwd /srv/work
-windows set server cwd D:\work
-macos set server cwd /Users/me/work
-linux set shells timeout bash 600
-```
-
-All three listen on 8089. `forge`, on Linux, works in `/srv/work` and gives its builds ten minutes;
-`studio`, on Windows, works in `D:\work`; `nomad`, on macOS, in `/Users/me/work`.
-
-Each machine keeps the lines of the other platforms as they are and writes them back with its own,
-so a `copy running-config startup-config` on Linux leaves the Windows lines of the file untouched.
-A line without a prefix on a key this platform holds changes it for this platform.
-
-An item whose program is not found on the PATH stays out, with one line in the log. The default
-configuration therefore lists every candidate shell and each machine serves the ones it has.
+One `server.conf` serves every machine: it is copied unchanged to `forge`, `studio` and `nomad`.
+What differs from one machine to another is found on each, never written per OS: a shell whose
+program is not found on the PATH stays out, with one line in the log. The default configuration
+therefore lists every candidate shell and each machine serves the ones it has.
 
 ### Modules
 
@@ -206,6 +192,10 @@ configuration therefore lists every candidate shell and each machine serves the 
 | `view pixels`           | number | pixels an image may declare before it is decoded                |
 | `view side`             | number | the longest side of an image sent, in pixels                    |
 | `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
+| `mcp url <item>`        | string | URL of an MCP server this server relays at `mcp/<item>`         |
+| `mcp key <item>`        | secret | bearer key sent to that server                                  |
+| `mcp headers <item>`    | string | more headers sent to it, `Name: value; Name: value`             |
+| `mcp timeout <item>`    | number | seconds it may stay silent                                      |
 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
@@ -218,12 +208,11 @@ set server host 127.0.0.1
 set server port 8089
 set server log debugging
 set server buffered 65536
-linux set shells command bash bash -s
-linux set shells timeout bash 290
-linux set shells output bash 65536
-macos set shells command zsh zsh -s
-macos set shells command bash bash -s
-windows set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
+set shells command bash bash -s
+set shells timeout bash 290
+set shells output bash 65536
+set shells command zsh zsh -s
+set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 set view output 65536
 set view image 52428800
@@ -235,9 +224,9 @@ set view quality 85
 Every shell carries its own `timeout`, 290 seconds, and `output`, 65536 bytes, as `bash` shows.
 `<boot>` stands for the PowerShell bootstrap below, written in full in the file.
 
-Each OS gets a default that works: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1 on
-Windows, and PowerShell 7 wherever it is installed. A shell the default leaves out, Git Bash or the
-bash of WSL, is one more line.
+Each machine serves the shells it has: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1
+on Windows, and PowerShell 7 wherever it is installed; on Windows the bash of Git Bash or of WSL
+joins when its program is on the PATH.
 
 ## Running
 
@@ -374,12 +363,18 @@ backend from the page through it, under the consent firewall when the model call
 MCP client gets the same CLI. A change of `server host` or `server port` moves the listener at once,
 once the address is checked free.
 
-A secret never crosses the context of the model. It reaches the server three ways: `server.conf`,
-the console, and MCP elicitation: a `set` line of a secret without its value answers with a request
-for input in url mode, which KiSS opens in the secure window of its own secrets, and the value goes
-from the user to the server alone. The model reads that the user typed it. A line that writes the
-value of a secret itself is refused, since a model wrote it. The same elicitation, in form mode,
-carries the questions and confirmations the server asks the user.
+A secret never crosses the context of the model. The administrator writes it in `server.conf` or on
+the console. An MCP client writes `set server key` alone: the batch applies nothing, and the call
+answers `input_required` with a form of one text field per secret, MCP elicitation of the 2026-07-28
+era, its message naming the url each secret goes to. The client asks the user and calls again with
+the values in `inputResponses`, out of the context of the model; the batch runs again with them and
+answers `! the user typed server key`. The server keeps nothing between the two calls. A batch of an
+MCP client moves no secret: once it has run, every secret the configuration sends goes to a url it
+went to before, in the running-config or the startup-config, or is a value the user typed in that
+batch under the url it goes to. A key a model moves or restores by a copy reaches no url the model
+wrote, and a copy that restores a route as it was saved passes. A line that writes the value of a
+secret is refused, and a client that takes no form, every client of the 2025 era, is told the secret
+goes in `server.conf` or on the console.
 
 ## The shell contract
 
@@ -472,9 +467,26 @@ The `serverInfo` of either era names the server by its hostname, its title `KiSS
 its version, and as its description the line it gives of itself in `show version`:
 `server forge 5633ee7 (2026-10-11) on linux`. KiSS lists that line in its own `show version`.
 
+## MCP routes
+
+The server relays the MCP servers its `mcp` module names, each at `mcp/<name>` of the server, so a
+page reaches a server it could not: one without CORS, or one only this machine sees. KiSS names a
+route by a relative URL, `set mcp url deepwiki mcp/deepwiki`, and the model may add one through the
+config tool, its key typed by the user as any secret, the form naming where the key goes. The relay
+speaks HTTP, not MCP: each request is built anew with its method, its body, the headers `Accept`,
+`Mcp-Session-Id`, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Last-Event-ID` and every
+`Mcp-Param-` header, then the headers and the key of the route, the key of this server never sent
+on. The answer comes back with its status, its body streamed as it arrives, and the headers
+`Content-Type`, `Mcp-Session-Id` and `MCP-Protocol-Version`. A server that refuses the key of its
+route answers 502 with the fix, `set mcp key <name>`, so the page never takes it for a refusal of
+its own key; one that redirects answers 502 naming where, `set mcp url <name>`, since a redirect
+followed would carry the key elsewhere. A route the configuration does not name answers 404. The
+client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
+
 ## HTTP and security
 
-- `GET /` serves the embedded page, `GET /kiss.conf` the site configuration, `POST /mcp` the MCP.
+- `GET /` serves the embedded page, `GET /kiss.conf` the site configuration, `POST /mcp` the MCP,
+  `/mcp/<name>` the servers it relays, behind the same checks.
   The site configuration is `kiss.conf` of the directory the server runs in, else the one it
   embeds, which names the backend by a relative URL, `set mcp url local mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
@@ -488,8 +500,8 @@ its version, and as its description the line it gives of itself in `show version
 - `/mcp` answers CORS preflights and allows `Authorization`, `Content-Type`, `MCP-Protocol-Version`
   and `Mcp-Method`.
 
-TLS stays out of the binary: a LAN or the internet reaches `server` through a reverse proxy or an
-ssh tunnel.
+The server listens without TLS: a LAN or the internet reaches it through a reverse proxy or an ssh
+tunnel.
 
 ## Delivery
 

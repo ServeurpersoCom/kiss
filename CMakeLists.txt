@@ -23,7 +23,8 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-# cpp-httplib: the HTTP server
+# cpp-httplib: the HTTP server, and the HTTPS client of the MCP servers it
+# relays
 add_subdirectory(vendor/cpp-httplib)
 
 # stb: the images view decodes, resizes and encodes

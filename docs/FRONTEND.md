@@ -494,6 +494,12 @@ them listed; a round waits only for a server still connecting, and its line name
 to the model every round, and the next turn tries it again: a server that never answers costs one
 wait a turn, the tools of a turn the same from round to round.
 
+A server may ask the user for secrets, the form mode of MCP elicitation: each text field of its form
+asks in the masked field of the page, `Value of server key of pod`, under the message of the server,
+and the call goes again with the values, which never reach the model. Leaving a field empty cancels
+the form; a form with no field, or with a field that is not text, is refused. A KiSS server asks
+this way for `set server key` written alone by the model.
+
 ```
 set mcp url sandbox https://example.com/mcp
 set mcp key sandbox                      ! a masked field asks for the token

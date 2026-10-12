@@ -196,8 +196,9 @@ export interface Scope {
 	conversations?: Library;
 	// asks the user to let the model make a change
 	grant?(request: Grant): Promise<Verdict>;
-	// asks the user for the value of a secret key, none when they give none
-	secret?(key: string): Promise<string | null>;
+	// asks the user for the value of a secret key, with what tells why when
+	// someone else asks, none when they give none
+	secret?(key: string, note?: string): Promise<string | null>;
 	// asks the user to confirm what a command is about to do
 	confirm?(question: string): Promise<boolean>;
 	// offers the user a file to save, resolving to whether they saved it
@@ -337,6 +338,9 @@ export interface ToolContext {
 	cli(text: string): Promise<Outcome>;
 	// asks the user to let the model make a call
 	grant(request: Grant): Promise<Verdict>;
+	// asks the user for the value of a secret, out of the sight of the model,
+	// with the note of whoever asks, none when they give none
+	secret(key: string, note: string): Promise<string | null>;
 	// the lines with every secret value masked
 	redact(text: string): string;
 	// stores the conversation as it settled

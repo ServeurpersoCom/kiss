@@ -7,12 +7,15 @@
 #include "log.h"
 
 #include <atomic>
+#include <cstring>
 #include <mutex>
 
 #if defined(_WIN32)
 #    include <ws2tcpip.h>
 #else
+#    include <arpa/inet.h>
 #    include <netdb.h>
+#    include <netinet/in.h>
 #    include <sys/socket.h>
 #    include <unistd.h>
 #endif
@@ -23,8 +26,17 @@ static std::string       g_host;
 static int               g_port = 0;
 static std::atomic<bool> g_quit{ false };
 
+// localhost, or a loopback address as written: IPv4 in 127.0.0.0/8, or ::1
 bool listener_loopback(const std::string & host) {
-    return host == "localhost" || host == "::1" || host.compare(0, 4, "127.") == 0;
+    in_addr  v4;
+    in6_addr v6;
+    if (host == "localhost") {
+        return true;
+    }
+    if (inet_pton(AF_INET, host.c_str(), &v4) == 1) {
+        return (ntohl(v4.s_addr) >> 24) == 127;
+    }
+    return inet_pton(AF_INET6, host.c_str(), &v6) == 1 && memcmp(&v6, &in6addr_loopback, sizeof(v6)) == 0;
 }
 
 bool listener_bindable(const std::string & host, int port, std::string & why) {

@@ -14,9 +14,9 @@ static std::string configuration(const std::string & word) {
     return word;
 }
 
-// copy running-config startup-config writes server.conf, copy startup-config
-// running-config reads it back into the draft
-static step_t compile_copy(const std::string &, const words_t & args) {
+// copy running-config startup-config writes server.conf once the batch holds,
+// copy startup-config running-config reads it back into the draft
+static step_t compile_copy(const words_t & args) {
     if (args.size() < 2) {
         throw incomplete();
     }
@@ -38,7 +38,8 @@ static step_t compile_copy(const std::string &, const words_t & args) {
             ctx.draft = startup_layer();
             return std::string();
         }
-        return archive_write(ctx.draft);
+        ctx.save = true;
+        return std::string();
     };
 }
 
@@ -47,7 +48,7 @@ static words_t next_copy(const words_t & args) {
 }
 
 static command make_copy() {
-    return { { "copy" }, false, false, compile_copy, next_copy };
+    return { { "copy" }, false, compile_copy, next_copy };
 }
 
 ENGINE_COMMAND(make_copy);
