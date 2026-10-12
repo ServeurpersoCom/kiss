@@ -169,8 +169,10 @@ answer given once leaves a way out open. Since `set`, `no`, `erase` and `copy` a
 of resolved values, they are guarded alike. Everything else, the model of the chat, its prompt, the
 style, the headers, the sampling, the model changes freely, the change shown in its output.
 
-The secrets of an item go with it where the user lets the model send it: the question names them,
-`! endpoints key u goes with it`, so a key is never typed again for a url that changes. A secret and
+The secrets of an item go with it to a url the user lets the model give it: the question names them,
+`! endpoints key u goes with it`, so a key is never typed again for a url that changes. An item sent
+through a proxy keeps its own at home, the key of the proxy going there, so that question names
+none. A secret and
 a url born in one batch go together, in either order, the url asking the user, who refuses both at
 once.
 

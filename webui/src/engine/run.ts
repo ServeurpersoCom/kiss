@@ -343,13 +343,14 @@ async function state(
 	return out;
 }
 
-// the secrets that go with the items a change sends somewhere new, a url or
-// a proxy, as the question tells them
+// the secrets that go with the items a change gives a new url, as the
+// question tells them; an item sent through a proxy keeps its own at home,
+// the key of the proxy going there
 function along(draft: ConfigReader, to: Record<string, Value | undefined>): string[] {
 	return Object.keys(to).flatMap((k) => {
 		const [key, name] = unstore(k);
 		const module = key.split(' ')[0];
-		if (schema.find(key)?.kind === 'enum' || to[k] === undefined) return [];
+		if (schema.find(key)?.kind !== 'url' || to[k] === undefined) return [];
 		return schema
 			.list()
 			.filter(([s, def]) => def.kind === 'secret' && s.startsWith(module + ' '))

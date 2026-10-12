@@ -813,7 +813,7 @@ describe('an MCP server', () => {
 		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('on');
 	});
 
-	it('holding a key moves with it once the user lets the model move it', async () => {
+	it('holding a key moves with it once the user lets the model move it, a proxy leaving it home', async () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
 		const asked: Grant[] = [];
@@ -831,5 +831,10 @@ describe('an MCP server', () => {
 				]
 			}
 		]);
+		await p.engine.run('set mcp url k http://k/mcp', 'user');
+		expect((await p.engine.run('set mcp proxy a k', 'llm', { grant })).text).toBe(
+			'% the user refused the change'
+		);
+		expect(asked[1]).toEqual({ kind: 'change', lines: ['+ set mcp proxy a k'] });
 	});
 });
