@@ -29,7 +29,7 @@ std::string engine_component(const std::string & name, const std::string & versi
     return "server " + (name.empty() ? "" : name + " ") + version + " on " + engine_platform();
 }
 
-// the running configuration over the defaults, the version, and the lock that
+// the running configuration over the factory configuration, the version, and the lock that
 // lets one batch run at a time
 static layer       g_running;
 static std::string g_version;
@@ -157,7 +157,7 @@ static sending sent(const layer & l) {
 // the running-config or the startup-config, or where the user saw it go as
 // they typed it: a key a model moves or restores by a copy reaches no url the
 // model wrote
-static std::string moved_secret(const layer & before, const layer & draft, const engine_typed & typed) {
+static std::string moved(const layer & before, const layer & draft, const engine_typed & typed) {
     sending known = sent(before);
     try {
         const sending startup = sent(startup_layer());
@@ -245,7 +245,7 @@ static engine_result batch(layer &              target,
         return { true, "", wanted };
     }
     if (role == ENGINE_MCP) {
-        const std::string reason = moved_secret(target, draft, typed);
+        const std::string reason = moved(target, draft, typed);
         if (!reason.empty()) {
             return failed(std::nullopt, alone, reason);
         }
@@ -295,29 +295,40 @@ layer startup_layer() {
     return startup;
 }
 
-std::string engine_defaults(const std::string & text) {
+std::string engine_factory(const std::string & text) {
     std::lock_guard<std::mutex> lock(g_mutex);
-    layer                       defaults;
+    layer                       factory;
     words_t                     problems;
     for (const std::string & line : split_lines(text)) {
         try {
             const words_t words = tokenize(line);
             if (words.empty() || lower(words[0]) != "set") {
-                fail("the defaults hold set lines only");
+                fail("the factory configuration holds set lines only");
             }
             const key_words kw = schema_read(words_t(words.begin() + 1, words.end()));
             if (kw.rest.empty()) {
                 fail(kw.key + " misses its value");
             }
-            defaults[stored(kw.key, kw.item)] = schema_parse(kw.key, join(kw.rest, " "));
+            factory[stored(kw.key, kw.item)] = schema_parse(kw.key, join(kw.rest, " "));
         } catch (const std::runtime_error & e) {
             problems.push_back(line + ": " + e.what());
         } catch (const incomplete &) {
             problems.push_back(line + ": misses words");
         }
     }
+    for (const engine_module & m : schema_modules()) {
+        for (const engine_key & k : m.keys) {
+            try {
+                if (k.reset) {
+                    schema_parse(m.name + " " + k.name, *k.reset);
+                }
+            } catch (const std::runtime_error & e) {
+                problems.push_back(std::string("reset value of ") + e.what());
+            }
+        }
+    }
     if (problems.empty()) {
-        defaults_layer() = defaults;
+        factory_layer() = factory;
     }
     return join(problems, "\n");
 }

@@ -9,20 +9,51 @@ import type {
 	Value
 } from '../lib/types.js';
 import { Incomplete, REFUSE } from '../lib/types.js';
-import { ERROR_PREFIX, REMOVED, beyond, comment } from '../lib/config.js';
+import {
+	ERROR_PREFIX,
+	FACTORY_FILE,
+	REMOVED,
+	SITE_CONFIG_URL,
+	beyond,
+	comment
+} from '../lib/config.js';
+import factoryText from '../../client.conf?raw';
 import { splitFilter, splitLines, tokenize } from './parse.js';
 import { FILTER_NAMES, compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
-import { KeySchema, stored } from './schema.js';
+import { KeySchema, stored, unstore } from './schema.js';
 import { Values } from './values.js';
 import { SaveArchive } from './archive.js';
 import { complete, partialWord } from './complete.js';
 import { didYouMean } from './near.js';
 
 const schema = new KeySchema(modules);
+
+// set lines as a layer of stored values, and what they refuse
+function layer(text: string, file: string): [Map<string, Value>, string[]] {
+	const values = new Map<string, Value>();
+	const problems: string[] = [];
+	for (const line of splitLines(text)) {
+		try {
+			const { command, args } = resolve(tokenize(line));
+			if (command.path.join(' ') !== 'set') throw new Error(`${file} holds set lines only`);
+			const { key, name, rest } = schema.read(args);
+			if (!rest.length) throw new Error(`${key} misses its value`);
+			values.set(stored(key, name), schema.parse(key, rest.join(' ')));
+		} catch (e) {
+			problems.push(`${line}: ${(e as Error).message}`);
+		}
+	}
+	return [values, problems];
+}
+
+// the factory configuration the page carries, what differs from the reset
+// value of a key; one it refuses stops the page at once
+const [factory, broken] = layer(factoryText, FACTORY_FILE);
+if (broken.length) throw new Error([FACTORY_FILE, ...broken].join('\n'));
 // what the site configuration gives, below every save
 const site = new Map<string, Value>();
-const running = new Values(schema, site);
+const running = new Values(schema, site, factory);
 const archive = new SaveArchive();
 
 // what replaces a value that must not be kept, and where a value may open
@@ -84,22 +115,12 @@ async function admit(ctx: Context, module: string, name: string): Promise<void> 
 	);
 }
 
-// the site configuration: set lines whose values sit between the defaults and
-// every save, applied whole or not at all like a batch, the rules of every
-// module holding; returns what it refuses
+// the site configuration: set lines whose values sit between the factory
+// configuration and every save, applied whole or not at all like a batch, the
+// rules of every module holding; returns what it refuses
 export function defaults(text: string): string[] {
-	const problems: string[] = [];
-	for (const line of splitLines(text)) {
-		try {
-			const { command, args } = resolve(tokenize(line));
-			if (command.path.join(' ') !== 'set') throw new Error('client.conf holds set lines only');
-			const { key, name, rest } = schema.read(args);
-			if (!rest.length) throw new Error(`${key} misses its value`);
-			site.set(stored(key, name), schema.parse(key, rest.join(' ')));
-		} catch (e) {
-			problems.push(`${line}: ${(e as Error).message}`);
-		}
-	}
+	const [values, problems] = layer(text, SITE_CONFIG_URL);
+	for (const [k, v] of values) site.set(k, v);
 	for (const m of modules) {
 		const reason = m.validate?.(running, modules);
 		if (reason) problems.push(`${m.name}: ${reason}`);
@@ -135,7 +156,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	const lines = splitLines(text);
 	if (!lines.length) lines.push('');
 	const alone = lines.length === 1;
-	const draft = running.clone(role);
+	const draft = running.clone();
 	const titled = conversation && { id: conversation.id, title: conversation.title };
 	const ctx: Context = {
 		...scope,
@@ -207,18 +228,27 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		if (reason) broken.push(`${m.name}: ${reason}`);
 	}
 	if (broken.length) return fail(null, broken.join('\n'));
+	// the layers below the session are shared, so the registers a batch can
+	// move are those the session layer changes
+	const changed = draft.changed(running);
+	const lists = new Map<string, Promise<string[]>>();
+	const listed = (module: string) => {
+		if (!lists.has(module)) lists.set(module, inventory(ctx, module));
+		return lists.get(module)!;
+	};
+	const before = await state(running, changed, listed);
+	const after = await state(draft, changed, listed);
+	signal?.throwIfAborted();
 	if (role === 'llm') {
-		const refused = await guard(draft, scope);
+		const refused = moved(draft) ?? (await guard(before, after, scope));
 		if (refused) return fail(null, refused);
 	}
-	const [before, after] = resolved(draft);
 	const diff = schema.diff(before, after);
 	if (conversation && titled && titled.title !== conversation.title) {
 		if (conversation.title) diff.push(`- title ${schema.quote(conversation.title)}`);
 		diff.push(`+ title ${schema.quote(titled.title)}`);
 		conversation.title = titled.title;
 	}
-	const changed = draft.changed(running);
 	running.assign(draft);
 	for (const m of modules) {
 		if (changed.some((k) => k.startsWith(m.name + ' '))) m.apply?.(running);
@@ -226,14 +256,71 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	return { ok: true, text: [...out, ...diff].join('\n') || comment('no change') };
 }
 
-// the change as the page sees it: every value resolved through the layers,
-// before the batch then after it
-function resolved(
-	draft: Values
-): [Record<string, Value | undefined>, Record<string, Value | undefined>] {
-	const keys = [...new Set([...running.stored(), ...draft.stored()])];
-	const of = (c: Values) => Object.fromEntries(keys.map((k) => [k, c.get(...schema.unstore(k))]));
-	return [of(running), of(draft)];
+// the items of a module, as its sources list them from the running
+// configuration, a source that fails listing none
+async function inventory(ctx: Context, module: string): Promise<string[]> {
+	const m = modules.find((x) => x.name === module);
+	if (!m?.items) return [];
+	const groups = await m.items({ ...ctx, running }).catch(() => []);
+	return groups.flatMap((g) => g.names);
+}
+
+// the registers a set of stored keys names, each with the value in force
+// through the layers of a configuration; a register of an item exists while
+// some layer names the item or its module lists it
+async function state(
+	config: Values,
+	keys: string[],
+	listed: (module: string) => Promise<string[]>
+): Promise<Record<string, Value>> {
+	const out: Record<string, Value> = {};
+	for (const k of keys) {
+		const [key, name] = unstore(k);
+		const module = key.split(' ')[0];
+		if (name !== undefined && !config.names(module).includes(name)) {
+			if (!(await listed(module)).includes(name)) continue;
+		}
+		const value = config.get(key, name);
+		if (value !== undefined) out[k] = value;
+	}
+	return out;
+}
+
+// what a configuration sends: every secret of an item with a url, as its
+// stored key, its value and that url
+type Sending = [string, Value, Value];
+
+function sent(config: ConfigReader): Sending[] {
+	const out: Sending[] = [];
+	for (const [key, def] of schema.list()) {
+		const module = key.split(' ')[0];
+		const url = schema.list().find(([k, d]) => d.kind === 'url' && k.startsWith(module + ' '));
+		if (def.kind !== 'secret' || !url) continue;
+		for (const name of config.names(module)) {
+			const value = config.get(key, name);
+			const to = config.get(url[0], name);
+			if (value !== undefined && to !== undefined) out.push([stored(key, name), value, to]);
+		}
+	}
+	return out;
+}
+
+// on a batch of the model, a secret the user or the site gave goes only where
+// a configuration they chose sends it: the running one before the batch, the
+// startup-config or a save; a value the model writes goes anywhere, the model
+// knowing it; returns why the batch stops, if it does
+function moved(draft: ConfigReader): string | null {
+	const chosen = [archive.startup(), ...archive.list().map((s) => s.values)].map((v) =>
+		running.reader(v)
+	);
+	const known = [running, ...chosen].flatMap(sent);
+	for (const [k, value, to] of sent(draft)) {
+		const given = known.filter(([kk, v]) => kk === k && v === value);
+		if (!given.length || given.some(([, , url]) => url === to)) continue;
+		const [key, name] = unstore(k);
+		return `${key.split(' ')[0]} ${name} would send its secret to ${to}, where only the user or the site sends it`;
+	}
+	return null;
 }
 
 // whether a change opens a way out: a key naming where the page goes, a url
@@ -244,10 +331,14 @@ function opens(def: Key, from: Value | undefined, to: Value | undefined): boolea
 	return values.indexOf(to ?? '') > values.indexOf(from ?? '');
 }
 
-// what the model may change: a guarded key only once the user agrees, every
-// time, when the change opens it; returns why the batch stops, if it does
-async function guard(draft: Values, scope: Scope): Promise<string | null> {
-	const [before, after] = resolved(draft);
+// what the model may change: a guarded register only once the user agrees,
+// every time, when the change opens it; returns why the batch stops, if it
+// does
+async function guard(
+	before: Record<string, Value>,
+	after: Record<string, Value>,
+	scope: Scope
+): Promise<string | null> {
 	const from: Record<string, Value | undefined> = {};
 	const to: Record<string, Value | undefined> = {};
 	for (const k of Object.keys(after)) {

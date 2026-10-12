@@ -42,9 +42,9 @@ endif()
 
 # the files the binary embeds as C arrays, each from its one source: the page,
 # gzipped by the page build and committed so the server builds without npm,
-# the client.conf of the page, and the defaults of the server
+# the client.conf the server serves to the page, and its factory configuration
 set(EMBEDDED)
-foreach(input tools/public/index.html.gz webui/public/client.conf server/server.conf)
+foreach(input tools/public/index.html.gz server/client.conf server/server.conf)
     get_filename_component(name "${input}" NAME)
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${name}.hpp")
     add_custom_command(

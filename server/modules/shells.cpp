@@ -23,10 +23,8 @@ static std::string validate(const engine_reader & config) {
         if (!tool_word(shell)) {
             return "shells " + shell + ": a shell name takes a-z, 0-9, _ and - only, as a tool name does";
         }
-        for (const char * key : { "command", "timeout", "output" }) {
-            if (!config.get(std::string("shells ") + key, shell)) {
-                return std::string("shells ") + key + " " + shell + " is not set";
-            }
+        if (!config.get("shells command", shell)) {
+            return "shells command " + shell + " is not set";
         }
         if (job_argv(config.get("shells command", shell).value_or("")).empty()) {
             return "shells command " + shell + " names no program";
@@ -60,12 +58,14 @@ static engine_module make_shells() {
     timeout.named   = true;
     timeout.min     = 1;
     timeout.integer = true;
+    timeout.reset   = "290";
 
     // the head and the tail of the output share the budget
     engine_key output("output", ENGINE_NUMBER);
     output.named   = true;
     output.min     = 2;
     output.integer = true;
+    output.reset   = "65536";
 
     engine_module m;
     m.name = "shells";

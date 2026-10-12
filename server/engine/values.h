@@ -12,11 +12,11 @@ using values_t = std::map<std::string, std::string>;
 // a layer of the configuration: every stored key it holds, with its value
 using layer = values_t;
 
-// the defaults the binary embeds, below every other layer
-layer & defaults_layer();
+// the factory configuration the binary embeds, below every other layer
+layer & factory_layer();
 
-// a configuration as a module reads it: a layer over the defaults, then the
-// fallback of the key
+// a configuration as a module reads it: a layer over the factory
+// configuration, then the reset value of the key
 struct reader : engine_reader {
     const layer & over;
 
@@ -34,7 +34,8 @@ words_t layer_names(const layer & l, const std::string & module);
 words_t layer_lines(const layer & l, bool secrets);
 
 // what a change does, line by line: the old line after -, the new one after
-// +, every value resolved through the layers; a secret replaced by another
+// +, every value resolved through the layers, a register existing while some
+// layer names its item; a secret replaced by another
 // reads as one line, its values out of view
 words_t diff(const layer & from, const layer & to);
 

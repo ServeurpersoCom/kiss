@@ -90,7 +90,7 @@ describe('a batch', () => {
 		);
 	});
 
-	it('answers with the change of the resolved values, secrets masked', async () => {
+	it('answers with the change of the registers that exist before or after, secrets masked', async () => {
 		const k = await page('set chat system red');
 		expect((await k.run('set chat system blue', 'user')).text).toBe(
 			'- set chat system red\n+ set chat system blue'
@@ -100,6 +100,10 @@ describe('a batch', () => {
 		);
 		const key = await k.run('set endpoints url a http://a/v1\nset endpoints key a sk-123', 'user');
 		expect(key.text).toBe('+ ! endpoints key a is set\n+ set endpoints url a http://a/v1');
+		await k.run('set endpoints timeout a 9', 'user');
+		expect((await k.run('no endpoints a', 'user')).text).toBe(
+			'- ! endpoints key a is set\n- set endpoints timeout a 9\n- set endpoints url a http://a/v1'
+		);
 	});
 
 	it('runs one at a time, whoever sends it', async () => {
@@ -210,7 +214,7 @@ describe('a secret', () => {
 		await k.run('set endpoints url u http://u/v1\nset endpoints key u sk-user', 'user');
 		for (const item of ['s', 'u']) {
 			const r = await k.run(`set endpoints url ${item} http://evil/v1`, 'llm');
-			expect(r.text).toContain(`endpoints ${item} holds a secret`);
+			expect(r.text).toContain(`endpoints ${item} would send its secret`);
 		}
 		expect((await k.run('set endpoints key u sk-model', 'llm')).ok).toBe(true);
 		expect((await k.run('set endpoints timeout u 9', 'llm')).ok).toBe(true);
@@ -222,10 +226,14 @@ describe('a secret', () => {
 			expect((await k.run(lines, 'llm', { secret, grant })).ok).toBe(true);
 		}
 		expect((await k.run('set endpoints url n1 http://evil/v1', 'llm', { grant })).text).toContain(
-			'endpoints n1 holds a secret'
+			'endpoints n1 would send its secret'
 		);
 		expect((await k.run('set endpoints url fresh http://f/v1', 'llm', { grant })).ok).toBe(true);
 		expect((await k.run('set endpoints url u http://u2/v1', 'user')).ok).toBe(true);
+		expect((await k.run('copy running-config kept', 'user')).ok).toBe(true);
+		expect((await k.run('set endpoints url u http://u3/v1', 'user')).ok).toBe(true);
+		expect((await k.run('copy kept running-config', 'llm', { grant })).ok).toBe(true);
+		expect(k.settings.get('endpoints url', 'u')).toBe('http://u2/v1');
 	});
 
 	it('never prints', async () => {

@@ -58,7 +58,7 @@ export default {
 			throw beyond(['show', key, ...args.slice(2, words)], args.slice(words));
 		return { module, key, name: args[2] };
 	},
-	// the values the words name, defaults included, as set lines to paste back;
+	// the values in force the words name, as set lines to paste back;
 	// the items of a module that knows more than those set go by group, who
 	// serves them, those unavailable last, whatever keeps them away; an
 	// item names one set or known, a prefix being enough

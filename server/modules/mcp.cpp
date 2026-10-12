@@ -87,12 +87,10 @@ static engine_module make_mcp() {
     headers.named = true;
 
     engine_key timeout("timeout", ENGINE_NUMBER);
-    timeout.named    = true;
-    timeout.min      = 1;
-    timeout.integer  = true;
-    timeout.fallback = []() {
-        return std::string(MCP_TIMEOUT);
-    };
+    timeout.named   = true;
+    timeout.min     = 1;
+    timeout.integer = true;
+    timeout.reset   = MCP_TIMEOUT;
 
     engine_module m;
     m.name = "mcp";

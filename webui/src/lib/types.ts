@@ -34,8 +34,6 @@ export type Grant =
 export interface Key {
 	kind: Kind;
 	default?: Value;
-	// the defaults of some items of a collection, over the default of the key
-	defaults?: Record<string, Value>;
 	// enum choices
 	values?: readonly string[];
 	// the property whose values a css value takes: color, width, font-family
@@ -111,9 +109,10 @@ export interface Command<P = void> {
 
 // keys are written as typed: "chat model", "endpoints url" with an item name
 export interface ConfigReader {
-	// the set value, else the site value, else the default of the key
+	// the value in force: the session layer, else the site, else the factory
+	// configuration, else the reset value of the key
 	get(key: string, name?: string): Value | undefined;
-	// the items of a collection module, set or given by the site
+	// the items of a collection module some layer names
 	names(module: string): string[];
 }
 
@@ -130,9 +129,9 @@ export interface Config extends ConfigReader {
 	// replaces every key set in the session; returns the keys dropped because no
 	// module declares them anymore or their key no longer takes their value
 	load(values: Record<string, Value>): string[];
-	// keys set in a session over the values the site gives, as they would run:
-	// every stored key, sorted, what load drops left out
-	over(values: Record<string, Value>): Record<string, Value>;
+	// another configuration over the same site and factory layers, what load
+	// drops left out
+	reader(values: Record<string, Value>): Config;
 }
 
 export interface Save {

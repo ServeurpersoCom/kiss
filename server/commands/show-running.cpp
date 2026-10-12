@@ -8,7 +8,7 @@
 
 // IOS show running-config: every line the running configuration holds, as the
 // line that sets it, which copy writes to server.conf; all, every key of every
-// module with its value, defaults included
+// module with the value in force
 static step_t compile_show_running(const words_t & args) {
     if (!args.empty() && pick(args[0], { ALL }, "word").empty()) {
         fail(beyond({ "show", RUNNING_CONFIG }, args));

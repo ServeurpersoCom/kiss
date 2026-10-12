@@ -9,6 +9,7 @@ import {
 	comment
 } from '../lib/config.js';
 import { choose, pick } from '../engine/near.js';
+import { unstore } from '../engine/schema.js';
 
 // the values a name holds over client.conf: the running configuration, the
 // startup-config, or a save
@@ -21,7 +22,8 @@ export function values(ctx: Context, name: string): Record<string, Value> {
 // a configuration as it runs: its values over client.conf, sorted, a key no
 // module declares anymore or a value its key no longer takes left out
 export function effective(ctx: Context, name: string): Record<string, Value> {
-	return ctx.config.over(values(ctx, name));
+	const config = ctx.config.reader(values(ctx, name));
+	return Object.fromEntries(config.stored().map((k) => [k, config.get(...unstore(k))!]));
 }
 
 // a configuration as the lines that show it, or with secrets the lines that

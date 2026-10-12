@@ -40,7 +40,9 @@ export const titled = (title: string, quote: (value: string) => string): string 
 // what stands for a secret kept out of view, in the lines the history keeps;
 // never a value, as its brackets tell
 export const REMOVED = '<removed>';
-// optional file next to the page: set lines that become the defaults of a site
+// the factory configuration the page carries, and the optional file next to
+// the page that a site writes over it: set lines both
+export const FACTORY_FILE = 'factory client.conf';
 export const SITE_CONFIG_URL = 'client.conf';
 export const PIPE = '|';
 // a word this many edits away from a candidate per three letters is a typo

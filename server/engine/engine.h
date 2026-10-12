@@ -37,19 +37,20 @@ enum engine_role {
 struct engine_key {
     engine_key(std::string n, engine_kind k) : name(std::move(n)), kind(k) {}
 
-    std::string                  name;
-    engine_kind                  kind;
+    std::string                name;
+    engine_kind                kind;
     // one value per item of a collection, the item named right before the value
-    bool                         named = false;
+    bool                       named = false;
     // the choices of an enum
-    std::vector<std::string>     values;
+    std::vector<std::string>   values;
     // the bounds of a number, both included, and whether it is whole
-    std::optional<double>        min;
-    std::optional<double>        max;
-    bool                         integer = false;
-    // the value when no layer holds one, read when asked: the host name, the
+    std::optional<double>      min;
+    std::optional<double>      max;
+    bool                       integer = false;
+    // the reset value of the register, as the machine powers on: written in
+    // the declaration, or measured as the module registers, the host name, the
     // start directory
-    std::function<std::string()> fallback;
+    std::optional<std::string> reset;
 };
 
 // what a module reads: the value of a key through every layer, none when no
@@ -118,12 +119,13 @@ constexpr const char * ENGINE_SYSTEM = "KiSS Operating System";
 // the name left out when empty
 std::string engine_component(const std::string & name, const std::string & version);
 
-// the defaults the binary embeds: set lines, below every other layer; returns
-// what it refuses, empty when it takes them all
-std::string engine_defaults(const std::string & text);
+// the factory configuration the binary embeds: set lines, what differs from
+// the reset value of a key, below every other layer; returns what it refuses,
+// a reset value its key does not take included, empty when it takes them all
+std::string engine_factory(const std::string & text);
 
 // the startup-config: the file server.conf runs as a batch of the
-// administrator over the defaults, and copy running-config startup-config
+// administrator over the factory configuration, and copy running-config startup-config
 // writes it back
 engine_result engine_start(const std::string & path, const std::string & version);
 

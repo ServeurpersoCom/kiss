@@ -1,37 +1,31 @@
-import type { Config, Role, Schema, Value } from '../lib/types.js';
+import type { Config, Schema, Value } from '../lib/types.js';
 import { stored, unstore } from './schema.js';
 
-// a configuration: the keys set in the session, over the values the site gives, over
-// the defaults of the schema; the site layer is shared by every copy, and a
-// copy written by the model moves no secret: on an item that held one when the
-// copy began it changes every key but the url, while unset, drop and load fall
-// back to values the user or the site chose; a secret and a url born in the
-// same copy go together, the url asking the user
+// a configuration: the keys set in the session, over the values the site
+// gives, over the factory configuration, over the reset value of each key;
+// the site and the factory layers are shared by every copy
 export class Values implements Config {
 	private map: Map<string, Value>;
-	// the keys set in the session when the copy began
-	private before: Map<string, Value>;
 
 	constructor(
 		private schema: Schema,
 		private site: Map<string, Value>,
-		map?: Map<string, Value>,
-		private role: Role = 'user'
+		private factory: Map<string, Value>,
+		map?: Map<string, Value>
 	) {
 		this.map = new Map(map);
-		this.before = new Map(map);
 	}
 
 	get(key: string, name?: string): Value | undefined {
 		const k = stored(key, name);
 		if (this.map.has(k)) return this.map.get(k);
 		if (this.site.has(k)) return this.site.get(k);
-		const def = this.schema.find(key);
-		return (name !== undefined ? def?.defaults?.[name] : undefined) ?? def?.default;
+		if (this.factory.has(k)) return this.factory.get(k);
+		return this.schema.find(key)?.default;
 	}
 
 	names(module: string): string[] {
-		const names = this.stored()
+		const names = [...this.stored(), ...this.factory.keys()]
 			.map(unstore)
 			.filter(([key, name]) => name && key.startsWith(module + ' '))
 			.map(([, name]) => name!);
@@ -39,15 +33,6 @@ export class Values implements Config {
 	}
 
 	set(key: string, value: Value, name?: string): void {
-		const module = key.split(' ')[0];
-		if (this.role === 'llm' && name && this.schema.find(key)?.kind === 'url') {
-			const held = this.schema.list().some(([k, def]) => {
-				const at = stored(k, name);
-				const secret = def.kind === 'secret' && k.startsWith(module + ' ');
-				return secret && (this.before.has(at) || this.site.has(at));
-			});
-			if (held) throw new Error(`${module} ${name} holds a secret, only the user changes its url`);
-		}
 		this.map.set(stored(key, name), value);
 	}
 
@@ -93,15 +78,16 @@ export class Values implements Config {
 		}
 	}
 
-	over(values: Record<string, Value>): Record<string, Value> {
-		const layer = new Values(this.schema, this.site);
-		layer.load(values);
-		return Object.fromEntries(layer.stored().map((k) => [k, layer.get(...unstore(k))!]));
+	// another configuration over the same site and factory layers, what load
+	// drops left out
+	reader(values: Record<string, Value>): Values {
+		const config = new Values(this.schema, this.site, this.factory);
+		config.load(values);
+		return config;
 	}
 
-	// a copy written with the rights of a role
-	clone(role: Role): Values {
-		return new Values(this.schema, this.site, this.map, role);
+	clone(): Values {
+		return new Values(this.schema, this.site, this.factory, this.map);
 	}
 
 	// stored keys whose value differs from the other configuration

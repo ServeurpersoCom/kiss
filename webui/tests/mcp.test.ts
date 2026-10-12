@@ -817,7 +817,7 @@ describe('an MCP server', () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
 		expect((await p.engine.run('set mcp url a http://evil/mcp', 'llm')).text).toContain(
-			'mcp a holds a secret'
+			'mcp a would send its secret'
 		);
 	});
 });

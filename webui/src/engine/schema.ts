@@ -69,10 +69,9 @@ function audit(key: string, def: Key): string | null {
 	if (def.kind === 'enum' && !def.values?.length) return `${key}: enum without values`;
 	if (def.guard && def.kind !== 'enum' && def.kind !== 'url' && def.kind !== 'string')
 		return `${key}: guard on no url, string or enum`;
-	for (const value of [def.default, ...Object.values(def.defaults ?? {})]) {
-		if (value === undefined) continue;
+	if (def.default !== undefined) {
 		try {
-			check(def, value);
+			check(def, def.default);
 		} catch (e) {
 			return `${key}: bad default, ${(e as Error).message}`;
 		}

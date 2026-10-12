@@ -76,7 +76,6 @@ file; no file grows with the features.
 
 ```
 webui/                   the page, as FRONTEND.md describes it
-webui/public/client.conf   the site configuration the page and the server serve by default
 server/main.cpp          the start: defaults, startup-config, console, listener
 server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run
 server/commands/         one file per command, registered by existing
@@ -93,7 +92,8 @@ server/job.cpp|h         spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
 server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
-server/server.conf       the defaults the binary embeds
+server/server.conf       the factory configuration the binary embeds
+server/client.conf       the client.conf the server serves when its directory has none
 vendor/                  cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
 tools/public/            index.html.gz, the page the binary embeds
 tools/xxd.cmake          embeds a file as a C array
@@ -105,7 +105,7 @@ build.cmd                the same on Windows, with Visual Studio Build Tools and
 format.sh                clang-format over the C++, vendors excluded
 ```
 
-Every file has one source: the binary embeds `webui/public/client.conf` and `server/server.conf` as
+Every file has one source: the binary embeds `server/client.conf` and `server/server.conf` as
 they are. `tools/public/index.html.gz` is the one built file under git, so a C++ developer builds
 the server with CMake alone; the page build writes it, gzipped deterministically.
 
@@ -165,16 +165,20 @@ back to the file whole.
 A value resolves through layers, the first that holds it winning:
 
 1. the running configuration;
-2. `server/server.conf`, embedded in the binary, as `client.conf` sits below every save of the page;
-3. the fallback of the key: the host name of the machine for `server hostname`, the start directory
-   for `server cwd`.
+2. the factory configuration `server/server.conf`, embedded in the binary, only what differs from a
+   reset value;
+3. the reset value the key declares: the host name of the machine for `server hostname`, the start
+   directory for `server cwd`, `8089` for `server port`.
+
+A batch answers with its change, every register the running layer moves, read through the layers
+before and after, a register of an item existing while a layer names the item, as on the page.
 
 ### One file for every machine
 
 One `server.conf` serves every machine: it is copied unchanged to `forge`, `studio` and `nomad`.
 What differs from one machine to another is found on each, never written per OS: a shell whose
 program is not found on the PATH stays out, the log and `show shells` saying which, `! shell zsh
-left out, zsh is found nowhere`, `! shell bash runs /usr/bin/bash`. The default configuration
+left out, zsh is found nowhere`, `! shell bash runs /usr/bin/bash`. The factory configuration
 therefore lists every candidate shell and each machine serves the ones it has.
 
 ### Modules
@@ -204,29 +208,21 @@ therefore lists every candidate shell and each machine serves the ones it has.
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
 
-### The defaults
+### The factory configuration
+
+Every key powers on at the reset value the tree above gives it. The factory configuration
+`server/server.conf` holds only what differs from them: the shells, a command line each.
 
 ```
-! server.conf: the defaults the KiSS server embeds
-set server host 127.0.0.1
-set server port 8089
-set server log debugging
-set server buffered 65536
 set shells command bash bash -s
-set shells timeout bash 290
-set shells output bash 65536
 set shells command zsh zsh -s
 set shells command powershell powershell -NoProfile -NonInteractive -Command "<boot>"
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
-set view output 65536
-set view image 52428800
-set view pixels 100000000
-set view side 1920
-set view quality 85
 ```
 
-Every shell carries its own `timeout`, 290 seconds, and `output`, 65536 bytes, as `bash` shows.
-`<boot>` stands for the PowerShell bootstrap below, written in full in the file.
+Every shell runs at the reset values of its other keys, `timeout` 290 seconds and `output` 65536
+bytes, until a line sets its own. `<boot>` stands for the PowerShell bootstrap below, written in
+full in the file.
 
 Each machine serves the shells it has: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1
 on Windows, and PowerShell 7 wherever it is installed; on Windows the bash of Git Bash or of WSL
@@ -519,7 +515,7 @@ tunnel.
 
 Prebuilt static binaries: Linux built against musl, macOS with no dependency outside the system,
 Windows with the static runtime (`/MT`). Each archive holds `server` and nothing else; the page and
-the default configuration live inside it.
+the factory configuration live inside it.
 
 ## Batches
 

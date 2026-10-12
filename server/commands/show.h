@@ -4,7 +4,7 @@
 
 #include "engine/values.h"
 
-// the values the words name, defaults included, as set lines to paste back
+// the values in force the words name, as set lines to paste back
 std::string show_module(const reader &      config,
                         const std::string & module,
                         const std::string & key,

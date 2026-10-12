@@ -35,9 +35,9 @@ int main(int argc, char ** argv) {
     log_info("Server", "%s, %s", ENGINE_SYSTEM, engine_component("", KISS_VERSION).c_str());
 
     const std::string refused =
-        engine_defaults(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));
+        engine_factory(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));
     if (!refused.empty()) {
-        log_error("Server", "The embedded defaults refuse:\n%s", refused.c_str());
+        log_error("Server", "The factory configuration refuses:\n%s", refused.c_str());
         return 1;
     }
     const engine_result started = engine_start(STARTUP_FILE, KISS_VERSION);

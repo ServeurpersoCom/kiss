@@ -9,23 +9,28 @@ static engine_module make_view() {
     engine_key output("output", ENGINE_NUMBER);
     output.min     = 2;
     output.integer = true;
+    output.reset   = "65536";
 
     engine_key image("image", ENGINE_NUMBER);
     image.min     = 1;
     image.integer = true;
+    image.reset   = "52428800";
 
     engine_key pixels("pixels", ENGINE_NUMBER);
     pixels.min     = 1;
     pixels.integer = true;
+    pixels.reset   = "100000000";
 
     engine_key side("side", ENGINE_NUMBER);
     side.min     = 1;
     side.integer = true;
+    side.reset   = "1920";
 
     engine_key quality("quality", ENGINE_NUMBER);
     quality.min     = 1;
     quality.max     = 100;
     quality.integer = true;
+    quality.reset   = "85";
 
     engine_module m;
     m.name = "view";

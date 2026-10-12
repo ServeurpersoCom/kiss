@@ -4,9 +4,9 @@ import { listed } from './copy.js';
 import show from './show.js';
 import { pick } from '../engine/near.js';
 
-// IOS show running-config: every key not at its default, as the line that
-// sets it; all, every key of every module, defaults included, as show
-// <module> lists it
+// IOS show running-config: what the session and the site set over the
+// factory configuration, as the lines that set it; all, every key of every
+// module with the value in force, as show <module> lists it
 export default {
 	path: ['show', RUNNING_CONFIG],
 	roles: ['user', 'llm'],

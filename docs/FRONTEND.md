@@ -85,6 +85,7 @@ inlined. It talks to an OpenAI compatible endpoint and to MCP servers straight f
 KiSS server of `server/`, described in `BACKEND.md`, is one MCP server among others.
 
 ```
+webui/client.conf      the factory configuration the page bundles
 webui/src/engine/      the CLI: parse, schema, values, registry, run, archive
 webui/src/commands/    one file per command, registered by existing
 webui/src/modules/     one file per module: its keys, rules, checks, how it applies to the page
@@ -106,12 +107,13 @@ plugin declared wrong or twice stops the page at load, never later.
 
 ### Values
 
-A value resolves through layers, the first that holds it winning: what the session sets, then
-`client.conf`, then the default of the item, then the default of the key. A save keeps the session
-layer only, and so does the startup-config. A key is two fixed words, a module then a key; a key of
-a collection takes the item name next, and the value always comes last. Its kind is `string`,
-`number`, `enum`, `url`, `secret` or `css`, a value of the CSS property it names, checked by the
-schema before anything runs.
+A value resolves through layers, the first that holds it winning, as on a device of Cisco IOS: what
+the session sets, then `client.conf` of the site, then the factory configuration `webui/client.conf`
+the page bundles, then the reset value the key declares. The factory configuration holds only what
+differs from a reset value. A save keeps the session layer only, and so does the startup-config. A
+key is two fixed words, a module then a key; a key of a collection takes the item name next, and the
+value always comes last. Its kind is `string`, `number`, `enum`, `url`, `secret` or `css`, a value
+of the CSS property it names, checked by the schema before anything runs.
 
 ### A batch
 
@@ -122,9 +124,13 @@ One batch runs at a time, whoever sends it: the user or the model.
 2. The lines run in order on a draft: a copy of the running configuration and of the title of the
    conversation the batch was sent in.
 3. The rules of every module hold on the draft.
-4. For the model, the firewall reads the resolved change and asks the user when it must.
+4. For the model, the commit reads where the draft sends every secret, then the firewall reads the
+   resolved change and asks the user when it must.
 5. The draft replaces the running configuration and the title, the modules whose keys changed
-   apply to the page, and the batch answers with its output, then its change, `-` then `+`.
+   apply to the page, and the batch answers with its output, then its change, `-` then `+`: every
+   register the session layer moves, read through the layers before and after, a register of an
+   item existing while a layer names the item or its module lists it, so a line shown holds before
+   or after the batch.
 
 A failure at any step applies nothing. A batch of a stopped turn neither starts, nor runs another
 line, nor replaces anything.
@@ -164,10 +170,11 @@ answer given once leaves a way out open. Since `set`, `no`, `erase` and `copy` a
 of resolved values, they are guarded alike. Everything else, the model of the chat, its prompt, the
 style, the headers, the sampling, the model changes freely, the change shown in its output.
 
-On an item that held a secret before the batch the model changes every key but the url, whatever
-the user answers: a secret goes to a URL the user or the site chose, never to one the model chose.
-A secret and a url born in one batch go together, in either order, the url asking the user, who
-refuses both at once.
+Before the firewall asks, the commit reads where the draft sends every secret: a secret the user or
+the site gave goes only to a url a configuration they chose sends it to, the running one before the
+batch, the startup-config or a save, whatever the user answers; a value the model writes goes
+anywhere, the model knowing it. A secret and a url born in one batch go together, in either order,
+the url asking the user, who refuses both at once.
 
 What loses data asks too, once the user confirms it, whoever asks for an erase and the model for a
 copy to the startup-config or a save: nothing is left that the user alone may do.
@@ -199,7 +206,7 @@ line    = command [ "|" filter ]
 command = "set" key [ value ]                a secret left out is asked
         | "no" key [ value ] | "no" module item  a value is left as IOS does
         | "show" module [ word [ item ] ] | "show" module item
-        | "show running-config" [ "all" ]    what differs from the defaults, or every key
+        | "show running-config" [ "all" ]    the overlays, or the state of every key
         | "show" ( "startup-config" | "css" | "version" | "title" )
         | "show saves" [ save ]              every save, or one as the lines that set it
         | "show conversations"
@@ -283,19 +290,21 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - Each conversation answers on its own, beside the others: its turn, its Stop and its questions
   are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
   the turn that asked it.
-- A value resolves from what the session sets, over `client.conf`, over the default of its key;
+- A value resolves from what the session sets, over `client.conf`, over the factory configuration,
+  over the reset value of its key;
   `erase running-config` drops what the session sets, a copy to `running-config` puts back the
   configuration it names. `client.conf` applies whole or not at all, like a batch.
 - Every configuration shows as it runs, over `client.conf`, the keys no module declares anymore left
   out: `show`, `show diff` and `export` alike, while a save keeps what the session sets only, so a
-  `client.conf` changed reaches every save. `show running-config` lists what differs from the
-  defaults, `show running-config all` every key of every module as `show <module>` lists it.
+  `client.conf` changed reaches every save. `show running-config` lists what the session and the
+  site set over the factory, `show running-config all` every key of every module as `show <module>`
+  lists it.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
-- On an item that held a secret before the batch, the model changes every key but the url: a secret
-  goes to a URL the user or the site chose, never to one the model chose; a secret and a url born in
-  one batch go together, in either order.
+- A secret the user or the site gave goes only to a url a configuration they chose sends it to,
+  never to one the model chose, whatever line moves it; a secret and a url born in one batch go
+  together, in either order.
 - The model opens a way out only once the user agrees, every time, whatever command spells the
   change: a url given a value, a tool opened; closing never asks.
 - A question offers always only for a call, and says what it gives.
@@ -698,10 +707,10 @@ set style sheet input 'form.svelte-composer { max-width: 64rem }'
 ## Site defaults
 
 An optional `client.conf` next to `index.html` gives a site its defaults, for instance the LLM a
-fresh page talks to. It holds `set` lines only, read at every page load, below every save of the
-user. `webui/public/client.conf` is the default the build copies into `webui/dist/` and the KiSS
-server embeds: its backend at the relative URL `mcp`. A site replaces it with its own. Anyone who
-can load the page can read it, so a key set there is public.
+fresh page talks to. It holds `set` lines only, read at every page load, over the factory
+configuration and below every save of the user. The KiSS server serves the one of the directory it
+runs in, else `server/client.conf` it embeds: its backend at the relative URL `mcp`. Anyone who can
+load the page can read it, so a key set there is public.
 
 ```
 set endpoints url prod https://example.com/v1

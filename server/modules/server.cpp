@@ -38,8 +38,7 @@ static std::string host_name() {
 
 // the directory the server starts in
 static std::string start_directory() {
-    static const std::string dir = std::filesystem::current_path().u8string();
-    return dir;
+    return std::filesystem::current_path().u8string();
 }
 
 static bool tool_word(const std::string & s) {
@@ -97,31 +96,37 @@ static void apply(const engine_reader & config) {
 }
 
 static engine_module make_server() {
+    engine_key host("host", ENGINE_STRING);
+    host.reset = "127.0.0.1";
+
     engine_key port("port", ENGINE_NUMBER);
     port.min     = 1;
     port.max     = 65535;
     port.integer = true;
+    port.reset   = "8089";
 
     engine_key hostname("hostname", ENGINE_STRING);
-    hostname.fallback = host_name;
+    hostname.reset = host_name();
 
     engine_key cwd("cwd", ENGINE_STRING);
-    cwd.fallback = start_directory;
+    cwd.reset = start_directory();
 
     engine_key log("log", ENGINE_ENUM);
     log.values = { std::begin(LOG_LEVELS), std::end(LOG_LEVELS) };
+    log.reset  = "debugging";
 
     // the bytes of the last lines of the log show logging keeps, 0 none
     engine_key buffered("buffered", ENGINE_NUMBER);
     buffered.min     = 0;
     buffered.integer = true;
+    buffered.reset   = "65536";
 
     engine_module m;
     m.name = "server";
     m.role =
         "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, "
         "the directory its tools start in, its log level";
-    m.keys.push_back(engine_key("host", ENGINE_STRING));
+    m.keys.push_back(host);
     m.keys.push_back(port);
     m.keys.push_back(hostname);
     m.keys.push_back(engine_key("key", ENGINE_SECRET));
