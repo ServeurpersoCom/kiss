@@ -48,10 +48,11 @@
 		color: var(--fg);
 		background: var(--bg);
 	}
-	/* every scrollbar thin, its thumb a share of the text */
+	/* every scrollbar thin and the same wherever it sits: its thumb a share of
+	   the text, its track the background of the page */
 	:global(*) {
 		scrollbar-width: thin;
-		scrollbar-color: var(--thumb) transparent;
+		scrollbar-color: var(--thumb) var(--bg);
 	}
 	:global(::placeholder) {
 		color: var(--fg-dim);
@@ -135,7 +136,7 @@
 			inset: 0;
 			z-index: 4;
 			border: none;
-			background: rgb(0 0 0 / 0.35);
+			background: var(--veil);
 		}
 		.composer {
 			padding: 0 0.5rem 0.5rem;

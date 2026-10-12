@@ -55,6 +55,7 @@
 
 <style>
 	.thread {
+		--fade: 2rem;
 		flex: 1;
 		overflow-y: auto;
 		min-height: 0;
@@ -65,7 +66,21 @@
 		gap: 1.2rem;
 		max-width: var(--width);
 		margin: 0 auto;
-		padding: 1.5rem 1rem 2rem;
+		padding: 1.5rem 1rem var(--fade);
+	}
+	/* the thread fades into the background above the composer: a layer held
+	   at the bottom of the scrolling box, as tall as the space under the last
+	   message, so the end of the thread reads whole and what scrolls up fades
+	   under it; the scrollbar and the clicks pass it by */
+	.thread::after {
+		content: '';
+		display: block;
+		position: sticky;
+		bottom: 0;
+		height: var(--fade);
+		margin-top: calc(-1 * var(--fade));
+		background: linear-gradient(transparent, var(--bg));
+		pointer-events: none;
 	}
 	.empty {
 		text-align: center;
