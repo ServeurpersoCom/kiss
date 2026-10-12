@@ -7,8 +7,8 @@ const text = (args: Record<string, unknown>): string =>
 	typeof args.lines === 'string' ? args.lines : '';
 
 export default {
-	name: 'config',
-	description: prompts.config,
+	name: 'client_config',
+	description: prompts.client_config,
 	parameters: {
 		type: 'object',
 		properties: {

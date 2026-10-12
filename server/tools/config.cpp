@@ -1,5 +1,5 @@
-// config.cpp: the config tool, a batch of CLI lines on the engine, as the
-// config tool of KiSS runs them on the page
+// config.cpp: the config tool, a batch of CLI lines on the engine, as
+// client_config runs them on the page
 
 #include "engine/schema.h"
 #include "engine/text.h"

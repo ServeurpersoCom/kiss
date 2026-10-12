@@ -262,7 +262,7 @@ describe('an MCP server', () => {
 			await p.go()
 		).done;
 		const names = p.bodies[0].tools.map((t) => t.function.name);
-		expect(names).toEqual(['config', 'bash_tool', 'snap', 'fail', 'wait', 'search']);
+		expect(names).toEqual(['client_config', 'bash_tool', 'snap', 'fail', 'wait', 'search']);
 		expect(p.bodies[1].tools).toEqual(p.bodies[0].tools);
 	});
 
@@ -552,7 +552,7 @@ describe('an MCP server', () => {
 			await p.go()
 		).done;
 		expect(p.bodies[0].tools.map((t) => t.function.name)).toEqual([
-			'config',
+			'client_config',
 			'bash_tool',
 			'snap',
 			'fail',
@@ -578,8 +578,8 @@ describe('an MCP server', () => {
 			throw new TypeError('fetch failed: down');
 		};
 		const p = await page({ down }, [
-			stream([call('config', { lines: 'show display' })]),
-			stream([call('config', { lines: 'show display' })]),
+			stream([call('client_config', { lines: 'show display' })]),
+			stream([call('client_config', { lines: 'show display' })]),
 			stream([{ content: 'ok' }]),
 			stream([{ content: 'again' }])
 		]);
@@ -606,7 +606,7 @@ describe('an MCP server', () => {
 				? open(req)
 				: new Response('{"error":"unauthorized"}', { status: 401 });
 		const p = await page({ locked }, [
-			stream([call('config', { lines: 'set mcp key locked good' })]),
+			stream([call('client_config', { lines: 'set mcp key locked good' })]),
 			stream([{ content: 'ok' }])
 		]);
 		await p.engine.run('set mcp url locked http://locked/mcp', 'user');
@@ -673,7 +673,7 @@ describe('an MCP server', () => {
 				a: legacy(SHELL),
 				b: modern([
 					{ name: 'bash_tool', run: text('x') },
-					{ name: 'config', run: text('x') }
+					{ name: 'client_config', run: text('x') }
 				])
 			},
 			[stream([{ content: 'ok' }])]
@@ -683,7 +683,7 @@ describe('an MCP server', () => {
 			await p.go()
 		).done;
 		expect(p.bodies[0].tools.map((t) => t.function.name)).toEqual([
-			'config',
+			'client_config',
 			'bash_tool',
 			'snap',
 			'fail',
@@ -691,7 +691,7 @@ describe('an MCP server', () => {
 		]);
 		const told = p.bodies[0].messages[0].content;
 		expect(told).toContain('mcp b: tool bash_tool left out, mcp a serves it');
-		expect(told).toContain('mcp b: tool config left out, KiSS serves it');
+		expect(told).toContain('mcp b: tool client_config left out, KiSS serves it');
 	});
 
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
@@ -702,7 +702,7 @@ describe('an MCP server', () => {
 		expect((await p.engine.run('show tools use', 'user')).text).toBe(
 			[
 				'! KiSS',
-				'set tools use config on',
+				'set tools use client_config on',
 				'! mcp a',
 				'set tools use bash_tool consent',
 				'set tools use snap off',
@@ -716,7 +716,7 @@ describe('an MCP server', () => {
 
 	it('turned off by a call is reached by no later call of the same round', async () => {
 		const off = {
-			name: 'config',
+			name: 'client_config',
 			arguments: JSON.stringify({ lines: 'set tools use bash_tool off' })
 		};
 		const bash = {
@@ -748,7 +748,7 @@ describe('an MCP server', () => {
 			stream([{ content: 'ok' }])
 		]);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await p.engine.run('set tools use bash_tool off\nset tools use config off', 'user');
+		await p.engine.run('set tools use bash_tool off\nset tools use client_config off', 'user');
 		await (
 			await p.go()
 		).done;

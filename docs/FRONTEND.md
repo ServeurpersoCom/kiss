@@ -75,7 +75,7 @@ modules
     preview <tool> <argument>       display preview, the argument of this tool over it
 
 tools
-  config                            lines
+  client_config                     lines
 ```
 
 ## The page
@@ -88,7 +88,7 @@ KiSS server of `server/`, described in `BACKEND.md`, is one MCP server among oth
 webui/src/engine/      the CLI: parse, schema, values, registry, run, archive
 webui/src/commands/    one file per command, registered by existing
 webui/src/modules/     one file per module: its keys, rules, checks, how it applies to the page
-webui/src/tools/       the tools of KiSS itself: config, the CLI as the model calls it
+webui/src/tools/       the tools of KiSS itself: client_config, the CLI as the model calls it
 webui/src/protocols/   one file per protocol an endpoint speaks: chat, messages, responses
 webui/src/lib/         the page side: agent, api, mcp, state, conversation, db
 webui/src/components/  thread, message, round, ask, dialog, composer, sidebar
@@ -207,9 +207,9 @@ command = "set" key [ value ]                a secret left out is asked
         | "copy" config config               alone; the model writes another config once confirmed
         | "write" [ "memory" ]               alone, IOS's copy running-config startup-config
         | "title" value                      the title of this conversation
-        | "export" [ "all" | config | id ] alone on its line
+        | "export" [ "conversations" | config | id ] alone on its line
         | "import"                           alone on its line
-        | "erase" ( "all" | config | id )    alone, once the user confirms it
+        | "erase" ( "conversations" | config | id ) alone, once the user confirms it
 key     = module word [ item ]               an item names one of a collection
 config  = "running-config" | "startup-config" | save   any prefix: run, start, a save
 save    = name                               whole when a copy makes it, one of that name giving way
@@ -492,9 +492,9 @@ One line under the turn says what the system does now, redrawn at every frame of
 - `Retrying hf - Error 429 - Attempt 2/1800 - 3,200 ms` while a busy endpoint is asked again
 - `Thinking - 1,040 ms - 52 tokens - 50.0 t/s` while the model reasons
 - `Writing - 3,518 ms - 177 tokens - 51.3 t/s` while it answers
-- `Calling config - 312 ms` while a call streams
-- `Running config - 47 ms` while the tool runs
-- `Round 2 - Running config - 47 ms` from the second round on
+- `Calling client_config - 312 ms` while a call streams
+- `Running client_config - 47 ms` while the tool runs
+- `Round 2 - Running client_config - 47 ms` from the second round on
 
 It hides while a question of the turn stands, as the time the user takes is none of the system. A
 request asks the endpoint to count its tokens, `stream_options` of OpenAI, one per chunk counting

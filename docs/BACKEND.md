@@ -363,7 +363,7 @@ KiSS, a machine is open to the model for reading only.
 ### The config tool
 
 `<name>_config` takes `description` and `lines`, runs the lines as a batch of CLI on the engine and
-answers with its output and its change, as the `config` tool of KiSS does. Its description lists
+answers with its output and its change, as the `client_config` tool of the page does. Its description lists
 every module with its keys and what it is, from the modules themselves, so the model knows the
 server before it reads a line of it. KiSS configures every
 backend from the page through it, under the consent firewall when the model calls it, and any other
