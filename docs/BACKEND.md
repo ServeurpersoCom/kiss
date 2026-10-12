@@ -42,8 +42,8 @@ modules
     pixels <count>                  100000000, decoded at most
     side <pixels>                   1920, the longest side sent
     quality <1..100>                85, of a JPEG made again
-  mcp
-    url <item> <url>                a server relayed at mcp/<item>
+  proxy
+    url <item> <url>                a server relayed at proxy/<item>
     key <item> <secret>
     headers <item> <Name: value; ...>
     timeout <item> <seconds>        300
@@ -84,7 +84,7 @@ server/tools/            one file per tool source, registered by existing
 server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
 server/listener.cpp|h    the socket, moved at once when server host or server port changes
 server/http.cpp|h        the routes and the checks of Host, Origin and the key
-server/proxy.cpp|h       the relay of the MCP servers the mcp module names
+server/proxy.cpp|h       the relay of the servers the proxy module names
 server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
 server/term.h            the terminal of the console, per OS: raw mode, a key, the width
 server/log.cpp|h         the log: [Module] Line
@@ -204,10 +204,10 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `view pixels`           | number | pixels an image may declare before it is decoded                |
 | `view side`             | number | the longest side of an image sent, in pixels                    |
 | `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
-| `mcp url <item>`        | string | URL of an MCP server this server relays at `mcp/<item>`         |
-| `mcp key <item>`        | secret | bearer key sent to that server                                  |
-| `mcp headers <item>`    | string | more headers sent to it, `Name: value; Name: value`             |
-| `mcp timeout <item>`    | number | seconds it may stay silent                                      |
+| `proxy url <item>`      | string | URL of a server this server relays at `proxy/<item>`            |
+| `proxy key <item>`      | secret | bearer key sent to that server                                  |
+| `proxy headers <item>`  | string | more headers sent to it, `Name: value; Name: value`             |
+| `proxy timeout <item>`  | number | seconds it may stay silent                                      |
 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
@@ -376,12 +376,12 @@ answers `input_required` with a form of one text field per secret, MCP elicitati
 era, its message naming the url each secret goes to. The client asks the user and calls again with
 the values in `inputResponses`, out of the context of the model; the batch runs again with them and
 answers `! the user typed server key`. The server keeps nothing between the two calls. A url an MCP
-client gives a route asks the user to let it, a yes field of the same form, `Let mcp/exa relay
+client gives a route asks the user to let it, a yes field of the same form, `Let proxy/exa relay
 https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
 holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
-mcp/b relay https://b.example/mcp, mcp key b with it`, so a key is never typed again for a url that
-changes. A line that writes the value of a secret is refused, and a client that takes no form, every
-client of the 2025 era, is told the secret goes in `server.conf` or on the console.
+proxy/b relay https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
+that changes. A line that writes the value of a secret is refused, and a client that takes no form,
+every client of the 2025 era, is told the secret goes in `server.conf` or on the console.
 
 ## The shell contract
 
@@ -474,28 +474,29 @@ The `serverInfo` of either era names the server by its hostname, its title `KiSS
 its version, and as its description the line it gives of itself in `show version`:
 `server forge 5633ee7 (2026-10-11) on linux`. KiSS lists that line in its own `show version`.
 
-## MCP routes
+## Proxy routes
 
-The server relays the MCP servers its `mcp` module names, each at `mcp/<name>` of the server, so a
+The server relays the servers its `proxy` module names, each at `proxy/<name>` of the server, so a
 page reaches a server it could not: one without CORS, or one only this machine sees. The page
-reaches a route through its proxy key, `set mcp proxy deepwiki backend` beside `set mcp url
-deepwiki https://mcp.deepwiki.com/mcp`, and the model may add a route through the config tool, the
-user letting its url and typing its key, the form naming where each goes. `show mcp` writes after
-each route where a client reaches it, `! mcp/deepwiki relays https://mcp.deepwiki.com/mcp`.
-The relay speaks HTTP, not MCP: each request is built anew with its method, its body, the headers
-`Accept`, `Mcp-Session-Id`, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Last-Event-ID` and
-every `Mcp-Param-` header, then the headers and the key of the route, the key of this server never
-sent on. The answer comes back with its status, its body streamed as it arrives, and the headers
-`Content-Type`, `Mcp-Session-Id` and `MCP-Protocol-Version`. A server that refuses the key of its
-route answers 502 with the fix, `set mcp key <name>`, so the page never takes it for a refusal of
-its own key; one that redirects answers 502 naming where, `set mcp url <name>`, since a redirect
-followed would carry the key elsewhere. A route the configuration does not name answers 404. The
-client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
+reaches a route through its proxy key, `set mcp proxy deepwiki backend` beside `set mcp url deepwiki
+https://mcp.deepwiki.com/mcp` on the page and `set proxy url deepwiki https://mcp.deepwiki.com/mcp`
+on the server, and the model may add a route through the config tool, the user letting its url and
+typing its key, the form naming where each goes. `show proxy` writes after each route where a client
+reaches it, `! proxy/deepwiki relays https://mcp.deepwiki.com/mcp`. The relay speaks HTTP, not MCP:
+each request is built anew with its method, its body, the headers `Accept`, `Mcp-Session-Id`,
+`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Last-Event-ID` and every `Mcp-Param-` header,
+then the headers and the key of the route, the key of this server never sent on. The answer comes
+back with its status, its body streamed as it arrives, and the headers `Content-Type`,
+`Mcp-Session-Id` and `MCP-Protocol-Version`. A server that refuses the key of its route answers 502
+with the fix, `set proxy key <name>`, so the page never takes it for a refusal of its own key; one
+that redirects answers 502 naming where, `set proxy url <name>`, since a redirect followed would
+carry the key elsewhere. A route the configuration does not name answers 404. The client speaks
+HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
 
 ## HTTP and security
 
 - `GET /` serves the embedded page, `GET /client.conf` the site configuration, `POST /mcp` the MCP,
-  `/mcp/<name>` the servers it relays, behind the same checks.
+  `/proxy/<name>` the servers it relays, behind the same checks.
   The site configuration is `client.conf` of the directory the server runs in, else the one it
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
@@ -531,7 +532,8 @@ through the binary.
 5. Static builds of the three platforms.
 6. The storage tool for conversations and configuration, called by KiSS and never by the model.
 
-Then the server grows by modules alone, the engine unchanged, as `mcp` relays MCP servers:
+Then the server grows by modules alone, the engine unchanged, as `proxy` relays servers:
 
 - `endpoints`: a router for OpenAI and Anthropic compatible endpoints, keys held on the server, for
   several users.
+- `mcp`: an MCP client of the server itself, the agentic loop run on the backend.

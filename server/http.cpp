@@ -1,6 +1,5 @@
 // http.cpp: the routes of the server: the page, its site configuration, the
-// MCP and the MCP servers it relays, behind the checks of Host, Origin and the
-// key
+// MCP and the servers it relays, behind the checks of Host, Origin and the key
 
 #include "http.h"
 
@@ -19,8 +18,8 @@
 // the site configuration a directory gives the page it serves
 static const char * const SITE_FILE = "client.conf";
 
-// the path of a relayed MCP server, its route name captured
-static const char * const ROUTE_PATH = R"(/mcp/([a-z0-9_-]+))";
+// the path of a relayed server, its route name captured
+static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+))";
 
 // the name and the port of a Host header: example.com:8089, [::1]:8089
 static void host_header(const std::string & value, std::string & name, std::string & port) {

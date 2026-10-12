@@ -11,6 +11,9 @@ export interface Remote {
 	timeout: number;
 }
 
+// the path of the KiSS server where it relays a server, beside its MCP
+const PROXY = 'proxy';
+
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -41,9 +44,9 @@ function own(config: ConfigReader, module: string, name: string): Remote {
 }
 
 // every item of the module that has a url, sorted by name; an item with a
-// proxy reaches its server through the relay of the proxy, at the url of the
-// proxy then its own name, with the key and headers of the proxy, in its own
-// seconds
+// proxy reaches its server through the relay of the proxy, at proxy/<name>
+// beside the url of the proxy, with the key and headers of the proxy, in its
+// own seconds
 export function remotes(config: ConfigReader, module: string): Remote[] {
 	return config
 		.names(module)
@@ -55,7 +58,7 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 			return {
 				...relay,
 				name,
-				url: `${relay.url}/${name}`,
+				url: new URL(`${PROXY}/${name}`, new URL(relay.url, location.href)).href,
 				timeout: own(config, module, name).timeout
 			};
 		});

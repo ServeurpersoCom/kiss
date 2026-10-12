@@ -9,7 +9,7 @@ static words_t next_set(const words_t & args) {
 }
 
 // set server port 9000. A model may write the lines of an MCP client, so a
-// secret never comes in one: set mcp key deepwiki, without its value, asks
+// secret never comes in one: set proxy key deepwiki, without its value, asks
 // the user to type it, and the batch runs again with what they typed
 static step_t compile_set(const words_t & args) {
     const key_words   kw   = schema_read(args);

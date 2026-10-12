@@ -468,7 +468,7 @@ describe('an MCP server', () => {
 		const relayed = modern([{ name: 'search', run: text('hit') }]);
 		const p = await page(
 			{
-				k: (req) => (new URL(req.url).pathname === '/mcp/exa' ? relayed(req) : own(req)),
+				k: (req) => (new URL(req.url).pathname === '/proxy/exa' ? relayed(req) : own(req)),
 				e: modern([{ name: 'search', run: text('direct') }])
 			},
 			[]

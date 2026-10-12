@@ -14,8 +14,8 @@ export default {
 		headers: { kind: 'string', named: true },
 		// seconds a call of a tool may take, until the turn stops at the latest
 		timeout: { kind: 'number', min: 0.1, default: '310', named: true },
-		// the KiSS server of another item that relays this one, reached at its
-		// url then the name of this one, with its key and headers
+		// the KiSS server of another item that relays this one, reached at
+		// proxy/<name> beside its url, with its key and headers
 		proxy: { kind: 'string', named: true, guard: true, of: 'mcp' }
 	},
 	validate(config) {

@@ -1,4 +1,4 @@
-// proxy.cpp: the relay of the MCP servers the mcp module names
+// proxy.cpp: the relay of the servers the proxy module names
 //
 // Each request is built anew from the one it relays, never spliced: its
 // method, its body, the headers of the first list below and every Mcp-Param-
@@ -39,11 +39,11 @@ struct route_conf {
 static std::optional<route_conf> route_of(const std::string & name) {
     std::optional<route_conf> r;
     engine_with([&](const engine_reader & config) {
-        const auto url = config.get("mcp url", name);
+        const auto url = config.get("proxy url", name);
         if (url) {
-            r = route_conf{ *url, config.get("mcp key", name).value_or(""),
-                            config.get("mcp headers", name).value_or(""),
-                            std::stoi(config.get("mcp timeout", name).value_or("0")) };
+            r = route_conf{ *url, config.get("proxy key", name).value_or(""),
+                            config.get("proxy headers", name).value_or(""),
+                            std::stoi(config.get("proxy timeout", name).value_or("0")) };
         }
     });
     return r;
@@ -65,7 +65,7 @@ static void refuse(httplib::Response & res, int status, const std::string & why)
 void proxy(const httplib::Request & req, httplib::Response & res, const std::string & route) {
     const auto r = route_of(route);
     if (!r) {
-        refuse(res, 404, "no mcp route \"" + route + "\"");
+        refuse(res, 404, "no proxy route \"" + route + "\"");
         return;
     }
     std::string host, path;
@@ -103,25 +103,25 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         client->open_stream(req.method, path, {}, headers, req.body, req.get_header_value("Content-Type")));
     if (!stream->is_valid()) {
         const std::string why = r->url + " cannot be reached: " + httplib::to_string(stream->error);
-        log_error("MCP", "Route mcp/%s: %s", route.c_str(), why.c_str());
+        log_error("Proxy", "Route proxy/%s: %s", route.c_str(), why.c_str());
         refuse(res, 502, why);
         return;
     }
     const int status = stream->response->status;
     if (status == httplib::StatusCode::Unauthorized_401 || status == httplib::StatusCode::Forbidden_403) {
-        const std::string why = r->url + " answered " + std::to_string(status) + " -> set mcp key " + route;
-        log_error("MCP", "Route mcp/%s: %s", route.c_str(), why.c_str());
+        const std::string why = r->url + " answered " + std::to_string(status) + " -> set proxy key " + route;
+        log_error("Proxy", "Route proxy/%s: %s", route.c_str(), why.c_str());
         refuse(res, 502, why);
         return;
     }
     if (status >= httplib::StatusCode::MultipleChoices_300 && status < httplib::StatusCode::BadRequest_400) {
         const std::string why = r->url + " answered " + std::to_string(status) + " to " +
-                                stream->response->get_header_value("Location") + " -> set mcp url " + route;
-        log_error("MCP", "Route mcp/%s: %s", route.c_str(), why.c_str());
+                                stream->response->get_header_value("Location") + " -> set proxy url " + route;
+        log_error("Proxy", "Route proxy/%s: %s", route.c_str(), why.c_str());
         refuse(res, 502, why);
         return;
     }
-    log_debug("MCP", "Route mcp/%s: %s %d", route.c_str(), req.method.c_str(), status);
+    log_debug("Proxy", "Route proxy/%s: %s %d", route.c_str(), req.method.c_str(), status);
     res.status = status;
     for (const char * h : RESPONSE_HEADERS) {
         if (stream->response->has_header(h)) {

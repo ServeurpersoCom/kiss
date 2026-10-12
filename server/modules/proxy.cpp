@@ -1,13 +1,14 @@
-// mcp.cpp: the mcp module: the MCP servers this server relays, each at
-// mcp/<name> of this server: the URL of the server, the key sent to it, more
+// proxy.cpp: the proxy module: the servers this server relays, each at
+// proxy/<name> of this server: the URL of the server, the key sent to it, more
 // headers, and the seconds the server may stay silent
 
 #include "engine/engine.h"
 #include "engine/text.h"
 #include "log.h"
 
-// the seconds a relayed server may stay silent, the default of the page
-static const char * const MCP_TIMEOUT = "300";
+// the seconds a relayed server may stay silent, ten less than the 310 the page
+// waits on a call of an MCP server
+static const char * const PROXY_TIMEOUT = "300";
 
 // the headers the relay writes itself, which a route never sets
 static const char * const OWN_HEADERS[] = { "host", "content-length", "transfer-encoding", "connection",
@@ -46,37 +47,38 @@ static std::string header_problem(const std::string & headers) {
 }
 
 static std::string validate(const engine_reader & config) {
-    for (const std::string & route : config.names("mcp")) {
+    for (const std::string & route : config.names("proxy")) {
         if (!route_word(route)) {
-            return "mcp " + route + ": a route name takes a-z, 0-9, _ and - only, as a path does";
+            return "proxy " + route + ": a route name takes a-z, 0-9, _ and - only, as a path does";
         }
-        const auto url = config.get("mcp url", route);
+        const auto url = config.get("proxy url", route);
         if (!url) {
-            return "mcp url " + route + " is not set";
+            return "proxy url " + route + " is not set";
         }
         if (!starts_with(*url, "http://") && !starts_with(*url, "https://")) {
-            return "mcp url " + route + " " + *url + " opens with http:// or https://";
+            return "proxy url " + route + " " + *url + " opens with http:// or https://";
         }
-        const std::string problem = header_problem(config.get("mcp headers", route).value_or(""));
+        const std::string problem = header_problem(config.get("proxy headers", route).value_or(""));
         if (!problem.empty()) {
-            return "mcp headers " + route + ": " + problem;
+            return "proxy headers " + route + ": " + problem;
         }
     }
     return "";
 }
 
 static void apply(const engine_reader & config) {
-    for (const std::string & route : config.names("mcp")) {
-        log_info("MCP", "Route mcp/%s relays %s", route.c_str(), config.get("mcp url", route).value_or("").c_str());
+    for (const std::string & route : config.names("proxy")) {
+        log_info("Proxy", "Route proxy/%s relays %s", route.c_str(),
+                 config.get("proxy url", route).value_or("").c_str());
     }
 }
 
 // where a client reaches a route
 static words_t notes(const engine_reader & config, const std::string & route) {
-    return { comment("mcp/" + route + " relays " + config.get("mcp url", route).value_or("")) };
+    return { comment("proxy/" + route + " relays " + config.get("proxy url", route).value_or("")) };
 }
 
-static engine_module make_mcp() {
+static engine_module make_proxy() {
     engine_key url("url", ENGINE_STRING);
     url.named = true;
 
@@ -90,12 +92,12 @@ static engine_module make_mcp() {
     timeout.named   = true;
     timeout.min     = 1;
     timeout.integer = true;
-    timeout.reset   = MCP_TIMEOUT;
+    timeout.reset   = PROXY_TIMEOUT;
 
     engine_module m;
-    m.name = "mcp";
+    m.name = "proxy";
     m.role =
-        "the MCP servers this server relays, each at mcp/<name> beside its own mcp, its key going to its url alone; a "
+        "the servers this server relays, each at proxy/<name> beside its own mcp, its key going to its url alone; a "
         "client reaches one there with the key of this server, the page by set mcp proxy <name> <this server>, and a "
         "route opens nothing before a client does";
     m.keys.push_back(url);
@@ -108,4 +110,4 @@ static engine_module make_mcp() {
     return m;
 }
 
-ENGINE_MODULE(make_mcp);
+ENGINE_MODULE(make_proxy);
