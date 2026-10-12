@@ -123,13 +123,14 @@ std::string engine_component(const std::string & name, const std::string & versi
 
 // the factory configuration the binary embeds: set lines, what differs from
 // the reset value of a key, below every other layer; returns what it refuses,
-// a reset value its key does not take included, empty when it takes them all
+// a reset value its key does not take and a rule of a module it breaks
+// included, empty when it takes them all
 std::string engine_factory(const std::string & text);
 
-// the startup-config: the file server.conf runs as a batch of the
-// administrator over the factory configuration, and copy running-config startup-config
-// writes it back
-engine_result engine_start(const std::string & path, const std::string & version);
+// the startup-config: the file server.conf runs over the factory
+// configuration block by block, as IOS boots, a block it refuses logged and
+// left out; copy running-config startup-config writes it back
+void engine_start(const std::string & path, const std::string & version);
 
 // one batch at a time, whoever sends it; typed fills the set lines of secrets
 // written without their value

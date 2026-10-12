@@ -291,7 +291,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A value resolves from what the session sets, over `client.conf`, over the factory configuration,
   over the reset value of its key;
   `erase running-config` drops what the session sets, a copy to `running-config` puts back the
-  configuration it names. `client.conf` applies whole or not at all, like a batch.
+  configuration it names.
 - Every configuration shows as it runs, over `client.conf`, the keys no module declares anymore left
   out: `show`, `show diff` and `export` alike, while a save keeps what the session sets only, so a
   `client.conf` changed reaches every save. `show running-config` lists what the session and the
@@ -326,6 +326,12 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   names no conversation; every conversation it names goes in one write, `erase conversations`
   keeping the pinned ones, which go only when named. The model writes a configuration but the
   running-config once the user confirms it too.
+- `client.conf`, then the startup-config, enter as IOS boots: a line the parser refuses stays out,
+  then the rest goes block by block, an item with all its keys, a block a rule refuses staying out
+  and tried again once others entered; the console tells each one, `startup-config: endpoints u:
+  endpoints: endpoints u has the url of endpoints s`, and the page starts on the rest, so the
+  running configuration always holds the rules. The factory configuration holds them too, or the
+  page does not start.
 - The page starts with the startup-config over `client.conf`: a copy to `startup-config` writes it
   and `erase startup-config` empties it, a save never touches it; the archive changes only once the
   browser stores it.

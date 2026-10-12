@@ -827,18 +827,37 @@ describe('the conversations', () => {
 });
 
 describe('client.conf', () => {
-	it('applies whole or not at all, the rules of every module holding', async () => {
+	it('leaves out a line or a block the rules refuse, the rest entering', async () => {
 		vi.resetModules();
 		const k = await import('../src/engine/run.js');
 		expect(k.defaults('set chat system red\nset endpoints key s sk-site')).toEqual([
-			'endpoints: endpoints s has no url'
+			'endpoints s: endpoints: endpoints s has no url'
 		]);
-		expect(k.defaults('set chat system red\nshow running-config')).toEqual([
-			'show running-config: client.conf holds set lines only'
-		]);
-		k.start();
-		expect(k.settings.get('chat system')).toBe('');
+		expect(k.settings.get('endpoints key', 's')).toBeUndefined();
+		expect(
+			k.defaults(
+				'set chat system red\nshow running-config\nset mcp proxy a b\nset mcp url a http://a/mcp\nset mcp url b http://b/mcp'
+			)
+		).toEqual(['show running-config: client.conf holds set lines only']);
+		expect(k.start()).toEqual([]);
+		expect(k.settings.get('chat system')).toBe('red');
+		expect(k.settings.get('mcp proxy', 'a')).toBe('b');
 		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
+	});
+});
+
+describe('the startup-config', () => {
+	it('leaves out a block the rules refuse over client.conf, the rest starting', async () => {
+		const before = await page();
+		await before.run('set endpoints url u http://x/v1\nset chat system kept', 'user');
+		await before.run('copy running-config startup-config', 'user');
+		vi.resetModules();
+		const k = await import('../src/engine/run.js');
+		k.defaults('set endpoints url s http://x/v1');
+		expect(k.start()).toEqual(['endpoints u: endpoints: endpoints u has the url of endpoints s']);
+		expect(k.settings.get('chat system')).toBe('kept');
+		expect(k.settings.get('endpoints url', 'u')).toBeUndefined();
+		expect((await k.run('show endpoints', 'user')).ok).toBe(true);
 	});
 });
 

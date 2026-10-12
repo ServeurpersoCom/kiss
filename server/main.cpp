@@ -40,11 +40,7 @@ int main(int argc, char ** argv) {
         log_error("Server", "The factory configuration refuses:\n%s", refused.c_str());
         return 1;
     }
-    const engine_result started = engine_start(STARTUP_FILE, KISS_VERSION);
-    if (!started.ok) {
-        log_error("Server", "Cannot start on %s:\n%s", STARTUP_FILE, started.text.c_str());
-        return 1;
-    }
+    engine_start(STARTUP_FILE, KISS_VERSION);
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);

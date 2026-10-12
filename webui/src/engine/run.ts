@@ -48,13 +48,15 @@ function layer(text: string, file: string): [Map<string, Value>, string[]] {
 }
 
 // the factory configuration the page carries, what differs from the reset
-// value of a key; one it refuses stops the page at once
+// value of a key; a line it refuses or a rule it breaks stops the page at once
 const [factory, broken] = layer(factoryText, FACTORY_FILE);
 if (broken.length) throw new Error([FACTORY_FILE, ...broken].join('\n'));
 // what the site configuration gives, below every save
 const site = new Map<string, Value>();
 const running = new Values(schema, site, factory);
 const archive = new SaveArchive();
+const unruly = breaks(running);
+if (unruly) throw new Error(`${FACTORY_FILE}: ${unruly}`);
 
 // what replaces a value that must not be kept, and where a value may open
 const QUOTE = /["']/;
@@ -115,24 +117,79 @@ async function admit(ctx: Context, module: string, name: string): Promise<void> 
 	);
 }
 
-// the site configuration: set lines whose values sit between the factory
-// configuration and every save, applied whole or not at all like a batch, the
-// rules of every module holding; returns what it refuses
-export function defaults(text: string): string[] {
-	const [values, problems] = layer(text, SITE_CONFIG_URL);
-	for (const [k, v] of values) site.set(k, v);
+// why a configuration breaks the rules of a module, if it does
+function breaks(config: ConfigReader): string | null {
 	for (const m of modules) {
-		const reason = m.validate?.(running, modules);
-		if (reason) problems.push(`${m.name}: ${reason}`);
+		const reason = m.validate?.(config, modules);
+		if (reason) return `${m.name}: ${reason}`;
 	}
-	if (problems.length) site.clear();
-	return problems;
+	return null;
 }
 
-// the startup-config becomes the running configuration, over client.conf
-export function start(): void {
-	running.load(archive.startup());
+// a layer enters the device as IOS runs a configuration at boot, block by
+// block: an item with every key it sets, else a key alone; a block that
+// breaks a rule stays out, tried again once others entered, as one item may
+// name another; returns each block that stays out and why
+function enter(
+	values: Map<string, Value>,
+	put: (stored: string, value: Value) => void,
+	drop: (stored: string) => void
+): string[] {
+	const blocks = new Map<string, string[]>();
+	for (const k of [...values.keys()].sort()) {
+		const [key, name] = unstore(k);
+		const block = name === undefined ? key : `${key.split(' ')[0]} ${name}`;
+		blocks.set(block, [...(blocks.get(block) ?? []), k]);
+	}
+	const why = new Map<string, string>();
+	for (let moved = true; moved;) {
+		moved = false;
+		for (const [block, keys] of blocks) {
+			for (const k of keys) put(k, values.get(k)!);
+			const reason = breaks(running);
+			if (!reason) {
+				blocks.delete(block);
+				moved = true;
+				continue;
+			}
+			for (const k of keys) drop(k);
+			why.set(block, reason);
+		}
+	}
+	return [...blocks.keys()].map((b) => `${b}: ${why.get(b)}`);
+}
+
+// the site configuration: set lines whose values sit between the factory
+// configuration and every save, entering line by line then block by block;
+// returns each line and block that stays out and why
+export function defaults(text: string): string[] {
+	const [values, problems] = layer(text, SITE_CONFIG_URL);
+	site.clear();
+	return [
+		...problems,
+		...enter(
+			values,
+			(k, v) => site.set(k, v),
+			(k) => site.delete(k)
+		)
+	];
+}
+
+// the startup-config enters the running configuration over client.conf the
+// same way, a key no module declares anymore or a value its key no longer
+// takes left out; returns each key and block that stays out and why
+export function start(): string[] {
+	const dropped = running.load(archive.startup());
+	const values = new Map(Object.entries(running.values()));
+	running.load({});
+	const put = (k: string, v: Value) => {
+		const [key, name] = unstore(k);
+		running.set(key, v, name);
+	};
+	const drop = (k: string) => running.unset(...unstore(k));
+	const problems = [...dropped.map((k) => `${k}: no key takes it`), ...enter(values, put, drop)];
 	for (const m of modules) m.apply?.(running);
+	return problems;
 }
 
 // one batch at a time, whoever sends it: the user or the model

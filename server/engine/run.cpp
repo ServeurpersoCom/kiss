@@ -100,13 +100,9 @@ static std::set<std::pair<std::string, std::string>> urls(const layer & l) {
 // that neither the running configuration before the batch nor the
 // startup-config holds, the user not yet letting them in this call
 static std::vector<engine_ask> unlet(const layer & before, const layer & draft, const engine_typed & typed) {
-    auto known = urls(before);
-    try {
-        const auto startup = urls(startup_layer());
-        known.insert(startup.begin(), startup.end());
-    } catch (const std::runtime_error &) {
-        // a startup-config that does not read vouches for nothing
-    }
+    auto       known   = urls(before);
+    const auto startup = urls(startup_layer());
+    known.insert(startup.begin(), startup.end());
     std::vector<engine_ask> out;
     for (const auto & u : urls(draft)) {
         const auto let = typed.find(u.first);
@@ -232,16 +228,80 @@ static engine_result batch(layer &              target,
     return { true, out.empty() ? comment("no change") : join(out, "\n"), {} };
 }
 
-layer startup_layer() {
+// the block a line that compiles belongs to, as IOS groups the lines of an
+// interface: the item a set line names, else the key it names, else the line
+// alone
+static std::string block_of(const std::string & line) {
+    const auto [cmd, args] = resolve(tokenize(split_filter(line).first));
+    if (cmd->path != words_t{ "set" }) {
+        return line;
+    }
+    const key_words kw = schema_read(args);
+    return kw.item.empty() ? kw.key : kw.module + " " + kw.item;
+}
+
+// why a batch refused, its lines joined, what it did not apply left out
+static std::string refusal(const std::string & text) {
+    const std::string prefix = ERROR_PREFIX;
+    words_t           out;
+    for (const std::string & l : split(text, '\n')) {
+        const std::string s = starts_with(l, prefix) ? l.substr(prefix.size()) : l;
+        if (s != "nothing applied") {
+            out.push_back(s);
+        }
+    }
+    return join(out, "; ");
+}
+
+// a configuration enters a layer as IOS runs one at boot: a line the parser
+// refuses stays out, then the rest goes block by block, a block its batch
+// refuses staying out, tried again once others entered, as one item may name
+// another; returns each line and block that stays out and why
+static words_t enter(layer & target, const std::string & text) {
+    words_t                                      out;
+    std::vector<std::pair<std::string, words_t>> blocks;
+    for (const std::string & line : split_lines(text)) {
+        try {
+            compile(line, false);
+        } catch (const std::runtime_error & e) {
+            out.push_back(line + ": " + e.what());
+            continue;
+        }
+        const std::string b  = block_of(line);
+        const auto        it = std::find_if(blocks.begin(), blocks.end(), [&](const auto & x) { return x.first == b; });
+        if (it == blocks.end()) {
+            blocks.push_back({ b, { line } });
+        } else {
+            it->second.push_back(line);
+        }
+    }
+    std::map<std::string, std::string> why;
+    for (bool moved = true; moved;) {
+        moved = false;
+        for (auto it = blocks.begin(); it != blocks.end();) {
+            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {});
+            if (r.ok) {
+                it    = blocks.erase(it);
+                moved = true;
+            } else {
+                why[it->first] = refusal(r.text);
+                ++it;
+            }
+        }
+    }
+    for (const auto & b : blocks) {
+        out.push_back(b.first + ": " + why[b.first]);
+    }
+    return out;
+}
+
+layer startup_layer(words_t * skipped) {
     bool              found = false;
     const std::string text  = archive_read(found);
     layer             startup;
-    if (!found) {
-        return startup;
-    }
-    const engine_result r = batch(startup, text, ENGINE_ADMIN, false, {});
-    if (!r.ok) {
-        fail(archive_path() + ":\n" + r.text);
+    const words_t     out = found ? enter(startup, text) : words_t{};
+    if (skipped) {
+        *skipped = out;
     }
     return startup;
 }
@@ -278,27 +338,37 @@ std::string engine_factory(const std::string & text) {
             }
         }
     }
-    if (problems.empty()) {
-        factory_layer() = factory;
+    if (!problems.empty()) {
+        return join(problems, "\n");
+    }
+    factory_layer() = factory;
+    const layer none;
+    for (const engine_module & m : schema_modules()) {
+        const std::string reason = m.validate ? m.validate(reader(none)) : "";
+        if (!reason.empty()) {
+            problems.push_back(m.name + ": " + reason);
+        }
+    }
+    if (!problems.empty()) {
+        factory_layer().clear();
     }
     return join(problems, "\n");
 }
 
-engine_result engine_start(const std::string & path, const std::string & version) {
+void engine_start(const std::string & path, const std::string & version) {
     std::lock_guard<std::mutex> lock(g_mutex);
     archive_open(path);
     g_version = version;
-    try {
-        g_running = startup_layer();
-    } catch (const std::runtime_error & e) {
-        return { false, e.what(), {} };
+    words_t skipped;
+    g_running = startup_layer(&skipped);
+    for (const std::string & s : skipped) {
+        log_error("Engine", "%s skips %s", archive_path().c_str(), s.c_str());
     }
     for (const engine_module & m : schema_modules()) {
         if (m.apply) {
             m.apply(reader(g_running));
         }
     }
-    return { true, "", {} };
 }
 
 // a batch that changes the running configuration says who changed it, as IOS

@@ -158,9 +158,13 @@ collection, then the value. `!` starts a comment, `no` removes an item or a valu
 The startup-config is `server.conf` of the directory the server runs in: the root of the repository
 during development, where git ignores it, the working directory of a systemd unit, the directory of
 a prebuilt binary. Several servers run on one machine from several directories. At start the file
-runs as a batch of the administrator, and a line it refuses stops the server with the reason. The
-result is the running configuration, in memory; `copy running-config startup-config` writes it
-back to the file whole.
+runs as IOS boots: a line the parser refuses stays out, then the rest goes block by block, an item
+with all its lines, a block a rule refuses staying out and tried again once others entered, as one
+item may name another. The log tells each one, `server.conf skips shells z: shells: shells command z
+is not set`, and the server starts on the rest, never stopped by a bad line. The factory
+configuration holds the rules of every module, or the binary does not start. The result is the
+running configuration, in memory; `copy running-config startup-config` writes it back to the file
+whole.
 
 A value resolves through layers, the first that holds it winning:
 

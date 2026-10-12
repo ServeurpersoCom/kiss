@@ -13,7 +13,7 @@ if (site?.ok && !site.headers.get('content-type')?.includes('html')) {
 		console.error(`${SITE_CONFIG_URL}: ${problem}`);
 }
 
-start();
+for (const problem of start()) console.error(`startup-config: ${problem}`);
 await restore();
 
 // development only: run CLI lines from the browser console, kiss('show running', 'llm')
