@@ -514,17 +514,15 @@ the default configuration live inside it.
 Each batch ends with a test from end to end on a Linux machine, a KiSS page running a command
 through the binary.
 
-1. Skeleton: the engine with the `server` module, `server.conf` with layers and prefixes, HTTP,
-   page, security, MCP of both eras, the config tool, the console and the log.
+1. Skeleton: the engine with the `server` module, `server.conf`, HTTP, page, security, MCP of both
+   eras, the config tool, the console and the log.
 2. Process layer on POSIX and the shell tools, output repair and truncation, SSE and cancel.
 3. The view tool.
 4. Windows: process layer, OEM decoding, the PowerShell bootstrap, checked on Windows 10 and 11.
 5. Static builds of the three platforms.
 6. The storage tool for conversations and configuration, called by KiSS and never by the model.
 
-Then the server grows into a router by modules alone, the engine unchanged:
+Then the server grows by modules alone, the engine unchanged, as `mcp` relays MCP servers:
 
-- `mcp`: a gateway that mounts remote MCP servers, renames and filters their tools, and keeps their
-  keys on the server, so no browser ever holds them.
 - `endpoints`: a router for OpenAI and Anthropic compatible endpoints, keys held on the server, for
   several users.
