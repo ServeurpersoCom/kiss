@@ -6,7 +6,8 @@
 	import { forks, path } from '../lib/conversation.js';
 	import type { Entry } from '../lib/types.js';
 
-	// distance from the bottom under which the thread follows new content
+	// distance from the bottom under which the thread follows new content, and
+	// stays at the bottom when its box shrinks, under the hints of the CLI
 	const FOLLOW_PX = 48;
 
 	let box: HTMLElement;
@@ -28,6 +29,7 @@
 			if (follow) box.scrollTop = box.scrollHeight;
 		});
 		observer.observe(content);
+		observer.observe(box);
 		return () => observer.disconnect();
 	});
 </script>
