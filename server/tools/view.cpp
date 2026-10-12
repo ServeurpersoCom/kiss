@@ -86,11 +86,12 @@ static bool shown(const fs::path & rel) {
 }
 
 // every entry two levels deep, sorted by path, each with the size of all it
-// holds, as find and du -sh list them
+// holds, as find and du -sh list them, then the count of the hidden ones
 static tool_result listing(const fs::path & root, const std::string & given, size_t budget, ticker & t) {
     std::map<std::string, uintmax_t> sizes = {
         { "", 0 }
     };
+    long long       hidden = 0;
     std::error_code ec;
     for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end; it.increment(ec)) {
@@ -100,6 +101,9 @@ static tool_result listing(const fs::path & root, const std::string & given, siz
         const fs::path rel = it->path().lexically_relative(root);
         if (it.depth() <= 1 && shown(rel)) {
             sizes.emplace(rel.generic_u8string(), 0);
+        } else if (it.depth() <= 1 && rel.filename().u8string()[0] == '.' && shown(rel.parent_path()) &&
+                   rel.parent_path().filename() != "node_modules") {
+            hidden++;
         }
         std::error_code fe;
         if (!it->is_regular_file(fe) || it->is_symlink(fe)) {
@@ -130,7 +134,8 @@ static tool_result listing(const fs::path & root, const std::string & given, siz
         const std::string line = human(size) + "\t" + path + "\n";
         kept.add(line.data(), line.size());
     }
-    return { kept.text() + counted((long long) sizes.size() - 1, "entry", "entries"), false };
+    const std::string tail = hidden ? ", " + std::to_string(hidden) + " hidden" : "";
+    return { kept.text() + counted((long long) sizes.size() - 1, "entry", "entries") + tail, false };
 }
 
 static std::string base64(const std::string & in) {
@@ -295,7 +300,7 @@ static std::vector<tool> view_tool(const engine_reader & config) {
                     ".\n\n"
                     "Supported path types:\n"
                     "- Directories: Lists files and directories up to 2 levels deep, ignoring hidden items and "
-                    "node_modules\n"
+                    "the contents of node_modules\n"
                     "- Image files (PNG, JPEG, GIF, WebP): Displays the image visually\n"
                     "- Text files: Displays numbered lines. You can optionally specify a view_range to see specific "
                     "lines.";
