@@ -43,7 +43,7 @@ modules
     side <pixels>                   1920, the longest side sent
     quality <1..100>                85, of a JPEG made again
   proxy
-    url <item> <url>                a server relayed at proxy/<item>
+    url <item> <url>                a server proxied at proxy/<item>
     key <item> <secret>
     auth <item> bearer|x-api-key    bearer, where the key goes
     headers <item> <Name: value; ...>
@@ -85,7 +85,7 @@ server/tools/            one file per tool source, registered by existing
 server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
 server/listener.cpp|h    the socket, moved at once when server host or server port changes
 server/http.cpp|h        the routes and the checks of Host, Origin and the key
-server/proxy.cpp|h       the relay of the servers the proxy module names
+server/proxy.cpp|h       the proxy of the servers the proxy module names
 server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
 server/term.h            the terminal of the console, per OS: raw mode, a key, the width
 server/log.cpp|h         the log: [Module] Line
@@ -205,7 +205,7 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `view pixels`           | number | pixels an image may declare before it is decoded                |
 | `view side`             | number | the longest side of an image sent, in pixels                    |
 | `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
-| `proxy url <item>`      | string | URL of a server this server relays at `proxy/<item>`            |
+| `proxy url <item>`      | string | URL of a server this server proxies at `proxy/<item>`           |
 | `proxy key <item>`      | secret | key sent to that server                                         |
 | `proxy auth <item>`     | enum   | `bearer` or `x-api-key`, where the key goes                     |
 | `proxy headers <item>`  | string | more headers sent to it, `Name: value; Name: value`             |
@@ -378,10 +378,10 @@ answers `input_required` with a form of one text field per secret, MCP elicitati
 era, its message naming the url each secret goes to. The client asks the user and calls again with
 the values in `inputResponses`, out of the context of the model; the batch runs again with them and
 answers `! the user typed server key`. The server keeps nothing between the two calls. A url an MCP
-client gives a route asks the user to let it, a yes field of the same form, `Let proxy/exa relay
+client gives a route asks the user to let it, a yes field of the same form, `Let proxy/exa proxy
 https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
 holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
-proxy/b relay https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
+proxy/b proxy https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
 that changes. A line that writes the value of a secret is refused, and a client that takes no form,
 every client of the 2025 era, is told the secret goes in `server.conf` or on the console.
 
@@ -478,17 +478,17 @@ its version, and as its description the line it gives of itself in `show version
 
 ## Proxy routes
 
-The server relays the servers its `proxy` module names, MCP servers and LLM endpoints alike, each at
-`proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
+The server proxies the servers its `proxy` module names, MCP servers and LLM endpoints alike, each
+at `proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
 this machine sees, or one whose key stays on the server. The page reaches a route through its proxy
 key, `set mcp proxy deepwiki backend` beside `set mcp url deepwiki https://mcp.deepwiki.com/mcp`, or
 `set endpoints proxy hf backend` beside `set endpoints url hf https://router.huggingface.co/v1`, and
 the server holds the route, `set proxy url hf https://router.huggingface.co/v1` and `set proxy key
 hf`; the model may add a route through the config tool, the user letting its url and typing its key,
 the form naming where each goes. `show proxy` writes after each route where a client reaches it, `!
-proxy/hf relays https://router.huggingface.co/v1`.
+proxy/hf proxies https://router.huggingface.co/v1`.
 
-The relay speaks HTTP and knows no protocol: a request to `proxy/<name>/<rest>` goes to the url of
+The proxy speaks HTTP and knows no protocol: a request to `proxy/<name>/<rest>` goes to the url of
 the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/completions` to
 `https://router.huggingface.co/v1/chat/completions`. Each request is built anew with its method, its
 body and every header but those that stay on its side (`Host`, `Origin`, `Cookie`, `Authorization`,
@@ -506,7 +506,7 @@ LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
 ## HTTP and security
 
 - `GET /` serves the embedded page, `GET /client.conf` the site configuration, `POST /mcp` the MCP,
-  `/proxy/<name>` the servers it relays, behind the same checks.
+  `/proxy/<name>` the servers it proxies, behind the same checks.
   The site configuration is `client.conf` of the directory the server runs in, else the one it
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
@@ -542,6 +542,6 @@ through the binary.
 5. Static builds of the three platforms.
 6. The storage tool for conversations and configuration, called by KiSS and never by the model.
 
-Then the server grows by modules alone, the engine unchanged, as `proxy` relays servers:
+Then the server grows by modules alone, the engine unchanged, as `proxy` proxies servers:
 
 - `mcp`: an MCP client of the server itself, the agentic loop run on the backend.

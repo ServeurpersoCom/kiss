@@ -46,11 +46,11 @@ export function endpoints(config: ConfigReader): Endpoint[] {
 // passes, the attempt about to be made, and how many the endpoint takes
 export type Retrying = (status: number, attempt: number, attempts: number) => void;
 
-// the headers that carry the key: those of the protocol, or, relayed, the key
+// the headers that carry the key: those of the protocol, or, proxied, the key
 // of the KiSS server as a bearer token beside the fixed headers of the
 // protocol, the server placing the key of the endpoint itself
 function auth(endpoint: Endpoint): Record<string, string> {
-	if (!endpoint.relayed) return endpoint.protocol.auth(endpoint.key, endpoint.headers);
+	if (!endpoint.proxied) return endpoint.protocol.auth(endpoint.key, endpoint.headers);
 	return { ...endpoint.protocol.auth('', {}), ...bearer(endpoint.key), ...endpoint.headers };
 }
 
@@ -66,7 +66,7 @@ export class EndpointError extends Error {
 }
 
 // the server's own JSON error message, else its text, as a KiSS server that
-// relays the endpoint tells what fails, else the HTTP status text: a web
+// proxies the endpoint tells what fails, else the HTTP status text: a web
 // server that is not an LLM answers with a whole HTML page
 async function failure(res: Response): Promise<EndpointError> {
 	const body = await res.text();

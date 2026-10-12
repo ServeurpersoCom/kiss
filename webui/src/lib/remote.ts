@@ -2,7 +2,7 @@ import type { ConfigReader, Image } from './types.js';
 
 // an item of a collection module that names a remote server by a url, an
 // optional key, the headers sent besides it and the seconds it has to answer:
-// endpoints and mcp; relayed, it goes through a KiSS server, the key and the
+// endpoints and mcp; proxied, it goes through a KiSS server, the key and the
 // headers those of that server
 export interface Remote {
 	name: string;
@@ -10,10 +10,10 @@ export interface Remote {
 	key: string;
 	headers: Record<string, string>;
 	timeout: number;
-	relayed: boolean;
+	proxied: boolean;
 }
 
-// the path of the KiSS server where it relays a server, beside its MCP
+// the path of the KiSS server where it proxies a server, beside its MCP
 const PROXY = 'proxy';
 
 // the module whose items name the KiSS servers a proxy takes, by their MCP
@@ -45,13 +45,13 @@ function own(config: ConfigReader, module: string, name: string): Remote {
 		key: String(config.get(`${module} key`, name) ?? ''),
 		headers: Object.fromEntries(pairs(String(config.get(`${module} headers`, name) ?? ''))),
 		timeout: Number(config.get(`${module} timeout`, name)),
-		relayed: false
+		proxied: false
 	};
 }
 
 // every item of the module that has a url, sorted by name; an item with a
 // proxy, an MCP server or an endpoint alike, reaches its server through the
-// relay of the KiSS server the proxy names, at proxy/<name> beside its MCP,
+// proxy of the KiSS server the proxy names, at proxy/<name> beside its MCP,
 // with the key and headers of that server, in its own seconds
 export function remotes(config: ConfigReader, module: string): Remote[] {
 	return config
@@ -60,13 +60,13 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 		.map((name) => {
 			const proxy = config.get(`${module} proxy`, name);
 			if (proxy === undefined) return own(config, module, name);
-			const relay = own(config, SERVERS, proxy);
+			const server = own(config, SERVERS, proxy);
 			return {
-				...relay,
+				...server,
 				name,
-				url: new URL(`${PROXY}/${name}`, new URL(relay.url, location.href)).href,
+				url: new URL(`${PROXY}/${name}`, new URL(server.url, location.href)).href,
 				timeout: own(config, module, name).timeout,
-				relayed: true
+				proxied: true
 			};
 		});
 }

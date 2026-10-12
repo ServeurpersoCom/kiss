@@ -1,6 +1,6 @@
-// proxy.cpp: the relay of the servers the proxy module names
+// proxy.cpp: the proxy of the servers the proxy module names
 //
-// Each request is built anew from the one it relays, never spliced: its method,
+// Each request is built anew from the one it proxies, never spliced: its method,
 // the rest of its path and its query after the url of the route, its body and
 // every header but those that stay on its side, then the headers of the route,
 // which replace those of the same name, and its key, placed as its auth says.
@@ -9,7 +9,7 @@
 // server that refuses the key of the route answers 502 here, so the client
 // never takes it for a refusal of the key of this server; one that redirects
 // answers 502 too, its key going to no address the route does not name. The
-// relay knows no protocol: MCP and LLM endpoints pass alike.
+// proxy knows no protocol: MCP and LLM endpoints pass alike.
 
 #include "proxy.h"
 
@@ -20,8 +20,8 @@
 #include <memory>
 #include <optional>
 
-// the headers that stay on their side of the relay, lowercase: those of the
-// connection, those that tell who each side is, the keys, and those the relay
+// the headers that stay on their side of the proxy, lowercase: those of the
+// connection, those that tell who each side is, the keys, and those the proxy
 // writes itself, a body passing uncompressed so it streams as it arrives
 static const char * const SIDE_HEADERS[] = {
     "connection",

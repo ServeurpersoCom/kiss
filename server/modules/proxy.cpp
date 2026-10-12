@@ -1,4 +1,4 @@
-// proxy.cpp: the proxy module: the servers this server relays, MCP servers and
+// proxy.cpp: the proxy module: the servers this server proxies, MCP servers and
 // LLM endpoints alike, each at proxy/<name> of this server: the URL of the
 // server, the key sent to it and where it goes, more headers, and the seconds
 // the server may stay silent
@@ -7,11 +7,11 @@
 #include "engine/text.h"
 #include "log.h"
 
-// the seconds a relayed server may stay silent, ten less than the 310 the page
+// the seconds a proxied server may stay silent, ten less than the 310 the page
 // waits on a call of an MCP server
 static const char * const PROXY_TIMEOUT = "300";
 
-// the headers the relay writes itself, which a route never sets
+// the headers the proxy writes itself, which a route never sets
 static const char * const OWN_HEADERS[] = { "host",       "content-length", "transfer-encoding",
                                             "connection", "authorization",  "x-api-key" };
 
@@ -40,7 +40,7 @@ static std::string header_problem(const std::string & headers) {
         const std::string name = lower(trim(h.substr(0, colon)));
         for (const char * own : OWN_HEADERS) {
             if (name == own) {
-                return name + " is written by the relay";
+                return name + " is written by the proxy";
             }
         }
     }
@@ -69,14 +69,14 @@ static std::string validate(const engine_reader & config) {
 
 static void apply(const engine_reader & config) {
     for (const std::string & route : config.names("proxy")) {
-        log_info("Proxy", "Route proxy/%s relays %s", route.c_str(),
+        log_info("Proxy", "Route proxy/%s proxies %s", route.c_str(),
                  config.get("proxy url", route).value_or("").c_str());
     }
 }
 
 // where a client reaches a route
 static words_t notes(const engine_reader & config, const std::string & route) {
-    return { comment("proxy/" + route + " relays " + config.get("proxy url", route).value_or("")) };
+    return { comment("proxy/" + route + " proxies " + config.get("proxy url", route).value_or("")) };
 }
 
 static engine_module make_proxy() {
@@ -104,7 +104,7 @@ static engine_module make_proxy() {
     engine_module m;
     m.name = "proxy";
     m.role =
-        "the servers this server relays, MCP servers and LLM endpoints alike, each at proxy/<name> beside its own "
+        "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> beside its own "
         "mcp, its key going to its url alone, as a bearer token or as x-api-key; a client reaches one there with the "
         "key of this server, the page by set mcp proxy or set endpoints proxy <name> <this server>, and a route opens "
         "nothing before a client does";

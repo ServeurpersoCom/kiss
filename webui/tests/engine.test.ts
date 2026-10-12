@@ -361,7 +361,7 @@ describe('the display', () => {
 });
 
 describe('a proxy', () => {
-	it('relays an endpoint through a KiSS server, its key kept there, the key of the server sent', async () => {
+	it('proxies an endpoint through a KiSS server, its key kept there, the key of the server sent', async () => {
 		const k = await page();
 		const sent: Record<string, Record<string, string>> = {};
 		vi.stubGlobal(

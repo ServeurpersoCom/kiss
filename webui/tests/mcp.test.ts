@@ -266,6 +266,33 @@ describe('an MCP server', () => {
 		expect(p.bodies[1].tools).toEqual(p.bodies[0].tools);
 	});
 
+	it('lists its tools again as each turn starts, the same from round to round', async () => {
+		const tools: Declared[] = [];
+		tools.push({
+			name: 'grow',
+			run: async () => (
+				tools.push({ name: 'grown', run: text('new') }),
+				{ content: [{ type: 'text', text: 'ok' }] }
+			)
+		});
+		const p = await page({ a: modern(tools) }, [
+			stream([call('grow', {})]),
+			stream([{ content: 'one' }]),
+			stream([{ content: 'two' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp\nset tools use grow on', 'user');
+		await (
+			await p.go()
+		).done;
+		await (
+			await p.go()
+		).done;
+		const names = (i: number) => p.bodies[i].tools.map((t) => t.function.name);
+		expect(names(0)).toEqual(['client_config', 'grow']);
+		expect(names(1)).toEqual(names(0));
+		expect(names(2)).toEqual(['client_config', 'grow', 'grown']);
+	});
+
 	it('of KiSS shows in show version with the line it gives of itself, in either era', async () => {
 		const p = await page(
 			{ a: legacy(SHELL, FORGE), b: modern(SHELL, FORGE), c: modern(SHELL) },
@@ -463,12 +490,12 @@ describe('an MCP server', () => {
 		]);
 	});
 
-	it('reaches a server through the proxy that relays it, with the key of the proxy', async () => {
+	it('reaches a server through the KiSS server that proxies it, with the key of that server', async () => {
 		const own = modern(SHELL);
-		const relayed = modern([{ name: 'search', run: text('hit') }]);
+		const proxied = modern([{ name: 'search', run: text('hit') }]);
 		const p = await page(
 			{
-				k: (req) => (new URL(req.url).pathname === '/proxy/exa' ? relayed(req) : own(req)),
+				k: (req) => (new URL(req.url).pathname === '/proxy/exa' ? proxied(req) : own(req)),
 				e: modern([{ name: 'search', run: text('direct') }])
 			},
 			[]

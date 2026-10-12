@@ -1,7 +1,7 @@
 import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } from './types.js';
 import { ALWAYS, REFUSE } from './types.js';
 import { chat, describe, pick } from './api.js';
-import { aggregate, connecting } from './mcp.js';
+import { aggregate, connecting, relist } from './mcp.js';
 import prompts from './prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
@@ -120,6 +120,7 @@ export async function turn(
 	// answered, and every tool the turn left out, as the model was told
 	const down = new Map<string, string>();
 	const told: string[] = [];
+	relist();
 	try {
 		for (; r < Number(settings.get('tools rounds')); r++) {
 			p.round = r + 1;

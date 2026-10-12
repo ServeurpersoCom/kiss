@@ -1,5 +1,5 @@
 // http.cpp: the routes of the server: the page, its site configuration, the
-// MCP and the servers it relays, behind the checks of Host, Origin and the key
+// MCP and the servers it proxies, behind the checks of Host, Origin and the key
 
 #include "http.h"
 
@@ -18,7 +18,7 @@
 // the site configuration a directory gives the page it serves
 static const char * const SITE_FILE = "client.conf";
 
-// the path of a relayed server, its route name then the rest of the path
+// the path of a proxied server, its route name then the rest of the path
 // captured
 static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+)(/.*)?)";
 
@@ -171,7 +171,7 @@ void http_routes(httplib::Server & server) {
     server.Get("/mcp", refuse);
     server.Delete("/mcp", refuse);
 
-    // the relay knows no protocol, so a page sends a relayed server the headers
+    // the proxy knows no protocol, so a page sends a proxied server the headers
     // it asks to, and reads every header the server answers, a session too
     server.Options(ROUTE_PATH, [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
@@ -179,7 +179,7 @@ void http_routes(httplib::Server & server) {
         res.set_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", req.get_header_value("Access-Control-Request-Headers"));
     });
-    const auto relay = [](const httplib::Request & req, httplib::Response & res) {
+    const auto forward = [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
         res.set_header("Access-Control-Expose-Headers", "*");
         std::string why;
@@ -192,7 +192,7 @@ void http_routes(httplib::Server & server) {
         }
         proxy(req, res, req.matches[1], req.matches[2]);
     };
-    server.Post(ROUTE_PATH, relay);
-    server.Get(ROUTE_PATH, relay);
-    server.Delete(ROUTE_PATH, relay);
+    server.Post(ROUTE_PATH, forward);
+    server.Get(ROUTE_PATH, forward);
+    server.Delete(ROUTE_PATH, forward);
 }

@@ -50,13 +50,13 @@ modules
     timeout <name> <seconds>        120
     retries <name> <count>          1800, a reply asked again on 408, 429, 5xx, 529
     pause <name> <seconds>          2, between two
-    proxy <name> <server>           guarded, the KiSS server that relays it
+    proxy <name> <server>           guarded, the KiSS server that proxies it
   mcp
     url <name> <url>                guarded
     key <name> <secret>
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        310
-    proxy <name> <server>           guarded, the KiSS server that relays it
+    proxy <name> <server>           guarded, the KiSS server that proxies it
   models                            show models lists them, by endpoint
     temperature <model> <number>
     top_p <model> <0..1>
@@ -470,13 +470,13 @@ reads the line its result keeps of each, `Image image/png, 4096 bytes`.
   written, the images of a call in its output. `max_tokens` goes as `max_output_tokens`; `top_k`,
   `min_p`, the penalties and `seed` never go.
 
-An endpoint is reached directly at its url, or through a KiSS server that relays it, as an MCP
+An endpoint is reached directly at its url, or through a KiSS server that proxies it, as an MCP
 server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of `monstre`,
 an item of `mcp`, with the key and headers of `monstre`, the key as a bearer token beside the fixed
 headers of the protocol; the server sends the key of `hf`, which stays there, where its `proxy auth`
 says, so a key of a cloud API never reaches the browser. `no endpoints proxy hf` goes direct again.
 The proxy names a KiSS server of the page that has no proxy itself, and the model sets it only once
-the user agrees, as a url. A relay that fails says why, `set proxy key hf` when the API refuses the
+the user agrees, as a url. A proxy that fails says why, `set proxy key hf` when the API refuses the
 key the server holds.
 
 ```
@@ -533,19 +533,19 @@ time of the system.
 KiSS calls the tools of any MCP server over Streamable HTTP, with the official TypeScript SDK. A
 server speaking the 2026 protocol is talked to in it, an older one through the `initialize`
 handshake. One client per server lives while its url, key, headers and timeout stay, with the tool
-list it served once connected, so the tools the model sees stay the same from turn to turn; a
-request that fails drops the client, and the next use connects again. A server connects as soon as
-the configuration names it, at load or on a change, so the first round that needs its tools finds
-them listed; a round waits only for a server still connecting, and its line names it,
-`Preparing mcp sandbox - 812 ms`. A server that fails sits out the rest of the turn, its error told
-to the model every round, and the next turn tries it again: a server that never answers costs one
-wait a turn, the tools of a turn the same from round to round.
+list it serves, asked again on that client as each turn starts, so a tool a server gains shows from
+the next turn on; a request that fails drops the client, and the next use connects again. A server
+connects as soon as the configuration names it, at load or on a change, so the first round that
+needs its tools finds them listed; a round waits only for a server still connecting, and its line
+names it, `Preparing mcp sandbox - 812 ms`. A server that fails sits out the rest of the turn, its
+error told to the model every round, and the next turn tries it again: a server that never answers
+costs one wait a turn, the tools of a turn the same from round to round.
 
-A server is reached directly at its url, or through a KiSS server that relays it: `set mcp proxy exa
-backend` reaches `exa` at `proxy/exa` beside the url of `backend`, where the KiSS server relays the
-server its `proxy` module names `exa`, with the key and headers of `backend`, the key of `exa` never
-sent; `no mcp proxy exa` goes direct again. One item, one set of tools, either way. The proxy names
-another server of the page that has no proxy itself, and the model sets it only once the user
+A server is reached directly at its url, or through a KiSS server that proxies it: `set mcp proxy
+exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, where the KiSS server proxies
+the server its `proxy` module names `exa`, with the key and headers of `backend`, the key of `exa`
+never sent; `no mcp proxy exa` goes direct again. One item, one set of tools, either way. The proxy
+names another server of the page that has no proxy itself, and the model sets it only once the user
 agrees, as a url. The backend the page comes from is `backend` in the `client.conf` the project
 ships, `set mcp url backend mcp`, wherever it runs.
 

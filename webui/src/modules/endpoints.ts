@@ -19,7 +19,7 @@ export default {
 		retries: { kind: 'number', min: 0, integer: true, default: '1800', named: true },
 		// seconds between two of them
 		pause: { kind: 'number', min: 0, default: '2', named: true },
-		// the KiSS server, an item of mcp, that relays this one, reached at
+		// the KiSS server, an item of mcp, that proxies this one, reached at
 		// proxy/<name> beside its MCP, with its key and headers
 		proxy: { kind: 'string', named: true, guard: true, of: 'mcp' }
 	},

@@ -16,8 +16,9 @@ import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
-// server, kept while its url and key stay, with the tool list it served once
-// connected, so the tools the model sees stay the same from turn to turn; a
+// server, kept while its url and key stay, with the tool list it serves, asked
+// again as each turn starts, so a tool a server gains shows from the next turn
+// on and the tools the model sees stay the same from round to round; a
 // request that fails drops the client, and the next use connects again
 
 // a client, its tool list, and whether that list came
@@ -169,35 +170,58 @@ async function called(
 // timeout; a change of any makes it another server
 const signature = (remote: Remote): string => JSON.stringify(remote);
 
+// the tools a client lists now, each called through that client
+async function listed(remote: Remote, c: Client): Promise<Tool[]> {
+	const { tools } = await c.listTools(undefined, { timeout: MCP_CONNECT_TIMEOUT_MS });
+	return tools.map((t): Tool => ({
+		name: t.name,
+		description: t.description ?? '',
+		parameters: t.inputSchema,
+		async run(ctx, args) {
+			try {
+				return await called(ctx, remote, c, { name: t.name, arguments: args });
+			} catch (e) {
+				if (ctx.signal.aborted) throw e;
+				drop(remote.name);
+				throw new Error(`mcp ${remote.name}: ${(e as Error).message}`);
+			}
+		}
+	}));
+}
+
+// a list that fails drops the client it came from, unless another one took
+// its place
+function watch(made: Connection): void {
+	made.tools.then(
+		() => (made.settled = true),
+		() => connections.get(made.remote.name) === made && drop(made.remote.name)
+	);
+}
+
 function connection(remote: Remote): Connection {
 	const held = connections.get(remote.name);
 	if (held && signature(held.remote) === signature(remote)) return held;
 	if (held) drop(remote.name);
 	const client = connect(remote);
-	const tools = client.then(async (c) => {
-		const { tools } = await c.listTools(undefined, { timeout: MCP_CONNECT_TIMEOUT_MS });
-		return tools.map((t): Tool => ({
-			name: t.name,
-			description: t.description ?? '',
-			parameters: t.inputSchema,
-			async run(ctx, args) {
-				try {
-					return await called(ctx, remote, c, { name: t.name, arguments: args });
-				} catch (e) {
-					if (ctx.signal.aborted) throw e;
-					drop(remote.name);
-					throw new Error(`mcp ${remote.name}: ${(e as Error).message}`);
-				}
-			}
-		}));
-	});
-	const made: Connection = { remote, client, tools, settled: false };
+	const made: Connection = {
+		remote,
+		client,
+		tools: client.then((c) => listed(remote, c)),
+		settled: false
+	};
 	connections.set(remote.name, made);
-	tools.then(
-		() => (made.settled = true),
-		() => connections.get(remote.name) === made && drop(remote.name)
-	);
+	watch(made);
 	return made;
+}
+
+// a turn starts on the tools every connected server serves now, each listing
+// them again on the client it holds
+export function relist(): void {
+	for (const made of connections.values()) {
+		if (!made.settled) continue;
+		made.tools = made.client.then((c) => listed(made.remote, c));
+		watch(made);
+	}
 }
 
 // the servers of the configuration a use waits for: those not down that hold
