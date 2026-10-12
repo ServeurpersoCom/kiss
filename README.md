@@ -3,7 +3,7 @@
 **A web harness with no settings panel. You talk; the model sets up the page.**
 
 One HTML file, no account, plus an optional C++ server per machine. Give it one endpoint, yourself
-or through the `kiss.conf` of the site, and the model bootstraps the rest: other endpoints, MCP
+or through the `client.conf` of the site, and the model bootstraps the rest: other endpoints, MCP
 servers, tools, style, typed by the model itself in a CLI modeled on Cisco IOS. Anything that opens
 a way out of the page waits for your yes, and a key goes from your keyboard to the page, never
 through the model.
@@ -103,9 +103,10 @@ build/server
 The server serves the page on http://127.0.0.1:8089/ and the MCP of the machine beside it, as
 `docs/BACKEND.md` describes. `./buildwebui.sh` rebuilds the page first, when it changes.
 
-It starts on `server.conf` of the directory it runs in, and serves `kiss.conf` of that directory to
-the page when there is one. To host the page alone, copy `webui/dist/index.html` to any static web
-server, with an optional `kiss.conf` beside it: `set` lines that give a fresh page its endpoints.
+It starts on `server.conf` of the directory it runs in, and serves `client.conf` of that directory
+to the page when there is one. To host the page alone, copy `webui/dist/index.html` to any static
+web server, with an optional `client.conf` beside it: `set` lines that give a fresh page its
+endpoints.
 
 ## Built with itself
 

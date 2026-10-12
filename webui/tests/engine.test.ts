@@ -657,20 +657,28 @@ describe('an erase', () => {
 			talk('cd56-3', 'three', 1)
 		];
 		const all = shelf(list());
-		expect((await k.run('erase all', 'llm', all)).text).toBe('- ab12-1 one\n- cd56-3 three');
+		expect((await k.run('erase conversations', 'llm', all)).text).toBe(
+			'- ab12-1 one\n- cd56-3 three'
+		);
 		expect(all.asked).toEqual(['Erase 2 conversations?']);
 		expect(all.conversations.list().map((c) => c.id)).toEqual(['ab34-2']);
 		const pinned = shelf(list());
 		expect((await k.run('erase ab3', 'user', pinned)).text).toBe('- ab34-2 kept');
 		expect(pinned.asked).toEqual(['Erase kept?']);
 		const kept = shelf(list(), null, false);
-		expect((await k.run('erase all', 'llm', kept)).text).toBe('% the user erased nothing');
+		expect((await k.run('erase conversations', 'llm', kept)).text).toBe(
+			'% the user erased nothing'
+		);
 		expect(kept.conversations.list()).toHaveLength(3);
 		expect((await k.run('erase ab', 'user', shelf(list()))).text).toBe(
 			'% ambiguous configuration or conversation "ab": ab12-1 ab34-2'
 		);
-		expect((await k.run('erase all', 'user', shelf([]))).text).toBe('% no conversation to erase');
-		expect((await k.run('erase all', 'user')).text).toBe('% nobody is here to confirm the erase');
+		expect((await k.run('erase conversations', 'user', shelf([]))).text).toBe(
+			'% no conversation to erase'
+		);
+		expect((await k.run('erase conversations', 'user')).text).toBe(
+			'% nobody is here to confirm the erase'
+		);
 	});
 
 	it('takes a configuration whole before a conversation of the same word', async () => {
@@ -708,18 +716,18 @@ describe('the conversations', () => {
 		);
 	});
 
-	it('export the one the batch was sent in, another by a prefix of its id, all, or the configuration', async () => {
+	it('export the one the batch was sent in, another by a prefix of its id, the conversations, or the configuration', async () => {
 		const k = await page();
 		const list = [talk('ab12-2', 'Two', 2), talk('ab34-1', 'One', 1)];
 		const s = shelf(list);
 		expect((await k.run('export', 'llm', { ...s, conversation: list[1] })).text).toBe(
-			'! exported 1 conversation to One.json'
+			'! exported 1 conversation to conversation One.json'
 		);
 		expect((await k.run('export ab1', 'llm', s)).text).toBe(
-			'! exported 1 conversation to Two.json'
+			'! exported 1 conversation to conversation Two.json'
 		);
-		expect((await k.run('export all', 'llm', s)).text).toMatch(
-			/^! exported 2 conversations to all \d{4}-\d\d-\d\d \d\d-\d\d\.json$/
+		expect((await k.run('export conversations', 'llm', s)).text).toMatch(
+			/^! exported 2 conversations to conversations \d{4}-\d\d-\d\d \d\d-\d\d\.json$/
 		);
 		expect(s.offered.map((o) => parse(o.text).map((c) => c.id))).toEqual([
 			['ab34-1'],
@@ -733,9 +741,13 @@ describe('the conversations', () => {
 			'% unknown configuration or conversation "zz"'
 		);
 		expect((await k.run('export', 'llm', s)).text).toBe('% no conversation here');
-		expect((await k.run('export all\nshow title', 'llm', s)).text).toContain('runs alone');
+		expect((await k.run('export conversations\nshow title', 'llm', s)).text).toContain(
+			'runs alone'
+		);
 		const refused = { ...s, offer: async () => false };
-		expect((await k.run('export all', 'llm', refused)).text).toBe('% the user saved no file');
+		expect((await k.run('export conversations', 'llm', refused)).text).toBe(
+			'% the user saved no file'
+		);
 		await k.run('set endpoints url a http://a/v1\nset endpoints key a sk-a', 'user');
 		const shown = await k.run('export running-config', 'llm', s);
 		expect(shown.text).toMatch(
@@ -793,7 +805,7 @@ describe('the conversations', () => {
 	});
 });
 
-describe('kiss.conf', () => {
+describe('client.conf', () => {
 	it('applies whole or not at all, the rules of every module holding', async () => {
 		vi.resetModules();
 		const k = await import('../src/engine/run.js');
@@ -801,7 +813,7 @@ describe('kiss.conf', () => {
 			'endpoints: endpoints s has no url'
 		]);
 		expect(k.defaults('set chat system red\nshow running-config')).toEqual([
-			'show running-config: kiss.conf holds set lines only'
+			'show running-config: client.conf holds set lines only'
 		]);
 		k.start();
 		expect(k.settings.get('chat system')).toBe('');
@@ -1158,7 +1170,7 @@ describe('erase and copy', () => {
 });
 
 describe('a page', () => {
-	it('starts with the startup-config over the kiss.conf of the moment, whatever a save does', async () => {
+	it('starts with the startup-config over the client.conf of the moment, whatever a save does', async () => {
 		const k = await page();
 		await k.run('set chat system blue', 'user');
 		expect((await k.run('copy run start', 'user')).text).toBe(
@@ -1177,7 +1189,7 @@ describe('a page', () => {
 		await next.run('copy b startup-config', 'user');
 		expect((await page()).settings.get('chat system')).toBe('green');
 		expect((await (await page()).run('erase startup-config', 'user', shelf([]))).text).toBe(
-			'! erased startup-config, the page starts on kiss.conf'
+			'! erased startup-config, the page starts on client.conf'
 		);
 		const bare = await page('set display tools open');
 		expect(bare.settings.get('chat system')).toBe('');

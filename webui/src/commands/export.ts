@@ -1,6 +1,7 @@
 import type { Command, Context, Conversation } from '../lib/types.js';
 import {
-	ALL,
+	CONVERSATION,
+	CONVERSATIONS,
 	CONFIG_EXTENSION,
 	FILE_EXTENSION,
 	ID_SHOWN,
@@ -23,7 +24,7 @@ interface File {
 	told: string;
 }
 
-// a configuration with its secrets as it runs, kiss.conf included, as import
+// a configuration with its secrets as it runs, client.conf included, as import
 // reads it and a site serves it
 function configFile(ctx: Context, config: string, minute: string): File {
 	const lines = listed(ctx, config, true);
@@ -31,7 +32,7 @@ function configFile(ctx: Context, config: string, minute: string): File {
 	return { name, text: lines.join('\n') + '\n', told: `exported ${config} to ${name}` };
 }
 
-// conversations: all of them named after the minute, one after its title
+// the conversations, named after the minute, or one, named after its title
 function packed(ctx: Context, plan: Plan, minute: string): File {
 	const all = ctx.conversations?.list() ?? [];
 	let list: readonly Conversation[] = all;
@@ -39,9 +40,12 @@ function packed(ctx: Context, plan: Plan, minute: string): File {
 		const here = all.find((c) => c.id === ctx.conversation?.id);
 		if (!here) throw new Error('no conversation here');
 		list = [here];
-	} else if (plan !== ALL) list = [ctx.conversations!.find(plan)];
+	} else if (plan !== CONVERSATIONS) list = [ctx.conversations!.find(plan)];
 	if (!list.length) throw new Error('no conversation yet');
-	const title = plan === ALL ? `${ALL} ${minute}` : list[0].title || list[0].id.slice(0, ID_SHOWN);
+	const title =
+		plan === CONVERSATIONS
+			? `${CONVERSATIONS} ${minute}`
+			: `${CONVERSATION} ${list[0].title || list[0].id.slice(0, ID_SHOWN)}`;
 	const name = fileName(title, FILE_EXTENSION);
 	const n = list.length;
 	const told = `exported ${n} ${n === 1 ? 'conversation' : 'conversations'} to ${name}`;
@@ -58,8 +62,8 @@ export default {
 	},
 	// a file offered to the user, its content going to their disk alone, named
 	// after what it holds: a configuration with its secrets, the running-config,
-	// the startup-config or a save, and all the conversations, after the minute
-	// too; one conversation after its title; nothing changes
+	// the startup-config or a save, then the minute, the conversations then the
+	// minute, one conversation then its title; nothing changes
 	async run(ctx, word) {
 		if (!ctx.offer) throw new Error('nobody is here to save the file');
 		const minute = localTime(Date.now());
@@ -72,6 +76,6 @@ export default {
 		return comment(file.told);
 	},
 	complete(ctx, args) {
-		return args.length ? [] : [ALL, ...configs(ctx), '<id>'];
+		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), '<id>'];
 	}
 } satisfies Command<Plan>;

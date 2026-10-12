@@ -1,7 +1,7 @@
 import type { Command, Context } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import {
-	ALL,
+	CONVERSATIONS,
 	ID_SHOWN,
 	RUNNING_CONFIG,
 	STARTUP_CONFIG,
@@ -15,8 +15,8 @@ import { configs, named, target } from './copy.js';
 // ones, a configuration, or a conversation by its id
 type Plan = string;
 
-// a configuration erased: the running-config back to kiss.conf over the
-// defaults, the startup-config gone so the page starts on kiss.conf, a save
+// a configuration erased: the running-config back to client.conf over the
+// defaults, the startup-config gone so the page starts on client.conf, a save
 // gone
 function config(ctx: Context, name: string): string {
 	if (name === RUNNING_CONFIG) {
@@ -25,7 +25,7 @@ function config(ctx: Context, name: string): string {
 	}
 	if (name === STARTUP_CONFIG) {
 		ctx.archive.boot(undefined);
-		return comment(`erased ${STARTUP_CONFIG}, the page starts on kiss.conf`);
+		return comment(`erased ${STARTUP_CONFIG}, the page starts on client.conf`);
 	}
 	ctx.archive.remove(ctx.archive.find(name));
 	return comment(`erased ${name}`);
@@ -53,7 +53,7 @@ export default {
 		}
 		if (!ctx.conversations) throw new Error('no conversation to erase');
 		const list =
-			plan === ALL
+			plan === CONVERSATIONS
 				? ctx.conversations.list().filter((c) => !c.pinned)
 				: [ctx.conversations.find(plan)];
 		if (!list.length) throw new Error('no conversation to erase');
@@ -70,6 +70,6 @@ export default {
 			.join('\n');
 	},
 	complete(ctx, args) {
-		return args.length ? [] : [ALL, ...configs(ctx), '<id>'];
+		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), '<id>'];
 	}
 } satisfies Command<Plan>;

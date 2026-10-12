@@ -41,7 +41,7 @@ export const titled = (title: string, quote: (value: string) => string): string 
 // never a value, as its brackets tell
 export const REMOVED = '<removed>';
 // optional file next to the page: set lines that become the defaults of a site
-export const SITE_CONFIG_URL = 'kiss.conf';
+export const SITE_CONFIG_URL = 'client.conf';
 export const PIPE = '|';
 // a word this many edits away from a candidate per three letters is a typo
 export const TYPO_LETTERS_PER_EDIT = 3;
@@ -124,6 +124,10 @@ export function beyond(head: readonly string[], rest: readonly string[]): Error 
 // conversations: the word naming every one of them, and their files, named
 // after a title without the characters a file name cannot hold
 export const ALL = 'all';
+// what export and erase name for every conversation, and the name of the file
+// one conversation goes to
+export const CONVERSATIONS = 'conversations';
+export const CONVERSATION = 'conversation';
 // the length an id shows, unique among a few thousand conversations
 export const ID_SHOWN = 8;
 export const FILE_EXTENSION = '.json';

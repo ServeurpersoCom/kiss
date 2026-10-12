@@ -1,7 +1,7 @@
 import type { Command, Context, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import {
-	ALL,
+	CONVERSATIONS,
 	NAME_PATTERN,
 	RUNNING_CONFIG,
 	STARTUP_CONFIG,
@@ -10,7 +10,7 @@ import {
 } from '../lib/config.js';
 import { choose, pick } from '../engine/near.js';
 
-// the values a name holds over kiss.conf: the running configuration, the
+// the values a name holds over client.conf: the running configuration, the
 // startup-config, or a save
 export function values(ctx: Context, name: string): Record<string, Value> {
 	if (name === RUNNING_CONFIG) return ctx.config.values();
@@ -18,7 +18,7 @@ export function values(ctx: Context, name: string): Record<string, Value> {
 	return ctx.archive.find(name).values;
 }
 
-// a configuration as it runs: its values over kiss.conf, sorted, a key no
+// a configuration as it runs: its values over client.conf, sorted, a key no
 // module declares anymore or a value its key no longer takes left out
 export function effective(ctx: Context, name: string): Record<string, Value> {
 	return ctx.config.over(values(ctx, name));
@@ -43,11 +43,11 @@ export function named(ctx: Context, word: string): boolean {
 	return configs(ctx).includes(word);
 }
 
-// what erase and export name: every conversation, a configuration, or a
+// what erase and export name: the conversations, a configuration, or a
 // conversation by its id, a prefix being enough
 export function target(ctx: Context, word: string): string {
 	const ids = ctx.conversations?.list().map((c) => c.id) ?? [];
-	return choose(word, [ALL, ...configs(ctx), ...ids], 'configuration or conversation');
+	return choose(word, [CONVERSATIONS, ...configs(ctx), ...ids], 'configuration or conversation');
 }
 
 // what the checks of the modules find in the running configuration

@@ -22,8 +22,8 @@ commands
   show version
   copy <config> <config>
   write [memory]
-  erase <id>|all|<config>
-  export [<id>|all|<config>]
+  erase <id>|conversations|<config>
+  export [<id>|conversations|<config>]
   import
   title <title>
   <command> | begin|count|exclude|include <pattern>
@@ -107,7 +107,7 @@ plugin declared wrong or twice stops the page at load, never later.
 ### Values
 
 A value resolves through layers, the first that holds it winning: what the session sets, then
-`kiss.conf`, then the default of the item, then the default of the key. A save keeps the session
+`client.conf`, then the default of the item, then the default of the key. A save keeps the session
 layer only, and so does the startup-config. A key is two fixed words, a module then a key; a key of
 a collection takes the item name next, and the value always comes last. Its kind is `string`,
 `number`, `enum`, `url`, `secret` or `css`, a value of the CSS property it names, checked by the
@@ -283,12 +283,12 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - Each conversation answers on its own, beside the others: its turn, its Stop and its questions
   are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
   the turn that asked it.
-- A value resolves from what the session sets, over `kiss.conf`, over the default of its key;
+- A value resolves from what the session sets, over `client.conf`, over the default of its key;
   `erase running-config` drops what the session sets, a copy to `running-config` puts back the
-  configuration it names. `kiss.conf` applies whole or not at all, like a batch.
-- Every configuration shows as it runs, over `kiss.conf`, the keys no module declares anymore left
+  configuration it names. `client.conf` applies whole or not at all, like a batch.
+- Every configuration shows as it runs, over `client.conf`, the keys no module declares anymore left
   out: `show`, `show diff` and `export` alike, while a save keeps what the session sets only, so a
-  `kiss.conf` changed reaches every save. `show running-config` lists what differs from the
+  `client.conf` changed reaches every save. `show running-config` lists what differs from the
   defaults, `show running-config all` every key of every module as `show <module>` lists it.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
@@ -317,11 +317,11 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A conversation takes its title from its first message; one the CLI opened has none until then,
   and reads `CLI` where a title would: its title is a name, never a line typed.
 - `erase` removes nothing before the user confirms it, whoever asks; a word naming a configuration
-  names no conversation; every conversation it names goes in one write, `erase all` keeping the
-  pinned ones, which go only when named. The model writes a configuration but the running-config
-  once the user confirms it too.
-- The page starts with the startup-config over `kiss.conf`: a copy to `startup-config` writes it and
-  `erase startup-config` empties it, a save never touches it; the archive changes only once the
+  names no conversation; every conversation it names goes in one write, `erase conversations`
+  keeping the pinned ones, which go only when named. The model writes a configuration but the
+  running-config once the user confirms it too.
+- The page starts with the startup-config over `client.conf`: a copy to `startup-config` writes it
+  and `erase startup-config` empties it, a save never touches it; the archive changes only once the
   browser stores it.
 - Every line `show running-config` writes pastes back after `no`, whatever value follows its key,
   and removes only itself, unless a rule of its module says why it stays: a model still names the
@@ -511,12 +511,12 @@ to the model every round, and the next turn tries it again: a server that never 
 wait a turn, the tools of a turn the same from round to round.
 
 A server is reached directly at its url, or through a KiSS server that relays it: `set mcp proxy exa
-backend` reaches `exa` at the url of `backend` then `/exa`, `mcp/exa` for the backend the page
-comes from, with the key and headers of `backend`, the key of `exa` never sent; `no mcp proxy exa`
-goes direct again. One item, one set of tools, either way. The proxy names another server of the
-page that has no proxy itself, and the model sets it only once the user agrees, as a url. The
-backend the page comes from is `backend` in the `kiss.conf` the project ships, `set mcp url backend
-mcp`, wherever it runs.
+backend` reaches `exa` at the url of `backend` then `/exa`, `mcp/exa` for the backend the page comes
+from, with the key and headers of `backend`, the key of `exa` never sent; `no mcp proxy exa` goes
+direct again. One item, one set of tools, either way. The proxy names another server of the page
+that has no proxy itself, and the model sets it only once the user agrees, as a url. The backend the
+page comes from is `backend` in the `client.conf` the project ships, `set mcp url backend mcp`,
+wherever it runs.
 
 A server may ask the user, the form mode of MCP elicitation, under its message: each text field of
 its form asks in the masked field of the page, `Value of server key of backend`, and each yes or no
@@ -583,30 +583,31 @@ belongs to no branch: a command of one branch stays applied when another shows.
 
 Files go through the CLI, so the model handles them as well as the user. `show conversations` lists
 them by id, the one the batch was sent in marked. `export` offers a file of this conversation, of
-another by a prefix of its id, of all of them, or of a configuration, in a card the user saves from:
-a browser saves a file on a click only, so the model never puts one on the disk by itself. A
+another by a prefix of its id, of the conversations, or of a configuration, in a card the user saves
+from: a browser saves a file on a click only, so the model never puts one on the disk by itself. A
 configuration, the running-config, the startup-config or a save, is its `set` lines with the values
 of its secrets, the browser holding them in clear anyway, so a copy to another browser needs no key
 typed again; they go to the disk of the user alone, the output naming the file only. A word naming a
-configuration names no conversation. A file is named after what it holds, a configuration and all
-the conversations after the minute too, `running-config 2026-10-10 14-32.conf`. `import` asks for a
-file in a card the user picks from and reads it by what it holds: a JSON file adds its conversations
-whose id is new, the others skipped and told; any other file runs its lines as more lines of the
-batch, whole or not at all, with the rights of whoever asked, the firewall included, the way lines
-pasted after a `/` run, its output opening with `! ran 5 lines of the file`; a file that holds
-nothing fails. Neither changes a conversation, the one shown included: an export reads the
-conversations as they settled, without the call that exports them, and an import only adds. To keep
-an export out of the context, edit the message that asked for it.
+configuration names no conversation. A file is named after what it holds, then the minute for a
+configuration and the conversations, `running-config 2026-10-10 14-32.conf`, `conversations
+2026-10-10 14-32.json`, and the title for one conversation, `conversation Two words.json`. `import`
+asks for a file in a card the user picks from and reads it by what it holds: a JSON file adds its
+conversations whose id is new, the others skipped and told; any other file runs its lines as more
+lines of the batch, whole or not at all, with the rights of whoever asked, the firewall included,
+the way lines pasted after a `/` run, its output opening with `! ran 5 lines of the file`; a file
+that holds nothing fails. Neither changes a conversation, the one shown included: an export reads
+the conversations as they settled, without the call that exports them, and an import only adds. To
+keep an export out of the context, edit the message that asked for it.
 
 ```
 show conversations
 export                                   ! this conversation
 export 3f2a                              ! another, by a prefix of its id
 export running-config                    ! a configuration, secrets included
-export all
+export conversations                     ! every conversation
 import
 erase 3f2a                               ! once the user confirms it
-erase all                                ! all but the pinned ones
+erase conversations                      ! every one but the pinned ones
 erase work                               ! a save
 ```
 
@@ -669,9 +670,9 @@ set style sheet input 'form.svelte-composer { max-width: 64rem }'  ! the compose
 
 ## Site defaults
 
-An optional `kiss.conf` next to `index.html` gives a site its defaults, for instance the LLM a
+An optional `client.conf` next to `index.html` gives a site its defaults, for instance the LLM a
 fresh page talks to. It holds `set` lines only, read at every page load, below every save of the
-user. `webui/public/kiss.conf` is the default the build copies into `webui/dist/` and the KiSS
+user. `webui/public/client.conf` is the default the build copies into `webui/dist/` and the KiSS
 server embeds: its backend at the relative URL `mcp`. A site replaces it with its own. Anyone who
 can load the page can read it, so a key set there is public.
 

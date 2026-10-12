@@ -150,7 +150,7 @@ export interface Archive {
 	// a save of the same name gives way to the new one
 	save(name: string, values: Record<string, Value>): void;
 	remove(save: Save): void;
-	// what the page starts with over kiss.conf, nothing once erased
+	// what the page starts with over client.conf, nothing once erased
 	startup(): Record<string, Value>;
 	boot(values: Record<string, Value> | undefined): void;
 }

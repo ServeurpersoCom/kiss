@@ -92,7 +92,7 @@ export function defaults(text: string): string[] {
 	for (const line of splitLines(text)) {
 		try {
 			const { command, args } = resolve(tokenize(line));
-			if (command.path.join(' ') !== 'set') throw new Error('kiss.conf holds set lines only');
+			if (command.path.join(' ') !== 'set') throw new Error('client.conf holds set lines only');
 			const { key, name, rest } = schema.read(args);
 			if (!rest.length) throw new Error(`${key} misses its value`);
 			site.set(stored(key, name), schema.parse(key, rest.join(' ')));
@@ -108,7 +108,7 @@ export function defaults(text: string): string[] {
 	return problems;
 }
 
-// the startup-config becomes the running configuration, over kiss.conf
+// the startup-config becomes the running configuration, over client.conf
 export function start(): void {
 	running.load(archive.startup());
 	for (const m of modules) m.apply?.(running);

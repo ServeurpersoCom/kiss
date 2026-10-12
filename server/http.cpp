@@ -4,9 +4,9 @@
 
 #include "http.h"
 
+#include "client.conf.hpp"
 #include "engine/engine.h"
 #include "index.html.gz.hpp"
-#include "kiss.conf.hpp"
 #include "listener.h"
 #include "log.h"
 #include "mcp/mcp.h"
@@ -17,7 +17,7 @@
 #include <sstream>
 
 // the site configuration a directory gives the page it serves
-static const char * const SITE_FILE = "kiss.conf";
+static const char * const SITE_FILE = "client.conf";
 
 // the path of a relayed MCP server, its route name captured
 static const char * const ROUTE_PATH = R"(/mcp/([a-z0-9_-]+))";
@@ -128,9 +128,9 @@ void http_routes(httplib::Server & server) {
         res.set_content(reinterpret_cast<const char *>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
     });
 
-    // the site configuration of the page: kiss.conf of the directory the
+    // the site configuration of the page: client.conf of the directory the
     // server runs in, else the one it embeds, its backend at a relative URL
-    server.Get("/kiss.conf", [](const httplib::Request &, httplib::Response & res) {
+    server.Get("/client.conf", [](const httplib::Request &, httplib::Response & res) {
         std::ifstream site(SITE_FILE, std::ios::binary);
         if (site) {
             std::ostringstream text;
@@ -138,7 +138,7 @@ void http_routes(httplib::Server & server) {
             res.set_content(text.str(), "text/plain; charset=utf-8");
             return;
         }
-        res.set_content(reinterpret_cast<const char *>(kiss_conf), kiss_conf_len, "text/plain; charset=utf-8");
+        res.set_content(reinterpret_cast<const char *>(client_conf), client_conf_len, "text/plain; charset=utf-8");
     });
 
     server.Options("/mcp", [](const httplib::Request & req, httplib::Response & res) {

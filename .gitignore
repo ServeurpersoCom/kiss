@@ -1,5 +1,5 @@
 /build
-/kiss.conf
+/client.conf
 /server.conf
 webui/dist
 webui/node_modules

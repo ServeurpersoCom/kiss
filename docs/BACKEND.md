@@ -58,7 +58,7 @@ tools
 
 `server` is an MCP server over Streamable HTTP and a process launcher. One runs on each machine that
 works for the model: a GPU server, a Windows box, a laptop. A KiSS page drives as many as its
-`kiss.conf` names, each under its own name, so the page never changes when a machine joins.
+`client.conf` names, each under its own name, so the page never changes when a machine joins.
 
 The C++ holds mechanisms only: HTTP, MCP, the process layer of each OS, decoding and truncation of
 output, the security checks. Every behavior is data in `server.conf`: which shells exist, how each
@@ -76,7 +76,7 @@ file; no file grows with the features.
 
 ```
 webui/                   the page, as FRONTEND.md describes it
-webui/public/kiss.conf   the site configuration the page and the server serve by default
+webui/public/client.conf   the site configuration the page and the server serve by default
 server/main.cpp          the start: defaults, startup-config, console, listener
 server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run
 server/commands/         one file per command, registered by existing
@@ -105,7 +105,7 @@ build.cmd                the same on Windows, with Visual Studio Build Tools and
 format.sh                clang-format over the C++, vendors excluded
 ```
 
-Every file has one source: the binary embeds `webui/public/kiss.conf` and `server/server.conf` as
+Every file has one source: the binary embeds `webui/public/client.conf` and `server/server.conf` as
 they are. `tools/public/index.html.gz` is the one built file under git, so a C++ developer builds
 the server with CMake alone; the page build writes it, gzipped deterministically.
 
@@ -152,7 +152,7 @@ knows no module by name, so a module joins without a change to the engine.
 
 ### server.conf
 
-`server.conf` holds set lines in the grammar of `kiss.conf`: a module, a key, the item name for a
+`server.conf` holds set lines in the grammar of `client.conf`: a module, a key, the item name for a
 collection, then the value. `!` starts a comment, `no` removes an item or a value.
 
 The startup-config is `server.conf` of the directory the server runs in: the root of the repository
@@ -165,7 +165,7 @@ back to the file whole.
 A value resolves through layers, the first that holds it winning:
 
 1. the running configuration;
-2. `server/server.conf`, embedded in the binary, as `kiss.conf` sits below every save of the page;
+2. `server/server.conf`, embedded in the binary, as `client.conf` sits below every save of the page;
 3. the fallback of the key: the host name of the machine for `server hostname`, the start directory
    for `server cwd`.
 
@@ -496,9 +496,9 @@ client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenS
 
 ## HTTP and security
 
-- `GET /` serves the embedded page, `GET /kiss.conf` the site configuration, `POST /mcp` the MCP,
+- `GET /` serves the embedded page, `GET /client.conf` the site configuration, `POST /mcp` the MCP,
   `/mcp/<name>` the servers it relays, behind the same checks.
-  The site configuration is `kiss.conf` of the directory the server runs in, else the one it
+  The site configuration is `client.conf` of the directory the server runs in, else the one it
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
 - On a loopback address, `Host` must name loopback and the port, against DNS rebinding.
