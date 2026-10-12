@@ -159,7 +159,7 @@ static std::string described(const std::string & mime, int w, int h, size_t byte
 // the file; the file streams through, so its size bounds nothing but time
 static tool_result
 file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last, bool ranged, ticker & t) {
-    std::string head(std::min<uintmax_t>(size, CHUNK), '\0');
+    std::string head(CHUNK, '\0');
     head.resize(fread(&head[0], 1, head.size(), f));
     if (!image_type(head).empty()) {
         if (size > v.image) {
@@ -260,7 +260,7 @@ static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & t
     std::error_code       ec;
     const fs::file_status st = fs::status(path, ec);
     if (ec || !fs::exists(st)) {
-        return { "No such file or directory", true };
+        return { "No such file or directory: " + path.u8string(), true };
     }
     ticker t{ tick };
     if (fs::is_directory(st)) {
