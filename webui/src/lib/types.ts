@@ -54,8 +54,9 @@ export interface Key {
 	// model takes an item of models
 	of?: string;
 	// a way out of the page, which the model opens only once the user agrees,
-	// every time: a url given a value, an enum moved toward its more open
-	// values, which go from the most closed to the most open
+	// every time: a url or a string naming where the page goes given a value,
+	// an enum moved toward its more open values, which go from the most closed
+	// to the most open
 	guard?: true;
 }
 
@@ -357,6 +358,8 @@ export interface ToolContext {
 	// asks the user for the value of a secret, out of the sight of the model,
 	// with the note of whoever asks, none when they give none
 	secret(key: string, note: string): Promise<string | null>;
+	// asks the user to confirm what a server is about to do
+	confirm(question: string): Promise<boolean>;
 	// the lines with every secret value masked
 	redact(text: string): string;
 	// stores the conversation as it settled

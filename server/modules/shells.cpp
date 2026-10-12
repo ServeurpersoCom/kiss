@@ -64,6 +64,9 @@ static engine_module make_shells() {
 
     engine_module m;
     m.name = "shells";
+    m.role =
+        "a tool <hostname>_<shell> per shell whose program this machine has: the command reading a script on stdin, "
+        "its seconds, its bytes of output";
     m.keys.push_back(command);
     m.keys.push_back(timeout);
     m.keys.push_back(output);

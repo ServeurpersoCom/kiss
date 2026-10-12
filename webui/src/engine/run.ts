@@ -236,10 +236,10 @@ function resolved(
 	return [of(running), of(draft)];
 }
 
-// whether a change opens a way out: a url given a value, an enum moved toward
-// its more open values
+// whether a change opens a way out: a key naming where the page goes, a url
+// or a proxy, given a value, an enum moved toward its more open values
 function opens(def: Key, from: Value | undefined, to: Value | undefined): boolean {
-	if (def.kind === 'url') return to !== undefined;
+	if (def.kind !== 'enum') return to !== undefined;
 	const values = def.values ?? [];
 	return values.indexOf(to ?? '') > values.indexOf(from ?? '');
 }

@@ -55,6 +55,7 @@ modules
     key <name> <secret>
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        310
+    proxy <name> <server>           guarded, the KiSS server that relays it
   models                            show models lists them, by endpoint
     temperature <model> <number>
     top_p <model> <0..1>
@@ -509,11 +510,20 @@ them listed; a round waits only for a server still connecting, and its line name
 to the model every round, and the next turn tries it again: a server that never answers costs one
 wait a turn, the tools of a turn the same from round to round.
 
-A server may ask the user for secrets, the form mode of MCP elicitation: each text field of its form
-asks in the masked field of the page, `Value of server key of pod`, under the message of the server,
-and the call goes again with the values, which never reach the model. Leaving a field empty cancels
-the form; a form with no field, or with a field that is not text, is refused. A KiSS server asks
-this way for `set server key` written alone by the model.
+A server is reached directly at its url, or through a KiSS server that relays it: `set mcp proxy exa
+backend` reaches `exa` at the url of `backend` then `/exa`, `mcp/exa` for the backend the page
+comes from, with the key and headers of `backend`, the key of `exa` never sent; `no mcp proxy exa`
+goes direct again. One item, one set of tools, either way. The proxy names another server of the
+page that has no proxy itself, and the model sets it only once the user agrees, as a url. The
+backend the page comes from is `backend` in the `kiss.conf` the project ships, `set mcp url backend
+mcp`, wherever it runs.
+
+A server may ask the user, the form mode of MCP elicitation, under its message: each text field of
+its form asks in the masked field of the page, `Value of server key of backend`, and each yes or no
+field asks the user to confirm; the call goes again with the answers, which never reach the model.
+Leaving a field empty, or saying no, cancels the form; a form with no field, or with a field of
+another kind, is refused. A KiSS server asks this way for `set server key` written alone by the
+model, and to let a route take a url the model gives it.
 
 ```
 set mcp url sandbox https://example.com/mcp

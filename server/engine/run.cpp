@@ -71,6 +71,8 @@ static step compile(const std::string & text, bool alone) {
 
 // the key an item names where it sends its secrets by
 static const char * const URL_KEY = "url";
+// what the user answers to let a url
+static const char * const YES     = "true";
 
 // the url of the item of a stored key, in the draft, when its module has one
 static std::string url_of(const layer & draft, const std::string & s) {
@@ -80,6 +82,40 @@ static std::string url_of(const layer & draft, const std::string & s) {
         return "";
     }
     return reader(draft).get(module + " " + URL_KEY, parts.second).value_or("");
+}
+
+// the urls a layer gives the items of its modules, by stored key
+static std::set<std::pair<std::string, std::string>> urls(const layer & l) {
+    std::set<std::pair<std::string, std::string>> out;
+    for (const auto & kv : l) {
+        const auto        parts  = unstore(kv.first);
+        const std::string module = parts.first.substr(0, parts.first.find(' '));
+        if (!parts.second.empty() && parts.first == module + " " + URL_KEY) {
+            out.insert(kv);
+        }
+    }
+    return out;
+}
+
+// the urls an MCP client gives that the user is to let: those of the draft
+// that neither the running configuration before the batch nor the
+// startup-config holds, the user not yet letting them in this call
+static std::vector<engine_ask> unlet(const layer & before, const layer & draft, const engine_typed & typed) {
+    auto known = urls(before);
+    try {
+        const auto startup = urls(startup_layer());
+        known.insert(startup.begin(), startup.end());
+    } catch (const std::runtime_error &) {
+        // a startup-config that does not read vouches for nothing
+    }
+    std::vector<engine_ask> out;
+    for (const auto & u : urls(draft)) {
+        const auto let = typed.find(u.first);
+        if (!known.count(u) && (let == typed.end() || let->second != YES)) {
+            out.push_back({ u.first, u.second, true });
+        }
+    }
+    return out;
 }
 
 static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) {
@@ -161,8 +197,9 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // target, which it replaces only when all of them succeed and the rules of
 // every module hold; the batch answers with what it changed, and on the
 // running configuration the modules whose keys changed apply. A secret left
-// to ask for stops it once every line ran, before the rules: the values the
-// user types decide them. A batch of an MCP client moves no secret. A save
+// to ask for, or a url of an MCP client the user has not let, stops it once
+// every line ran, before the rules: what the user answers decides them. A
+// batch of an MCP client moves no secret. A save
 // writes the draft as the batch leaves it, once the rules hold and before it
 // replaces the target
 static engine_result batch(layer &              target,
@@ -201,8 +238,11 @@ static engine_result batch(layer &              target,
             return failed(i, alone, e.what());
         }
     }
-    if (!asks.empty()) {
-        return { true, "", asked(draft, asks) };
+    std::vector<engine_ask> wanted = role == ENGINE_MCP ? unlet(target, draft, typed) : std::vector<engine_ask>{};
+    const auto              typing = asked(draft, asks);
+    wanted.insert(wanted.end(), typing.begin(), typing.end());
+    if (!wanted.empty()) {
+        return { true, "", wanted };
     }
     if (role == ENGINE_MCP) {
         const std::string reason = moved_secret(target, draft, typed);

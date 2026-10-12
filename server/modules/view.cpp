@@ -29,6 +29,9 @@ static engine_module make_view() {
 
     engine_module m;
     m.name = "view";
+    m.role =
+        "the tool <hostname>_view: the bytes of a text, the bytes and pixels of an image, the side and quality it goes "
+        "at";
     m.keys.push_back(output);
     m.keys.push_back(image);
     m.keys.push_back(pixels);

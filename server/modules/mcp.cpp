@@ -71,6 +71,11 @@ static void apply(const engine_reader & config) {
     }
 }
 
+// where a client reaches a route
+static words_t notes(const engine_reader & config, const std::string & route) {
+    return { comment("mcp/" + route + " relays " + config.get("mcp url", route).value_or("")) };
+}
+
 static engine_module make_mcp() {
     engine_key url("url", ENGINE_STRING);
     url.named = true;
@@ -91,12 +96,17 @@ static engine_module make_mcp() {
 
     engine_module m;
     m.name = "mcp";
+    m.role =
+        "the MCP servers this server relays, each at mcp/<name> beside its own mcp, its key going to its url alone; a "
+        "client reaches one there with the key of this server, the page by set mcp proxy <name> <this server>, and a "
+        "route opens nothing before a client does";
     m.keys.push_back(url);
     m.keys.push_back(key);
     m.keys.push_back(headers);
     m.keys.push_back(timeout);
     m.validate = validate;
     m.apply    = apply;
+    m.notes    = notes;
     return m;
 }
 

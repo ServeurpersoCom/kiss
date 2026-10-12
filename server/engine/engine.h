@@ -62,13 +62,17 @@ struct engine_reader {
 
 // a module owns the keys spelled after its name: "server" owns "server port"
 struct engine_module {
-    std::string                                       name;
-    std::vector<engine_key>                           keys;
+    std::string                                                                         name;
+    // what the module is, as the config tool tells it
+    std::string                                                                         role;
+    std::vector<engine_key>                                                             keys;
     // the rule across keys, checked on every change: why the configuration
     // breaks it, empty when it holds
-    std::function<std::string(const engine_reader &)> validate;
+    std::function<std::string(const engine_reader &)>                                   validate;
     // mirrors the running configuration into the server after a change
-    std::function<void(const engine_reader &)>        apply;
+    std::function<void(const engine_reader &)>                                          apply;
+    // what an item does, as notes show <module> writes after its lines
+    std::function<std::vector<std::string>(const engine_reader &, const std::string &)> notes;
 };
 
 // a file in modules/ registers its module by existing
@@ -76,16 +80,19 @@ bool engine_register(engine_module (*make)());
 
 #define ENGINE_MODULE(make) static const bool engine_registered_##make = engine_register(make)
 
-// a secret the user is to type: its stored key, and the url of its item, where
-// it goes, when its module has one
+// what the user is to answer: a secret to type, by its stored key, and the
+// url of its item, where it goes, when its module has one; or, yes set, a url
+// to let an item take, by its stored key, and that url
 struct engine_ask {
     std::string key;
     std::string to;
+    bool        yes = false;
 };
 
 // what a batch answers: whether it holds and what it printed; a batch an MCP
-// client sends with a set line of a secret and no value applies nothing and
-// names in asks the secrets the user is to type, the text left empty
+// client sends with a set line of a secret and no value, or giving an item a
+// url neither the running nor the startup configuration holds, applies
+// nothing and names in asks what the user is to answer, the text left empty
 struct engine_result {
     bool                    ok;
     std::string             text;

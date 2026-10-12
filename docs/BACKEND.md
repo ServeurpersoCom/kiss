@@ -362,7 +362,9 @@ KiSS, a machine is open to the model for reading only.
 ### The config tool
 
 `<name>_config` takes `description` and `lines`, runs the lines as a batch of CLI on the engine and
-answers with its output and its change, as the `config` tool of KiSS does. KiSS configures every
+answers with its output and its change, as the `config` tool of KiSS does. Its description lists
+every module with its keys and what it is, from the modules themselves, so the model knows the
+server before it reads a line of it. KiSS configures every
 backend from the page through it, under the consent firewall when the model calls it, and any other
 MCP client gets the same CLI. A change of `server host` or `server port` moves the listener at once,
 once the address is checked free.
@@ -376,7 +378,10 @@ answers `! the user typed server key`. The server keeps nothing between the two 
 MCP client moves no secret: once it has run, every secret the configuration sends goes to a url it
 went to before, in the running-config or the startup-config, or is a value the user typed in that
 batch under the url it goes to. A key a model moves or restores by a copy reaches no url the model
-wrote, and a copy that restores a route as it was saved passes. A line that writes the value of a
+wrote, and a copy that restores a route as it was saved passes. A url an MCP client gives a route
+the same way asks the user to let it, a yes field of the same form, `Let mcp/exa relay
+https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
+holds it. A line that writes the value of a
 secret is refused, and a client that takes no form, every client of the 2025 era, is told the secret
 goes in `server.conf` or on the console.
 
@@ -474,13 +479,15 @@ its version, and as its description the line it gives of itself in `show version
 ## MCP routes
 
 The server relays the MCP servers its `mcp` module names, each at `mcp/<name>` of the server, so a
-page reaches a server it could not: one without CORS, or one only this machine sees. KiSS names a
-route by a relative URL, `set mcp url deepwiki mcp/deepwiki`, and the model may add one through the
-config tool, its key typed by the user as any secret, the form naming where the key goes. The relay
-speaks HTTP, not MCP: each request is built anew with its method, its body, the headers `Accept`,
-`Mcp-Session-Id`, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Last-Event-ID` and every
-`Mcp-Param-` header, then the headers and the key of the route, the key of this server never sent
-on. The answer comes back with its status, its body streamed as it arrives, and the headers
+page reaches a server it could not: one without CORS, or one only this machine sees. The page
+reaches a route through its proxy key, `set mcp proxy deepwiki backend` beside `set mcp url
+deepwiki https://mcp.deepwiki.com/mcp`, and the model may add a route through the config tool, the
+user letting its url and typing its key, the form naming where each goes. `show mcp` writes after
+each route where a client reaches it, `! mcp/deepwiki relays https://mcp.deepwiki.com/mcp`.
+The relay speaks HTTP, not MCP: each request is built anew with its method, its body, the headers
+`Accept`, `Mcp-Session-Id`, `MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Last-Event-ID` and
+every `Mcp-Param-` header, then the headers and the key of the route, the key of this server never
+sent on. The answer comes back with its status, its body streamed as it arrives, and the headers
 `Content-Type`, `Mcp-Session-Id` and `MCP-Protocol-Version`. A server that refuses the key of its
 route answers 502 with the fix, `set mcp key <name>`, so the page never takes it for a refusal of
 its own key; one that redirects answers 502 naming where, `set mcp url <name>`, since a redirect
@@ -492,7 +499,7 @@ client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenS
 - `GET /` serves the embedded page, `GET /kiss.conf` the site configuration, `POST /mcp` the MCP,
   `/mcp/<name>` the servers it relays, behind the same checks.
   The site configuration is `kiss.conf` of the directory the server runs in, else the one it
-  embeds, which names the backend by a relative URL, `set mcp url local mcp`, so the page reaches
+  embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
 - On a loopback address, `Host` must name loopback and the port, against DNS rebinding.
 - A request without `Origin` (a CLI client) or from the origin of the page itself needs no key.

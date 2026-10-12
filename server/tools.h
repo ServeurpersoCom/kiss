@@ -19,17 +19,17 @@ struct tool_result {
 
     tool_result(std::string data, std::string type) : error(false), image(std::move(data)), mime(std::move(type)) {}
 
-    std::string              text;
-    bool                     error;
-    std::string              image;
-    std::string              mime;
+    std::string             text;
+    bool                    error;
+    std::string             image;
+    std::string             mime;
     // how the call ended as the log tells it, when the tool says more than
     // done or failed, and the level of that line
-    std::string              outcome;
-    log_level                level = LOG_INFO;
-    // the stored keys of the secrets the user is to type before the call is
-    // asked again with them, its text telling what to type
-    std::vector<std::string> asks;
+    std::string             outcome;
+    log_level               level = LOG_INFO;
+    // what the user is to answer before the call is asked again with it, its
+    // text telling what
+    std::vector<engine_ask> asks;
 };
 
 // called every second while a tool runs, false once the client is gone

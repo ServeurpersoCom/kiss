@@ -34,11 +34,13 @@ const connections = new Map<string, Connection>();
 const UNAUTHORIZED = 401;
 
 // the one input a server may ask of KiSS: a form whose fields are secrets,
-// text each typed in the masked field of the page; the user gives them all,
-// or leaving one cancels the form
+// text each typed in the masked field of the page, or yes or no, the user
+// confirming what the server says; the user answers them all, or leaving one
+// cancels the form
 const ELICITATION = 'elicitation/create';
 const FORM_MODE = 'form';
 const TEXT_FIELD = 'string';
+const YES_FIELD = 'boolean';
 const ACTIONS = ['accept', 'cancel'] as const;
 const [ACCEPT, CANCEL] = ACTIONS;
 
@@ -104,9 +106,9 @@ function outcome(result: CallToolResult): Outcome {
 	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
 }
 
-// what the user answers to a form of a server, each of its fields typed out
-// of the sight of the model under the message of the server; an input other
-// than a form of text fields is none KiSS answers
+// what the user answers to a form of a server under its message: a text field
+// typed out of the sight of the model, a yes or no field confirmed; an input
+// other than a form of such fields is none KiSS answers
 async function answer(ctx: ToolContext, server: string, input: InputRequest): Promise<object> {
 	const params = (input.params ?? {}) as {
 		mode?: string;
@@ -118,11 +120,20 @@ async function answer(ctx: ToolContext, server: string, input: InputRequest): Pr
 	}
 	const fields = Object.entries(params.requestedSchema?.properties ?? {});
 	if (!fields.length) throw new Error('asks for a form with no field');
-	const other = fields.find(([, schema]) => schema.type !== TEXT_FIELD);
-	if (other) throw new Error(`asks for ${other[0]}, a field KiSS does not answer: only text`);
-	const content: Record<string, string> = {};
-	for (const [field] of fields) {
-		const value = await ctx.secret(`${field} of ${server}`, params.message ?? '');
+	const other = fields.find(
+		([, schema]) => schema.type !== TEXT_FIELD && schema.type !== YES_FIELD
+	);
+	if (other)
+		throw new Error(`asks for ${other[0]}, a field KiSS does not answer: only text or yes`);
+	const content: Record<string, string | boolean> = {};
+	for (const [field, schema] of fields) {
+		const note = params.message ?? '';
+		if (schema.type === YES_FIELD) {
+			if (!(await ctx.confirm(note || `${field} of ${server}?`))) return { action: CANCEL };
+			content[field] = true;
+			continue;
+		}
+		const value = await ctx.secret(`${field} of ${server}`, note);
 		if (value === null) return { action: CANCEL };
 		content[field] = value;
 	}

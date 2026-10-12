@@ -100,6 +100,7 @@ async function page(replies: Reply[], lines = '', listed: object[] = [{ id: 'x' 
 		redact: engine.redact,
 		grant,
 		secret: async () => null,
+		confirm: async () => false,
 		keep: async () => void (kept.rounds = settled(reply.rounds))
 	};
 	const user: Message[] = [{ role: 'user', text: 'go' }];

@@ -118,6 +118,9 @@ static engine_module make_server() {
 
     engine_module m;
     m.name = "server";
+    m.role =
+        "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, "
+        "the directory its tools start in, its log level";
     m.keys.push_back(engine_key("host", ENGINE_STRING));
     m.keys.push_back(port);
     m.keys.push_back(hostname);

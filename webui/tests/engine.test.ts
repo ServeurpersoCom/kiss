@@ -526,6 +526,19 @@ describe('the firewall', () => {
 		expect(refuse.asked).toHaveLength(1);
 	});
 
+	it('asks the user before the model sends a server through a proxy, never to go direct', async () => {
+		const k = await page();
+		await k.run('set mcp url k http://k/mcp\nset mcp url x http://x/mcp', 'user');
+		const refuse = user(REFUSE);
+		expect((await k.run('set mcp proxy x k', 'llm', refuse)).text).toBe(
+			'% the user refused the change'
+		);
+		expect(refuse.asked).toEqual([{ kind: 'change', lines: ['+ set mcp proxy x k'] }]);
+		await k.run('set mcp proxy x k', 'user');
+		expect((await k.run('no mcp proxy x', 'llm', refuse)).ok).toBe(true);
+		expect(refuse.asked).toHaveLength(1);
+	});
+
 	it('never asks when the model closes', async () => {
 		const k = await page();
 		await k.run('set endpoints url a http://a/v1', 'user');
@@ -1185,9 +1198,9 @@ describe('every key', () => {
 		mcp: 'b'
 	};
 	// values to try for a key by its kind, the first it takes that is not its
-	// default kept
+	// default kept; c names the server a proxy takes
 	const TRIES: Record<string, string[]> = {
-		string: ['m/x', 'X-A: 1'],
+		string: ['m/x', 'X-A: 1', 'c'],
 		url: ['http://n/v1'],
 		css: ['#123456', '2px', '700', 'serif', '1.5']
 	};
@@ -1200,7 +1213,7 @@ describe('every key', () => {
 			'fetch',
 			vi.fn(async () => models(['x']))
 		);
-		await k.run('set endpoints url m http://m/v1', 'user');
+		await k.run('set endpoints url m http://m/v1\nset mcp url c http://c/mcp', 'user');
 		const { modules } = await import('../src/engine/registry.js');
 		const untaken: string[] = [];
 		for (const m of modules) {

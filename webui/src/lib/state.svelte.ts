@@ -291,6 +291,7 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 		redact,
 		grant,
 		secret: reach(id).secret,
+		confirm: reach(id).confirm,
 		keep: () => save(conversation)
 	};
 	try {

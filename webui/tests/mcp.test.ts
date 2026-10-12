@@ -189,6 +189,7 @@ async function page(
 			redact: engine.redact,
 			grant,
 			secret: async (key, note) => (keys.push(key), notes.push(note), secrets.shift() ?? null),
+			confirm: async (question) => (questions.push(question), yeses.shift() ?? false),
 			keep: async () => void (kept.rounds = settled(reply.rounds))
 		};
 		const user: Message[] = [{ role: 'user', text: 'go' }];
@@ -204,7 +205,23 @@ async function page(
 	const keys: string[] = [];
 	// the notes of the servers that asked
 	const notes: string[] = [];
-	return { engine, bodies, auth, methods, asked, verdicts, secrets, keys, notes, go };
+	// what the user confirms, in order, no once past them, and what they were asked
+	const yeses: boolean[] = [];
+	const questions: string[] = [];
+	return {
+		engine,
+		bodies,
+		auth,
+		methods,
+		asked,
+		verdicts,
+		secrets,
+		keys,
+		notes,
+		yeses,
+		questions,
+		go
+	};
 }
 
 // the address the page is served at, against which a relative URL resolves
@@ -396,6 +413,95 @@ describe('an MCP server', () => {
 		const calls = t.reply.rounds.flatMap((r) => r.calls);
 		expect(calls[0]).toMatchObject({ result: 's3cret', ok: true });
 		expect(calls[1]).toMatchObject({ result: 'cancel', ok: false });
+	});
+
+	it('asks the user to confirm what a server says, then asks the call again with the answer', async () => {
+		const answers: unknown[] = [];
+		const CONFIRM: Declared = {
+			name: 'route',
+			run: async (_args, _signal, again) => {
+				answers.push(again.inputResponses ?? null);
+				if (again.inputResponses) {
+					const { action } = again.inputResponses.confirm as { action: string };
+					return { content: [{ type: 'text', text: action }] };
+				}
+				return {
+					resultType: 'input_required',
+					inputRequests: {
+						confirm: {
+							method: 'elicitation/create',
+							params: {
+								mode: 'form',
+								message: 'Route x to https://x?',
+								requestedSchema: {
+									type: 'object',
+									properties: { 'mcp url x': { type: 'boolean' } },
+									required: ['mcp url x']
+								}
+							}
+						}
+					}
+				};
+			}
+		};
+		const p = await page({ a: modern([CONFIRM]) }, [
+			stream([call('route', { description: 'route' })]),
+			stream([call('route', { description: 'route' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		p.yeses.push(true, false);
+		await (
+			await p.go()
+		).done;
+		expect(p.questions).toEqual(['Route x to https://x?', 'Route x to https://x?']);
+		expect(answers).toEqual([
+			null,
+			{ confirm: { action: 'accept', content: { 'mcp url x': true } } },
+			null,
+			{ confirm: { action: 'cancel' } }
+		]);
+	});
+
+	it('reaches a server through the proxy that relays it, with the key of the proxy', async () => {
+		const own = modern(SHELL);
+		const relayed = modern([{ name: 'search', run: text('hit') }]);
+		const p = await page(
+			{
+				k: (req) => (new URL(req.url).pathname === '/mcp/exa' ? relayed(req) : own(req)),
+				e: modern([{ name: 'search', run: text('direct') }])
+			},
+			[]
+		);
+		await p.engine.run(
+			'set mcp url kiss http://k/mcp\nset mcp key kiss K\nset mcp url exa http://e/mcp\n' +
+				'set mcp key exa E\nset mcp proxy exa kiss',
+			'user'
+		);
+		expect((await p.engine.run('show tools', 'user')).text).toContain(
+			'! mcp exa\nset tools use search'
+		);
+		expect(p.methods.e).toBeUndefined();
+		expect(p.auth).toContain('Bearer K');
+		expect(p.auth).not.toContain('Bearer E');
+		await p.engine.run('no mcp proxy exa', 'user');
+		await p.engine.run('show tools', 'user');
+		expect(p.methods.e).toContain('tools/list');
+		expect(p.auth).toContain('Bearer E');
+	});
+
+	it('takes as a proxy another server that has none itself', async () => {
+		const p = await page({}, []);
+		await p.engine.run('set mcp url k http://k/mcp\nset mcp url j http://j/mcp', 'user');
+		expect((await p.engine.run('set mcp proxy k k', 'user')).text).toContain(
+			'mcp proxy k names the server itself'
+		);
+		expect((await p.engine.run('set mcp proxy k z', 'user')).text).toContain(
+			'mcp proxy k: no mcp z'
+		);
+		expect((await p.engine.run('set mcp proxy k j\nset mcp proxy j k', 'user')).text).toContain(
+			'has a proxy itself'
+		);
 	});
 
 	it('keeps a secret typed for a server out of the model and the conversation', async () => {

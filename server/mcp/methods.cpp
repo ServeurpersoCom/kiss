@@ -14,8 +14,9 @@
 static const char * const SERVER_INFO_META         = "io.modelcontextprotocol/serverInfo";
 static const char * const CLIENT_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities";
 
-// the one input a call asks for: a form of the secrets the user is to type
-static const char * const SECRETS_FORM = "secrets";
+// the one input a call asks for: a form the user answers, a text field per
+// secret to type, a yes field per url to let
+static const char * const USER_FORM = "user";
 
 // a result the server does not keep: the tools follow the configuration, so a
 // client asks again rather than caching
@@ -97,12 +98,13 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
     });
 }
 
-// a call that asks the user for secrets: an input_required result whose one
-// form has a text field per stored key, the call coming again with them
+// a call that asks the user: an input_required result whose one form has a
+// text field per secret and a yes field per url, by stored key, the call
+// coming again with the answers
 static std::string asked_json(yyjson_val * id, const tool_result & r) {
     return jsonrpc_input_required_json(id, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * form =
-            yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "inputRequests"), SECRETS_FORM);
+            yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "inputRequests"), USER_FORM);
         yyjson_mut_obj_add_str(doc, form, "method", "elicitation/create");
         yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc, form, "params");
         yyjson_mut_obj_add_str(doc, params, "mode", "form");
@@ -111,10 +113,10 @@ static std::string asked_json(yyjson_val * id, const tool_result & r) {
         yyjson_mut_obj_add_str(doc, schema, "type", "object");
         yyjson_mut_val * properties = yyjson_mut_obj_add_obj(doc, schema, "properties");
         yyjson_mut_val * required   = yyjson_mut_obj_add_arr(doc, schema, "required");
-        for (const std::string & key : r.asks) {
-            yyjson_mut_val * field = yyjson_mut_obj_add_obj(doc, properties, key.c_str());
-            yyjson_mut_obj_add_str(doc, field, "type", "string");
-            yyjson_mut_arr_add_strcpy(doc, required, key.c_str());
+        for (const engine_ask & a : r.asks) {
+            yyjson_mut_val * field = yyjson_mut_obj_add_obj(doc, properties, a.key.c_str());
+            yyjson_mut_obj_add_str(doc, field, "type", a.yes ? "boolean" : "string");
+            yyjson_mut_arr_add_strcpy(doc, required, a.key.c_str());
         }
     });
 }
@@ -208,10 +210,11 @@ static bool takes_forms(yyjson_val * params) {
     return elicitation && (yyjson_obj_get(elicitation, "form") || !yyjson_obj_get(elicitation, "url"));
 }
 
-// the secrets the user typed into the form of an earlier call, when the call
-// comes again with its answer; false when they gave none
+// what the user answered to the form of an earlier call, when the call comes
+// again with it: the secrets typed, the urls let; false when they answered
+// nothing
 static bool answered(yyjson_val * params, engine_typed & typed) {
-    yyjson_val * form = yyjson_obj_get(yyjson_obj_get(params, "inputResponses"), SECRETS_FORM);
+    yyjson_val * form = yyjson_obj_get(yyjson_obj_get(params, "inputResponses"), USER_FORM);
     if (!form) {
         return true;
     }
@@ -225,6 +228,8 @@ static bool answered(yyjson_val * params, engine_typed & typed) {
     yyjson_obj_foreach(yyjson_obj_get(form, "content"), i, n, key, value) {
         if (yyjson_is_str(value)) {
             typed[yyjson_get_str(key)] = yyjson_get_str(value);
+        } else if (yyjson_is_true(value)) {
+            typed[yyjson_get_str(key)] = "true";
         }
     }
     return true;
@@ -260,13 +265,13 @@ void method_tools_call(const httplib::Request &            req,
         const bool   forms = modern && takes_forms(params);
         const auto   run   = [t, args, typed, given, forms](const tool_tick & tick) -> tool_result {
             if (!given) {
-                return { "The user typed no secret", true };
+                return { "The user answered nothing", true };
             }
             const tool_result r = t.call(args, typed, tick);
             if (!r.asks.empty() && !forms) {
                 return {
-                    "This client shows the user no form to type a secret: it goes in server.conf or on the "
-                        "console of the server",
+                    "This client shows the user no form: a secret or a url it asks goes in server.conf or on "
+                        "the console of the server",
                     true
                 };
             }

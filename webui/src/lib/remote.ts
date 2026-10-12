@@ -29,32 +29,62 @@ function pairs(text: string): [string, string][] {
 		});
 }
 
-// every item of the module that has a url, sorted by name
+// an item as it names its server: its url, key, headers and seconds
+function own(config: ConfigReader, module: string, name: string): Remote {
+	return {
+		name,
+		url: String(config.get(`${module} url`, name)),
+		key: String(config.get(`${module} key`, name) ?? ''),
+		headers: Object.fromEntries(pairs(String(config.get(`${module} headers`, name) ?? ''))),
+		timeout: Number(config.get(`${module} timeout`, name))
+	};
+}
+
+// every item of the module that has a url, sorted by name; an item with a
+// proxy reaches its server through the relay of the proxy, at the url of the
+// proxy then its own name, with the key and headers of the proxy, in its own
+// seconds
 export function remotes(config: ConfigReader, module: string): Remote[] {
 	return config
 		.names(module)
 		.filter((name) => config.get(`${module} url`, name))
-		.map((name) => ({
-			name,
-			url: String(config.get(`${module} url`, name)),
-			key: String(config.get(`${module} key`, name) ?? ''),
-			headers: Object.fromEntries(pairs(String(config.get(`${module} headers`, name) ?? ''))),
-			timeout: Number(config.get(`${module} timeout`, name))
-		}));
+		.map((name) => {
+			const proxy = config.get(`${module} proxy`, name);
+			if (proxy === undefined) return own(config, module, name);
+			const relay = own(config, module, proxy);
+			return {
+				...relay,
+				name,
+				url: `${relay.url}/${name}`,
+				timeout: own(config, module, name).timeout
+			};
+		});
 }
 
-// the rules of such a module: every item has a url of its own, a relative one
-// resolved against the page, since the same server reached twice serves the
-// same names twice, and its headers are Name: value pairs
+// the rules of such a module: every item has a url of its own, a proxy names
+// another item that has no proxy itself, and no server is reached twice, a
+// relative url resolved against the page, since the same server reached twice
+// serves the same names twice; its headers are Name: value pairs
 export function rules(config: ConfigReader, module: string): string | null {
 	const names = config.names(module).filter((n) => !config.get(`${module} url`, n));
 	if (names.length) return `${module} ${names.join(' ')} has no url`;
-	const owner = new Map<string, string>();
 	for (const name of config.names(module)) {
-		const url = new URL(String(config.get(`${module} url`, name)), location.href).href;
+		const proxy = config.get(`${module} proxy`, name);
+		if (proxy === undefined) continue;
+		if (proxy === name) return `${module} proxy ${name} names the server itself`;
+		if (!config.get(`${module} url`, proxy))
+			return `${module} proxy ${name}: no ${module} ${proxy}`;
+		if (config.get(`${module} proxy`, proxy) !== undefined)
+			return `${module} proxy ${name}: ${module} ${proxy} has a proxy itself`;
+	}
+	const owner = new Map<string, string>();
+	for (const remote of remotes(config, module)) {
+		const url = new URL(remote.url, location.href).href;
 		const first = owner.get(url);
-		if (first) return `${module} ${name} has the url of ${module} ${first}`;
-		owner.set(url, name);
+		if (first) return `${module} ${remote.name} has the url of ${module} ${first}`;
+		owner.set(url, remote.name);
+	}
+	for (const name of config.names(module)) {
 		const text = String(config.get(`${module} headers`, name) ?? '');
 		const bad = pairs(text).find(([n, v]) => !n || !v);
 		if (bad) return `${module} headers ${name}: "${bad[1] || bad[0]}" is not Name: value`;

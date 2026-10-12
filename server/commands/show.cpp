@@ -42,9 +42,17 @@ std::string show_module(const reader &      config,
         for (const std::string & n : config.names(module)) {
             const words_t lines = effective_lines(m, config, key, n, true);
             out.insert(out.end(), lines.begin(), lines.end());
+            if (key.empty() && m.notes) {
+                const words_t notes = m.notes(config, n);
+                out.insert(out.end(), notes.begin(), notes.end());
+            }
         }
     } else {
         out = effective_lines(m, config, key, item, true);
+        if (key.empty() && m.notes) {
+            const words_t notes = m.notes(config, item);
+            out.insert(out.end(), notes.begin(), notes.end());
+        }
     }
     if (out.empty()) {
         return comment("no " + module + (item.empty() ? "" : " " + item) + " yet");
