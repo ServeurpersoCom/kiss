@@ -8,7 +8,7 @@ import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
-import { run, settings } from '../engine/run.js';
+import { mask, run, settings } from '../engine/run.js';
 
 // whether the user lets the model make this call: a tool in consent asks, and
 // always turns it on, as the user
@@ -98,7 +98,9 @@ async function setup(
 		.filter((part) => part)
 		.join('\n\n');
 	const info = endpoint.protocol.described ? await describe(endpoint, model, signal) : undefined;
-	const request: Request = { model, system, messages, tools, parameters, info };
+	// whatever the model reads goes through the mask, so a secret a server or an
+	// endpoint answers back never reaches it
+	const request: Request = mask({ model, system, messages, tools, parameters, info });
 	return { endpoint, request, tools };
 }
 

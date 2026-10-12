@@ -8,6 +8,8 @@
 using words_t = std::vector<std::string>;
 
 constexpr const char * COMMENT_PREFIX = "!";
+// what a secret reads where it would show
+constexpr const char * REMOVED        = "<removed>";
 constexpr const char * ERROR_PREFIX   = "% ";
 constexpr const char * PIPE           = "|";
 constexpr const char * RUNNING_CONFIG = "running-config";

@@ -301,6 +301,10 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   site set over the factory, `show running-config all` every key of every module as `show <module>`
   lists it.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
+- No secret the page knows reaches the model: what a server or an endpoint answers back, an error,
+  a result or a note, reads `<removed>` where the value of a key stood, a value typed in the form
+  of a server included; a value under 8 characters is no key and stays. Headers carry no key:
+  `Authorization` and `x-api-key` come from the key of the item alone.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
 - The secrets of an item go with it to a url the model writes once the user lets it, the question

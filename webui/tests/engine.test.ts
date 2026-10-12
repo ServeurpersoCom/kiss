@@ -407,6 +407,23 @@ describe('a proxy', () => {
 });
 
 describe('the headers of a server', () => {
+	it('carry no key, which goes in the key of the item, a secret', async () => {
+		const k = await page();
+		for (const name of ['Authorization', 'x-api-key']) {
+			expect(
+				(
+					await k.run(
+						`set endpoints url a http://a/v1\nset endpoints headers a '${name}: sk-a'`,
+						'user'
+					)
+				).text
+			).toContain(`endpoints headers a: ${name} carries a key -> set endpoints key a`);
+		}
+		expect(
+			(await k.run("set mcp url b http://b/mcp\nset mcp headers b 'Authorization: x'", 'user')).text
+		).toContain('mcp headers b: Authorization carries a key -> set mcp key b');
+	});
+
 	it('go with every request to it alone, after its key, as Name: value pairs', async () => {
 		const k = await page();
 		const sent: Record<string, Record<string, string>> = {};

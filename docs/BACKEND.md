@@ -383,7 +383,11 @@ https://mcp.exa.ai/mcp`, unless the running-config before the batch or the start
 holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
 proxy/b proxy https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
 that changes. A line that writes the value of a secret is refused, and a client that takes no form,
-every client of the 2025 era, is told the secret goes in `server.conf` or on the console.
+every client of the 2025 era, is told the secret goes in `server.conf` or on the console. The text
+every tool answers reads `<removed>` where the value of a secret of the server stood, so a shell,
+`view` or `show logging` never hands a key on; a value under 8 characters is no key and stays, and a
+value the server never read, a line it refused, is no secret it knows. A line `server.conf` refuses
+is logged by its number, never by its text: `server.conf skips line 4: unterminated "`.
 
 ## The shell contract
 

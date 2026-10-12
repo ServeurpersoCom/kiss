@@ -121,7 +121,7 @@ static std::string asked_json(yyjson_val * id, const tool_result & r) {
     });
 }
 
-// the result of a tool call
+// the result of a tool call, its text masked of every secret of the server
 static std::string call_json(yyjson_val * id, bool modern, const tool_result & r) {
     if (!r.asks.empty()) {
         return asked_json(id, r);
@@ -129,9 +129,10 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_result & r
     return jsonrpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
         if (!r.text.empty() || r.image.empty()) {
-            yyjson_mut_val * block = yyjson_mut_arr_add_obj(doc, content);
+            const std::string text  = engine_mask(r.text);
+            yyjson_mut_val *  block = yyjson_mut_arr_add_obj(doc, content);
             yyjson_mut_obj_add_str(doc, block, "type", "text");
-            yyjson_mut_obj_add_strncpy(doc, block, "text", r.text.c_str(), r.text.size());
+            yyjson_mut_obj_add_strncpy(doc, block, "text", text.c_str(), text.size());
         }
         if (!r.image.empty()) {
             yyjson_mut_val * block = yyjson_mut_arr_add_obj(doc, content);

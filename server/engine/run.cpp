@@ -10,6 +10,7 @@
 #include "log.h"
 
 #include <algorithm>
+#include <cstring>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -254,17 +255,23 @@ static std::string refusal(const std::string & text) {
 }
 
 // a configuration enters a layer as IOS runs one at boot: a line the parser
-// refuses stays out, then the rest goes block by block, a block its batch
-// refuses staying out, tried again once others entered, as one item may name
-// another; returns each line and block that stays out and why
+// refuses stays out, named by its number, never by its text, which may hold a
+// secret; then the rest goes block by block, a block its batch refuses staying
+// out, tried again once others entered, as one item may name another; returns
+// each line and block that stays out and why
 static words_t enter(layer & target, const std::string & text) {
     words_t                                      out;
     std::vector<std::pair<std::string, words_t>> blocks;
-    for (const std::string & line : split_lines(text)) {
+    const words_t                                raw = split(text, '\n');
+    for (size_t i = 0; i < raw.size(); i++) {
+        const std::string line = trim(raw[i]);
+        if (line.empty() || starts_with(line, COMMENT_PREFIX)) {
+            continue;
+        }
         try {
             compile(line, false);
         } catch (const std::runtime_error & e) {
-            out.push_back(line + ": " + e.what());
+            out.push_back("line " + std::to_string(i + 1) + ": " + e.what());
             continue;
         }
         const std::string b  = block_of(line);
@@ -369,6 +376,40 @@ void engine_start(const std::string & path, const std::string & version) {
             m.apply(reader(g_running));
         }
     }
+}
+
+// the shortest value masked as a secret: a shorter one is no key, and would
+// mask common text
+static const size_t SECRET_SHORTEST = 8;
+
+std::string engine_mask(const std::string & text) {
+    words_t secrets;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        const reader                config(g_running);
+        for (const engine_module & m : schema_modules()) {
+            for (const engine_key & k : m.keys) {
+                if (k.kind != ENGINE_SECRET) {
+                    continue;
+                }
+                for (const std::string & item : k.named ? config.names(m.name) : words_t{ "" }) {
+                    const auto value = config.get(m.name + " " + k.name, item);
+                    if (value && value->size() >= SECRET_SHORTEST) {
+                        secrets.push_back(*value);
+                    }
+                }
+            }
+        }
+    }
+    std::sort(secrets.begin(), secrets.end(),
+              [](const std::string & a, const std::string & b) { return a.size() > b.size(); });
+    std::string out = text;
+    for (const std::string & s : secrets) {
+        for (size_t at = out.find(s); at != std::string::npos; at = out.find(s, at + std::strlen(REMOVED))) {
+            out.replace(at, s.size(), REMOVED);
+        }
+    }
+    return out;
 }
 
 // a batch that changes the running configuration says who changed it, as IOS

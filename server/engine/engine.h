@@ -136,6 +136,11 @@ void engine_start(const std::string & path, const std::string & version);
 // written without their value
 engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed = {});
 
+// a text as a client may read it: the value of every secret the running
+// configuration holds replaced by <removed>, the longest first, so a tool
+// that shows a log or a file never hands a key on
+std::string engine_mask(const std::string & text);
+
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");
 

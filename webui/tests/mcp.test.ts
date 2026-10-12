@@ -405,6 +405,42 @@ describe('an MCP server', () => {
 		expect((await p.engine.run('set mcp url pod /mcp', 'user')).ok).toBe(true);
 	});
 
+	it('never lets the model read a secret an endpoint or a server answers back', async () => {
+		const ECHO: Declared = {
+			name: 'echo',
+			run: async (_args, _signal, again) => {
+				if (!again.inputResponses) return asking();
+				const { content } = again.inputResponses.secrets as { content: { token: string } };
+				return { content: [{ type: 'text', text: `token ${content.token} taken` }] };
+			}
+		};
+		const refusing = async () =>
+			new Response(JSON.stringify({ error: { message: 'bad key sk-endpoint-0001' } }), {
+				status: 401,
+				headers: { 'content-type': 'application/json' }
+			});
+		const p = await page({ k: refusing, a: modern([ECHO]) }, [
+			stream([call('client_config', { description: 'list', lines: 'show models' })]),
+			stream([call('echo', { description: 'token' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run(
+			'set endpoints url k http://k/v1\nset endpoints key k sk-endpoint-0001\n' +
+				'set mcp url a http://a/mcp\nset tools use echo on',
+			'user'
+		);
+		p.secrets.push('typed-secret-0002');
+		const t = await p.go();
+		await t.done;
+		const read = JSON.stringify(p.bodies);
+		expect(t.reply.rounds[0].calls[0].result).toContain('sk-endpoint-0001');
+		expect(t.reply.rounds[1].calls[0].result).toContain('typed-secret-0002');
+		expect(read).not.toContain('sk-endpoint-0001');
+		expect(read).not.toContain('typed-secret-0002');
+		expect(read).toContain('bad key <removed>');
+		expect(read).toContain('token <removed> taken');
+	});
+
 	it('asks the user for the secrets a server wants, then asks the call again with them', async () => {
 		// the answers each call carried, none on a first call
 		const answers: unknown[] = [];

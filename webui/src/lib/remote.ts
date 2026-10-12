@@ -19,6 +19,10 @@ const PROXY = 'proxy';
 // the module whose items name the KiSS servers a proxy takes, by their MCP
 const SERVERS = 'mcp';
 
+// the headers that carry a key, which only the key of an item writes, so a
+// key is a secret wherever it goes
+const KEYED = ['authorization', 'x-api-key'];
+
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -75,7 +79,7 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 // a KiSS server, another item of mcp that has no proxy itself, and no server
 // is reached twice, a relative url resolved against the page, since the same
 // server reached twice serves the same names twice; its headers are Name:
-// value pairs
+// value pairs, none of them carrying a key
 export function rules(config: ConfigReader, module: string): string | null {
 	const names = config.names(module).filter((n) => !config.get(`${module} url`, n));
 	if (names.length) return `${module} ${names.join(' ')} has no url`;
@@ -100,6 +104,9 @@ export function rules(config: ConfigReader, module: string): string | null {
 		const text = String(config.get(`${module} headers`, name) ?? '');
 		const bad = pairs(text).find(([n, v]) => !n || !v);
 		if (bad) return `${module} headers ${name}: "${bad[1] || bad[0]}" is not Name: value`;
+		const keyed = pairs(text).find(([n]) => KEYED.includes(n.toLowerCase()));
+		if (keyed)
+			return `${module} headers ${name}: ${keyed[0]} carries a key -> set ${module} key ${name}`;
 	}
 	return null;
 }
