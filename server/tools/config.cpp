@@ -20,7 +20,7 @@ static tool_result call(yyjson_val * args, const engine_typed & typed, const too
             keys.push_back(a.key);
             if (a.yes) {
                 told.push_back("let " + parts.first.substr(0, parts.first.find(' ')) + "/" + parts.second + " relay " +
-                               a.to);
+                               a.to + (a.along.empty() ? "" : ", " + join(a.along, ", ") + " with it"));
             } else {
                 told.push_back("type " + (a.to.empty() ? a.key : a.key + " sent to " + a.to));
             }

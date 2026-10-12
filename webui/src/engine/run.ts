@@ -240,7 +240,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	const after = await state(draft, changed, listed);
 	signal?.throwIfAborted();
 	if (role === 'llm') {
-		const refused = moved(draft) ?? (await guard(before, after, scope));
+		const refused = await guard(draft, before, after, scope);
 		if (refused) return fail(null, refused);
 	}
 	const diff = schema.diff(before, after);
@@ -286,41 +286,19 @@ async function state(
 	return out;
 }
 
-// what a configuration sends: every secret of an item with a url, as its
-// stored key, its value and that url
-type Sending = [string, Value, Value];
-
-function sent(config: ConfigReader): Sending[] {
-	const out: Sending[] = [];
-	for (const [key, def] of schema.list()) {
-		const module = key.split(' ')[0];
-		const url = schema.list().find(([k, d]) => d.kind === 'url' && k.startsWith(module + ' '));
-		if (def.kind !== 'secret' || !url) continue;
-		for (const name of config.names(module)) {
-			const value = config.get(key, name);
-			const to = config.get(url[0], name);
-			if (value !== undefined && to !== undefined) out.push([stored(key, name), value, to]);
-		}
-	}
-	return out;
-}
-
-// on a batch of the model, a secret the user or the site gave goes only where
-// a configuration they chose sends it: the running one before the batch, the
-// startup-config or a save; a value the model writes goes anywhere, the model
-// knowing it; returns why the batch stops, if it does
-function moved(draft: ConfigReader): string | null {
-	const chosen = [archive.startup(), ...archive.list().map((s) => s.values)].map((v) =>
-		running.reader(v)
-	);
-	const known = [running, ...chosen].flatMap(sent);
-	for (const [k, value, to] of sent(draft)) {
-		const given = known.filter(([kk, v]) => kk === k && v === value);
-		if (!given.length || given.some(([, , url]) => url === to)) continue;
+// the secrets that go with the items a change sends somewhere new, a url or
+// a proxy, as the question tells them
+function along(draft: ConfigReader, to: Record<string, Value | undefined>): string[] {
+	return Object.keys(to).flatMap((k) => {
 		const [key, name] = unstore(k);
-		return `${key.split(' ')[0]} ${name} would send its secret to ${to}, where only the user or the site sends it`;
-	}
-	return null;
+		const module = key.split(' ')[0];
+		if (schema.find(key)?.kind === 'enum' || to[k] === undefined) return [];
+		return schema
+			.list()
+			.filter(([s, def]) => def.kind === 'secret' && s.startsWith(module + ' '))
+			.filter(([s]) => draft.get(s, name) !== undefined)
+			.map(([s]) => comment(`${stored(s, name)} goes with it`));
+	});
 }
 
 // whether a change opens a way out: a key naming where the page goes, a url
@@ -335,6 +313,7 @@ function opens(def: Key, from: Value | undefined, to: Value | undefined): boolea
 // every time, when the change opens it; returns why the batch stops, if it
 // does
 async function guard(
+	draft: ConfigReader,
 	before: Record<string, Value>,
 	after: Record<string, Value>,
 	scope: Scope
@@ -350,7 +329,10 @@ async function guard(
 	}
 	if (!Object.keys(to).length) return null;
 	if (!scope.grant) return 'nobody is here to agree to the change';
-	const verdict = await scope.grant({ kind: 'change', lines: schema.diff(from, to) });
+	const verdict = await scope.grant({
+		kind: 'change',
+		lines: [...schema.diff(from, to), ...along(draft, to)]
+	});
 	scope.signal?.throwIfAborted();
 	return verdict === REFUSE ? 'the user refused the change' : null;
 }

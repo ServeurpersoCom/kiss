@@ -13,7 +13,6 @@
 #include <mutex>
 #include <set>
 #include <stdexcept>
-#include <tuple>
 
 const char * engine_platform() {
 #if defined(_WIN32)
@@ -111,9 +110,19 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
     std::vector<engine_ask> out;
     for (const auto & u : urls(draft)) {
         const auto let = typed.find(u.first);
-        if (!known.count(u) && (let == typed.end() || let->second != YES)) {
-            out.push_back({ u.first, u.second, true });
+        if (known.count(u) || (let != typed.end() && let->second == YES)) {
+            continue;
         }
+        const auto        parts  = unstore(u.first);
+        const std::string module = parts.first.substr(0, parts.first.find(' '));
+        engine_ask        ask{ u.first, u.second, true, {} };
+        for (const engine_key & k : find_module(module)->keys) {
+            const std::string s = stored(module + " " + k.name, parts.second);
+            if (k.kind == ENGINE_SECRET && draft.count(s)) {
+                ask.along.push_back(s);
+            }
+        }
+        out.push_back(ask);
     }
     return out;
 }
@@ -124,58 +133,6 @@ static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) 
         out.push_back({ s, url_of(draft, s) });
     }
     return out;
-}
-
-// what a layer sends: every secret of an item with a url, with that url and
-// its value
-using sending = std::set<std::tuple<std::string, std::string, std::string>>;
-
-static sending sent(const layer & l) {
-    sending out;
-    for (const engine_module & m : schema_modules()) {
-        const std::string url = m.name + " " + URL_KEY;
-        if (!find_key(url)) {
-            continue;
-        }
-        for (const auto & kv : l) {
-            const auto parts = unstore(kv.first);
-            if (parts.first != url) {
-                continue;
-            }
-            for (const engine_key & k : m.keys) {
-                const auto held = l.find(stored(m.name + " " + k.name, parts.second));
-                if (k.kind == ENGINE_SECRET && held != l.end()) {
-                    out.insert({ held->first, kv.second, held->second });
-                }
-            }
-        }
-    }
-    return out;
-}
-
-// on the lines of an MCP client, a secret goes only where it went before, in
-// the running-config or the startup-config, or where the user saw it go as
-// they typed it: a key a model moves or restores by a copy reaches no url the
-// model wrote
-static std::string moved(const layer & before, const layer & draft, const engine_typed & typed) {
-    sending known = sent(before);
-    try {
-        const sending startup = sent(startup_layer());
-        known.insert(startup.begin(), startup.end());
-    } catch (const std::runtime_error &) {
-        // a startup-config that does not read vouches for nothing
-    }
-    for (const auto & t : sent(draft)) {
-        const std::string & sk = std::get<0>(t);
-        const auto          ty = typed.find(sk);
-        if (known.count(t) || (ty != typed.end() && schema_parse(unstore(sk).first, ty->second) == std::get<2>(t))) {
-            continue;
-        }
-        const auto parts = unstore(sk);
-        return parts.first.substr(0, parts.first.find(' ')) + " " + parts.second + " would send its secret to " +
-               std::get<1>(t) + ", where only the administrator or the user typing it sends it";
-    }
-    return "";
 }
 
 static engine_result failed(std::optional<size_t> line, bool alone, const std::string & message) {
@@ -243,12 +200,6 @@ static engine_result batch(layer &              target,
     wanted.insert(wanted.end(), typing.begin(), typing.end());
     if (!wanted.empty()) {
         return { true, "", wanted };
-    }
-    if (role == ENGINE_MCP) {
-        const std::string reason = moved(target, draft, typed);
-        if (!reason.empty()) {
-            return failed(std::nullopt, alone, reason);
-        }
     }
     words_t broken;
     for (const engine_module & m : schema_modules()) {

@@ -371,16 +371,13 @@ the console. An MCP client writes `set server key` alone: the batch applies noth
 answers `input_required` with a form of one text field per secret, MCP elicitation of the 2026-07-28
 era, its message naming the url each secret goes to. The client asks the user and calls again with
 the values in `inputResponses`, out of the context of the model; the batch runs again with them and
-answers `! the user typed server key`. The server keeps nothing between the two calls. A batch of an
-MCP client moves no secret: once it has run, every secret the configuration sends goes to a url it
-went to before, in the running-config or the startup-config, or is a value the user typed in that
-batch under the url it goes to. A key a model moves or restores by a copy reaches no url the model
-wrote, and a copy that restores a route as it was saved passes. A url an MCP client gives a route
-the same way asks the user to let it, a yes field of the same form, `Let mcp/exa relay
+answers `! the user typed server key`. The server keeps nothing between the two calls. A url an MCP
+client gives a route asks the user to let it, a yes field of the same form, `Let mcp/exa relay
 https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
-holds it. A line that writes the value of a
-secret is refused, and a client that takes no form, every client of the 2025 era, is told the secret
-goes in `server.conf` or on the console.
+holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
+mcp/b relay https://b.example/mcp, mcp key b with it`, so a key is never typed again for a url that
+changes. A line that writes the value of a secret is refused, and a client that takes no form, every
+client of the 2025 era, is told the secret goes in `server.conf` or on the console.
 
 ## The shell contract
 

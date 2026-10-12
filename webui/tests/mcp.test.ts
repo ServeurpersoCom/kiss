@@ -813,11 +813,23 @@ describe('an MCP server', () => {
 		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('on');
 	});
 
-	it('holding a key is never moved by the model', async () => {
+	it('holding a key moves with it once the user lets the model move it', async () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
-		expect((await p.engine.run('set mcp url a http://evil/mcp', 'llm')).text).toContain(
-			'mcp a would send its secret'
+		const asked: Grant[] = [];
+		const grant = async (request: Grant) => (asked.push(request), REFUSE);
+		expect((await p.engine.run('set mcp url a http://b/mcp', 'llm', { grant })).text).toBe(
+			'% the user refused the change'
 		);
+		expect(asked).toEqual([
+			{
+				kind: 'change',
+				lines: [
+					'- set mcp url a http://a/mcp',
+					'+ set mcp url a http://b/mcp',
+					'! mcp key a goes with it'
+				]
+			}
+		]);
 	});
 });

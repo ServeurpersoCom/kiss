@@ -124,8 +124,7 @@ One batch runs at a time, whoever sends it: the user or the model.
 2. The lines run in order on a draft: a copy of the running configuration and of the title of the
    conversation the batch was sent in.
 3. The rules of every module hold on the draft.
-4. For the model, the commit reads where the draft sends every secret, then the firewall reads the
-   resolved change and asks the user when it must.
+4. For the model, the firewall reads the resolved change and asks the user when it must.
 5. The draft replaces the running configuration and the title, the modules whose keys changed
    apply to the page, and the batch answers with its output, then its change, `-` then `+`: every
    register the session layer moves, read through the layers before and after, a register of an
@@ -170,11 +169,10 @@ answer given once leaves a way out open. Since `set`, `no`, `erase` and `copy` a
 of resolved values, they are guarded alike. Everything else, the model of the chat, its prompt, the
 style, the headers, the sampling, the model changes freely, the change shown in its output.
 
-Before the firewall asks, the commit reads where the draft sends every secret: a secret the user or
-the site gave goes only to a url a configuration they chose sends it to, the running one before the
-batch, the startup-config or a save, whatever the user answers; a value the model writes goes
-anywhere, the model knowing it. A secret and a url born in one batch go together, in either order,
-the url asking the user, who refuses both at once.
+The secrets of an item go with it where the user lets the model send it: the question names them,
+`! endpoints key u goes with it`, so a key is never typed again for a url that changes. A secret and
+a url born in one batch go together, in either order, the url asking the user, who refuses both at
+once.
 
 What loses data asks too, once the user confirms it, whoever asks for an erase and the model for a
 copy to the startup-config or a save: nothing is left that the user alone may do.
@@ -302,9 +300,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
-- A secret the user or the site gave goes only to a url a configuration they chose sends it to,
-  never to one the model chose, whatever line moves it; a secret and a url born in one batch go
-  together, in either order.
+- The secrets of an item go with it to a url the model writes once the user lets it, the question
+  naming them; a secret and a url born in one batch go together, in either order.
 - The model opens a way out only once the user agrees, every time, whatever command spells the
   change: a url given a value, a tool opened; closing never asks.
 - A question offers always only for a call, and says what it gives.
