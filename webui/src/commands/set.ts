@@ -42,6 +42,6 @@ export default {
 		return comment(`the user typed ${name ? `${key} ${name}` : key}`);
 	},
 	complete(ctx, args) {
-		return ctx.schema.next(ctx.config, args, true, false);
+		return ctx.schema.next(ctx.config, args, true, false, ctx.known);
 	}
 } satisfies Command<Plan>;

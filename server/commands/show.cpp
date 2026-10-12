@@ -2,6 +2,7 @@
 
 #include "commands/show.h"
 
+#include "engine/near.h"
 #include "engine/registry.h"
 #include "engine/run.h"
 #include "engine/schema.h"
@@ -56,7 +57,7 @@ static words_t next_key_or_item(const words_t & args) {
 }
 
 // show server, show server port: the word after a collection names a key when
-// it names one, else an item
+// it names one, else an item, one the draft holds, a prefix being enough
 static step_t compile_show(const words_t & args) {
     if (args.empty()) {
         throw incomplete();
@@ -85,7 +86,8 @@ static step_t compile_show(const words_t & args) {
         }
     }
     return [module, key, item](context & ctx) {
-        return show_module(reader(ctx.draft), module, key, item);
+        const reader config(ctx.draft);
+        return show_module(config, module, key, item.empty() ? "" : choose(item, config.names(module), module));
     };
 }
 

@@ -26,15 +26,23 @@ std::optional<std::string> reader::get(const std::string & key, const std::strin
     return std::nullopt;
 }
 
+words_t layer_names(const layer & l, const std::string & module) {
+    std::set<std::string> names;
+    for (const auto & kv : l) {
+        const auto [key, item] = unstore(kv.first);
+        if (!item.empty() && starts_with(key, module + " ")) {
+            names.insert(item);
+        }
+    }
+    return words_t(names.begin(), names.end());
+}
+
 std::vector<std::string> reader::names(const std::string & module) const {
     std::set<std::string> names;
     const layer &         defaults = defaults_layer();
     for (const layer * l : { &over, &defaults }) {
-        for (const auto & kv : *l) {
-            const auto [key, item] = unstore(kv.first);
-            if (!item.empty() && starts_with(key, module + " ")) {
-                names.insert(item);
-            }
+        for (const std::string & n : layer_names(*l, module)) {
+            names.insert(n);
         }
     }
     return words_t(names.begin(), names.end());

@@ -6,7 +6,7 @@ export default {
 	name: 'chat',
 	keys: {
 		// endpoint/model as show models lists it; empty: the one model of the one endpoint
-		model: { kind: 'string', default: '' },
+		model: { kind: 'string', default: '', of: 'models' },
 		// sent first in every request, none when empty
 		system: { kind: 'string', default: '' }
 	},

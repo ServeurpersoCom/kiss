@@ -1,6 +1,7 @@
 import type { Command } from '../lib/types.js';
 import { beyond, comment, localTime } from '../lib/config.js';
 import { listed } from './copy.js';
+import { choose } from '../engine/near.js';
 
 export default {
 	path: ['show', 'saves'],
@@ -11,9 +12,13 @@ export default {
 	},
 	// every save, oldest first; one save by its name as it runs, kiss.conf
 	// included
-	run(ctx, name) {
-		if (name !== undefined) {
-			ctx.archive.find(name);
+	run(ctx, word) {
+		if (word !== undefined) {
+			const name = choose(
+				word,
+				ctx.archive.list().map((s) => s.name),
+				'save'
+			);
 			const lines = listed(ctx, name);
 			return lines.length ? lines.join('\n') : comment('every key is at its default');
 		}

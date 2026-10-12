@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { app, send, stop } from '../lib/state.svelte.js';
-	import { suggest } from '../engine/run.js';
+	import { known, suggest } from '../engine/run.js';
+	import type { Known } from '../lib/types.js';
 	import { extend } from '../engine/complete.js';
 	import Icon from './Icon.svelte';
 	import { SLASH } from '../lib/config.js';
@@ -8,9 +9,18 @@
 	let text = $state('');
 	let field: HTMLTextAreaElement;
 
+	// the items the modules know, listed again each time a line opens on the CLI
+	let items: Known = $state({});
+	const cli = $derived(text.startsWith(SLASH));
+	$effect(() => {
+		if (cli) known('user').then((k) => (items = k));
+	});
+
 	// what may follow a slash command, filtered as it is typed
 	let hints = $derived(
-		text.startsWith(SLASH) && !text.includes('\n') ? suggest(text.slice(SLASH.length), 'user') : []
+		cli && !text.includes('\n')
+			? suggest(text.slice(SLASH.length), 'user', items, { conversation: app.current ?? undefined })
+			: []
 	);
 	// the slash command completed as far as the candidates agree; a candidate
 	// in <> names what to type, it only shows

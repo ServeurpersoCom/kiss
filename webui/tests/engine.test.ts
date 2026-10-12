@@ -654,7 +654,7 @@ describe('an erase', () => {
 		expect((await k.run('erase all', 'llm', kept)).text).toBe('% the user erased nothing');
 		expect(kept.conversations.list()).toHaveLength(3);
 		expect((await k.run('erase ab', 'user', shelf(list()))).text).toBe(
-			'% ambiguous conversation "ab": ab12-1 ab34-2'
+			'% ambiguous configuration or conversation "ab": ab12-1 ab34-2'
 		);
 		expect((await k.run('erase all', 'user', shelf([]))).text).toBe('% no conversation to erase');
 		expect((await k.run('erase all', 'user')).text).toBe('% nobody is here to confirm the erase');
@@ -714,9 +714,11 @@ describe('the conversations', () => {
 			['ab12-2', 'ab34-1']
 		]);
 		expect((await k.run('export ab', 'llm', s)).text).toBe(
-			'% ambiguous conversation "ab": ab12-2 ab34-1'
+			'% ambiguous configuration or conversation "ab": ab12-2 ab34-1'
 		);
-		expect((await k.run('export zz', 'llm', s)).text).toBe('% unknown conversation "zz"');
+		expect((await k.run('export zz', 'llm', s)).text).toBe(
+			'% unknown configuration or conversation "zz"'
+		);
 		expect((await k.run('export', 'llm', s)).text).toBe('% no conversation here');
 		expect((await k.run('export all\nshow title', 'llm', s)).text).toContain('runs alone');
 		const refused = { ...s, offer: async () => false };
@@ -848,7 +850,65 @@ describe('IOS words', () => {
 		expect((await k.run('show startup-config', 'user')).text).toContain(
 			'set display thinking open'
 		);
-		expect((await k.run('write disk', 'user')).text).toContain('unknown write "disk", use memory');
+		expect((await k.run('write disk', 'user')).text).toContain('unknown write "disk"');
+	});
+});
+
+describe('completion and abbreviation', () => {
+	it('completes a value with the items it names, models of every endpoint for chat model', async () => {
+		const k = await page('set endpoints url hf http://hf/v1');
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => models(['qwen/a', 'qwen/b', 'deepseek/v4']))
+		);
+		const known = await k.known('user');
+		expect(k.suggest('set chat model hf/q', 'user', known)).toEqual(['hf/qwen/a', 'hf/qwen/b']);
+		expect(k.suggest('set models temperature hf/d', 'user', known)).toEqual(['hf/deepseek/v4']);
+		expect(k.suggest('show models hf/q', 'user', known)).toEqual(['hf/qwen/a', 'hf/qwen/b']);
+	});
+
+	it('offers the current value of a key, never the one of a secret', async () => {
+		const k = await page('set endpoints url prod http://p/v1\nset chat system "Be brief"');
+		expect(k.suggest('set endpoints timeout prod ', 'user')).toEqual(['120', '<number>']);
+		expect(k.suggest('set chat system ', 'user')).toEqual(['"Be brief"', '<string>']);
+		await k.run('set endpoints key prod K', 'user');
+		expect(k.suggest('set endpoints key prod ', 'user')).toEqual(['<secret>']);
+	});
+
+	it('completes the filter after a pipe', async () => {
+		const k = await page();
+		expect(k.suggest('show running-config | ', 'user')).toEqual([
+			'begin',
+			'count',
+			'exclude',
+			'include'
+		]);
+		expect(k.suggest('show running-config | in', 'user')).toEqual(['include']);
+	});
+
+	it('abbreviates an item that must exist, never one a set may create', async () => {
+		const k = await page();
+		await k.run('set endpoints url local http://p/v1', 'user');
+		await k.run('set endpoints url lo http://q/v1', 'user');
+		expect(k.settings.names('endpoints')).toEqual(['lo', 'local']);
+		expect((await k.run('show endpoints loc', 'user')).text).toContain(
+			'set endpoints url local http://p/v1'
+		);
+		expect((await k.run('no endpoints l', 'user')).text).toBe(
+			'% ambiguous endpoints "l": lo local'
+		);
+		await k.run('no endpoints url loc', 'user');
+		expect(k.settings.get('endpoints url', 'local')).toBeUndefined();
+		expect((await k.run('no endpoints x', 'user')).text).toContain('unknown endpoints "x"');
+	});
+
+	it('names a configuration by a prefix, a new save only by its whole name', async () => {
+		const k = await page();
+		await k.run('set display tools open', 'user');
+		await k.run('copy run backup', 'user');
+		expect((await k.run('show diff back run', 'user')).text).toBe('! no difference');
+		expect((await k.run('copy ba start', 'user')).text).toBe('! copied backup to startup-config');
+		expect((await k.run('show saves ba', 'user')).text).toContain('set display tools open');
 	});
 });
 
@@ -932,7 +992,7 @@ describe('a copy', () => {
 		expect((await k.run('show saves c | include url', 'user')).text).toBe(
 			'set endpoints url m http://m/v1'
 		);
-		expect((await k.run('show saves z', 'user')).text).toBe('% unknown save "z"');
+		expect((await k.run('show saves z', 'user')).text).toBe('% unknown save "z", did you mean b');
 		const no = shelf([], null, false);
 		expect((await k.run('copy a startup-config', 'llm', no)).text).toBe(
 			'% the user copied nothing'
@@ -1040,7 +1100,7 @@ describe('erase and copy', () => {
 	it('erase running-config drops what the session sets, a copy to it puts back the save it names', async () => {
 		const k = await page('set display tools open');
 		expect((await k.run('copy first running-config', 'user')).text).toContain(
-			'unknown save "first"'
+			'unknown configuration "first"'
 		);
 		await k.run('set chat system blue', 'user');
 		await k.run('copy running-config first', 'user');

@@ -1,13 +1,14 @@
 import type { Command, Context, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import {
+	ALL,
 	NAME_PATTERN,
 	RUNNING_CONFIG,
 	STARTUP_CONFIG,
 	beyond,
-	comment,
-	configuration
+	comment
 } from '../lib/config.js';
+import { choose, pick } from '../engine/near.js';
 
 // the values a name holds over kiss.conf: the running configuration, the
 // startup-config, or a save
@@ -31,14 +32,22 @@ export function listed(ctx: Context, name: string, secrets = false): string[] {
 	);
 }
 
-// whether a word names a configuration: the running-config, the
-// startup-config, or a save
+// the configurations a word may name: the running-config, the
+// startup-config, and every save
+export function configs(ctx: Context): string[] {
+	return [RUNNING_CONFIG, STARTUP_CONFIG, ...ctx.archive.list().map((s) => s.name)];
+}
+
+// whether a word names a configuration
 export function named(ctx: Context, word: string): boolean {
-	return (
-		word === RUNNING_CONFIG ||
-		word === STARTUP_CONFIG ||
-		ctx.archive.list().some((s) => s.name === word)
-	);
+	return configs(ctx).includes(word);
+}
+
+// what erase and export name: every conversation, a configuration, or a
+// conversation by its id, a prefix being enough
+export function target(ctx: Context, word: string): string {
+	const ids = ctx.conversations?.list().map((c) => c.id) ?? [];
+	return choose(word, [ALL, ...configs(ctx), ...ids], 'configuration or conversation');
 }
 
 // what the checks of the modules find in the running configuration
@@ -57,17 +66,21 @@ export default {
 	path: ['copy'],
 	roles: ['user', 'llm'],
 	alone: true,
+	// the source names a configuration, a prefix being enough; the target
+	// names the running-config or the startup-config the same way, else a
+	// save by its whole name, which it may create
 	parse(_schema, args) {
 		if (args.length < 2) throw new Incomplete();
 		if (args.length > 2) throw beyond(['copy', ...args.slice(0, 2)], args.slice(2));
-		const [from, to] = args.map(configuration);
+		const to = pick(args[1], [RUNNING_CONFIG, STARTUP_CONFIG], 'configuration') ?? args[1];
 		if (!NAME_PATTERN.test(to)) throw new Error(`"${to}" is not a save name`);
-		if (from === to) throw new Error('a copy goes from one configuration to another');
-		return [from, to];
+		return [args[0], to];
 	},
 	// a copy from the running-config tells what the checks find, as a copy
 	// of a save keeps what was checked when it was made
-	async run(ctx, [from, to]) {
+	async run(ctx, [word, to]) {
+		const from = choose(word, configs(ctx), 'configuration');
+		if (from === to) throw new Error('a copy goes from one configuration to another');
 		const copied = values(ctx, from);
 		if (to === RUNNING_CONFIG) {
 			const dropped = ctx.config.load(copied);
@@ -86,7 +99,7 @@ export default {
 		return [`copied ${from} to ${to}`, ...warnings].map(comment).join('\n');
 	},
 	complete(ctx, args) {
-		const names = [RUNNING_CONFIG, STARTUP_CONFIG, ...ctx.archive.list().map((s) => s.name)];
+		const names = configs(ctx);
 		return args.length === 0 ? names : args.length === 1 ? [...names, '<name>'] : [];
 	}
 } satisfies Command<string[]>;

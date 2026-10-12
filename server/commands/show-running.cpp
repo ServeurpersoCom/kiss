@@ -1,6 +1,7 @@
 // show-running.cpp: show running-config [all]
 
 #include "commands/show.h"
+#include "engine/near.h"
 #include "engine/registry.h"
 #include "engine/run.h"
 #include "engine/schema.h"
@@ -9,7 +10,7 @@
 // line that sets it, which copy writes to server.conf; all, every key of every
 // module with its value, defaults included
 static step_t compile_show_running(const words_t & args) {
-    if (!args.empty() && !starts_with(ALL, lower(args[0]))) {
+    if (!args.empty() && pick(args[0], { ALL }, "word").empty()) {
         fail(beyond({ "show", RUNNING_CONFIG }, args));
     }
     if (args.size() > 1) {

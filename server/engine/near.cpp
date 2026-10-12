@@ -42,3 +42,37 @@ std::string did_you_mean(const std::string & word, const words_t & candidates, c
     }
     return near.empty() ? "" : ", did you mean " + head + near;
 }
+
+std::string pick(const std::string & word, const words_t & words, const std::string & what) {
+    if (word.empty()) {
+        return "";
+    }
+    if (std::find(words.begin(), words.end(), word) != words.end()) {
+        return word;
+    }
+    const std::string typed = lower(word);
+    words_t           hits, exact;
+    for (const std::string & w : words) {
+        if (starts_with(lower(w), typed) && std::find(hits.begin(), hits.end(), w) == hits.end()) {
+            hits.push_back(w);
+            if (lower(w) == typed) {
+                exact.push_back(w);
+            }
+        }
+    }
+    if (exact.size() == 1) {
+        return exact[0];
+    }
+    if (hits.size() > 1) {
+        fail("ambiguous " + what + " \"" + word + "\": " + join(hits, " "));
+    }
+    return hits.empty() ? "" : hits[0];
+}
+
+std::string choose(const std::string & word, const words_t & words, const std::string & what) {
+    const std::string found = pick(word, words, what);
+    if (found.empty()) {
+        fail("unknown " + what + " \"" + word + "\"" + did_you_mean(word, words));
+    }
+    return found;
+}

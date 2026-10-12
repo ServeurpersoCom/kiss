@@ -1,18 +1,10 @@
 // copy.cpp: copy between the running-config and the startup-config
 
 #include "engine/archive.h"
+#include "engine/near.h"
 #include "engine/registry.h"
 #include "engine/run.h"
 #include "engine/schema.h"
-
-static std::string configuration(const std::string & word) {
-    for (const char * n : { RUNNING_CONFIG, STARTUP_CONFIG }) {
-        if (starts_with(n, lower(word))) {
-            return n;
-        }
-    }
-    return word;
-}
 
 // copy running-config startup-config writes server.conf once the batch holds,
 // copy startup-config running-config reads it back into the draft
@@ -23,13 +15,9 @@ static step_t compile_copy(const words_t & args) {
     if (args.size() > 2) {
         fail(beyond({ "copy", args[0], args[1] }, words_t(args.begin() + 2, args.end())));
     }
-    const std::string from = configuration(args[0]);
-    const std::string to   = configuration(args[1]);
-    for (const std::string & n : { from, to }) {
-        if (n != RUNNING_CONFIG && n != STARTUP_CONFIG) {
-            fail("unknown configuration \"" + n + "\", use " + RUNNING_CONFIG + " " + STARTUP_CONFIG);
-        }
-    }
+    const words_t     configs = { RUNNING_CONFIG, STARTUP_CONFIG };
+    const std::string from    = choose(args[0], configs, "configuration");
+    const std::string to      = choose(args[1], configs, "configuration");
     if (from == to) {
         fail("a copy goes from one configuration to another");
     }

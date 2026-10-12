@@ -22,7 +22,8 @@ export default {
 		ctx.conversation.title = title;
 		return '';
 	},
-	complete(_ctx, args) {
-		return args.length ? [] : ['<title>'];
+	complete(ctx, args) {
+		const title = ctx.conversation?.title;
+		return args.length ? [] : [...(title ? [title] : []), '<title>'];
 	}
 } satisfies Command<string>;

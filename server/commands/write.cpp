@@ -2,6 +2,7 @@
 // running-config as the batch leaves it written to server.conf once the batch
 // holds, as copy running-config startup-config writes it
 
+#include "engine/near.h"
 #include "engine/registry.h"
 #include "engine/run.h"
 
@@ -11,8 +12,8 @@ static step_t compile_write(const words_t & args) {
     if (args.size() > 1) {
         fail(beyond({ "write", args[0] }, words_t(args.begin() + 1, args.end())));
     }
-    if (args.size() == 1 && !starts_with(MEMORY, lower(args[0]))) {
-        fail("unknown write \"" + args[0] + "\", use " + MEMORY);
+    if (args.size() == 1) {
+        choose(args[0], { MEMORY }, "write");
     }
     return [](context & ctx) {
         ctx.save = true;

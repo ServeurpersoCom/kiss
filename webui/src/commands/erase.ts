@@ -7,14 +7,13 @@ import {
 	STARTUP_CONFIG,
 	beyond,
 	comment,
-	configuration,
 	titled
 } from '../lib/config.js';
-import { named } from './copy.js';
+import { configs, named, target } from './copy.js';
 
-// what erase names: every conversation but the pinned ones, or a word: a
-// configuration, else a conversation by a prefix of its id
-type Plan = typeof ALL | { word: string };
+// what erase names, a prefix being enough: every conversation but the pinned
+// ones, a configuration, or a conversation by its id
+type Plan = string;
 
 // a configuration erased: the running-config back to kiss.conf over the
 // defaults, the startup-config gone so the page starts on kiss.conf, a save
@@ -41,21 +40,22 @@ export default {
 	parse(_schema, args) {
 		if (!args.length) throw new Incomplete();
 		if (args.length > 1) throw beyond(['erase', args[0]], args.slice(1));
-		return args[0] === ALL ? ALL : { word: configuration(args[0]) };
+		return args[0];
 	},
-	async run(ctx, plan) {
+	async run(ctx, word) {
 		if (!ctx.confirm) throw new Error('nobody is here to confirm the erase');
-		if (plan !== ALL && named(ctx, plan.word)) {
-			const yes = await ctx.confirm(`Erase ${plan.word}?`);
+		const plan = target(ctx, word);
+		if (named(ctx, plan)) {
+			const yes = await ctx.confirm(`Erase ${plan}?`);
 			ctx.signal?.throwIfAborted();
 			if (!yes) throw new Error('the user erased nothing');
-			return config(ctx, plan.word);
+			return config(ctx, plan);
 		}
 		if (!ctx.conversations) throw new Error('no conversation to erase');
 		const list =
 			plan === ALL
 				? ctx.conversations.list().filter((c) => !c.pinned)
-				: [ctx.conversations.find(plan.word.toLowerCase())];
+				: [ctx.conversations.find(plan)];
 		if (!list.length) throw new Error('no conversation to erase');
 		const question =
 			list.length === 1
@@ -70,7 +70,6 @@ export default {
 			.join('\n');
 	},
 	complete(ctx, args) {
-		const configs = [RUNNING_CONFIG, STARTUP_CONFIG, ...ctx.archive.list().map((s) => s.name)];
-		return args.length ? [] : [ALL, ...configs, '<id>'];
+		return args.length ? [] : [ALL, ...configs(ctx), '<id>'];
 	}
 } satisfies Command<Plan>;

@@ -2,6 +2,8 @@
 
 #include "engine/filter.h"
 
+#include "engine/near.h"
+
 #include <regex>
 
 // the filter after a pipe, as IOS reads it: show running-config | include
@@ -18,16 +20,7 @@ filter_t compile_filter(const std::string & spec) {
     const std::string trimmed = trim(spec);
     const std::string word    = trimmed.substr(0, trimmed.find_first_of(" \t"));
     const std::string pattern = trim(trimmed.substr(word.size()));
-    words_t           hits;
-    for (const std::string & n : names) {
-        if (starts_with(n, lower(word))) {
-            hits.push_back(n);
-        }
-    }
-    if (hits.size() != 1) {
-        fail("unknown filter \"" + word + "\", use " + join(names, " "));
-    }
-    const std::string name = hits[0];
+    const std::string name    = choose(word, names, "filter");
     if (pattern.empty()) {
         fail(name + " needs a pattern");
     }

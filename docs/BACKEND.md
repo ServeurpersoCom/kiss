@@ -123,9 +123,12 @@ only and grandchildren outlive a timeout. `job.cpp` owns that layer.
 
 The configuration runs on the engine of the page, rewritten in C++: the same words, the same
 batches, the same laws. A key is two fixed words, a module then a key; a key of a collection takes
-the item name next, and the value comes last. Each word may be any prefix that names one word only,
-the way Cisco IOS reads a line, the value of an enum too: `set server log inf` sets
-`informational`, and the configuration keeps the whole word.
+the item name next, and the value comes last. A word that names something already there may be any
+prefix that names it alone, the way Cisco IOS reads a line: a command, a module, a key, a filter,
+the value of an enum (`set server log inf` sets `informational`), `all` and `memory`, the item of
+`no` and `show`, and a configuration (`copy run start`); the configuration keeps the whole word. A
+word that may be new is written whole: the item of a `set`, and every value but the one of an
+enum.
 
 A batch compiles every line before the first one runs, runs them on a draft of the running
 configuration, checks the rules of every module on the draft, then replaces the running
@@ -284,8 +287,9 @@ forge# copy run start
 The line is edited as in a shell, and completes as IOS does, from the words the engine reads:
 
 - Tab completes the word when one word fits, else the start every fitting word shares, else lists
-  them; `?` lists what may follow, or the words the word typed starts, and leaves the line as it is.
-  Ctrl-V types the next key as it is, a `?` in a value.
+  them: the words of the engine, the items set, the filters after a pipe, and for a value its
+  current one, a secret aside; `?` lists what may follow, or the words the word typed starts, and
+  leaves the line as it is. Ctrl-V types the next key as it is, a `?` in a value.
 - Left and Right, Home and End or Ctrl-A and Ctrl-E move; Backspace and Delete erase a character,
   Ctrl-U the line before the cursor, Ctrl-K the line after it; Up and Down walk the history.
 - `exit` and `quit`, Ctrl-C, and Ctrl-D on an empty line stop the server. They are words of the

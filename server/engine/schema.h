@@ -35,7 +35,8 @@ struct key_words {
 // the key the words name, its item for a named key, and the words after it
 key_words schema_read(const words_t & words);
 
-// what may follow the words of a key: modules, keys, items, a value
+// what may follow the words of a key: modules, keys, items, and with a value
+// its current one, a secret aside
 words_t schema_next(const engine_reader & config, const words_t & words, bool value, bool items);
 
 bool        secret(const std::string & s);

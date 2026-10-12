@@ -41,3 +41,23 @@ export function didYouMean(word: string, candidates: readonly string[], head = '
 	const near = nearest(word, candidates);
 	return near ? `, did you mean ${head}${near}` : '';
 }
+
+// the word a typed word names in a closed set: itself, else the only word it
+// starts, case aside; none when it starts none
+export function pick(word: string, words: readonly string[], what: string): string | undefined {
+	if (!word) return undefined;
+	if (words.includes(word)) return word;
+	const typed = word.toLowerCase();
+	const hits = [...new Set(words.filter((w) => w.toLowerCase().startsWith(typed)))];
+	const exact = hits.filter((w) => w.toLowerCase() === typed);
+	if (exact.length === 1) return exact[0];
+	if (hits.length > 1) throw new Error(`ambiguous ${what} "${word}": ${hits.join(' ')}`);
+	return hits[0];
+}
+
+// the word a typed word names in a closed set, or why it names none
+export function choose(word: string, words: readonly string[], what: string): string {
+	const found = pick(word, words, what);
+	if (found === undefined) throw new Error(`unknown ${what} "${word}"` + didYouMean(word, words));
+	return found;
+}

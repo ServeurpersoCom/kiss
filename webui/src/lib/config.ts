@@ -19,10 +19,6 @@ export const MODEL_SEPARATOR = '/';
 // them; neither is a save name
 export const RUNNING_CONFIG = 'running-config';
 export const STARTUP_CONFIG = 'startup-config';
-// a word naming one of them by any prefix, as IOS reads copy run start, else
-// a save by its name
-export const configuration = (word: string): string =>
-	[RUNNING_CONFIG, STARTUP_CONFIG].find((n) => n.startsWith(word.toLowerCase())) ?? word;
 export const ERROR_PREFIX = '% ';
 export const COMMENT_PREFIX = '!';
 // a line of output that is not a command: a heading, a note, a warning

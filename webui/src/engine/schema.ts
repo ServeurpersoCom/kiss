@@ -1,7 +1,7 @@
-import type { ConfigReader, Key, KeyWords, Module, Schema, Value } from '../lib/types.js';
+import type { ConfigReader, Key, KeyWords, Known, Module, Schema, Value } from '../lib/types.js';
 import { Incomplete } from '../lib/types.js';
 import { NAME_PATTERN, REMOVED, comment } from '../lib/config.js';
-import { didYouMean } from './near.js';
+import { choose, didYouMean, pick } from './near.js';
 
 const URL_PROTOCOLS = ['http:', 'https:'];
 // a value that reads back as one token without quotes, a pipe opening a filter
@@ -17,15 +17,6 @@ export function stored(key: string, name?: string): string {
 export function unstore(stored: string): [string, string | undefined] {
 	const words = stored.split(' ');
 	return [words.slice(0, 2).join(' '), words[2]];
-}
-
-// the word a typed word names: itself, else the only word it starts
-function pick(word: string, words: readonly string[], what: string): string | undefined {
-	const typed = word.toLowerCase();
-	if (words.includes(typed)) return typed;
-	const hits = words.filter((w) => w.startsWith(typed));
-	if (hits.length > 1) throw new Error(`ambiguous ${what} "${word}": ${hits.join(' ')}`);
-	return hits[0];
 }
 
 function check(def: Key, raw: string): Value {
@@ -105,6 +96,10 @@ export class KeySchema implements Schema {
 		const problems = this.entries.map(([key, def]) => audit(key, def));
 		const keys = this.entries.map(([key]) => key);
 		keys.forEach((k, i) => keys.indexOf(k) !== i && problems.push(`${k}: declared twice`));
+		const names = all.map((m) => m.name);
+		for (const [key, def] of this.entries) {
+			if (def.of && !names.includes(def.of)) problems.push(`${key}: of names no module`);
+		}
 		const found = problems.filter((p) => p !== null);
 		if (found.length) throw new Error(['bad keys', ...found].join('\n'));
 	}
@@ -164,31 +159,46 @@ export class KeySchema implements Schema {
 		const def = this.find(key)!;
 		if (!def.named) return { key, def, module, rest: words.slice(2) };
 		if (words.length < 3) throw new Incomplete();
-		if (!NAME_PATTERN.test(words[2])) throw new Error(`"${words[2]}" is not a ${module} name`);
+		// a key that takes only some items names one of them, a prefix being
+		// enough; any other takes any name
 		const names = def.names?.(this.all);
-		if (names && !names.includes(words[2])) {
-			throw new Error(`unknown ${key} "${words[2]}"` + didYouMean(words[2], names));
-		}
-		return { key, def, module, name: words[2], rest: words.slice(3) };
+		const name = names ? choose(words[2], names, key) : words[2];
+		if (!NAME_PATTERN.test(name)) throw new Error(`"${name}" is not a ${module} name`);
+		return { key, def, module, name, rest: words.slice(3) };
 	}
 
-	next(config: ConfigReader, words: readonly string[], value: boolean, items: boolean): string[] {
+	next(
+		config: ConfigReader,
+		words: readonly string[],
+		value: boolean,
+		items: boolean,
+		known: Known = {}
+	): string[] {
+		const all = (module: string) => [
+			...new Set([...config.names(module), ...(known[module] ?? [])])
+		];
 		try {
 			if (!words.length) return [...this.modules.keys()].sort();
 			const module = this.module(words[0]);
 			const keys = Object.keys(this.modules.get(module) ?? {}).sort();
 			if (words.length === 1) {
-				return items && this.collection(module) ? [...keys, ...config.names(module)] : keys;
+				return items && this.collection(module) ? [...keys, ...all(module)] : keys;
 			}
 			const keyWord = this.key(module, words[1]);
 			if (!keyWord) return [];
-			const def = this.find(`${module} ${keyWord}`)!;
+			const key = `${module} ${keyWord}`;
+			const def = this.find(key)!;
 			if (def.named && words.length === 2) {
-				return def.names ? [...def.names(this.all)] : [...config.names(module), '<name>'];
+				if (def.names) return [...def.names(this.all)];
+				return value ? [...all(module), '<name>'] : all(module);
 			}
 			if (!value || words.length !== (def.named ? 3 : 2)) return [];
 			if (def.kind === 'enum') return [...(def.values ?? [])];
-			return [`<${def.property ?? def.kind}>`];
+			const current = def.kind === 'secret' ? undefined : config.get(key, words[2]);
+			return [
+				...new Set([...(current ? [this.quote(current)] : []), ...(def.of ? all(def.of) : [])]),
+				`<${def.property ?? def.kind}>`
+			];
 		} catch {
 			return [];
 		}

@@ -50,6 +50,9 @@ export interface Key {
 	// the only items it takes, when they are known: a line naming another
 	// fails, a value stored under another is dropped as an unknown key is
 	names?(modules: readonly Module[]): readonly string[];
+	// the module whose items the value names, offered when it completes: chat
+	// model takes an item of models
+	of?: string;
 	// a way out of the page, which the model opens only once the user agrees,
 	// every time: a url given a value, an enum moved toward its more open
 	// values, which go from the most closed to the most open
@@ -74,6 +77,9 @@ export interface Module {
 	// knows none when it failed
 	items?(ctx: Context): Promise<Group[]>;
 }
+
+// the items each module knows beyond those set, by module, as last listed
+export type Known = Readonly<Record<string, readonly string[]>>;
 
 export interface Group {
 	group: string;
@@ -170,8 +176,16 @@ export interface Schema {
 	// throws Incomplete when the words stop before the key is named
 	read(words: readonly string[]): KeyWords;
 	// what may follow the words in a line naming a key, a value too when asked,
-	// and right after a collection its items too when asked
-	next(config: ConfigReader, words: readonly string[], value: boolean, items: boolean): string[];
+	// and right after a collection its items too when asked: the items set, and
+	// those known when given; a value takes its current one, a secret aside,
+	// and the items of the module it names
+	next(
+		config: ConfigReader,
+		words: readonly string[],
+		value: boolean,
+		items: boolean,
+		known?: Known
+	): string[];
 	// a value as one token that reads back unchanged
 	quote(value: Value): string;
 	// the key and the item name of a stored key
@@ -244,6 +258,8 @@ export interface Context extends Scope {
 	modules: readonly Module[];
 	// the commands open to the role
 	commands: readonly Command<unknown>[];
+	// the items the modules know, for completion only
+	known?: Known;
 	// the lines of a file run as more lines of the batch, on the same draft,
 	// whole or not at all with it; their output
 	lines?(text: string): Promise<string>;

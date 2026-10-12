@@ -1,4 +1,5 @@
 import { comment } from '../lib/config.js';
+import { choose } from './near.js';
 
 type Lines = (lines: string[]) => string[];
 
@@ -18,7 +19,7 @@ const FILTERS: Record<string, (re: RegExp) => Lines> = {
 	include: (re) => (lines) => lines.filter((l) => re.test(l))
 };
 
-const NAMES = Object.keys(FILTERS);
+export const FILTER_NAMES = Object.keys(FILTERS);
 
 // the filter a pipe spells, compiled once: a bad name or pattern fails here,
 // before anything runs
@@ -26,9 +27,7 @@ export function compileFilter(spec: string): (text: string) => string {
 	const trimmed = spec.trim();
 	const word = trimmed.split(/\s/, 1)[0];
 	const pattern = trimmed.slice(word.length).trim();
-	const names = NAMES.filter((n) => n.startsWith(word.toLowerCase()));
-	if (names.length !== 1) throw new Error(`unknown filter "${word}", use ${NAMES.join(' ')}`);
-	const name = names[0];
+	const name = choose(word, FILTER_NAMES, 'filter');
 	if (!pattern) throw new Error(`${name} needs a pattern`);
 	let re: RegExp;
 	try {

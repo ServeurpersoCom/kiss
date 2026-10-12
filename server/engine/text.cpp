@@ -62,21 +62,3 @@ std::string trim(const std::string & s) {
 std::string beyond(const words_t & head, const words_t & rest) {
     return "nothing goes after " + join(head, " ") + ": " + join(rest, " ");
 }
-
-// the word a typed word names: itself, else the only word it starts
-std::string pick(const std::string & word, const words_t & words, const std::string & what) {
-    const std::string typed = lower(word);
-    if (std::find(words.begin(), words.end(), typed) != words.end()) {
-        return typed;
-    }
-    words_t hits;
-    for (const std::string & w : words) {
-        if (starts_with(w, typed)) {
-            hits.push_back(w);
-        }
-    }
-    if (hits.size() > 1) {
-        fail("ambiguous " + what + " \"" + word + "\": " + join(hits, " "));
-    }
-    return hits.empty() ? "" : hits[0];
-}

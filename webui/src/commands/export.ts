@@ -4,19 +4,17 @@ import {
 	CONFIG_EXTENSION,
 	FILE_EXTENSION,
 	ID_SHOWN,
-	RUNNING_CONFIG,
-	STARTUP_CONFIG,
 	beyond,
 	comment,
-	configuration,
 	fileName,
 	localTime
 } from '../lib/config.js';
-import { listed, named } from './copy.js';
+import { configs, listed, named, target } from './copy.js';
 
-// what export names: every conversation, the one the batch was sent in, or a
-// word: a configuration, else a conversation by a prefix of its id
-type Plan = typeof ALL | null | { word: string };
+// what export names: the conversation the batch was sent in, or a word, a
+// prefix being enough: every conversation, a configuration, or a conversation
+// by its id
+type Plan = string | null;
 
 // a file offered: its name, its text, and what the output tells of it
 interface File {
@@ -41,7 +39,7 @@ function packed(ctx: Context, plan: Plan, minute: string): File {
 		const here = all.find((c) => c.id === ctx.conversation?.id);
 		if (!here) throw new Error('no conversation here');
 		list = [here];
-	} else if (plan !== ALL) list = [ctx.conversations!.find(plan.word.toLowerCase())];
+	} else if (plan !== ALL) list = [ctx.conversations!.find(plan)];
 	if (!list.length) throw new Error('no conversation yet');
 	const title = plan === ALL ? `${ALL} ${minute}` : list[0].title || list[0].id.slice(0, ID_SHOWN);
 	const name = fileName(title, FILE_EXTENSION);
@@ -56,26 +54,24 @@ export default {
 	alone: true,
 	parse(_schema, args) {
 		if (args.length > 1) throw beyond(['export', args[0]], args.slice(1));
-		if (!args.length) return null;
-		if (args[0] === ALL) return ALL;
-		return { word: configuration(args[0]) };
+		return args.length ? args[0] : null;
 	},
 	// a file offered to the user, its content going to their disk alone, named
 	// after what it holds: a configuration with its secrets, the running-config,
 	// the startup-config or a save, and all the conversations, after the minute
 	// too; one conversation after its title; nothing changes
-	async run(ctx, plan) {
+	async run(ctx, word) {
 		if (!ctx.offer) throw new Error('nobody is here to save the file');
 		const minute = localTime(Date.now());
-		const config = plan !== null && plan !== ALL ? plan.word : '';
-		const file = named(ctx, config) ? configFile(ctx, config, minute) : packed(ctx, plan, minute);
+		const plan = word === null ? null : target(ctx, word);
+		const file =
+			plan !== null && named(ctx, plan) ? configFile(ctx, plan, minute) : packed(ctx, plan, minute);
 		const saved = await ctx.offer(file.name, file.text);
 		ctx.signal?.throwIfAborted();
 		if (!saved) throw new Error('the user saved no file');
 		return comment(file.told);
 	},
 	complete(ctx, args) {
-		const configs = [RUNNING_CONFIG, STARTUP_CONFIG, ...ctx.archive.list().map((s) => s.name)];
-		return args.length ? [] : [ALL, ...configs, '<id>'];
+		return args.length ? [] : [ALL, ...configs(ctx), '<id>'];
 	}
 } satisfies Command<Plan>;

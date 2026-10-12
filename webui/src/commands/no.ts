@@ -1,4 +1,5 @@
 import type { Command } from '../lib/types.js';
+import { choose } from '../engine/near.js';
 
 // no endpoints prod names an item of a collection, no chat model a key; a
 // key takes the line show running-config writes, whatever value follows it
@@ -18,14 +19,14 @@ export default {
 		const { key, name } = schema.read(args);
 		return { key, name };
 	},
+	// an item names one the draft holds, a prefix being enough
 	run(ctx, plan) {
 		if ('item' in plan) {
-			if (!ctx.config.names(plan.module).includes(plan.item)) {
-				throw new Error(`unknown ${plan.module} "${plan.item}"`);
-			}
-			ctx.config.drop(plan.module, plan.item);
+			ctx.config.drop(plan.module, choose(plan.item, ctx.config.names(plan.module), plan.module));
 		} else {
-			ctx.config.unset(plan.key, plan.name);
+			const [module] = plan.key.split(' ');
+			const name = plan.name && choose(plan.name, ctx.config.names(module), module);
+			ctx.config.unset(plan.key, name);
 		}
 		return '';
 	},

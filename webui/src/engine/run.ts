@@ -1,8 +1,17 @@
-import type { ConfigReader, Context, Key, Outcome, Role, Scope, Value } from '../lib/types.js';
+import type {
+	ConfigReader,
+	Context,
+	Key,
+	Known,
+	Outcome,
+	Role,
+	Scope,
+	Value
+} from '../lib/types.js';
 import { Incomplete, REFUSE } from '../lib/types.js';
 import { ERROR_PREFIX, REMOVED, beyond, comment } from '../lib/config.js';
 import { splitFilter, splitLines, tokenize } from './parse.js';
-import { compileFilter } from './filter.js';
+import { FILTER_NAMES, compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
 import { KeySchema, stored } from './schema.js';
 import { Values } from './values.js';
@@ -280,22 +289,51 @@ export function redact(text: string): string {
 		.join('\n');
 }
 
-// the words that may complete the line, for tab completion
-export function suggest(text: string, role: Role): string[] {
+// the context a line completes in: the running configuration, the items the
+// modules know, and the conversation it is typed in
+function completing(role: Role, known: Known, scope: Scope): Context {
 	const ctx: Context = {
+		...scope,
 		role,
 		config: running,
 		running,
 		archive,
 		schema,
 		modules,
+		known,
 		commands: commands.filter((c) => c.roles.includes(role)),
 		admit: (module, name) => admit(ctx, module, name)
 	};
+	return ctx;
+}
+
+// the words that may complete the line, for tab completion: after a pipe the
+// filters, else what the command takes
+export function suggest(text: string, role: Role, known: Known = {}, scope: Scope = {}): string[] {
 	try {
 		const partial = partialWord(text);
-		return complete(ctx, tokenize(text.slice(0, text.length - partial.length)), partial);
+		const [head, spec] = splitFilter(text.slice(0, text.length - partial.length));
+		if (spec !== undefined) {
+			const typed = partial.toLowerCase();
+			return spec.trim() ? [] : FILTER_NAMES.filter((n) => n.startsWith(typed));
+		}
+		return complete(completing(role, known, scope), tokenize(head), partial);
 	} catch {
 		return [];
 	}
+}
+
+// the items every module knows beyond those set, as their sources list them
+// now, a source that fails listing none
+export async function known(role: Role): Promise<Known> {
+	const ctx = completing(role, {}, {});
+	const out: Record<string, string[]> = {};
+	await Promise.all(
+		modules.map(async (m) => {
+			if (!m.items) return;
+			const groups = await m.items(ctx).catch(() => []);
+			out[m.name] = groups.flatMap((g) => g.names);
+		})
+	);
+	return out;
 }

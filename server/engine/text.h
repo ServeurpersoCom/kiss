@@ -30,6 +30,3 @@ words_t     split(const std::string & text, char sep);
 std::string trim(const std::string & s);
 
 std::string beyond(const words_t & head, const words_t & rest);
-
-// the word a typed word names: itself, else the only word it starts
-std::string pick(const std::string & word, const words_t & words, const std::string & what);

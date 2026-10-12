@@ -26,6 +26,9 @@ struct reader : engine_reader {
     std::vector<std::string>   names(const std::string & module) const override;
 };
 
+// the items of a collection one layer holds, sorted
+words_t layer_names(const layer & l, const std::string & module);
+
 // the lines of a layer, sorted; secrets in view only when they are to be
 // written
 words_t layer_lines(const layer & l, bool secrets);

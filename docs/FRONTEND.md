@@ -130,11 +130,22 @@ line, nor replaces anything.
 
 ### Words
 
-Each word may be any prefix that names one word only, the way Cisco IOS reads a line; an exact word
-always wins. The value of an enum reads the same, `set display tools op` setting `open`, and the
-configuration keeps the whole word. Right after `set`, `no` or `show`, the words of longer commands and the names of the
-modules compete, so `show d` is ambiguous between `diff` and `display`. A module named as a word of
-a longer command could never be told from it, so the registry refuses it.
+A word that names something already there may be any prefix that names it alone, the way Cisco IOS
+reads a line; an exact word always wins, and the configuration keeps the whole word. That holds for
+a command, a module, a key, a filter, the value of an enum (`set display tools op` sets `open`),
+`all` and `memory`, the item of `no` and `show`, a configuration (`copy run start`), and what
+`erase` and `export` name. A word that may be new is written whole: the item of a `set`, which may
+create it, a save a copy creates, and every value but the one of an enum, `chat model` included.
+
+Right after `set`, `no` or `show`, the words of longer commands and the names of the modules
+compete, so `show d` is ambiguous between `diff` and `display`. A module named as a word of a longer
+command could never be told from it, so the registry refuses it.
+
+Every word completes, on Tab or by a click on the words under the composer: the words above, the
+items set and those the modules know (the models of every endpoint, the tools of every server),
+listed again each time a line opens on the CLI, the filters after a pipe, the title of the
+conversation, and for a value its current one, a secret aside, and the items of the module it
+names: `set chat model hf/` offers every model of `hf`.
 
 ### The firewall
 
@@ -199,8 +210,8 @@ command = "set" key [ value ]                a secret left out is asked
         | "import"                           alone on its line
         | "erase" ( "all" | config | id )    alone, once the user confirms it
 key     = module word [ item ]               an item names one of a collection
-config  = "running-config" | "startup-config" | save   either by any prefix: run, start
-save    = name                               a save of the same name gives way
+config  = "running-config" | "startup-config" | save   any prefix: run, start, a save
+save    = name                               whole when a copy makes it, one of that name giving way
 value   = bare | "json string" | 'literal'
 filter  = ( "include" | "exclude" | "begin" | "count" ) pattern
 pattern = the rest of the line as written    a regular expression minding case, | included
@@ -244,11 +255,15 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line takes one filter, after its first pipe outside quotes, as IOS does: the pattern is the rest
   of the line as written, so `| include ^set (tools|style)` reads whole; an output comes whole, as
   long as it is, the filter narrowing it.
-- A command, module, key or filter word, or the value of an enum, may be any prefix that names one
-  word only; right after `set`, `no` or `show`, command and module words compete, `show d` being
-  ambiguous between `diff` and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
+- A word naming something already there, a command, module, key, filter, enum value, item of `no`
+  or `show`, configuration or conversation, may be any prefix that names one only; a word that may
+  be new, the item of a `set`, a save a copy creates, a value, is written whole; right after
+  `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between `diff`
+  and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
   `tools`, `saves`, `models`, its singular, a prefix of it, naming it too; an acronym, `mcp`, or a
   whole, `display`, `style`, keeps its one name.
+- Every word completes: a value with its current one, never the one of a secret, and with the items
+  of the module it names, the models of every endpoint for `chat model`.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
   replaces it only when every line succeeds, and answers with what changed; it always answers,
   `! no change` when it writes nothing and changes nothing, so a request never ends in silence.
