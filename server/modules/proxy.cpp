@@ -1,6 +1,7 @@
-// proxy.cpp: the proxy module: the servers this server relays, each at
-// proxy/<name> of this server: the URL of the server, the key sent to it, more
-// headers, and the seconds the server may stay silent
+// proxy.cpp: the proxy module: the servers this server relays, MCP servers and
+// LLM endpoints alike, each at proxy/<name> of this server: the URL of the
+// server, the key sent to it and where it goes, more headers, and the seconds
+// the server may stay silent
 
 #include "engine/engine.h"
 #include "engine/text.h"
@@ -11,8 +12,8 @@
 static const char * const PROXY_TIMEOUT = "300";
 
 // the headers the relay writes itself, which a route never sets
-static const char * const OWN_HEADERS[] = { "host", "content-length", "transfer-encoding", "connection",
-                                            "authorization" };
+static const char * const OWN_HEADERS[] = { "host",       "content-length", "transfer-encoding",
+                                            "connection", "authorization",  "x-api-key" };
 
 // a route is a path of this server, so its name is a word a path takes
 static bool route_word(const std::string & s) {
@@ -85,6 +86,12 @@ static engine_module make_proxy() {
     engine_key key("key", ENGINE_SECRET);
     key.named = true;
 
+    // where the key goes: a bearer token, or the x-api-key of the Anthropic API
+    engine_key auth("auth", ENGINE_ENUM);
+    auth.named  = true;
+    auth.values = { "bearer", "x-api-key" };
+    auth.reset  = "bearer";
+
     engine_key headers("headers", ENGINE_STRING);
     headers.named = true;
 
@@ -97,11 +104,13 @@ static engine_module make_proxy() {
     engine_module m;
     m.name = "proxy";
     m.role =
-        "the servers this server relays, each at proxy/<name> beside its own mcp, its key going to its url alone; a "
-        "client reaches one there with the key of this server, the page by set mcp proxy <name> <this server>, and a "
-        "route opens nothing before a client does";
+        "the servers this server relays, MCP servers and LLM endpoints alike, each at proxy/<name> beside its own "
+        "mcp, its key going to its url alone, as a bearer token or as x-api-key; a client reaches one there with the "
+        "key of this server, the page by set mcp proxy or set endpoints proxy <name> <this server>, and a route opens "
+        "nothing before a client does";
     m.keys.push_back(url);
     m.keys.push_back(key);
+    m.keys.push_back(auth);
     m.keys.push_back(headers);
     m.keys.push_back(timeout);
     m.validate = validate;

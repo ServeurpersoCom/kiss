@@ -45,6 +45,7 @@ modules
   proxy
     url <item> <url>                a server relayed at proxy/<item>
     key <item> <secret>
+    auth <item> bearer|x-api-key    bearer, where the key goes
     headers <item> <Name: value; ...>
     timeout <item> <seconds>        300
 
@@ -205,7 +206,8 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `view side`             | number | the longest side of an image sent, in pixels                    |
 | `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
 | `proxy url <item>`      | string | URL of a server this server relays at `proxy/<item>`            |
-| `proxy key <item>`      | secret | bearer key sent to that server                                  |
+| `proxy key <item>`      | secret | key sent to that server                                         |
+| `proxy auth <item>`     | enum   | `bearer` or `x-api-key`, where the key goes                     |
 | `proxy headers <item>`  | string | more headers sent to it, `Name: value; Name: value`             |
 | `proxy timeout <item>`  | number | seconds it may stay silent                                      |
 
@@ -476,22 +478,30 @@ its version, and as its description the line it gives of itself in `show version
 
 ## Proxy routes
 
-The server relays the servers its `proxy` module names, each at `proxy/<name>` of the server, so a
-page reaches a server it could not: one without CORS, or one only this machine sees. The page
-reaches a route through its proxy key, `set mcp proxy deepwiki backend` beside `set mcp url deepwiki
-https://mcp.deepwiki.com/mcp` on the page and `set proxy url deepwiki https://mcp.deepwiki.com/mcp`
-on the server, and the model may add a route through the config tool, the user letting its url and
-typing its key, the form naming where each goes. `show proxy` writes after each route where a client
-reaches it, `! proxy/deepwiki relays https://mcp.deepwiki.com/mcp`. The relay speaks HTTP, not MCP:
-each request is built anew with its method, its body, the headers `Accept`, `Mcp-Session-Id`,
-`MCP-Protocol-Version`, `Mcp-Method`, `Mcp-Name`, `Last-Event-ID` and every `Mcp-Param-` header,
-then the headers and the key of the route, the key of this server never sent on. The answer comes
-back with its status, its body streamed as it arrives, and the headers `Content-Type`,
-`Mcp-Session-Id` and `MCP-Protocol-Version`. A server that refuses the key of its route answers 502
-with the fix, `set proxy key <name>`, so the page never takes it for a refusal of its own key; one
-that redirects answers 502 naming where, `set proxy url <name>`, since a redirect followed would
-carry the key elsewhere. A route the configuration does not name answers 404. The client speaks
-HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
+The server relays the servers its `proxy` module names, MCP servers and LLM endpoints alike, each at
+`proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
+this machine sees, or one whose key stays on the server. The page reaches a route through its proxy
+key, `set mcp proxy deepwiki backend` beside `set mcp url deepwiki https://mcp.deepwiki.com/mcp`, or
+`set endpoints proxy hf backend` beside `set endpoints url hf https://router.huggingface.co/v1`, and
+the server holds the route, `set proxy url hf https://router.huggingface.co/v1` and `set proxy key
+hf`; the model may add a route through the config tool, the user letting its url and typing its key,
+the form naming where each goes. `show proxy` writes after each route where a client reaches it, `!
+proxy/hf relays https://router.huggingface.co/v1`.
+
+The relay speaks HTTP and knows no protocol: a request to `proxy/<name>/<rest>` goes to the url of
+the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/completions` to
+`https://router.huggingface.co/v1/chat/completions`. Each request is built anew with its method, its
+body and every header but those that stay on its side (`Host`, `Origin`, `Cookie`, `Authorization`,
+`x-api-key`, `Accept-Encoding`, the length and the connection), then the headers of the route, which
+replace those of the same name, and its key, as a bearer token or, for the Messages API of
+Anthropic, `set proxy auth claude x-api-key`; the key of this server never goes on. The answer comes
+back with its status and every header but those that stay on its side, its body streamed as it
+arrives, uncompressed. A page served elsewhere passes CORS: the server lets the headers it asks to
+send and shows every header it answers. A server that refuses the key of its route answers 502 with
+the fix, `set proxy key <name>`, so the page never takes it for a refusal of its own key; one that
+redirects answers 502 naming where, `set proxy url <name>`, since a redirect followed would carry
+the key elsewhere. A route the configuration does not name answers 404. The client speaks HTTPS:
+LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
 
 ## HTTP and security
 
@@ -534,6 +544,4 @@ through the binary.
 
 Then the server grows by modules alone, the engine unchanged, as `proxy` relays servers:
 
-- `endpoints`: a router for OpenAI and Anthropic compatible endpoints, keys held on the server, for
-  several users.
 - `mcp`: an MCP client of the server itself, the agentic loop run on the backend.

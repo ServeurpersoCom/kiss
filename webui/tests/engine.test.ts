@@ -360,6 +360,52 @@ describe('the display', () => {
 	});
 });
 
+describe('a proxy', () => {
+	it('relays an endpoint through a KiSS server, its key kept there, the key of the server sent', async () => {
+		const k = await page();
+		const sent: Record<string, Record<string, string>> = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init: RequestInit) => {
+				sent[url] = init.headers as Record<string, string>;
+				return models(['m']);
+			})
+		);
+		await k.run(
+			[
+				'set mcp url kiss http://k/mcp',
+				'set mcp key kiss K',
+				'set endpoints url hf http://h/v1',
+				'set endpoints key hf H',
+				'set endpoints proxy hf kiss',
+				'set endpoints url claude http://c/v1',
+				'set endpoints protocol claude messages',
+				'set endpoints key claude C',
+				'set endpoints proxy claude kiss'
+			].join('\n'),
+			'user'
+		);
+		expect((await k.run('show models', 'user')).text).toContain('hf/m');
+		expect(sent['http://k/proxy/hf/models']).toEqual({ Authorization: 'Bearer K' });
+		const claude = sent['http://k/proxy/claude/models?limit=1000'];
+		expect(claude).toMatchObject({
+			Authorization: 'Bearer K',
+			'anthropic-version': expect.any(String)
+		});
+		expect(claude['x-api-key']).toBeUndefined();
+		expect(Object.keys(sent).filter((u) => /^http:\/\/[hc]\//.test(u))).toEqual([]);
+		expect((await k.run('set endpoints proxy hf nowhere', 'user')).text).toContain(
+			'endpoints proxy hf: no mcp nowhere'
+		);
+		expect((await k.run('no endpoints proxy hf', 'llm')).ok).toBe(true);
+		expect((await k.run('set endpoints proxy hf kiss', 'llm')).text).toBe(
+			'% nobody is here to agree to the change'
+		);
+		await k.run('show models', 'user');
+		expect(sent['http://h/v1/models']).toEqual({ Authorization: 'Bearer H' });
+	});
+});
+
 describe('the headers of a server', () => {
 	it('go with every request to it alone, after its key, as Name: value pairs', async () => {
 		const k = await page();

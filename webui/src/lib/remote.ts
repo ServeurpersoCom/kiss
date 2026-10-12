@@ -1,18 +1,23 @@
 import type { ConfigReader, Image } from './types.js';
 
 // an item of a collection module that names a remote server by a url, an
-// optional bearer key, the headers sent besides it and the seconds it has to
-// answer: endpoints and mcp
+// optional key, the headers sent besides it and the seconds it has to answer:
+// endpoints and mcp; relayed, it goes through a KiSS server, the key and the
+// headers those of that server
 export interface Remote {
 	name: string;
 	url: string;
 	key: string;
 	headers: Record<string, string>;
 	timeout: number;
+	relayed: boolean;
 }
 
 // the path of the KiSS server where it relays a server, beside its MCP
 const PROXY = 'proxy';
+
+// the module whose items name the KiSS servers a proxy takes, by their MCP
+const SERVERS = 'mcp';
 
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
@@ -39,14 +44,15 @@ function own(config: ConfigReader, module: string, name: string): Remote {
 		url: String(config.get(`${module} url`, name)),
 		key: String(config.get(`${module} key`, name) ?? ''),
 		headers: Object.fromEntries(pairs(String(config.get(`${module} headers`, name) ?? ''))),
-		timeout: Number(config.get(`${module} timeout`, name))
+		timeout: Number(config.get(`${module} timeout`, name)),
+		relayed: false
 	};
 }
 
 // every item of the module that has a url, sorted by name; an item with a
-// proxy reaches its server through the relay of the proxy, at proxy/<name>
-// beside the url of the proxy, with the key and headers of the proxy, in its
-// own seconds
+// proxy, an MCP server or an endpoint alike, reaches its server through the
+// relay of the KiSS server the proxy names, at proxy/<name> beside its MCP,
+// with the key and headers of that server, in its own seconds
 export function remotes(config: ConfigReader, module: string): Remote[] {
 	return config
 		.names(module)
@@ -54,31 +60,34 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 		.map((name) => {
 			const proxy = config.get(`${module} proxy`, name);
 			if (proxy === undefined) return own(config, module, name);
-			const relay = own(config, module, proxy);
+			const relay = own(config, SERVERS, proxy);
 			return {
 				...relay,
 				name,
 				url: new URL(`${PROXY}/${name}`, new URL(relay.url, location.href)).href,
-				timeout: own(config, module, name).timeout
+				timeout: own(config, module, name).timeout,
+				relayed: true
 			};
 		});
 }
 
 // the rules of such a module: every item has a url of its own, a proxy names
-// another item that has no proxy itself, and no server is reached twice, a
-// relative url resolved against the page, since the same server reached twice
-// serves the same names twice; its headers are Name: value pairs
+// a KiSS server, another item of mcp that has no proxy itself, and no server
+// is reached twice, a relative url resolved against the page, since the same
+// server reached twice serves the same names twice; its headers are Name:
+// value pairs
 export function rules(config: ConfigReader, module: string): string | null {
 	const names = config.names(module).filter((n) => !config.get(`${module} url`, n));
 	if (names.length) return `${module} ${names.join(' ')} has no url`;
 	for (const name of config.names(module)) {
 		const proxy = config.get(`${module} proxy`, name);
 		if (proxy === undefined) continue;
-		if (proxy === name) return `${module} proxy ${name} names the server itself`;
-		if (!config.get(`${module} url`, proxy))
-			return `${module} proxy ${name}: no ${module} ${proxy}`;
-		if (config.get(`${module} proxy`, proxy) !== undefined)
-			return `${module} proxy ${name}: ${module} ${proxy} has a proxy itself`;
+		if (module === SERVERS && proxy === name)
+			return `${module} proxy ${name} names the server itself`;
+		if (!config.get(`${SERVERS} url`, proxy))
+			return `${module} proxy ${name}: no ${SERVERS} ${proxy}`;
+		if (config.get(`${SERVERS} proxy`, proxy) !== undefined)
+			return `${module} proxy ${name}: ${SERVERS} ${proxy} has a proxy itself`;
 	}
 	const owner = new Map<string, string>();
 	for (const remote of remotes(config, module)) {

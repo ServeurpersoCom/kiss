@@ -1,6 +1,6 @@
 import type { ConfigReader, Delta, Protocol, Request } from './types.js';
 import { MODEL_SEPARATOR, SLASH } from './config.js';
-import { remotes, type Remote } from './remote.js';
+import { bearer, remotes, type Remote } from './remote.js';
 import chatProtocol from '../protocols/chat.js';
 
 // the client of every endpoint: the model list, and a request streamed in the
@@ -46,6 +46,14 @@ export function endpoints(config: ConfigReader): Endpoint[] {
 // passes, the attempt about to be made, and how many the endpoint takes
 export type Retrying = (status: number, attempt: number, attempts: number) => void;
 
+// the headers that carry the key: those of the protocol, or, relayed, the key
+// of the KiSS server as a bearer token beside the fixed headers of the
+// protocol, the server placing the key of the endpoint itself
+function auth(endpoint: Endpoint): Record<string, string> {
+	if (!endpoint.relayed) return endpoint.protocol.auth(endpoint.key, endpoint.headers);
+	return { ...endpoint.protocol.auth('', {}), ...bearer(endpoint.key), ...endpoint.headers };
+}
+
 // what an endpoint answered wrong, with the command that fixes it when the
 // configuration is the cause
 export class EndpointError extends Error {
@@ -57,15 +65,16 @@ export class EndpointError extends Error {
 	}
 }
 
-// the server's own JSON error message, else the HTTP status text: a web server
-// that is not an LLM answers with a whole HTML page
+// the server's own JSON error message, else its text, as a KiSS server that
+// relays the endpoint tells what fails, else the HTTP status text: a web
+// server that is not an LLM answers with a whole HTML page
 async function failure(res: Response): Promise<EndpointError> {
 	const body = await res.text();
 	let message = res.statusText;
 	try {
 		message = JSON.parse(body).error?.message ?? message;
 	} catch {
-		// not JSON
+		if (res.headers.get('content-type')?.startsWith('text/plain')) message = body.trim() || message;
 	}
 	const fix = UNAUTHORIZED.includes(res.status)
 		? KEY_FIX
@@ -99,7 +108,7 @@ async function request<T>(
 	try {
 		const res = await fetch(`${endpoint.url}${path}`, {
 			...init,
-			headers: { ...endpoint.protocol.auth(endpoint.key, endpoint.headers), ...init.headers },
+			headers: { ...auth(endpoint), ...init.headers },
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
 			// a network or CORS failure: nothing answers at that URL

@@ -50,6 +50,7 @@ modules
     timeout <name> <seconds>        120
     retries <name> <count>          1800, a reply asked again on 408, 429, 5xx, 529
     pause <name> <seconds>          2, between two
+    proxy <name> <server>           guarded, the KiSS server that relays it
   mcp
     url <name> <url>                guarded
     key <name> <secret>
@@ -468,6 +469,15 @@ reads the line its result keeps of each, `Image image/png, 4096 bytes`.
   the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
   written, the images of a call in its output. `max_tokens` goes as `max_output_tokens`; `top_k`,
   `min_p`, the penalties and `seed` never go.
+
+An endpoint is reached directly at its url, or through a KiSS server that relays it, as an MCP
+server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of `monstre`,
+an item of `mcp`, with the key and headers of `monstre`, the key as a bearer token beside the fixed
+headers of the protocol; the server sends the key of `hf`, which stays there, where its `proxy auth`
+says, so a key of a cloud API never reaches the browser. `no endpoints proxy hf` goes direct again.
+The proxy names a KiSS server of the page that has no proxy itself, and the model sets it only once
+the user agrees, as a url. A relay that fails says why, `set proxy key hf` when the API refuses the
+key the server holds.
 
 ```
 set endpoints url claude https://api.anthropic.com/v1
