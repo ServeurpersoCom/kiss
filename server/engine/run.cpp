@@ -130,7 +130,7 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
 static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) {
     std::vector<engine_ask> out;
     for (const std::string & s : keys) {
-        out.push_back({ s, url_of(draft, s) });
+        out.push_back({ s, url_of(draft, s), false, {} });
     }
     return out;
 }
