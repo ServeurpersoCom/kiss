@@ -708,7 +708,7 @@ describe('an MCP server', () => {
 				'set tools use snap off',
 				'set tools use fail consent',
 				'set tools use wait consent',
-				'! others',
+				'! unavailable',
 				'set tools use old consent'
 			].join('\n')
 		);
