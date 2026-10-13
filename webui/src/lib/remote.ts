@@ -1,13 +1,12 @@
 import type { ConfigReader, Image } from './types.js';
 import { BEARER, credential, placement } from './keychain.js';
-import { SLASH } from './config.js';
 
 // an item of a collection module that names a remote server by a url, the
 // header that carries its key, the headers sent besides it and the seconds it
-// has to answer: endpoints and mcp; proxied, it goes through a route of a KiSS
-// server, which holds its url and its key, the key and the headers those of
-// that server; sign reads the key through the keychain as a request leaves, so
-// no remote holds its value
+// has to answer: endpoints and mcp; proxied, it goes through the route of its
+// name on a KiSS server, the key and the headers those of that server, its own
+// url and key waiting until it goes direct again; sign reads the key through
+// the keychain as a request leaves, so no remote holds its value
 export interface Remote {
 	name: string;
 	url: string;
@@ -22,10 +21,6 @@ const PROXY = 'proxy';
 
 // the module whose items name the KiSS servers a proxy takes, by their MCP
 const SERVERS = 'mcp';
-
-// the keys of an item that name its server, which a proxied item leaves to
-// the route of its KiSS server
-const ROUTED = ['url', 'key', 'auth', 'headers'];
 
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
@@ -89,9 +84,8 @@ export function remotes(
 }
 
 // the rules of such a module: every item has a url of its own or a proxy, a
-// proxy names a KiSS server, another item of mcp that has no proxy itself, and
-// leaves the url, key, auth and headers of the item to the route there; no
-// server is reached twice, a relative url resolved against the page, since the
+// proxy names a KiSS server, another item of mcp that has a url and no proxy
+// itself, and no server is reached twice, a relative url resolved against the page, since the
 // same server reached twice serves the same names twice; its auth is Header or
 // Header: Scheme, its headers are Name: value pairs, none of them the header
 // that carries its key, placed by its auth or else as fallback says
@@ -109,16 +103,16 @@ export function rules(
 		if (proxy === undefined) continue;
 		if (module === SERVERS && proxy === name)
 			return `${module} proxy ${name} names the server itself`;
-		if (!config.get(`${SERVERS} url`, proxy))
-			return `${module} proxy ${name}: no ${SERVERS} ${proxy}`;
+		if (!config.get(`${SERVERS} url`, proxy)) {
+			const servers = config
+				.names(SERVERS)
+				.filter(
+					(s) => config.get(`${SERVERS} url`, s) && config.get(`${SERVERS} proxy`, s) === undefined
+				);
+			return `${module} proxy ${name}: no ${SERVERS} ${proxy}, a proxy names the KiSS server that holds route ${name}, one of ${SERVERS} ${servers.join(' ')}`;
+		}
 		if (config.get(`${SERVERS} proxy`, proxy) !== undefined)
 			return `${module} proxy ${name}: ${SERVERS} ${proxy} has a proxy itself`;
-		const held = ROUTED.filter((k) => config.get(`${module} ${k}`, name) !== undefined);
-		if (held.length)
-			return (
-				`${module} ${name} goes through ${SERVERS} ${proxy}, so its server is named there -> ` +
-				held.map((k) => `${SLASH}no ${module} ${k} ${name}`).join(', ')
-			);
 	}
 	const owner = new Map<string, string>();
 	for (const remote of remotes(config, module)) {

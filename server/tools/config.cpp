@@ -57,7 +57,7 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                     "! <module> <key> [item] is set for one that is set, and no line for one that is not. To set a "
                     "secret, write its line without the value, set proxy key <name>: the user types it in a field "
                     "you never see, so never ask for it in the chat. A url no configuration holds yet asks the user "
-                    "to let it.";
+                    "to let it with a card of the page as the line runs: run the line, never ask in the chat first.";
     t.input = R"({"type":"object","properties":{)"
               R"("description":{"type":"string","description":"Why I'm configuring the server, written first"},)"
               R"("lines":{"type":"string","description":"CLI lines, one per line"}},)"

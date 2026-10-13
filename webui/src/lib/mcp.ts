@@ -290,8 +290,8 @@ async function routes(remote: Remote): Promise<Route[]> {
 }
 
 // every item of the module the batch sends through a new proxy finds the
-// route of its name on that server, a route with a key when the item held one
-// here, so the server it names keeps taking the requests the item sends
+// route of its name on that server, a route with a key when the item holds
+// one here, so the server it names keeps taking the requests the item sends
 export async function routed(
 	module: string,
 	config: ConfigReader,
@@ -306,7 +306,7 @@ export async function routed(
 		const route = (await routes(server)).find((r) => r.name === name);
 		if (!route)
 			return `mcp ${proxy} has no route ${name} -> set proxy url ${name} <url> on mcp ${proxy}`;
-		if (!route.keyed && before.get(`${module} key`, name) !== undefined)
+		if (!route.keyed && config.get(`${module} key`, name) !== undefined)
 			return `${module} ${name} holds a key and route ${name} of mcp ${proxy} none -> set proxy key ${name} on mcp ${proxy}`;
 	}
 	return null;

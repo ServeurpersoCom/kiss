@@ -414,40 +414,27 @@ describe('a proxy', () => {
 		expect(claude['x-api-key']).toBeUndefined();
 		delete routes.claude;
 		expect((await k.run('set endpoints timeout claude 5', 'user')).ok).toBe(true);
-		expect((await k.run('set endpoints url hf http://h/v1', 'user')).text).toBe(
-			'% endpoints: endpoints hf goes through mcp kiss, so its server is named there -> /no endpoints url hf'
-		);
-		expect((await k.run('set endpoints proxy hf nowhere', 'user')).text).toContain(
-			'endpoints proxy hf: no mcp nowhere'
+		await k.run('set endpoints url hf http://h/v1\nset endpoints key hf H', 'user');
+		delete sent['http://k/proxy/hf/models'];
+		await k.run('show models', 'user');
+		expect(sent['http://k/proxy/hf/models']).toEqual({ Authorization: 'Bearer K' });
+		expect(sent['http://h/v1/models']).toBeUndefined();
+		expect((await k.run('set endpoints proxy hf nowhere', 'user')).text).toBe(
+			'% endpoints: endpoints proxy hf: no mcp nowhere, a proxy names the KiSS server that holds route hf, one of mcp kiss'
 		);
 		expect((await k.run('set endpoints proxy nope kiss', 'user')).text).toBe(
 			'% endpoints: mcp kiss has no route nope -> set proxy url nope <url> on mcp kiss'
 		);
 		await k.run('set endpoints url bare http://b/v1\nset endpoints key bare B', 'user');
-		expect(
-			(
-				await k.run(
-					'set endpoints proxy bare kiss\nno endpoints url bare\nno endpoints key bare',
-					'user'
-				)
-			).text
-		).toBe(
-			'% endpoints: endpoints bare holds a key and route bare of mcp kiss none -> set proxy key bare on mcp kiss\n' +
-				'% nothing applied'
+		expect((await k.run('set endpoints proxy bare kiss', 'user')).text).toBe(
+			'% endpoints: endpoints bare holds a key and route bare of mcp kiss none -> set proxy key bare on mcp kiss'
 		);
-		expect((await k.run('no endpoints proxy hf\nset endpoints url hf http://h/v1', 'llm')).ok).toBe(
-			false
-		);
-		await k.run(
-			'no endpoints proxy hf\nset endpoints url hf http://h/v1\nset endpoints key hf H',
-			'user'
-		);
+		expect((await k.run('no endpoints proxy hf', 'llm')).ok).toBe(true);
 		await k.run('show models', 'user');
 		expect(sent['http://h/v1/models']).toEqual({ Authorization: 'Bearer H' });
-		expect(
-			(await k.run('set endpoints proxy hf kiss\nno endpoints url hf\nno endpoints key hf', 'llm'))
-				.text
-		).toBe('% nobody is here to agree to the change\n% nothing applied');
+		expect((await k.run('set endpoints proxy hf kiss', 'llm')).text).toBe(
+			'% nobody is here to agree to the change'
+		);
 	});
 });
 

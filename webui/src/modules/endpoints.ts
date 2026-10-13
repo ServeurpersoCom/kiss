@@ -23,9 +23,9 @@ export default {
 		retries: { kind: 'number', min: 0, integer: true, default: '1800', named: true },
 		// seconds between two of them
 		pause: { kind: 'number', min: 0, default: '2', named: true },
-		// the KiSS server, an item of mcp, whose route of the same name holds the
-		// url and the key of this one, reached at proxy/<name> beside its MCP,
-		// with its key and headers
+		// the KiSS server, an item of mcp, whose route of the same name this one
+		// goes through, reached at proxy/<name> beside its MCP, with its key and
+		// headers, the url and key of this one waiting until it goes direct
 		proxy: { kind: 'string', named: true, guard: true, of: 'mcp' }
 	},
 	validate(config) {

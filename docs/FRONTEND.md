@@ -484,13 +484,13 @@ reads the line its result keeps of each, `Image image/png, 4096 bytes`.
 An endpoint is reached directly at its url, or through the route of its name on a KiSS server, as
 an MCP server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of
 `monstre`, an item of `mcp`, with the key, auth and headers of `monstre` beside the fixed headers of
-the protocol; the route holds the url and the key of `hf`, so a key of a cloud API never reaches the
-browser, and the item here holds neither: `endpoints hf goes through mcp monstre, so its server is
-named there -> /no endpoints url hf`. The batch that sets a proxy asks the server for its routes,
+the protocol; the route holds the url and the key it sends, so a key of a cloud API never reaches
+the browser, and the url and key of `hf` here wait unused until `no endpoints proxy hf` sends it
+direct again, one line either way. The batch that sets a proxy asks the server for its routes,
 which it publishes as MCP resources: one without a route of that name, or without a key when the
-item held one, stops the batch with the fix, `set proxy key hf on mcp monstre`, so the model never
-cuts itself off its own endpoint. `no endpoints proxy hf` with a url goes direct again. The proxy
-names a KiSS server of the page that has no proxy itself, and the model sets it only once the user
+item holds one, stops the batch with the fix, `set proxy key hf on mcp monstre`, so the model never
+cuts itself off its own endpoint. The proxy names a KiSS server of the page that has a url and no
+proxy itself, the refusal of any other listing those, and the model sets it only once the user
 agrees, as a url.
 
 ```
@@ -559,8 +559,8 @@ costs one wait a turn, the tools of a turn the same from round to round.
 
 A server is reached directly at its url, or through the route of its name on a KiSS server: `set
 mcp proxy exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, with the key and
-headers of `backend`, the route there holding the url and the key of `exa`, as for an endpoint; `no
-mcp proxy exa` with a url goes direct again. One item, one set of tools, either way. The proxy
+headers of `backend`, the url and key of `exa` waiting unused, as for an endpoint; `no mcp proxy
+exa` goes direct again. One item, one set of tools, either way. The proxy
 names another server of the page that has no proxy itself, and the model sets it only once the user
 agrees, as a url. The backend the page comes from is `backend` in the `client.conf` the project
 ships, `set mcp url backend mcp`, wherever it runs.

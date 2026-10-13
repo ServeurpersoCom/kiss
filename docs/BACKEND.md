@@ -492,8 +492,8 @@ The server proxies the servers its `proxy` module names, MCP servers and LLM end
 at `proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
 this machine sees, or one whose key stays on the server. The server holds the route, `set proxy url
 hf https://router.huggingface.co/v1` and `set proxy key hf`, and the page reaches it by the item of
-the same name, `set endpoints proxy hf backend` or `set mcp proxy deepwiki backend`, which holds no
-url or key of its own; the model may add a route through the config tool, the user letting its url
+the same name, `set endpoints proxy hf backend` or `set mcp proxy deepwiki backend`, its own url and
+key waiting unused while it goes through; the model may add a route through the config tool, the user letting its url
 and typing its key, the form naming where each goes. `resources/list` publishes every route as
 `kiss:proxy/<name>`, its `_meta` `kiss/keyed` telling whether it holds a key, so the page checks the
 route before it sends an item there. `show proxy` writes after each route where a client reaches it,
