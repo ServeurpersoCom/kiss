@@ -53,9 +53,11 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                     "show running-config [all], show startup-config, show version, show logging, "
                     "copy running-config startup-config or write memory. Its modules, with their keys: " +
                     join(modules, "; ") +
-                    ". Every default fits as it is, so set only what differs. A secret takes no value here: set "
-                    "<module> <key> [item] alone asks the user to type it, out of your sight, and a url no "
-                    "configuration holds yet asks the user to let it.";
+                    ". Every default fits as it is, so set only what differs. A secret never shows: show writes "
+                    "! <module> <key> [item] is set for one that is set, and no line for one that is not. To set a "
+                    "secret, write its line without the value, set proxy key <name>: the user types it in a field "
+                    "you never see, so never ask for it in the chat. A url no configuration holds yet asks the user "
+                    "to let it.";
     t.input = R"({"type":"object","properties":{)"
               R"("description":{"type":"string","description":"Why I'm configuring the server, written first"},)"
               R"("lines":{"type":"string","description":"CLI lines, one per line"}},)"

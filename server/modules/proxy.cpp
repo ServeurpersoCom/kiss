@@ -111,11 +111,10 @@ static engine_module make_proxy() {
     engine_module m;
     m.name = "proxy";
     m.role =
-        "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> beside its own "
-        "mcp, its key going to its url alone, in the header its auth names, Header or Header: Scheme, and every secret "
-        "of this server filtered from the answer; a client reaches one there with the "
-        "key of this server, the page by set mcp proxy or set endpoints proxy <name> <this server>, and a route opens "
-        "nothing before a client does";
+        "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> with the key of "
+        "this server, the page by set mcp proxy or set endpoints proxy <name> <its name for this server>; the key of "
+        "a route goes to its url alone, in the header its auth names, Header or Header: Scheme, and a route without "
+        "a key reaches its url without one";
     m.keys.push_back(url);
     m.keys.push_back(key);
     m.keys.push_back(auth);
