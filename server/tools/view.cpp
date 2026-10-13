@@ -1,6 +1,7 @@
 // view.cpp: the view tool: a directory two levels deep with the size of each
 // entry, an image as an image block, a text file with numbered lines
 
+#include "file.h"
 #include "image.h"
 #include "output.h"
 #include "tools.h"
@@ -14,9 +15,6 @@
 #include <map>
 
 namespace fs = std::filesystem;
-
-// the bytes read at a time, and the first ones that tell an image or a binary
-static const size_t CHUNK = 65536;
 
 // the milliseconds between two ticks
 static const int TICK_MS = 1000;
@@ -63,11 +61,6 @@ static std::string human(uintmax_t n) {
         snprintf(buf, sizeof(buf), "%.0f%c", std::ceil(v), units[u]);
     }
     return buf;
-}
-
-// a count with its noun: 1 line, 3 lines
-static std::string counted(long long n, const char * one, const char * many) {
-    return std::to_string(n) + " " + (n == 1 ? one : many);
 }
 
 // an entry the listing shows: no hidden part, nothing below node_modules
@@ -135,7 +128,7 @@ static tool_result listing(const fs::path & root, const std::string & given, siz
         kept.add(line.data(), line.size());
     }
     const std::string tail = hidden ? ", " + std::to_string(hidden) + " hidden" : "";
-    return { kept.text() + counted((long long) sizes.size() - 1, "entry", "entries") + tail, false };
+    return { kept.text() + output_counted((long long) sizes.size() - 1, "entry", "entries") + tail, false };
 }
 
 static std::string base64(const std::string & in) {
@@ -164,14 +157,14 @@ static std::string described(const std::string & mime, int w, int h, size_t byte
 // the file; the file streams through, so its size bounds nothing but time
 static tool_result
 file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last, bool ranged, ticker & t) {
-    std::string head(CHUNK, '\0');
+    std::string head(FILE_CHUNK, '\0');
     head.resize(fread(&head[0], 1, head.size(), f));
     if (!image_type(head).empty()) {
         if (size > v.load) {
             return { "Image larger than " + std::to_string(v.load) + " bytes", true };
         }
         std::string data = head;
-        char        buf[CHUNK];
+        char        buf[FILE_CHUNK];
         for (size_t got; (got = fread(buf, 1, sizeof(buf), f)) > 0;) {
             if (!t.alive()) {
                 return { "Cancelled", true };
@@ -220,19 +213,20 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
             emit();
             at = nl + 1;
         }
-        chunk.resize(CHUNK);
-        chunk.resize(fread(&chunk[0], 1, CHUNK, f));
+        chunk.resize(FILE_CHUNK);
+        chunk.resize(fread(&chunk[0], 1, FILE_CHUNK, f));
     }
     if (!line.empty()) {
         emit();
     }
     const long long total = number - 1;
     if (ranged && first > total) {
-        return { "Line " + std::to_string(first) + " is past the end, the file has " + counted(total, "line", "lines"),
+        return { "Line " + std::to_string(first) + " is past the end, the file has " +
+                     output_counted(total, "line", "lines"),
                  true };
     }
     if (!ranged) {
-        return { kept.text() + counted(total, "line", "lines"), false };
+        return { kept.text() + output_counted(total, "line", "lines"), false };
     }
     const long long end = last < 0 || last > total ? total : last;
     return { kept.text() + "Lines " + std::to_string(first) + "-" + std::to_string(end) + " of " +
@@ -258,10 +252,7 @@ static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & t
         }
     }
 
-    fs::path path = fs::u8path(given);
-    if (path.is_relative()) {
-        path = fs::u8path(v.cwd) / path;
-    }
+    const fs::path        path = file_path(v.cwd, given);
     std::error_code       ec;
     const fs::file_status st = fs::status(path, ec);
     if (ec || !fs::exists(st)) {

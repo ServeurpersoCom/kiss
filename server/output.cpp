@@ -95,3 +95,7 @@ std::string output_utf8(const std::string & text, output_decode decode) {
     }
     return out;
 }
+
+std::string output_counted(long long n, const char * one, const char * many) {
+    return std::to_string(n) + " " + (n == 1 ? one : many);
+}

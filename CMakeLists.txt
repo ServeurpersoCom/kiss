@@ -82,3 +82,9 @@ add_executable(seal_test server/tests/seal.cpp server/engine/seal.cpp server/eng
 target_include_directories(seal_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server)
 target_link_libraries(seal_test PRIVATE yyjson)
 add_custom_command(TARGET seal_test POST_BUILD COMMAND seal_test)
+
+# files_test: the laws of the files the tools on files reach, run once built,
+# a broken law failing the build
+add_executable(files_test server/tests/files.cpp server/file.cpp)
+target_include_directories(files_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server)
+add_custom_command(TARGET files_test POST_BUILD COMMAND files_test)

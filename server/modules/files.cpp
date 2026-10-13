@@ -1,7 +1,8 @@
-// files.cpp: the files module: the tools on files, view: the bytes of text
-// view returns at most, its head and its tail; the bytes of a file a tool
-// loads whole, an image view reads; the megapixels view decodes at most, and
-// the longest side and the JPEG quality of an image it makes again
+// files.cpp: the files module: the tools on files, view, str_replace and
+// create_file: the bytes of text view returns at most, its head and its
+// tail; the bytes of a file a tool loads whole, an image view reads or a text
+// str_replace rewrites; the megapixels view decodes at most, and the longest
+// side and the JPEG quality of an image it makes again
 
 #include "engine/engine.h"
 
@@ -35,8 +36,9 @@ static engine_module make_files() {
     engine_module m;
     m.name = "files";
     m.role =
-        "the tools on files, <hostname>_view: the bytes of text view returns, the bytes of a file a tool loads whole, "
-        "the megapixels an image decodes to, the longest side and the JPEG quality of an image made again";
+        "the tools on files, <hostname>_view, <hostname>_str_replace and <hostname>_create_file: the bytes of text "
+        "view returns, the bytes of a file a tool loads whole, the megapixels an image decodes to, the longest side "
+        "and the JPEG quality of an image made again";
     m.keys.push_back(output);
     m.keys.push_back(load);
     m.keys.push_back(megapixels);

@@ -36,6 +36,9 @@ struct output_buffer {
     size_t        count = 0;
 };
 
+// a count with its noun as a result tells it: 1 line, 3 lines
+std::string output_counted(long long n, const char * one, const char * many);
+
 // the text with every run of invalid UTF-8 bytes replaced by what decode
 // reads in it, or by one U+FFFD when it reads nothing, so binary output stays
 // close to the size read

@@ -1,7 +1,7 @@
 # KiSS server
 
-The reference of the backend: one binary, `server`, that runs commands and views files on the machine
-it runs on, for KiSS or any other MCP client.
+The reference of the backend: one binary, `server`, that runs commands, views, edits and creates
+files on the machine it runs on, for KiSS or any other MCP client.
 
 ## Commands
 
@@ -54,6 +54,8 @@ tools
   <hostname>_config                 description lines
   <hostname>_<shell>                description command
   <hostname>_view                   description path [view_range]
+  <hostname>_str_replace            description path old_str [new_str]
+  <hostname>_create_file            description path file_text
 ```
 
 ## The server
@@ -93,10 +95,13 @@ server/term.h            the terminal of the console, per OS: raw mode, a key, t
 server/log.cpp|h         the log: [Module] Line
 server/job.cpp|h         spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
+server/file.cpp|h        the files the tools on files reach: a path, a text loaded whole, a write
+                         in place, a string found
 server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
 server/tests/seal.cpp    the laws of the seal, built and run with the server, a broken law failing
                          the build
+server/tests/files.cpp   the laws of file.cpp, built and run the same way
 server/server.conf       the factory configuration the binary embeds
 server/client.conf       the client.conf the server serves when its directory has none
 vendor/                  cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
@@ -205,7 +210,7 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `shells timeout <item>`    | number | seconds a call may run                                          |
 | `shells output <item>`     | number | bytes of output a call returns                                  |
 | `files max-output`         | number | bytes of text `view` returns, its head and its tail             |
-| `files max-load`           | number | bytes of a file a tool loads whole, an image `view` reads       |
+| `files max-load`           | number | bytes of a file a tool loads whole, an image or a text to edit  |
 | `files max-megapixels`     | number | megapixels an image may declare before it is decoded            |
 | `files max-dimension`      | number | the longest side of an image sent, in pixels                    |
 | `files jpeg-quality`       | number | the JPEG quality of an image made again, 1 to 100               |
@@ -342,10 +347,9 @@ timeout of its own to set.
 ### The view tool
 
 `<name>_view` takes `description`, `path`, relative to `server working-directory` or absolute, and
-`view_range`, the lines `[start, end]` of a text file, from 1, `end` -1 for the last. It is the one
-file tool: every OS creates and edits files through its shell, while `view` gives the model what a
-shell gives badly, an image it sees and a text it can cite by line. With `view` on and every other
-tool off in KiSS, a machine is open to the model for reading only.
+`view_range`, the lines `[start, end]` of a text file, from 1, `end` -1 for the last. It gives the
+model what a shell gives badly, an image it sees and a text it can cite by line. With `view` on and
+every other tool off in KiSS, a machine is open to the model for reading only.
 
 - A directory lists every entry two levels deep, sorted by path, each with the size of all it holds,
   as `find` and `du -sh` would: hidden entries and the content of `node_modules` stay out. The last
@@ -366,6 +370,30 @@ tool off in KiSS, a machine is open to the model for reading only.
   300` for a range. Past `files max-output`, the head and the tail stay, as for a shell. The file
   streams through, so its size costs time and never memory.
 - Another binary file, one with a NUL byte near its start, is refused with `Binary file`.
+
+### The str_replace and create_file tools
+
+A shell writes a file through a heredoc, whose quoting differs from bash to PowerShell and breaks on
+the text it carries. These two tools write the bytes of a JSON string as they are, the same on every
+OS, and a model trained on `str_replace` and `create_file` calls them as it learned them. Both take
+`path` as `view` does, and write in place: the mode, the owner and the links of a file stay.
+
+`<name>_str_replace` takes `description`, `path`, `old_str` and `new_str`, empty by default to
+delete. The file loads whole, up to `files max-load` bytes, and `old_str` must occur in it exactly
+once, byte for byte: a CRLF file takes an `old_str` in CRLF. The result says where the change went,
+so the model can view the lines around it:
+
+```
+Replaced at line 42 of src/main.cpp, 18 -> 25 bytes
+```
+
+`Not found in <path>` and `Found 3 times in <path>, old_str must be unique` change nothing, nor do
+`Binary file` and `File larger than <limit> bytes`.
+
+`<name>_create_file` takes `description`, `path` and `file_text`, makes the directories the path
+needs and writes the file whole, over the one already there: `Created src/new.cpp, 12 lines, 345
+bytes`, or `Overwrote` when it existed. `file_text` is never empty, as no required string is; an
+empty file is a command of the shell.
 
 ### The config tool
 
@@ -467,10 +495,10 @@ set shells command gpu ssh -T -o BatchMode=yes root@forge bash -s
 set shells command box podman exec -i sandbox bash -s
 ```
 
-The OpenSSH client ships with Linux, macOS and Windows 10 and later. Two limits hold: `view` works on
-the machine that runs `server`, and ending a local ssh without a terminal does not end the remote
-process, so a remote item wraps its shell in `timeout` on the remote side. A machine that needs `view`
-or a reliable tree kill runs its own `server`.
+The OpenSSH client ships with Linux, macOS and Windows 10 and later. Two limits hold: the tools on
+files work on the machine that runs `server`, and ending a local ssh without a terminal does not end
+the remote process, so a remote item wraps its shell in `timeout` on the remote side. A machine that
+needs the tools on files or a reliable tree kill runs its own `server`.
 
 ## MCP
 
