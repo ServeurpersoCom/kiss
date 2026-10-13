@@ -64,7 +64,7 @@ struct engine_reader {
     virtual std::vector<std::string>   names(const std::string & module) const                              = 0;
 };
 
-// a module owns the keys spelled after its name: "server" owns "server port"
+// a module owns the keys spelled after its name: "server" owns "server listen-port"
 struct engine_module {
     std::string                                                                         name;
     // what the module is, as the config tool tells it

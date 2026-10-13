@@ -9,13 +9,13 @@ static words_t next_key_or_item(const words_t & args) {
     return schema_next(reader(running_layer()), args, false, true);
 }
 
-// no server port names a key, no shells zsh an item of a collection, an item
+// no server listen-port names a key, no shells zsh an item of a collection, an item
 // one the draft holds, a prefix being enough; a key takes the line show
 // running-config writes, whatever value follows it
 static step_t compile_no(const words_t & args) {
     if (args.size() == 2) {
         const std::string module = schema_module(args[0]);
-        if (collection(module) && schema_key(module, args[1]).empty()) {
+        if (collection(module) && schema_key_after(module, args[1], false).empty()) {
             const std::string word = args[1];
             return [module, word](context & ctx) {
                 const std::string item = choose(word, layer_names(ctx.draft, module), module);

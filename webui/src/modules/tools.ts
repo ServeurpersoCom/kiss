@@ -10,20 +10,20 @@ export default {
 	name: 'tools',
 	keys: {
 		// the rounds of tool calls a turn takes at most
-		rounds: { kind: 'number', min: 1, integer: true, default: '1000' },
+		'max-rounds': { kind: 'number', min: 1, integer: true, default: '1000' },
 		// off, the model never sees the tool; consent, each call asks the user,
 		// always turning it on; the factory configuration turns the tools of
 		// KiSS on, and their changes ask
 		use: { kind: 'enum', values: USES, default: CONSENT, named: true, guard: true },
 		// the argument a call of the tool shows folded, by its name, over the
-		// one display preview names for every tool
-		preview: { kind: 'string', named: true }
+		// one display preview-argument names for every tool
+		'preview-argument': { kind: 'string', named: true }
 	},
 	apply(config) {
 		display.preview = Object.fromEntries(
 			config
 				.names('tools')
-				.map((tool) => [tool, String(config.get('tools preview', tool) ?? '')])
+				.map((tool) => [tool, String(config.get('tools preview-argument', tool) ?? '')])
 				.filter(([, argument]) => argument)
 		);
 	},

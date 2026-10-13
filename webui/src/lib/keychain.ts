@@ -47,7 +47,7 @@ export function placement(auth: string): [string, string] | null {
 	return TOKEN.test(name) && (!scheme || TOKEN.test(scheme)) ? [name, scheme] : null;
 }
 
-// the header that carries the key of an item, placed as auth says, none
+// the header that carries the key of an item, placed as auth-header says, none
 // without a key: the one read of the value of a key
 export function credential(
 	config: ConfigReader,

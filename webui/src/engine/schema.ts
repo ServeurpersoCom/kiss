@@ -139,6 +139,15 @@ export class KeySchema implements Schema {
 		return pick(word, Object.keys(this.modules.get(module) ?? {}).sort(), `${module} key`);
 	}
 
+	// the key the word after a module names where an item may stand too: a
+	// key written whole, or a prefix of one taking no item or followed by its
+	// item; none when the word names an item of a collection
+	keyAfter(module: string, word: string, followed: boolean): string | undefined {
+		const key = this.key(module, word);
+		if (!key || key === word || followed || !this.collection(module)) return key;
+		return this.find(`${module} ${key}`)!.named ? undefined : key;
+	}
+
 	collection(module: string): boolean {
 		return Object.values(this.modules.get(module) ?? {}).some((def) => def.named);
 	}

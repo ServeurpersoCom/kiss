@@ -64,10 +64,10 @@ static std::string validate(const engine_reader & config) {
                    std::to_string(TOOL_NAME_MAX);
         }
     }
-    const auto host = config.get("server host");
-    const auto port = config.get("server port");
+    const auto host = config.get("server listen-address");
+    const auto port = config.get("server listen-port");
     if (!host || !port) {
-        return "server host and server port are set";
+        return "server listen-address and server listen-port are set";
     }
     if (!listener_loopback(*host) && !config.get("server key")) {
         return "listening on " + *host + " requires server key";
@@ -76,30 +76,30 @@ static std::string validate(const engine_reader & config) {
     if (!listener_bindable(*host, std::stoi(*port), why)) {
         return "cannot listen on " + *host + " port " + *port + ": " + why;
     }
-    const std::string cwd = config.get("server cwd").value_or("");
+    const std::string cwd = config.get("server working-directory").value_or("");
     std::error_code   ec;
     if (!std::filesystem::is_directory(std::filesystem::u8path(cwd), ec)) {
-        return "server cwd " + cwd + " is no directory";
+        return "server working-directory " + cwd + " is no directory";
     }
     return "";
 }
 
 static void apply(const engine_reader & config) {
-    const std::string level = config.get("server log").value_or("");
+    const std::string level = config.get("server log-level").value_or("");
     for (int l = LOG_ERROR; l <= LOG_DEBUG; l++) {
         if (level == LOG_LEVELS[l]) {
             log_level_set((log_level) l);
         }
     }
-    log_buffer_set((size_t) std::stoull(config.get("server buffered").value_or("0")));
-    listener_move(*config.get("server host"), std::stoi(*config.get("server port")));
+    log_buffer_set((size_t) std::stoull(config.get("server log-buffer").value_or("0")));
+    listener_move(*config.get("server listen-address"), std::stoi(*config.get("server listen-port")));
 }
 
 static engine_module make_server() {
-    engine_key host("host", ENGINE_STRING);
-    host.reset = "127.0.0.1";
+    engine_key address("listen-address", ENGINE_STRING);
+    address.reset = "127.0.0.1";
 
-    engine_key port("port", ENGINE_NUMBER);
+    engine_key port("listen-port", ENGINE_NUMBER);
     port.min     = 1;
     port.max     = 65535;
     port.integer = true;
@@ -108,31 +108,31 @@ static engine_module make_server() {
     engine_key hostname("hostname", ENGINE_STRING);
     hostname.reset = host_name();
 
-    engine_key cwd("cwd", ENGINE_STRING);
+    engine_key cwd("working-directory", ENGINE_STRING);
     cwd.reset = start_directory();
 
-    engine_key log("log", ENGINE_ENUM);
-    log.values = { std::begin(LOG_LEVELS), std::end(LOG_LEVELS) };
-    log.reset  = "debugging";
+    engine_key level("log-level", ENGINE_ENUM);
+    level.values = { std::begin(LOG_LEVELS), std::end(LOG_LEVELS) };
+    level.reset  = "debugging";
 
     // the bytes of the last lines of the log show logging keeps, 0 none
-    engine_key buffered("buffered", ENGINE_NUMBER);
-    buffered.min     = 0;
-    buffered.integer = true;
-    buffered.reset   = "65536";
+    engine_key buffer("log-buffer", ENGINE_NUMBER);
+    buffer.min     = 0;
+    buffer.integer = true;
+    buffer.reset   = "65536";
 
     engine_module m;
     m.name = "server";
     m.role =
         "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, "
         "the directory its tools start in, its log level";
-    m.keys.push_back(host);
+    m.keys.push_back(address);
     m.keys.push_back(port);
     m.keys.push_back(hostname);
     m.keys.push_back(engine_key("key", ENGINE_SECRET));
     m.keys.push_back(cwd);
-    m.keys.push_back(log);
-    m.keys.push_back(buffered);
+    m.keys.push_back(level);
+    m.keys.push_back(buffer);
     m.validate = validate;
     m.apply    = apply;
     return m;

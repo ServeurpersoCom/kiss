@@ -34,28 +34,31 @@ commands
 modules
   chat
     model <model>                   the one model of the one endpoint
-    system <text>                   none
+    system-prompt <text>            none
   display
     thinking closed|open|inference  closed
-    tools closed|open|inference     closed
+    tool-calls closed|open|inference
+                                    closed
     render thinking|reply markdown|plain
                                     markdown
-    preview <argument>              description, the argument every folded call shows
+    preview-argument <argument>     description, the argument every folded call shows
   endpoints
     url <name> <url>                guarded
     protocol <name> chat|messages|responses
                                     chat
     key <name> <secret>
-    auth <name> <Header[: Scheme]>  the header of the protocol
+    auth-header <name> <Header[: Scheme]>
+                                    the header of the protocol
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        120
-    retries <name> <count>          1800, a reply asked again on 408, 429, 5xx, 529
-    pause <name> <seconds>          2, between two
+    max-retries <name> <count>      1800, a reply asked again on 408, 429, 5xx, 529
+    retry-pause <name> <seconds>    2, between two
     proxy <name> <server>           guarded, the KiSS server whose route holds it
   mcp
     url <name> <url>                guarded
     key <name> <secret>
-    auth <name> <Header[: Scheme]>  Authorization: Bearer
+    auth-header <name> <Header[: Scheme]>
+                                    Authorization: Bearer
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        310
     proxy <name> <server>           guarded, the KiSS server whose route holds it
@@ -73,9 +76,10 @@ modules
     <token> <value>                 show style lists them; bg, fg, accent set a theme
     sheet <name> <css>
   tools                             show tools lists them, by who serves them
-    rounds <count>                  1000
+    max-rounds <count>              1000
     use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
-    preview <tool> <argument>       display preview, the argument of this tool over it
+    preview-argument <tool> <argument>
+                                    display preview-argument, the argument of this tool over it
 
 tools
   client_config                     lines
@@ -141,10 +145,10 @@ line, nor replaces anything.
 
 A word that names something already there may be any prefix that names it alone, the way Cisco IOS
 reads a line; an exact word always wins, and the configuration keeps the whole word. That holds for
-a command, a module, a key, a filter, the value of an enum (`set display tools op` sets `open`),
-`all` and `memory`, the item of `no` and `show`, a configuration (`copy run start`), and what
-`erase` and `export` name. A word that may be new is written whole: the item of a `set`, which may
-create it, a save a copy creates, and every value but the one of an enum, `chat model` included.
+a command, a module, a key, a filter, the value of an enum (`set display tool-calls op` sets
+`open`), `all` and `memory`, the item of `no` and `show`, a configuration (`copy run start`), and
+what `erase` and `export` name. A word that may be new is written whole: the item of a `set`, which
+may create it, a save a copy creates, and every value but the one of an enum, `chat model` included.
 
 Right after `set`, `no` or `show`, the words of longer commands and the names of the modules
 compete, so `show d` is ambiguous between `diff` and `display`. A module named as a word of a longer
@@ -247,15 +251,15 @@ lower case, keys and values verbatim. Everything else the page tells the user or
 with a capital, the result of a call KiSS writes, the error of a turn, the status line, unless it
 opens on a URL, written as it is; what a server answers goes as it came.
 
-| Module      | Keys                                                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| `chat`      | `model`, `system`                                                                                               |
-| `display`   | `thinking`, `tools`, `render <thinking or reply>`, `preview`                                                    |
-| `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth <name>`, `headers <name>`, `timeout <name>` |
-| `mcp`       | `url <name>` guarded, `key <name>` secret, `auth <name>`, `headers <name>`, `timeout <name>`                    |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                            |
-| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                   |
-| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                                                   |
+| Module      | Keys                                                                                                                                                                                       |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `chat`      | `model`, `system-prompt`                                                                                                                                                                   |
+| `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
+| `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
+| `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                                                                                                       |
+| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                                                                                              |
+| `tools`     | `max-rounds`, `use <tool>` guarded when opening, `preview-argument <tool>`                                                                                                                 |
 
 ### Laws
 
@@ -264,37 +268,36 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line takes one filter, after its first pipe outside quotes, as IOS does: the pattern is the rest
   of the line as written, so `| include ^set (tools|style)` reads whole; an output comes whole, as
   long as it is, the filter narrowing it.
-- A word naming something already there, a command, module, key, filter, enum value, item of `no`
-  or `show`, configuration or conversation, may be any prefix that names one only; a word that may
-  be new, the item of a `set`, a save a copy creates, a value, is written whole; right after
-  `set`, `no` or `show`, command and module words compete, `show d` being ambiguous between `diff`
-  and `display`; an exact word always wins. A collection is named in the plural, `endpoints`,
-  `tools`, `saves`, `models`, its singular, a prefix of it, naming it too; an acronym, `mcp`, or a
-  whole, `display`, `style`, keeps its one name.
+- A word naming something already there, a command, module, key, filter, enum value, item of `no` or
+  `show`, configuration or conversation, may be any prefix that names one only; a word that may be
+  new, the item of a `set`, a save a copy creates, a value, is written whole; right after `set`,
+  `no` or `show`, command and module words compete, `show d` being ambiguous between `diff` and
+  `display`; an exact word always wins. A collection is named in the plural, `endpoints`, `tools`,
+  `saves`, `models`, its singular, a prefix of it, naming it too; an acronym, `mcp`, or a whole,
+  `display`, `style`, keeps its one name.
 - Every word completes: a value with its current one, never the one of a secret, and with the items
   of the module it names, the models of every endpoint for `chat model`.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
-  replaces it only when every line succeeds, and answers with what changed; it always answers,
-  `! no change` when it writes nothing and changes nothing, so a request never ends in silence.
-- Nothing reaches the network before it passes the firewall: a batch writes a draft, and what
-  lists models or tools reads the configuration as it applies, so a show after a set in the same
-  batch reads what was there before.
-- One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model
-  neither starts, nor runs another line, nor replaces anything.
+  replaces it only when every line succeeds, and answers with what changed; it always answers, `! no
+  change` when it writes nothing and changes nothing, so a request never ends in silence.
+- Nothing reaches the network before it passes the firewall: a batch writes a draft, and what lists
+  models or tools reads the configuration as it applies, so a show after a set in the same batch
+  reads what was there before.
+- One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model neither
+  starts, nor runs another line, nor replaces anything.
 - A request holds one system message, first, as every template takes it: the system prompt, then
   what the turn left out.
-- The line under a turn and what the turn spent measure the system alone: the time the user takes
-  on a question leaves every clock of the turn that asks, a round counts its tokens once, by the
-  count of the endpoint when it gives one, and the rate starts from the second token.
+- The line under a turn and what the turn spent measure the system alone: the time the user takes on
+  a question leaves every clock of the turn that asks, a round counts its tokens once, by the count
+  of the endpoint when it gives one, and the rate starts from the second token.
 - A turn tries each MCP server once: a server that fails sits out its other rounds, and the next
   turn tries it again; a server connects as soon as the configuration names it.
-- Each conversation answers on its own, beside the others: its turn, its Stop and its questions
-  are its own, and deleting it stops its turn alone. Questions wait their turn, each answered to
-  the turn that asked it.
+- Each conversation answers on its own, beside the others: its turn, its Stop and its questions are
+  its own, and deleting it stops its turn alone. Questions wait their turn, each answered to the
+  turn that asked it.
 - A value resolves from what the session sets, over `client.conf`, over the factory configuration,
-  over the reset value of its key;
-  `erase running-config` drops what the session sets, a copy to `running-config` puts back the
-  configuration it names.
+  over the reset value of its key; `erase running-config` drops what the session sets, a copy to
+  `running-config` puts back the configuration it names.
 - Every configuration shows as it runs, over `client.conf`, the keys no module declares anymore left
   out: `show`, `show diff` and `export` alike, while a save keeps what the session sets only, so a
   `client.conf` changed reaches every save. `show running-config` lists what the session and the
@@ -302,14 +305,14 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   lists it.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The keychain of the page is the one reader of the value of a key beside the engine that holds it:
-  a module reads a secret `<removed>`, and the key goes out at one place, the header its `auth`
-  names, `Header` or `Header: Scheme`, read as the request leaves. What leaves the memory of the
-  page is sealed: the request to the model, a conversation stored or exported, every string in it
-  and every name of a property read `<removed>` where a secret the page has known this session
-  stood, a value typed in the form of a server and a key replaced since included. A string is sealed
-  as decoded, so a key escaped or streamed in pieces is caught, and a conversation kept before is
-  sealed as it leaves again. The screen shows what came. The headers of an item never name the
-  header its `auth` writes.
+  a module reads a secret `<removed>`, and the key goes out at one place, the header its
+  `auth-header` names, `Header` or `Header: Scheme`, read as the request leaves. What leaves the
+  memory of the page is sealed: the request to the model, a conversation stored or exported, every
+  string in it and every name of a property read `<removed>` where a secret the page has known this
+  session stood, a value typed in the form of a server and a key replaced since included. A string
+  is sealed as decoded, so a key escaped or streamed in pieces is caught, and a conversation kept
+  before is sealed as it leaves again. The screen shows what came. The headers of an item never name
+  the header its `auth-header` writes.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
 - The secrets of an item go with it to a url the model writes once the user lets it, the question
@@ -317,8 +320,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The model opens a way out only once the user agrees, every time, whatever command spells the
   change: a url given a value, a tool opened; closing never asks.
 - A question offers always only for a call, and says what it gives.
-- The thinking and the reply render as Markdown unless set `plain`; `render` takes these two
-  blocks only.
+- The thinking and the reply render as Markdown unless set `plain`; `render` takes these two blocks
+  only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
   from the page itself, checked in Chromium.
 - The images of a call go to the model with its result, every round, when the list of its endpoint
@@ -326,14 +329,14 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A tool in `consent` asks the user before each call: once, always, which turns it on, or refuse.
   The tools of KiSS are on. A call reaches its tool only while the tool is not off, as it stands
   when the call goes: a tool a call turns off is reached by no later call of the round.
-- A secret a `set` line leaves out is asked of the user, and never enters the conversation; the
-  line that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
+- A secret a `set` line leaves out is asked of the user, and never enters the conversation; the line
+  that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
 - No style token or sheet applies while a question stands, whatever it sets meanwhile: the card the
   user answers reads in the style of the page alone.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `copy` moves it.
-- A conversation takes its title from its first message; one the CLI opened has none until then,
-  and reads `CLI` where a title would: its title is a name, never a line typed.
+- A conversation takes its title from its first message; one the CLI opened has none until then, and
+  reads `CLI` where a title would: its title is a name, never a line typed.
 - `erase` removes nothing before the user confirms it, whoever asks; a word naming a configuration
   names no conversation; every conversation it names goes in one write, `erase conversations`
   keeping the pinned ones, which go only when named. The model writes a configuration but the
@@ -358,8 +361,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
   known items only, `display render`, `tools use`, or a value its key no longer takes, at boot, in a
   copy and wherever it shows, and a copy says so; a line naming one fails.
-- A model list answers within its timeout, its body included, so no endpoint holds the queue;
-  every endpoint lists at once, one that fails beside the others.
+- A model list answers within its timeout, its body included, so no endpoint holds the queue; every
+  endpoint lists at once, one that fails beside the others.
 - A copy from `running-config` warns when no model answers the chat: `chat model` empty with more
   than one endpoint, or naming a model its endpoint does not serve; an endpoint that fails warns
   once, by its name.
@@ -370,24 +373,23 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>` alone
   when the source fails: `show models` by endpoint, `show tools` by who serves it, `show css` by
   component; a listing from one source, `show display`, reads at the margin. A setting no source
-  serves now goes last, under `! unavailable`, whatever keeps it away, a source down or a name
-  gone, and stays until a `no` drops it.
+  serves now goes last, under `! unavailable`, whatever keeps it away, a source down or a name gone,
+  and stays until a `no` drops it.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
   next round on.
 - A turn keeps, on the page and in the browser, what settled: what streamed, the calls that ended
   before a stop, and the one a stop or a page closed cut while it ran, with its arguments and as
   stopped, since the tool may have acted; a call never sent leaves nothing.
-- A message copied gives its source: the text typed, the answer without its thinking or calls,
-  the output of a command.
+- A message copied gives its source: the text typed, the answer without its thinking or calls, the
+  output of a command.
 - An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
-  history the model reads are the path up from the leaf; a version comes back as it was last
-  written in.
-- An answer again enters beside the answers of its message, from the very prefix, every branch
-  kept.
-- A message enters with the moment it entered, and reads how long ago that was in the language
-  of the browser, past a day in days of the calendar, so yesterday is the day the sidebar names so.
-- A command closed leaves the tree, what followed it following the entry before it, the versions
-  and the history the model reads as they were; a conversation it leaves empty goes with it.
+  history the model reads are the path up from the leaf; a version comes back as it was last written
+  in.
+- An answer again enters beside the answers of its message, from the very prefix, every branch kept.
+- A message enters with the moment it entered, and reads how long ago that was in the language of
+  the browser, past a day in days of the calendar, so yesterday is the day the sidebar names so.
+- A command closed leaves the tree, what followed it following the entry before it, the versions and
+  the history the model reads as they were; a conversation it leaves empty goes with it.
 - A conversation file reads back to every conversation as it settled, ids and branches kept, or
   imports nothing and says where it goes wrong; an import adds only the conversations whose id is
   new, and neither `export` nor `import` changes a conversation.
@@ -445,12 +447,11 @@ those turned off left out; a server that fails, or a name served twice, becomes 
 model, which tells the user, the note kept until the turn ends, so what the model did about a server
 stays explained once the server is back. Each round streams its thinking, its text and its calls,
 the arguments of a call read as the stream writes them, their JSON closed where it stops; a round
-that calls nothing ends the turn, at most `tools rounds` of them, which the model may raise like any
-free key, a cost shown in its change. A line of the stream that does not read stops the turn naming
-the endpoint and the line. Every round reads the
-configuration as it stands, so a tool a call turns on is offered from the next round on, as is a
-model, a system prompt or a parameter a call changes. A tool in `consent` asks before its call, and
-a turn stopped keeps what settled.
+that calls nothing ends the turn, at most `tools max-rounds` of them, which the model may raise like
+any free key, a cost shown in its change. A line of the stream that does not read stops the turn
+naming the endpoint and the line. Every round reads the configuration as it stands, so a tool a call
+turns on is offered from the next round on, as is a model, a system prompt or a parameter a call
+changes. A tool in `consent` asks before its call, and a turn stopped keeps what settled.
 
 Every endpoint speaks the protocol `endpoints protocol` names: the protocol builds the request from
 the history, carries the key and reads the stream, and the rest of KiSS sees the same deltas
@@ -461,36 +462,33 @@ when the list of the endpoint says the model sees them or says nothing; a model 
 reads the line its result keeps of each, `Image image/png, 4096 bytes`.
 
 - `chat`, by default: the chat completions of OpenAI, the open standard of llama.cpp, vLLM and
-  Hugging Face, the key as a bearer token unless `auth` says. A tool message holds text only, so
-  the images of a round follow its results in one user message; `architecture.input_modalities` in
-  the list, as llama-server and Hugging Face give it, says whether the model sees them.
-- `messages`: the Messages API of Anthropic, the key in `x-api-key` unless `auth` says, with the
-  headers a page needs,
-  the betas the headers of the endpoint name joining its own,
-  the thinking summarized and sent back as it came, the prompt cached up to its last block, every
-  tool streaming its arguments, the images of a call in its result, unless
-  `capabilities.image_input` says otherwise. A signed block is bound to the system, the tools and
-  the messages before it: one the configuration changed since, a tool opened or a prompt edited, is
-  dropped by the API and thought again, never refused. The list of the endpoint gives the most
-  tokens the model writes and whether it thinks, `models max_tokens` over it; `min_p`, the penalties
-  and `seed` never go.
+  Hugging Face, the key as a bearer token unless `auth-header` says. A tool message holds text only,
+  so the images of a round follow its results in one user message; `architecture.input_modalities`
+  in the list, as llama-server and Hugging Face give it, says whether the model sees them.
+- `messages`: the Messages API of Anthropic, the key in `x-api-key` unless `auth-header` says, with
+  the headers a page needs, the betas the headers of the endpoint name joining its own, the thinking
+  summarized and sent back as it came, the prompt cached up to its last block, every tool streaming
+  its arguments, the images of a call in its result, unless `capabilities.image_input` says
+  otherwise. A signed block is bound to the system, the tools and the messages before it: one the
+  configuration changed since, a tool opened or a prompt edited, is dropped by the API and thought
+  again, never refused. The list of the endpoint gives the most tokens the model writes and whether
+  it thinks, `models max_tokens` over it; `min_p`, the penalties and `seed` never go.
 - `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
-  nothing stored on the server, the key as a bearer token unless `auth` says, the system prompt as
-  its instructions,
-  the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
-  written, the images of a call in its output. `max_tokens` goes as `max_output_tokens`; `top_k`,
-  `min_p`, the penalties and `seed` never go.
+  nothing stored on the server, the key as a bearer token unless `auth-header` says, the system
+  prompt as its instructions, the reasoning streamed as its summary and sent back encrypted as it
+  came, every tool as it is written, the images of a call in its output. `max_tokens` goes as
+  `max_output_tokens`; `top_k`, `min_p`, the penalties and `seed` never go.
 
-An endpoint is reached directly at its url, or through the route of its name on a KiSS server, as
-an MCP server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of
-`monstre`, an item of `mcp`, with the key, auth and headers of `monstre` beside the fixed headers of
-the protocol; the route holds the url and the key it sends, so a key of a cloud API never reaches
-the browser, and the url and key of `hf` here wait unused until `no endpoints proxy hf` sends it
-direct again, one line either way. The batch that sets a proxy asks the server for its routes,
-which it publishes as MCP resources: one without a route of that name, or without a key when the
-item holds one, stops the batch with the fix, `set proxy key hf on mcp monstre`, so the model never
-cuts itself off its own endpoint. The proxy names a KiSS server of the page that has a url and no
-proxy itself, the refusal of any other listing those, and the model sets it only once the user
+An endpoint is reached directly at its url, or through the route of its name on a KiSS server, as an
+MCP server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of
+`monstre`, an item of `mcp`, with the key, auth-header and headers of `monstre` beside the fixed
+headers of the protocol; the route holds the url and the key it sends, so a key of a cloud API never
+reaches the browser, and the url and key of `hf` here wait unused until `no endpoints proxy hf`
+sends it direct again, one line either way. The batch that sets a proxy asks the server for its
+routes, which it publishes as MCP resources: one without a route of that name, or without a key when
+the item holds one, stops the batch with the fix, `set proxy key hf on mcp monstre`, so the model
+never cuts itself off its own endpoint. The proxy names a KiSS server of the page that has a url and
+no proxy itself, the refusal of any other listing those, and the model sets it only once the user
 agrees, as a url.
 
 ```
@@ -503,8 +501,8 @@ set endpoints protocol openai responses
 
 The Claude API speaks `chat` too, once the headers of its endpoint name the page,
 `anthropic-dangerous-direct-browser-access: true`, and give `anthropic-version: 2023-06-01`, which
-its list needs. Every MCP server sends its key as a bearer token unless `auth` says:
-`set mcp auth exa x-api-key`, `set endpoints auth azure api-key`, `set endpoints auth h
+its list needs. Every MCP server sends its key as a bearer token unless `auth-header` says: `set mcp
+auth-header exa x-api-key`, `set endpoints auth-header azure api-key`, `set endpoints auth-header h
 'Authorization: Token'`. Every endpoint and every MCP server sends the headers it is given besides,
 `Name: value` pairs split by `;`, to it alone.
 
@@ -583,13 +581,13 @@ show tools | include bash
 ! the model never sees it
 set tools use str_replace off
 ! the argument every folded call shows, the default
-set display preview description
+set display preview-argument description
 ! the one of a tool over it; a call without it shows its first argument
-set tools preview bash_tool command
+set tools preview-argument bash_tool command
 ! every setting of that tool, gone
 no tools bash_tool
 ! the tool rounds a turn takes at most, 1000 by default
-set tools rounds 2000
+set tools max-rounds 2000
 ! the seconds a call may take, 310 by default
 set mcp timeout sandbox 600
 ```

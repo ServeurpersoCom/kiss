@@ -12,7 +12,7 @@ export default {
 		key: { kind: 'secret', named: true },
 		// the header that carries the key, Header or Header: Scheme, the one of
 		// the protocol unless set
-		auth: { kind: 'string', named: true },
+		'auth-header': { kind: 'string', named: true },
 		// sent with every request, Name: value pairs split by ;
 		headers: { kind: 'string', named: true },
 		// seconds the endpoint has to start answering: a model list, the start of
@@ -20,9 +20,9 @@ export default {
 		timeout: { kind: 'number', min: 0.1, default: '120', named: true },
 		// the times a reply is asked again while the endpoint answers a status
 		// that passes, 0 never
-		retries: { kind: 'number', min: 0, integer: true, default: '1800', named: true },
+		'max-retries': { kind: 'number', min: 0, integer: true, default: '1800', named: true },
 		// seconds between two of them
-		pause: { kind: 'number', min: 0, default: '2', named: true },
+		'retry-pause': { kind: 'number', min: 0, default: '2', named: true },
 		// the KiSS server, an item of mcp, whose route of the same name this one
 		// goes through, reached at proxy/<name> beside its MCP, with its key and
 		// headers, the url and key of this one waiting until it goes direct

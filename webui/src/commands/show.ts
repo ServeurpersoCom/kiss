@@ -4,7 +4,7 @@ import { beyond, comment } from '../lib/config.js';
 import { choose } from '../engine/near.js';
 
 // show chat, show tools use, show tools use bash_tool, and show tools bash_tool:
-// the word after a collection names a key when it names one, else an item
+// the word after a collection names a key as schema.keyAfter reads it, else an item
 interface Plan {
 	module: string;
 	key?: string;
@@ -46,7 +46,7 @@ export default {
 		if (!args.length) throw new Incomplete();
 		const module = schema.module(args[0]);
 		if (args.length === 1) return { module };
-		const word = schema.key(module, args[1]);
+		const word = schema.keyAfter(module, args[1], args.length > 2);
 		if (!word) {
 			if (!schema.collection(module)) throw new Error(`unknown key "${module} ${args[1]}"`);
 			if (args.length > 2) throw beyond(['show', module, args[1]], args.slice(2));

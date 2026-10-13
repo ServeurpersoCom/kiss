@@ -1,5 +1,5 @@
 // show-logging.cpp: show logging, the last lines of the log as server
-// buffered keeps them, as IOS shows its logging buffer
+// log-buffer keeps them, as IOS shows its logging buffer
 
 #include "engine/registry.h"
 #include "engine/run.h"
@@ -12,7 +12,7 @@ static step_t compile_show_logging(const words_t & args) {
     return [](context &) {
         std::string kept = log_buffered();
         if (kept.empty()) {
-            return comment("no log kept, server buffered is 0 or nothing happened yet");
+            return comment("no log kept, server log-buffer is 0 or nothing happened yet");
         }
         kept.pop_back();
         return kept;

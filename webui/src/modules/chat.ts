@@ -8,7 +8,7 @@ export default {
 		// endpoint/model as show models lists it; empty: the one model of the one endpoint
 		model: { kind: 'string', default: '', of: 'models' },
 		// sent first in every request, none when empty
-		system: { kind: 'string', default: '' }
+		'system-prompt': { kind: 'string', default: '' }
 	},
 	// a model set names an endpoint of the configuration, the model itself
 	// left to the endpoint

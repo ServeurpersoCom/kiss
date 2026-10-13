@@ -82,7 +82,7 @@ async function setup(
 	const { endpoint, model } = await pick(settings, signal);
 	const waits = connecting(settings, down);
 	if (waits.length) mark(p, 'preparing', `mcp ${waits.join(', ')}`, performance.now());
-	const prompt = String(settings.get('chat system') ?? '');
+	const prompt = String(settings.get('chat system-prompt') ?? '');
 	// the parameters set for this model, numbers as numbers
 	const parameters = Object.fromEntries(
 		Object.entries(models.keys).flatMap(([name, def]) => {
@@ -121,7 +121,7 @@ export async function turn(
 	const told: string[] = [];
 	relist();
 	try {
-		for (; r < Number(settings.get('tools rounds')); r++) {
+		for (; r < Number(settings.get('tools max-rounds')); r++) {
 			p.round = r + 1;
 			mark(p, 'preparing', '', performance.now());
 			// the history as it stands before this round, which the round goes on

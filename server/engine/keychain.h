@@ -20,7 +20,7 @@ constexpr const char * BEARER = "Authorization: Bearer";
 // no Header or Header: Scheme
 bool placement(const std::string & auth, std::string & name, std::string & scheme);
 
-// the header that carries the key of an item, placed as auth says, false
+// the header that carries the key of an item, placed as auth-header says, false
 // without a key or a placement
 bool credential(const engine_reader & config,
                 const std::string &   auth,

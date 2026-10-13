@@ -83,10 +83,10 @@ beforeEach(() => {
 describe('a batch', () => {
 	it('applies whole or not at all', async () => {
 		const k = await page();
-		const r = await k.run('set display tools open\nset display tools wide', 'user');
+		const r = await k.run('set display tool-calls open\nset display tool-calls wide', 'user');
 		expect(r.ok).toBe(false);
 		expect(r.text).toContain('nothing applied');
-		expect(k.settings.get('display tools')).toBe('closed');
+		expect(k.settings.get('display tool-calls')).toBe('closed');
 	});
 
 	it('compiles every line before the first one runs', async () => {
@@ -103,7 +103,7 @@ describe('a batch', () => {
 
 	it('runs a command that writes the archive alone', async () => {
 		const k = await page();
-		const r = await k.run('set display tools open\ncopy running-config a', 'user');
+		const r = await k.run('set display tool-calls open\ncopy running-config a', 'user');
 		expect(r.text).toContain('copy runs alone');
 		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
 	});
@@ -113,18 +113,18 @@ describe('a batch', () => {
 		expect((await k.run('show running-config now', 'user')).text).toBe(
 			'% nothing goes after show running-config: now'
 		);
-		expect((await k.run('show chat system now', 'user')).text).toBe(
-			'% nothing goes after show chat system: now'
+		expect((await k.run('show chat system-prompt now', 'user')).text).toBe(
+			'% nothing goes after show chat system-prompt: now'
 		);
 	});
 
 	it('answers with the change of the registers that exist before or after, secrets masked', async () => {
-		const k = await page('set chat system red');
-		expect((await k.run('set chat system blue', 'user')).text).toBe(
-			'- set chat system red\n+ set chat system blue'
+		const k = await page('set chat system-prompt red');
+		expect((await k.run('set chat system-prompt blue', 'user')).text).toBe(
+			'- set chat system-prompt red\n+ set chat system-prompt blue'
 		);
-		expect((await k.run('no chat system', 'user')).text).toBe(
-			'- set chat system blue\n+ set chat system red'
+		expect((await k.run('no chat system-prompt', 'user')).text).toBe(
+			'- set chat system-prompt blue\n+ set chat system-prompt red'
 		);
 		const key = await k.run('set endpoints url x http://x/v1\nset endpoints key x sk-123', 'user');
 		expect(key.text).toBe('+ ! endpoints key x is set\n+ set endpoints url x http://x/v1');
@@ -140,12 +140,12 @@ describe('a batch', () => {
 		vi.stubGlobal('fetch', h.fetch);
 		await k.run('set endpoints url a http://a/v1', 'user');
 		const slow = k.run('show models', 'llm');
-		const set = k.run('set chat system blue', 'user');
+		const set = k.run('set chat system-prompt blue', 'user');
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		h.release();
 		expect((await slow).text).toBe('! endpoints a\n! a/m');
 		await set;
-		expect(k.settings.get('chat system')).toBe('blue');
+		expect(k.settings.get('chat system-prompt')).toBe('blue');
 	});
 });
 
@@ -175,7 +175,7 @@ describe('a model list', () => {
 		expect((await k.run('show models', 'user')).text).toBe(
 			'! endpoints a http://a/v1 does not answer within 0.1 s'
 		);
-		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
+		expect((await k.run('set chat system-prompt blue', 'user')).ok).toBe(true);
 	});
 
 	it('whose body never ends frees the queue after its timeout', async () => {
@@ -193,7 +193,7 @@ describe('a model list', () => {
 		expect((await k.run('show models', 'user')).text).toContain(
 			'http://a/v1 does not answer within 0.1 s'
 		);
-		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
+		expect((await k.run('set chat system-prompt blue', 'user')).ok).toBe(true);
 	});
 });
 
@@ -202,8 +202,10 @@ describe('after a stop', () => {
 		const k = await page();
 		const stop = new AbortController();
 		stop.abort();
-		await expect(k.run('set chat system blue', 'llm', { signal: stop.signal })).rejects.toThrow();
-		expect(k.settings.get('chat system')).toBe('');
+		await expect(
+			k.run('set chat system-prompt blue', 'llm', { signal: stop.signal })
+		).rejects.toThrow();
+		expect(k.settings.get('chat system-prompt')).toBe('');
 	});
 
 	it('a waiting batch replaces nothing', async () => {
@@ -212,11 +214,11 @@ describe('after a stop', () => {
 		vi.stubGlobal('fetch', h.fetch);
 		await k.run('set endpoints url a http://a/v1', 'user');
 		const stop = new AbortController();
-		const r = k.run('set chat system blue\nshow models', 'llm', { signal: stop.signal });
+		const r = k.run('set chat system-prompt blue\nshow models', 'llm', { signal: stop.signal });
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		stop.abort();
 		await expect(r).rejects.toThrow();
-		expect(k.settings.get('chat system')).toBe('');
+		expect(k.settings.get('chat system-prompt')).toBe('');
 	});
 
 	it('a queued batch never starts', async () => {
@@ -226,13 +228,13 @@ describe('after a stop', () => {
 		await k.run('set endpoints url a http://a/v1', 'user');
 		const first = k.run('show models', 'user');
 		const stop = new AbortController();
-		const queued = k.run('set chat system blue', 'llm', { signal: stop.signal });
+		const queued = k.run('set chat system-prompt blue', 'llm', { signal: stop.signal });
 		await vi.waitFor(() => expect(h.fetch).toHaveBeenCalled());
 		stop.abort();
 		h.release();
 		await first;
 		await expect(queued).rejects.toThrow();
-		expect(k.settings.get('chat system')).toBe('');
+		expect(k.settings.get('chat system-prompt')).toBe('');
 	});
 });
 
@@ -312,14 +314,14 @@ describe('show running-config', () => {
 		const k = await page();
 		const lines = [
 			'set style sheet a ":root { --accent: oklch(0.6 0.2 300) }"',
-			'set chat system "a|b \\"c\\"\\nd"',
+			'set chat system-prompt "a|b \\"c\\"\\nd"',
 			'set style sheet b \'body { font-family: "Inter", sans-serif }\'',
-			'set display tools open',
+			'set display tool-calls open',
 			'set endpoints url a http://a/v1'
 		];
 		expect((await k.run(lines.join('\n'), 'user')).ok).toBe(true);
-		expect(k.settings.get('chat system')).toBe('a|b "c"\nd');
-		expect(k.settings.get('display tools')).toBe('open');
+		expect(k.settings.get('chat system-prompt')).toBe('a|b "c"\nd');
+		expect(k.settings.get('display tool-calls')).toBe('open');
 		const shown = (await k.run('show running-config', 'user')).text;
 		const fresh = await page();
 		const sets = shown
@@ -332,12 +334,12 @@ describe('show running-config', () => {
 
 	it('all lists every module as show lists it, defaults included', async () => {
 		const k = await page();
-		await k.run('set display tools open', 'user');
+		await k.run('set display tool-calls open', 'user');
 		const all = (await k.run('show run al', 'user')).text;
 		const { modules } = await import('../src/engine/registry.js');
 		const each = await Promise.all(modules.map((m) => k.run(`show ${m.name}`, 'user')));
 		expect(all).toBe(each.map((r) => r.text).join('\n'));
-		expect(all).toContain('set display tools open\n');
+		expect(all).toContain('set display tool-calls open\n');
 		expect(all).toContain('set display thinking closed\n');
 		expect((await k.run('show running-config x', 'user')).text).toBe(
 			'% nothing goes after show running-config: x'
@@ -349,11 +351,11 @@ describe('the display', () => {
 	it('folds by default and opens on demand', async () => {
 		const k = await page();
 		expect(k.settings.get('display thinking')).toBe('closed');
-		expect(k.settings.get('display tools')).toBe('closed');
-		expect((await k.run('set display tools ajar', 'user')).text).toContain(
+		expect(k.settings.get('display tool-calls')).toBe('closed');
+		expect((await k.run('set display tool-calls ajar', 'user')).text).toContain(
 			'not one of closed open'
 		);
-		expect((await k.run('set display tools open', 'user')).ok).toBe(true);
+		expect((await k.run('set display tool-calls open', 'user')).ok).toBe(true);
 	});
 
 	it('renders the thinking and the reply as markdown by default, each plain on demand', async () => {
@@ -377,12 +379,15 @@ describe('the display', () => {
 	it('previews the description of every folded call, a tool of its own over it', async () => {
 		const k = await page();
 		const { display } = await import('../src/lib/display.svelte.js');
-		expect(k.settings.get('display preview')).toBe('description');
+		expect(k.settings.get('display preview-argument')).toBe('description');
 		expect(display.argument).toBe('description');
-		await k.run('set display preview query\nset tools preview client_config lines', 'user');
+		await k.run(
+			'set display preview-argument query\nset tools preview-argument client_config lines',
+			'user'
+		);
 		expect(display.argument).toBe('query');
 		expect(display.preview).toEqual({ client_config: 'lines' });
-		await k.run('no display preview\nno tools preview client_config', 'user');
+		await k.run('no display preview-argument\nno tools preview-argument client_config', 'user');
 		expect(display.argument).toBe('description');
 		expect(display.preview).toEqual({});
 	});
@@ -443,21 +448,21 @@ describe('the headers of a server', () => {
 		const k = await page();
 		await k.run('set endpoints url a http://a/v1\nset mcp url b http://b/mcp', 'user');
 		expect((await k.run("set endpoints headers a 'authorization: x'", 'user')).text).toContain(
-			'endpoints headers a: authorization is the header endpoints auth a writes'
+			'endpoints headers a: authorization is the header endpoints auth-header a writes'
 		);
 		expect((await k.run("set mcp headers b 'Authorization: x'", 'user')).text).toContain(
-			'mcp headers b: Authorization is the header mcp auth b writes'
+			'mcp headers b: Authorization is the header mcp auth-header b writes'
 		);
 		await k.run('set endpoints protocol a messages', 'user');
 		expect((await k.run("set endpoints headers a 'x-api-key: x'", 'user')).text).toContain(
-			'endpoints headers a: x-api-key is the header endpoints auth a writes'
+			'endpoints headers a: x-api-key is the header endpoints auth-header a writes'
 		);
 		expect((await k.run("set endpoints headers a 'Authorization: x'", 'user')).ok).toBe(true);
-		expect((await k.run('set endpoints auth a Authorization', 'user')).text).toContain(
-			'endpoints headers a: Authorization is the header endpoints auth a writes'
+		expect((await k.run('set endpoints auth-header a Authorization', 'user')).text).toContain(
+			'endpoints headers a: Authorization is the header endpoints auth-header a writes'
 		);
-		expect((await k.run("set endpoints auth a 'a/b: c'", 'user')).text).toContain(
-			'endpoints auth a: "a/b: c" is not Header or Header: Scheme'
+		expect((await k.run("set endpoints auth-header a 'a/b: c'", 'user')).text).toContain(
+			'endpoints auth-header a: "a/b: c" is not Header or Header: Scheme'
 		);
 	});
 
@@ -475,10 +480,10 @@ describe('the headers of a server', () => {
 			[
 				'set endpoints url a http://a/v1',
 				'set endpoints key a sk-a',
-				'set endpoints auth a api-key',
+				'set endpoints auth-header a api-key',
 				'set endpoints url b http://b/v1',
 				'set endpoints key b sk-b',
-				"set endpoints auth b 'Authorization: Token'",
+				"set endpoints auth-header b 'Authorization: Token'",
 				'set endpoints url c http://c/v1',
 				'set endpoints key c sk-c',
 				'set endpoints protocol c messages'
@@ -570,15 +575,15 @@ describe('a tool', () => {
 			'% unknown tools "repo.search"'
 		);
 		const r = await k.run(
-			'set tools preview client_config query\nset tools use client_config off',
+			'set tools preview-argument client_config query\nset tools use client_config off',
 			'user'
 		);
 		expect(r.ok).toBe(true);
 		expect((await k.run('show tools client_config', 'user')).text).toBe(
-			'set tools preview client_config query\nset tools use client_config off'
+			'set tools preview-argument client_config query\nset tools use client_config off'
 		);
 		expect((await k.run('no tools client_config', 'user')).ok).toBe(true);
-		expect(k.settings.get('tools preview', 'repo.search')).toBeUndefined();
+		expect(k.settings.get('tools preview-argument', 'repo.search')).toBeUndefined();
 		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
 	});
 });
@@ -594,7 +599,9 @@ describe('a title', () => {
 		expect((await k.run('show title', 'user', { conversation: c })).text).toBe(
 			'title "Bonjour le monde"'
 		);
-		const failed = await k.run('title other\nset display tools wide', 'llm', { conversation: c });
+		const failed = await k.run('title other\nset display tool-calls wide', 'llm', {
+			conversation: c
+		});
 		expect(failed.ok).toBe(false);
 		expect(c.title).toBe('Bonjour le monde');
 		const long = await k.run(`title ${'a'.repeat(61)}`, 'llm', { conversation: c });
@@ -628,9 +635,9 @@ function user(verdict: Verdict) {
 describe('the firewall', () => {
 	it('asks the user every time the model opens a way out, whatever spells it', async () => {
 		const k = await page();
-		await k.run('set tools use client_config off\nset chat system mine', 'user');
+		await k.run('set tools use client_config off\nset chat system-prompt mine', 'user');
 		const once = user(ONCE);
-		expect((await k.run('set chat system theirs', 'llm', once)).ok).toBe(true);
+		expect((await k.run('set chat system-prompt theirs', 'llm', once)).ok).toBe(true);
 		expect((await k.run('set endpoints url b http://b/v1', 'llm', once)).ok).toBe(true);
 		expect((await k.run('set endpoints url b http://c/v1', 'llm', once)).ok).toBe(true);
 		expect(once.asked).toEqual([
@@ -837,7 +844,7 @@ describe('an erase', () => {
 
 	it('takes a configuration whole before a conversation of the same word', async () => {
 		const k = await page();
-		await k.run('set chat system blue', 'user');
+		await k.run('set chat system-prompt blue', 'user');
 		await k.run('copy running-config ab12', 'user');
 		const list = [talk('ab12-1', 'one', 1)];
 		const s = shelf(list, null, false);
@@ -845,7 +852,7 @@ describe('an erase', () => {
 		const yes = shelf(list);
 		expect((await k.run('erase ab12', 'llm', yes)).text).toBe('! erased ab12');
 		expect((await k.run('erase run', 'llm', yes)).text).toBe(
-			'- set chat system blue\n+ set chat system ""'
+			'- set chat system-prompt blue\n+ set chat system-prompt ""'
 		);
 		expect([...s.asked, ...yes.asked]).toEqual([
 			'Erase ab12?',
@@ -938,11 +945,11 @@ describe('the conversations', () => {
 		);
 		expect(list).toHaveLength(2);
 		expect((await k.run('import', 'llm', shelf(list))).text).toBe('% the user picked no file');
-		const conf = 'set chat system "from a file"\n! a note\n set display tools open\n';
+		const conf = 'set chat system-prompt "from a file"\n! a note\n set display tool-calls open\n';
 		expect((await k.run('import', 'user', shelf(list, conf))).text).toContain(
-			'+ set chat system "from a file"'
+			'+ set chat system-prompt "from a file"'
 		);
-		expect(k.settings.get('display tools')).toBe('open');
+		expect(k.settings.get('display tool-calls')).toBe('open');
 		expect((await k.run('import', 'user', shelf(list, conf))).text).toBe(
 			'! ran 2 lines of the file'
 		);
@@ -952,10 +959,10 @@ describe('the conversations', () => {
 		expect((await k.run('import', 'user', shelf(list, serialize([])))).text).toBe(
 			'% the file holds no conversation'
 		);
-		expect((await k.run('set display tools open', 'user')).text).toBe('! no change');
-		const broken = 'set chat system other\nbogus';
+		expect((await k.run('set display tool-calls open', 'user')).text).toBe('! no change');
+		const broken = 'set chat system-prompt other\nbogus';
 		expect((await k.run('import', 'user', shelf(list, broken))).text).toContain('file line 2:');
-		expect(k.settings.get('chat system')).toBe('from a file');
+		expect(k.settings.get('chat system-prompt')).toBe('from a file');
 	});
 });
 
@@ -963,32 +970,32 @@ describe('client.conf', () => {
 	it('leaves out a line or a block the rules refuse, the rest entering', async () => {
 		vi.resetModules();
 		const k = await import('../src/engine/run.js');
-		expect(k.defaults('set chat system red\nset endpoints key s sk-site')).toEqual([
+		expect(k.defaults('set chat system-prompt red\nset endpoints key s sk-site')).toEqual([
 			'endpoints s: endpoints: endpoints s has no url'
 		]);
 		expect(k.settings.get('endpoints key', 's')).toBeUndefined();
 		expect(
 			k.defaults(
-				'set chat system red\nshow running-config\nset mcp proxy a b\nset mcp url b http://b/mcp'
+				'set chat system-prompt red\nshow running-config\nset mcp proxy a b\nset mcp url b http://b/mcp'
 			)
 		).toEqual(['show running-config: client.conf holds set lines only']);
 		expect(k.start()).toEqual([]);
-		expect(k.settings.get('chat system')).toBe('red');
+		expect(k.settings.get('chat system-prompt')).toBe('red');
 		expect(k.settings.get('mcp proxy', 'a')).toBe('b');
-		expect((await k.run('set chat system blue', 'user')).ok).toBe(true);
+		expect((await k.run('set chat system-prompt blue', 'user')).ok).toBe(true);
 	});
 });
 
 describe('the startup-config', () => {
 	it('leaves out a block the rules refuse over client.conf, the rest starting', async () => {
 		const before = await page();
-		await before.run('set endpoints url u http://x/v1\nset chat system kept', 'user');
+		await before.run('set endpoints url u http://x/v1\nset chat system-prompt kept', 'user');
 		await before.run('copy running-config startup-config', 'user');
 		vi.resetModules();
 		const k = await import('../src/engine/run.js');
 		k.defaults('set endpoints url s http://x/v1');
 		expect(k.start()).toEqual(['endpoints u: endpoints: endpoints u has the url of endpoints s']);
-		expect(k.settings.get('chat system')).toBe('kept');
+		expect(k.settings.get('chat system-prompt')).toBe('kept');
 		expect(k.settings.get('endpoints url', 'u')).toBeUndefined();
 		expect((await k.run('show endpoints', 'user')).ok).toBe(true);
 	});
@@ -1030,9 +1037,11 @@ describe('a model', () => {
 describe('IOS words', () => {
 	it('take a value by any prefix that names one only, the config keeping it whole', async () => {
 		const k = await page();
-		expect((await k.run('set display tools op', 'user')).ok).toBe(true);
-		expect(k.settings.get('display tools')).toBe('open');
-		expect((await k.run('show running-config', 'user')).text).toContain('set display tools open');
+		expect((await k.run('set display tool-calls op', 'user')).ok).toBe(true);
+		expect(k.settings.get('display tool-calls')).toBe('open');
+		expect((await k.run('show running-config', 'user')).text).toContain(
+			'set display tool-calls open'
+		);
 		expect((await k.run('set tools use client_config o', 'user')).text).toContain(
 			'ambiguous value "o": off on'
 		);
@@ -1040,9 +1049,11 @@ describe('IOS words', () => {
 
 	it('write memory, or write alone, as copy running-config startup-config', async () => {
 		const k = await page();
-		await k.run('set display tools open', 'user');
+		await k.run('set display tool-calls open', 'user');
 		expect((await k.run('wr mem', 'user')).text).toBe('! copied running-config to startup-config');
-		expect((await k.run('show startup-config', 'user')).text).toContain('set display tools open');
+		expect((await k.run('show startup-config', 'user')).text).toContain(
+			'set display tool-calls open'
+		);
 		await k.run('set display thinking open', 'user');
 		expect((await k.run('write', 'user')).ok).toBe(true);
 		expect((await k.run('show startup-config', 'user')).text).toContain(
@@ -1066,9 +1077,9 @@ describe('completion and abbreviation', () => {
 	});
 
 	it('offers the current value of a key, never the one of a secret', async () => {
-		const k = await page('set endpoints url prod http://p/v1\nset chat system "Be brief"');
+		const k = await page('set endpoints url prod http://p/v1\nset chat system-prompt "Be brief"');
 		expect(k.suggest('set endpoints timeout prod ', 'user')).toEqual(['120', '<number>']);
-		expect(k.suggest('set chat system ', 'user')).toEqual(['"Be brief"', '<string>']);
+		expect(k.suggest('set chat system-prompt ', 'user')).toEqual(['"Be brief"', '<string>']);
 		await k.run('set endpoints key prod K', 'user');
 		expect(k.suggest('set endpoints key prod ', 'user')).toEqual(['<secret>']);
 	});
@@ -1102,11 +1113,11 @@ describe('completion and abbreviation', () => {
 
 	it('names a configuration by a prefix, a new save only by its whole name', async () => {
 		const k = await page();
-		await k.run('set display tools open', 'user');
+		await k.run('set display tool-calls open', 'user');
 		await k.run('copy run backup', 'user');
 		expect((await k.run('show diff back run', 'user')).text).toBe('! no difference');
 		expect((await k.run('copy ba start', 'user')).text).toBe('! copied backup to startup-config');
-		expect((await k.run('show saves ba', 'user')).text).toContain('set display tools open');
+		expect((await k.run('show saves ba', 'user')).text).toContain('set display tool-calls open');
 	});
 });
 
@@ -1168,12 +1179,12 @@ describe('a copy', () => {
 			'% nothing goes after copy running-config a: b'
 		);
 		vi.useFakeTimers({ now: new Date('2026-10-05T09:17:00Z'), toFake: ['Date'] });
-		await k.run('set chat system blue', 'user');
+		await k.run('set chat system-prompt blue', 'user');
 		await k.run('copy running-config a', 'user');
 		vi.setSystemTime(new Date('2026-10-05T09:20:00Z'));
 		await k.run('copy running-config b', 'user');
 		vi.setSystemTime(new Date('2026-10-05T09:25:00Z'));
-		await k.run('set chat system green', 'user');
+		await k.run('set chat system-prompt green', 'user');
 		await k.run('copy running-config a', 'user');
 		vi.useRealTimers();
 		expect((await k.run('show saves', 'user')).text).toBe(
@@ -1181,11 +1192,13 @@ describe('a copy', () => {
 		);
 		await k.run('set endpoints url m http://m/v1\nset endpoints key m sk-m', 'user');
 		await k.run('copy running-config c', 'user');
-		expect((await k.run('show saves b', 'user')).text).toBe('set chat system blue');
+		expect((await k.run('show saves b', 'user')).text).toBe('set chat system-prompt blue');
 		expect((await k.run('show saves c', 'user')).text).toBe(
-			['set chat system green', '! endpoints key m is set', 'set endpoints url m http://m/v1'].join(
-				'\n'
-			)
+			[
+				'set chat system-prompt green',
+				'! endpoints key m is set',
+				'set endpoints url m http://m/v1'
+			].join('\n')
 		);
 		expect((await k.run('show saves c | include url', 'user')).text).toBe(
 			'set endpoints url m http://m/v1'
@@ -1201,18 +1214,20 @@ describe('a copy', () => {
 			'Copy a to startup-config?',
 			'Copy b to a, replacing it?'
 		]);
-		expect((await k.run('show saves a', 'user')).text).toBe('set chat system blue');
+		expect((await k.run('show saves a', 'user')).text).toBe('set chat system-prompt blue');
 	});
 
 	it('compares one configuration with another', async () => {
 		const k = await page();
-		await k.run('set chat system blue', 'user');
+		await k.run('set chat system-prompt blue', 'user');
 		await k.run('copy running-config a', 'user');
-		await k.run('set chat system green', 'user');
+		await k.run('set chat system-prompt green', 'user');
 		expect((await k.run('show diff a running-config', 'user')).text).toBe(
-			'- set chat system blue\n+ set chat system green'
+			'- set chat system-prompt blue\n+ set chat system-prompt green'
 		);
-		expect((await k.run('show diff startup-config a', 'user')).text).toBe('+ set chat system blue');
+		expect((await k.run('show diff startup-config a', 'user')).text).toBe(
+			'+ set chat system-prompt blue'
+		);
 		expect((await k.run('show diff running-config running-config', 'user')).text).toBe(
 			'! no difference'
 		);
@@ -1228,14 +1243,14 @@ describe('show', () => {
 		expect((await k.run('show endpoints', 'user')).text).toBe(
 			[
 				'! endpoints key x is set',
-				'set endpoints pause x 2',
+				'set endpoints max-retries x 1800',
 				'set endpoints protocol x chat',
-				'set endpoints retries x 1800',
+				'set endpoints retry-pause x 2',
 				'set endpoints timeout x 120',
 				'set endpoints url x http://x/v1',
-				'set endpoints pause y 2',
+				'set endpoints max-retries y 1800',
 				'set endpoints protocol y chat',
-				'set endpoints retries y 1800',
+				'set endpoints retry-pause y 2',
 				'set endpoints timeout y 120',
 				'set endpoints url y http://y/v1'
 			].join('\n')
@@ -1248,7 +1263,7 @@ describe('show', () => {
 		);
 		expect((await k.run('show endpoints key y', 'user')).text).toBe('! endpoints key y is not set');
 		expect((await k.run('show endpoints x', 'user')).text).toBe(
-			'! endpoints key x is set\nset endpoints pause x 2\nset endpoints protocol x chat\nset endpoints retries x 1800\nset endpoints timeout x 120\nset endpoints url x http://x/v1'
+			'! endpoints key x is set\nset endpoints max-retries x 1800\nset endpoints protocol x chat\nset endpoints retry-pause x 2\nset endpoints timeout x 120\nset endpoints url x http://x/v1'
 		);
 		expect((await k.run('show chat zz', 'user')).text).toContain('unknown key');
 	});
@@ -1296,26 +1311,26 @@ describe('style', () => {
 
 describe('erase and copy', () => {
 	it('erase running-config drops what the session sets, a copy to it puts back the save it names', async () => {
-		const k = await page('set display tools open');
+		const k = await page('set display tool-calls open');
 		expect((await k.run('copy first running-config', 'user')).text).toContain(
 			'unknown configuration "first"'
 		);
-		await k.run('set chat system blue', 'user');
+		await k.run('set chat system-prompt blue', 'user');
 		await k.run('copy running-config first', 'user');
-		await k.run('set chat system green', 'user');
+		await k.run('set chat system-prompt green', 'user');
 		await k.run('copy running-config second', 'user');
-		await k.run('set chat system pink\nset display tools closed', 'user');
+		await k.run('set chat system-prompt pink\nset display tool-calls closed', 'user');
 		await k.run('erase running-config', 'user', shelf([]));
-		expect(k.settings.get('chat system')).toBe('');
-		expect(k.settings.get('display tools')).toBe('open');
+		expect(k.settings.get('chat system-prompt')).toBe('');
+		expect(k.settings.get('display tool-calls')).toBe('open');
 		await k.run('copy second running-config', 'user');
-		expect(k.settings.get('chat system')).toBe('green');
+		expect(k.settings.get('chat system-prompt')).toBe('green');
 		await k.run('copy first running-config', 'user');
-		expect(k.settings.get('chat system')).toBe('blue');
+		expect(k.settings.get('chat system-prompt')).toBe('blue');
 		// a key no module declares anymore, or a value its key no longer takes,
 		// goes, at boot as in a copy, and what stays runs
 		const values = {
-			'chat system': 'old',
+			'chat system-prompt': 'old',
 			'privilege level gone': 'allow',
 			'endpoints url a': 'http://a/v1',
 			'endpoints protocol a': 'zz'
@@ -1324,15 +1339,15 @@ describe('erase and copy', () => {
 		localStorage.setItem('kiss.startup', JSON.stringify(values));
 		const later = await page();
 		expect((await later.run('show running-config', 'user')).text).toBe(
-			'set chat system old\nset endpoints url a http://a/v1'
+			'set chat system-prompt old\nset endpoints url a http://a/v1'
 		);
 		expect((await later.run('show diff old run', 'user')).text).toBe('! no difference');
 		await later.run('erase running-config', 'user', shelf([]));
 		expect((await later.run('copy old running-config', 'user')).text).toBe(
 			[
 				'! dropped what no key takes: privilege level gone, endpoints protocol a',
-				'- set chat system ""',
-				'+ set chat system old',
+				'- set chat system-prompt ""',
+				'+ set chat system-prompt old',
 				'+ set endpoints url a http://a/v1'
 			].join('\n')
 		);
@@ -1345,28 +1360,30 @@ describe('erase and copy', () => {
 describe('a page', () => {
 	it('starts with the startup-config over the client.conf of the moment, whatever a save does', async () => {
 		const k = await page();
-		await k.run('set chat system blue', 'user');
+		await k.run('set chat system-prompt blue', 'user');
 		expect((await k.run('copy run start', 'user')).text).toBe(
 			'! copied running-config to startup-config'
 		);
-		await k.run('set chat system green', 'user');
+		await k.run('set chat system-prompt green', 'user');
 		await k.run('copy running-config b', 'user');
 		await k.run('copy b running-config', 'user');
-		const next = await page('set display tools open');
-		expect(next.settings.get('chat system')).toBe('blue');
-		expect(next.settings.get('display tools')).toBe('open');
+		const next = await page('set display tool-calls open');
+		expect(next.settings.get('chat system-prompt')).toBe('blue');
+		expect(next.settings.get('display tool-calls')).toBe('open');
 		expect((await next.run('show startup-config', 'user')).text).toBe(
-			'set chat system blue\nset display tools open'
+			'set chat system-prompt blue\nset display tool-calls open'
 		);
 		expect((await next.run('show diff start run', 'user')).text).toBe('! no difference');
 		await next.run('copy b startup-config', 'user');
-		expect((await page()).settings.get('chat system')).toBe('green');
+		expect((await page()).settings.get('chat system-prompt')).toBe('green');
 		expect((await (await page()).run('erase startup-config', 'user', shelf([]))).text).toBe(
 			'! erased startup-config, the page starts on client.conf'
 		);
-		const bare = await page('set display tools open');
-		expect(bare.settings.get('chat system')).toBe('');
-		expect((await bare.run('show startup-config', 'user')).text).toBe('set display tools open');
+		const bare = await page('set display tool-calls open');
+		expect(bare.settings.get('chat system-prompt')).toBe('');
+		expect((await bare.run('show startup-config', 'user')).text).toBe(
+			'set display tool-calls open'
+		);
 		expect((await (await page()).run('show startup-config', 'user')).text).toBe(
 			'! every key is at its default'
 		);

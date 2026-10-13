@@ -93,6 +93,14 @@ std::string schema_key(const std::string & module, const std::string & word) {
     return pick(word, key_names(module), module + " key");
 }
 
+std::string schema_key_after(const std::string & module, const std::string & word, bool followed) {
+    const std::string key = schema_key(module, word);
+    if (key.empty() || key == word || followed || !collection(module) || !find_key(module + " " + key)->named) {
+        return key;
+    }
+    return "";
+}
+
 // a number as it reads back: a whole number in all its digits, as JavaScript
 // writes it below 1e21, any other in the shortest digits that give it back
 static std::string number(double n) {

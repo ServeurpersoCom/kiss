@@ -21,6 +21,11 @@ bool                               collection(const std::string & module);
 std::string                        schema_module(const std::string & word);
 std::string                        schema_key(const std::string & module, const std::string & word);
 
+// the key the word after a module names where an item may stand too: a key
+// written whole, or a prefix of one taking no item or followed by its item;
+// empty when the word names an item of a collection
+std::string schema_key_after(const std::string & module, const std::string & word, bool followed);
+
 // the value a key takes from what a line writes, checked against its kind
 std::string schema_parse(const std::string & key, const std::string & raw);
 

@@ -181,6 +181,9 @@ export interface Schema {
 	module(word: string): string;
 	// the key of a module a word names, a prefix being enough, if any
 	key(module: string, word: string): string | undefined;
+	// the key the word after a module names, where an item of a collection
+	// wins over a prefix of a key that takes an item and has none
+	keyAfter(module: string, word: string, followed: boolean): string | undefined;
 	collection(module: string): boolean;
 	// throws Incomplete when the words stop before the key is named
 	read(words: readonly string[]): KeyWords;

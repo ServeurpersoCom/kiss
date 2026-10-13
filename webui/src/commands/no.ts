@@ -12,7 +12,7 @@ export default {
 	parse(schema, args) {
 		if (args.length === 2) {
 			const module = schema.module(args[0]);
-			if (schema.collection(module) && !schema.key(module, args[1])) {
+			if (schema.collection(module) && !schema.keyAfter(module, args[1], false)) {
 				return { module, item: args[1] };
 			}
 		}

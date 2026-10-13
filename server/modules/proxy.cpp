@@ -44,7 +44,7 @@ static std::string header_problem(const std::string & headers, const std::string
             }
         }
         if (name == lower(keyed)) {
-            return trim(h.substr(0, colon)) + " is the header proxy auth writes";
+            return trim(h.substr(0, colon)) + " is the header proxy auth-header writes";
         }
     }
     return "";
@@ -62,10 +62,10 @@ static std::string validate(const engine_reader & config) {
         if (!starts_with(*url, "http://") && !starts_with(*url, "https://")) {
             return "proxy url " + route + " " + *url + " opens with http:// or https://";
         }
-        const std::string auth = config.get("proxy auth", route).value_or(BEARER);
+        const std::string auth = config.get("proxy auth-header", route).value_or(BEARER);
         std::string       keyed, scheme;
         if (!placement(auth, keyed, scheme)) {
-            return "proxy auth " + route + ": \"" + auth + "\" is not Header or Header: Scheme";
+            return "proxy auth-header " + route + ": \"" + auth + "\" is not Header or Header: Scheme";
         }
         const std::string problem = header_problem(config.get("proxy headers", route).value_or(""), keyed);
         if (!problem.empty()) {
@@ -95,7 +95,7 @@ static engine_module make_proxy() {
     key.named = true;
 
     // the header that carries the key, Header or Header: Scheme
-    engine_key auth("auth", ENGINE_STRING);
+    engine_key auth("auth-header", ENGINE_STRING);
     auth.named = true;
     auth.reset = BEARER;
 
@@ -113,7 +113,8 @@ static engine_module make_proxy() {
     m.role =
         "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> with the key of "
         "this server, the page by set mcp proxy or set endpoints proxy <name> <its name for this server>; the key of "
-        "a route goes to its url alone, in the header its auth names, Header or Header: Scheme, and a route without "
+        "a route goes to its url alone, in the header its auth-header names, Header or Header: Scheme, and a route "
+        "without "
         "a key reaches its url without one";
     m.keys.push_back(url);
     m.keys.push_back(key);

@@ -402,12 +402,12 @@ describe('an MCP server', () => {
 			new Response('', { status: 503 }),
 			stream([{ content: 'ok' }])
 		]);
-		await p.engine.run('set endpoints pause m 0', 'user');
+		await p.engine.run('set endpoints retry-pause m 0', 'user');
 		const t = await p.go();
 		await t.done;
 		expect(t.reply.rounds[0].text).toBe('ok');
 		expect(p.bodies).toHaveLength(3);
-		await p.engine.run('set endpoints retries m 1', 'user');
+		await p.engine.run('set endpoints max-retries m 1', 'user');
 		const replies = [busy(), busy()];
 		vi.stubGlobal('fetch', async () => replies.shift()!);
 		const u = await p.go();
@@ -743,7 +743,10 @@ describe('an MCP server', () => {
 
 	it('tells what it left out in the one system message, after the system prompt', async () => {
 		const p = await page({}, [stream([{ content: 'ok' }])]);
-		await p.engine.run('set chat system "be brief"\nset mcp url gone http://gone/mcp', 'user');
+		await p.engine.run(
+			'set chat system-prompt "be brief"\nset mcp url gone http://gone/mcp',
+			'user'
+		);
 		await (
 			await p.go()
 		).done;
@@ -783,7 +786,7 @@ describe('an MCP server', () => {
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
 		const p = await page({ a: legacy(SHELL), b: legacy([{ name: 'old', run: text('old') }]) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await p.engine.run('set tools use snap off\nset tools preview old x', 'user');
+		await p.engine.run('set tools use snap off\nset tools preview-argument old x', 'user');
 		await p.engine.run('no mcp b', 'user');
 		expect((await p.engine.run('show tools use', 'user')).text).toBe(
 			[

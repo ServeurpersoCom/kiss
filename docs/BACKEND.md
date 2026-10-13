@@ -24,28 +24,29 @@ commands
 
 modules
   server
-    host <address>                  127.0.0.1
-    port <1..65535>                 8089
+    listen-address <address>        127.0.0.1
+    listen-port <1..65535>          8089
     hostname <word>                 the host name
     key <secret>                    required off loopback
-    cwd <path>                      the start directory
-    log errors|informational|debugging
+    working-directory <path>        the start directory
+    log-level errors|informational|debugging
                                     debugging
-    buffered <bytes>                65536, the log show logging keeps
+    log-buffer <bytes>              65536, the log show logging keeps
   shells
     command <item> <line>           bash, zsh, powershell, pwsh, where found
     timeout <item> <seconds>        290
     output <item> <bytes>           65536
-  view
-    output <bytes>                  65536
-    image <bytes>                   52428800, an image file read at most
-    pixels <count>                  100000000, decoded at most
-    side <pixels>                   1920, the longest side sent
-    quality <1..100>                85, of a JPEG made again
+  files
+    max-output <bytes>              65536, the text view returns
+    max-load <bytes>                52428800, a file loaded whole
+    max-megapixels <count>          100, decoded at most
+    max-dimension <pixels>          1920, the longest side sent
+    jpeg-quality <1..100>           85, of a JPEG made again
   proxy
     url <item> <url>                a server proxied at proxy/<item>
     key <item> <secret>
-    auth <item> <Header[: Scheme]>  Authorization: Bearer
+    auth-header <item> <Header[: Scheme]>
+                                    Authorization: Bearer
     headers <item> <Name: value; ...>
     timeout <item> <seconds>        300
 
@@ -84,7 +85,7 @@ server/commands/         one file per command, registered by existing
 server/modules/          one file per module: its keys, rules, how it applies to the server
 server/tools/            one file per tool source, registered by existing
 server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
-server/listener.cpp|h    the socket, moved at once when server host or server port changes
+server/listener.cpp|h    the socket, moved when server listen-address or listen-port changes
 server/http.cpp|h        the routes and the checks of Host, Origin and the key
 server/proxy.cpp|h       the proxy of the servers the proxy module names
 server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
@@ -129,9 +130,9 @@ The configuration runs on the engine of the page, rewritten in C++: the same wor
 batches, the same laws. A key is two fixed words, a module then a key; a key of a collection takes
 the item name next, and the value comes last. A word that names something already there may be any
 prefix that names it alone, the way Cisco IOS reads a line: a command, a module, a key, a filter,
-the value of an enum (`set server log inf` sets `informational`), `all` and `memory`, the item of
-`no` and `show`, and a configuration (`copy run start`); the configuration keeps the whole word. A
-word that may be new is written whole: the item of a `set`, and every value but the one of an
+the value of an enum (`set server log-level inf` sets `informational`), `all` and `memory`, the item
+of `no` and `show`, and a configuration (`copy run start`); the configuration keeps the whole word.
+A word that may be new is written whole: the item of a `set`, and every value but the one of an
 enum.
 
 A batch compiles every line before the first one runs, runs them on a draft of the running
@@ -176,7 +177,7 @@ A value resolves through layers, the first that holds it winning:
 2. the factory configuration `server/server.conf`, embedded in the binary, only what differs from a
    reset value;
 3. the reset value the key declares: the host name of the machine for `server hostname`, the start
-   directory for `server cwd`, `8089` for `server port`.
+   directory for `server working-directory`, `8089` for `server listen-port`.
 
 A batch answers with its change, every register the running layer moves, read through the layers
 before and after, a register of an item existing while a layer names the item, as on the page.
@@ -191,28 +192,28 @@ therefore lists every candidate shell and each machine serves the ones it has.
 
 ### Modules
 
-| key                     | kind   | meaning                                                         |
-| ----------------------- | ------ | --------------------------------------------------------------- |
-| `server host`           | string | address to listen on                                            |
-| `server port`           | number | port to listen on                                               |
-| `server hostname`       | string | the prompt and the prefix of every tool name, as IOS's hostname |
-| `server key`            | secret | bearer key, required off loopback                               |
-| `server cwd`            | string | working directory of every tool, the start directory by default |
-| `server log`            | enum   | `errors`, `informational` or `debugging`, what the log tells    |
-| `server buffered`       | number | bytes of the last lines of the log `show logging` keeps         |
-| `shells command <item>` | string | command line that runs a script read on stdin                   |
-| `shells timeout <item>` | number | seconds a call may run                                          |
-| `shells output <item>`  | number | bytes of output a call returns                                  |
-| `view output`           | number | bytes of text `view` returns, its head and its tail             |
-| `view image`            | number | bytes of an image file `view` reads at most                     |
-| `view pixels`           | number | pixels an image may declare before it is decoded                |
-| `view side`             | number | the longest side of an image sent, in pixels                    |
-| `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
-| `proxy url <item>`      | string | URL of a server this server proxies at `proxy/<item>`           |
-| `proxy key <item>`      | secret | key sent to that server                                         |
-| `proxy auth <item>`     | string | the header of the key, `Header` or `Header: Scheme`             |
-| `proxy headers <item>`  | string | more headers sent to it, `Name: value; Name: value`             |
-| `proxy timeout <item>`  | number | seconds it may stay silent                                      |
+| key                        | kind   | meaning                                                         |
+| -------------------------- | ------ | --------------------------------------------------------------- |
+| `server listen-address`    | string | address to listen on                                            |
+| `server listen-port`       | number | port to listen on                                               |
+| `server hostname`          | string | the prompt and the prefix of every tool name, as IOS's hostname |
+| `server key`               | secret | bearer key, required off loopback                               |
+| `server working-directory` | string | working directory of every tool, the start directory by default |
+| `server log-level`         | enum   | `errors`, `informational` or `debugging`, what the log tells    |
+| `server log-buffer`        | number | bytes of the last lines of the log `show logging` keeps         |
+| `shells command <item>`    | string | command line that runs a script read on stdin                   |
+| `shells timeout <item>`    | number | seconds a call may run                                          |
+| `shells output <item>`     | number | bytes of output a call returns                                  |
+| `files max-output`         | number | bytes of text `view` returns, its head and its tail             |
+| `files max-load`           | number | bytes of a file a tool loads whole, an image `view` reads       |
+| `files max-megapixels`     | number | megapixels an image may declare before it is decoded            |
+| `files max-dimension`      | number | the longest side of an image sent, in pixels                    |
+| `files jpeg-quality`       | number | the JPEG quality of an image made again, 1 to 100               |
+| `proxy url <item>`         | string | URL of a server this server proxies at `proxy/<item>`           |
+| `proxy key <item>`         | secret | key sent to that server                                         |
+| `proxy auth-header <item>` | string | the header of the key, `Header` or `Header: Scheme`             |
+| `proxy headers <item>`     | string | more headers sent to it, `Name: value; Name: value`             |
+| `proxy timeout <item>`     | number | seconds it may stay silent                                      |
 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
@@ -245,7 +246,7 @@ opens the console; anything else, `/dev/null` under systemd, a Windows service, 
 
 Its log goes to stderr, one line per event in the form of every GGML project of the house,
 `[Module] Line`, and opens on the version. A server tells everything that happens, as the console
-of a router does by default: `server log` sets how much, at once, no restart.
+of a router does by default: `server log-level` sets how much, at once, no restart.
 
 - `errors`: what fails or is refused, a request without its key, a call refused or killed, a
   listener that cannot bind.
@@ -255,7 +256,7 @@ of a router does by default: `server log` sets how much, at once, no restart.
   era, every other argument of a call, a text by its first line, and the bytes a call sends back.
 
 `show logging` prints the last lines of the log, as IOS keeps them with `logging buffered`:
-`server buffered` sets how many bytes stay, every line of the start included, so the console, KiSS
+`server log-buffer` sets how many bytes stay, every line of the start included, so the console, KiSS
 through the config tool, and the model asked to diagnose read what happened without the terminal of
 the machine.
 
@@ -282,10 +283,10 @@ typed, which it never cuts.
 forge# show version
 ! KiSS Operating System
 ! server forge 5633ee7 (2026-10-11) on linux
-forge# set server port 9000
+forge# set server listen-port 9000
 [Engine] Configured by the administrator
-- set server port 8089
-+ set server port 9000
+- set server listen-port 8089
++ set server listen-port 9000
 forge# copy run start
 ! copied running-config to startup-config
 ```
@@ -315,10 +316,10 @@ so the tool list stays the same from turn to turn and the prompt cache of the mo
 Every tool takes `description` first, why the call is made, then what it does: its schema lists it
 first and says so, for a model to write the why before the what. A model still writes its arguments
 in the order it likes, so KiSS shows `description` on a folded call by its name, wherever it stands:
-`display preview description` is its default, which `tools preview <tool>` overrides for one tool.
-The schema of a tool is its law: a key outside it, a required key missing or a required
-string empty refuses the call before it runs, with `Unknown argument <key>` or
-`<Key> argument required`, so a misnamed argument never runs as if it were absent.
+`display preview-argument description` is its default, which `tools preview-argument <tool>`
+overrides for one tool. The schema of a tool is its law: a key outside it, a required key missing or
+a required string empty refuses the call before it runs, with `Unknown argument <key>` or `<Key>
+argument required`, so a misnamed argument never runs as if it were absent.
 
 A result is plain text in sentences, no prompt and no `!`: the CLI is the config tool alone. The
 model wrote the call and keeps it in its context, so a result never echoes it.
@@ -340,39 +341,40 @@ timeout of its own to set.
 
 ### The view tool
 
-`<name>_view` takes `description`, `path`, relative to `server cwd` or absolute, and `view_range`,
-the lines `[start, end]` of a text file, from 1, `end` -1 for the last. It is the one file tool:
-every OS creates and edits files through its shell, while `view` gives the model what a shell gives
-badly, an image it sees and a text it can cite by line. With `view` on and every other tool off in
-KiSS, a machine is open to the model for reading only.
+`<name>_view` takes `description`, `path`, relative to `server working-directory` or absolute, and
+`view_range`, the lines `[start, end]` of a text file, from 1, `end` -1 for the last. It is the one
+file tool: every OS creates and edits files through its shell, while `view` gives the model what a
+shell gives badly, an image it sees and a text it can cite by line. With `view` on and every other
+tool off in KiSS, a machine is open to the model for reading only.
 
-- A directory lists every entry two levels deep, sorted by path, each with the size of all it
-  holds, as `find` and `du -sh` would: hidden entries and the content of `node_modules` stay out.
-  The last line counts the entries.
+- A directory lists every entry two levels deep, sorted by path, each with the size of all it holds,
+  as `find` and `du -sh` would: hidden entries and the content of `node_modules` stay out. The last
+  line counts the entries.
 - A PNG, JPEG, GIF or WebP image, known by its first bytes, comes back as an image block. A JPEG
-  that fits `view side` goes as it is, and an opaque PNG that fits too when it weighs less than its
-  JPEG, as a drawing or a screenshot does. Any other image is made a JPEG of `view quality` that
-  fits it: resized in linear light with the same scale on both sides, turned as its EXIF says, a
-  transparent one laid on white. A text block before it tells the image read and the image sent,
-  `Image image/png 6000x4000, 47087504 bytes, sent as image/jpeg 1920x1280, 292632 bytes`, so the
-  model knows what it sees. A WebP goes as it is when it fits, and is refused when it does not.
-- Before anything decodes it, an image is refused past `view image` bytes, or when its header
-  declares more than `view pixels` pixels, so neither a huge file nor a small one that inflates
-  holds the memory of the machine. A photo of 50 MB reaches the model in a few hundred KB, well
-  within the 5 MiB a request may weigh on the Hugging Face router.
-- A text file comes back with numbered lines, `N<tab>line`, then `300 lines`, or
-  `Lines 10-20 of 300` for a range. Past `view output`, the head and the tail stay, as for a shell.
-  The file streams through, so its size costs time and never memory.
+  that fits `files max-dimension` goes as it is, and an opaque PNG that fits too when it weighs less
+  than its JPEG, as a drawing or a screenshot does. Any other image is made a JPEG of `files
+  jpeg-quality` that fits it: resized in linear light with the same scale on both sides, turned as
+  its EXIF says, a transparent one laid on white. A text block before it tells the image read and
+  the image sent, `Image image/png 6000x4000, 47087504 bytes, sent as image/jpeg 1920x1280, 292632
+  bytes`, so the model knows what it sees. A WebP goes as it is when it fits, and is refused when it
+  does not.
+- Before anything decodes it, an image is refused past `files max-load` bytes, or when its header
+  declares more than `files max-megapixels` megapixels, so neither a huge file nor a small one that
+  inflates holds the memory of the machine. A photo of 50 MB reaches the model in a few hundred KB,
+  well within the 5 MiB a request may weigh on the Hugging Face router.
+- A text file comes back with numbered lines, `N<tab>line`, then `300 lines`, or `Lines 10-20 of
+  300` for a range. Past `files max-output`, the head and the tail stay, as for a shell. The file
+  streams through, so its size costs time and never memory.
 - Another binary file, one with a NUL byte near its start, is refused with `Binary file`.
 
 ### The config tool
 
 `<name>_config` takes `description` and `lines`, runs the lines as a batch of CLI on the engine and
-answers with its output and its change, as the `client_config` tool of the page does. Its description lists
-every module with its keys and what it is, from the modules themselves, so the model knows the
-server before it reads a line of it. KiSS configures every
-backend from the page through it, under the consent firewall when the model calls it, and any other
-MCP client gets the same CLI. A change of `server host` or `server port` moves the listener at once,
+answers with its output and its change, as the `client_config` tool of the page does. Its
+description lists every module with its keys and what it is, from the modules themselves, so the
+model knows the server before it reads a line of it. KiSS configures every backend from the page
+through it, under the consent firewall when the model calls it, and any other MCP client gets the
+same CLI. A change of `server listen-address` or `server listen-port` moves the listener at once,
 once the address is checked free.
 
 A secret never crosses the context of the model. The administrator writes it in `server.conf` or on
@@ -505,25 +507,24 @@ the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/com
 body and every header but those that stay on its side (`Host`, `Origin`, `Cookie`, `Authorization`,
 `x-api-key`, `Accept-Encoding`, the length and the connection), then the headers of the route, which
 replace those of the same name and never name the header of its key, then its key in the header
-`proxy auth` names, `Header` or `Header: Scheme`, a bearer token unless set, `set proxy auth claude
-x-api-key` for the Messages API of Anthropic; the key of this server never goes on. The answer comes
-back with its status and every header but those that stay on its side, each through the keychain,
-every secret of the configuration the route was read from read `<removed>`: a stream of events event
-by event as it arrives, its data lines joined as a client joins them, an event the stream leaves
-open dropped as a client drops it, any other body whole, uncompressed. JSON goes through yyjson:
-every string and every name of a property is sealed as decoded, whatever escapes wrote the key, and
-the JSON is written again, its numbers as they were written; any other text, a header and a refusal
-of the proxy are sealed as they are written. A page served elsewhere passes CORS: the server lets
-the headers it asks to send and shows every header it answers. A server that refuses the key of its
-route answers 424 with the fix, `set proxy key <name>`, so the page never takes it for a refusal of
-its own key nor for a server down for a while, which it asks again; one that redirects answers 424
-naming where, `set proxy url <name>`, since a redirect followed would carry the key elsewhere; an
-url no client of the build reaches answers 424 too. A server that cannot be reached answers 502. A
-route the configuration does not name answers 404. A
-server that hides its own key some other way, deeper than the JSON a page decodes or in pieces
-across events, betrays a key it holds, which no filter stops, so a key goes only to a server trusted
-with it. The client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL
-elsewhere.
+`proxy auth-header` names, `Header` or `Header: Scheme`, a bearer token unless set, `set proxy
+auth-header claude x-api-key` for the Messages API of Anthropic; the key of this server never goes
+on. The answer comes back with its status and every header but those that stay on its side, each
+through the keychain, every secret of the configuration the route was read from read `<removed>`: a
+stream of events event by event as it arrives, its data lines joined as a client joins them, an
+event the stream leaves open dropped as a client drops it, any other body whole, uncompressed. JSON
+goes through yyjson: every string and every name of a property is sealed as decoded, whatever
+escapes wrote the key, and the JSON is written again, its numbers as they were written; any other
+text, a header and a refusal of the proxy are sealed as they are written. A page served elsewhere
+passes CORS: the server lets the headers it asks to send and shows every header it answers. A server
+that refuses the key of its route answers 424 with the fix, `set proxy key <name>`, so the page
+never takes it for a refusal of its own key nor for a server down for a while, which it asks again;
+one that redirects answers 424 naming where, `set proxy url <name>`, since a redirect followed would
+carry the key elsewhere; an url no client of the build reaches answers 424 too. A server that cannot
+be reached answers 502. A route the configuration does not name answers 404. A server that hides its
+own key some other way, deeper than the JSON a page decodes or in pieces across events, betrays a
+key it holds, which no filter stops, so a key goes only to a server trusted with it. The client
+speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
 
 ## HTTP and security
 

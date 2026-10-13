@@ -8,7 +8,7 @@ static words_t next_set(const words_t & args) {
     return schema_next(reader(running_layer()), args, true, false);
 }
 
-// set server port 9000. A model may write the lines of an MCP client, so a
+// set server listen-port 9000. A model may write the lines of an MCP client, so a
 // secret never comes in one: set proxy key deepwiki, without its value, asks
 // the user to type it, and the batch runs again with what they typed
 static step_t compile_set(const words_t & args) {

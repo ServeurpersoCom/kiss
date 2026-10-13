@@ -51,7 +51,7 @@ static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tic
 
 static std::vector<tool> shell_tools(const engine_reader & config) {
     std::vector<tool> tools;
-    const std::string cwd = config.get("server cwd").value_or("");
+    const std::string cwd = config.get("server working-directory").value_or("");
     for (const std::string & name : config.names("shells")) {
         const std::string command = config.get("shells command", name).value_or("");
         if (job_find(command).empty()) {

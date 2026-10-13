@@ -24,8 +24,8 @@ static const int TICK_MS = 1000;
 struct viewer {
     std::string  cwd;
     size_t       output;
-    // the bytes of an image file view reads at most
-    size_t       image;
+    // the bytes of a file view loads whole, an image
+    size_t       load;
     image_limits limits;
 };
 
@@ -167,8 +167,8 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
     std::string head(CHUNK, '\0');
     head.resize(fread(&head[0], 1, head.size(), f));
     if (!image_type(head).empty()) {
-        if (size > v.image) {
-            return { "Image larger than " + std::to_string(v.image) + " bytes", true };
+        if (size > v.load) {
+            return { "Image larger than " + std::to_string(v.load) + " bytes", true };
         }
         std::string data = head;
         char        buf[CHUNK];
@@ -286,12 +286,12 @@ static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & t
 
 static std::vector<tool> view_tool(const engine_reader & config) {
     viewer v;
-    v.cwd            = config.get("server cwd").value_or("");
-    v.output         = (size_t) std::stoull(config.get("view output").value_or("0"));
-    v.image          = (size_t) std::stoull(config.get("view image").value_or("0"));
-    v.limits.pixels  = (size_t) std::stoull(config.get("view pixels").value_or("0"));
-    v.limits.side    = std::stoi(config.get("view side").value_or("0"));
-    v.limits.quality = std::stoi(config.get("view quality").value_or("0"));
+    v.cwd            = config.get("server working-directory").value_or("");
+    v.output         = (size_t) std::stoull(config.get("files max-output").value_or("0"));
+    v.load           = (size_t) std::stoull(config.get("files max-load").value_or("0"));
+    v.limits.pixels  = (size_t) std::stoull(config.get("files max-megapixels").value_or("0")) * 1000000;
+    v.limits.side    = std::stoi(config.get("files max-dimension").value_or("0"));
+    v.limits.quality = std::stoi(config.get("files jpeg-quality").value_or("0"));
 
     tool t;
     t.suffix      = "view";

@@ -3,7 +3,7 @@
 // Each request is built anew from the one it proxies, never spliced: its method,
 // the rest of its path and its query after the url of the route, its body and
 // every header but those that stay on its side, then the headers of the route,
-// which replace those of the same name, and its key, in the header its auth
+// which replace those of the same name, and its key, in the header its auth-header
 // names. The key of this server never leaves it. The answer keeps its status and
 // every header but those that stay on its side, each through the keychain of
 // every secret of this server: a stream of events event by event as it arrives,
@@ -88,10 +88,10 @@ static std::optional<route_conf> route_of(const std::string & name) {
     engine_with([&](const engine_reader & config) {
         const auto url = config.get("proxy url", name);
         if (url) {
-            r      = route_conf{};
-            r->url = *url;
-            r->keyed =
-                credential(config, config.get("proxy auth", name).value_or(BEARER), "proxy", name, r->header, r->value);
+            r          = route_conf{};
+            r->url     = *url;
+            r->keyed   = credential(config, config.get("proxy auth-header", name).value_or(BEARER), "proxy", name,
+                                    r->header, r->value);
             r->headers = config.get("proxy headers", name).value_or("");
             r->timeout = std::stoi(config.get("proxy timeout", name).value_or("0"));
             r->secrets = keychain_secrets(config);

@@ -40,10 +40,10 @@ function pairs(text: string): [string, string][] {
 		});
 }
 
-// an item as it names its server: its url, key placed by its auth or else as
+// an item as it names its server: its url, key placed by its auth-header or else as
 // fallback says, headers and seconds
 function own(config: ConfigReader, module: string, name: string, fallback: string): Remote {
-	const auth = String(config.get(`${module} auth`, name) ?? '') || fallback;
+	const auth = String(config.get(`${module} auth-header`, name) ?? '') || fallback;
 	return {
 		name,
 		url: String(config.get(`${module} url`, name)),
@@ -57,8 +57,8 @@ function own(config: ConfigReader, module: string, name: string, fallback: strin
 // every item of the module that has a url or a proxy, sorted by name; an item
 // with a proxy, an MCP server or an endpoint alike, reaches its server through
 // the route of its name on the KiSS server the proxy names, at proxy/<name>
-// beside its MCP, with the key, auth and headers of that server, in its own
-// seconds; fallback gives where the key of an item goes when its auth does not
+// beside its MCP, with the key, auth-header and headers of that server, in its own
+// seconds; fallback gives where the key of an item goes when its auth-header does not
 // say
 export function remotes(
 	config: ConfigReader,
@@ -86,9 +86,9 @@ export function remotes(
 // the rules of such a module: every item has a url of its own or a proxy, a
 // proxy names a KiSS server, another item of mcp that has a url and no proxy
 // itself, and no server is reached twice, a relative url resolved against the page, since the
-// same server reached twice serves the same names twice; its auth is Header or
+// same server reached twice serves the same names twice; its auth-header is Header or
 // Header: Scheme, its headers are Name: value pairs, none of them the header
-// that carries its key, placed by its auth or else as fallback says
+// that carries its key, placed by its auth-header or else as fallback says
 export function rules(
 	config: ConfigReader,
 	module: string,
@@ -125,18 +125,18 @@ export function rules(
 		const text = String(config.get(`${module} headers`, name) ?? '');
 		const bad = pairs(text).find(([n, v]) => !n || !v);
 		if (bad) return `${module} headers ${name}: "${bad[1] || bad[0]}" is not Name: value`;
-		const auth = String(config.get(`${module} auth`, name) ?? '');
+		const auth = String(config.get(`${module} auth-header`, name) ?? '');
 		if (auth && !placement(auth))
-			return `${module} auth ${name}: "${auth}" is not Header or Header: Scheme`;
+			return `${module} auth-header ${name}: "${auth}" is not Header or Header: Scheme`;
 		const [header] = placement(auth || fallback(name))!;
 		const both = pairs(text).find(([n]) => n.toLowerCase() === header.toLowerCase());
 		if (both)
-			return `${module} headers ${name}: ${both[0]} is the header ${module} auth ${name} writes`;
+			return `${module} headers ${name}: ${both[0]} is the header ${module} auth-header ${name} writes`;
 	}
 	return null;
 }
 
-// what a request to an MCP server carries: its key placed by its auth, then
+// what a request to an MCP server carries: its key placed by its auth-header, then
 // its headers
 export function headers(remote: Remote): Record<string, string> {
 	return { ...remote.sign(), ...remote.headers };

@@ -1,6 +1,6 @@
 #pragma once
-// listener.h: the socket the server listens on, which a change of server host
-// or server port moves at once
+// listener.h: the socket the server listens on, which a change of server listen-address
+// or server listen-port moves at once
 
 #include <string>
 

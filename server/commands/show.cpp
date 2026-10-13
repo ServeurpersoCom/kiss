@@ -64,8 +64,9 @@ static words_t next_key_or_item(const words_t & args) {
     return schema_next(reader(running_layer()), args, false, true);
 }
 
-// show server, show server port: the word after a collection names a key when
-// it names one, else an item, one the draft holds, a prefix being enough
+// show server, show server listen-port: the word after a collection names a key as
+// schema_key_after reads it, else an item, one the draft holds, a prefix being
+// enough
 static step_t compile_show(const words_t & args) {
     if (args.empty()) {
         throw incomplete();
@@ -73,7 +74,7 @@ static step_t compile_show(const words_t & args) {
     const std::string module = schema_module(args[0]);
     std::string       key, item;
     if (args.size() > 1) {
-        const std::string word = schema_key(module, args[1]);
+        const std::string word = schema_key_after(module, args[1], args.size() > 2);
         if (word.empty()) {
             if (!collection(module)) {
                 fail("unknown key \"" + module + " " + args[1] + "\"");

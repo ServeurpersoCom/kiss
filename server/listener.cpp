@@ -103,8 +103,8 @@ void listener_stop() {
 
 bool listener_run() {
     while (!g_quit) {
-        const std::string host = *engine_get("server host");
-        const int         port = std::stoi(*engine_get("server port"));
+        const std::string host = *engine_get("server listen-address");
+        const int         port = std::stoi(*engine_get("server listen-port"));
         httplib::Server   server;
         http_routes(server);
         if (!server.bind_to_port(host, port)) {

@@ -167,11 +167,11 @@ describe('a turn', () => {
 
 	it('reads the configuration as it stands every round', async () => {
 		const p = await page([
-			stream([calls(['a', 'set models temperature m/x 0.3\nset tools rounds 2'])]),
+			stream([calls(['a', 'set models temperature m/x 0.3\nset tools max-rounds 2'])]),
 			stream([calls(['b', 'set tools use client_config off'])]),
 			stream([calls(['c', 'show version'])])
 		]);
-		await p.engine.run('set tools rounds 3', 'user');
+		await p.engine.run('set tools max-rounds 3', 'user');
 		await p.go();
 		expect(p.bodies[0]).not.toHaveProperty('temperature');
 		expect(p.bodies[1]).toMatchObject({ temperature: 0.3 });
@@ -197,7 +197,7 @@ describe('a turn', () => {
 
 	it('stops after the rounds set', async () => {
 		const p = await page([stream([calls(['a', 'show version'])])]);
-		await p.engine.run('set tools rounds 1', 'user');
+		await p.engine.run('set tools max-rounds 1', 'user');
 		await p.go();
 		expect(p.bodies).toHaveLength(1);
 		expect(p.reply.error).toBe('Stopped after 1 tool rounds');
@@ -324,7 +324,7 @@ describe('the messages protocol', () => {
 			[
 				answer([block(0, { type: 'text', text: '' }), delta(0, { type: 'text_delta', text: 'ok' })])
 			],
-			`${MESSAGES}\nset endpoints key m sk-a\nset chat system be brief\nset endpoints headers m 'Anthropic-Beta: other'`
+			`${MESSAGES}\nset endpoints key m sk-a\nset chat system-prompt be brief\nset endpoints headers m 'Anthropic-Beta: other'`
 		);
 		await p.go();
 		expect(p.requests[0].url).toBe('http://m/v1/messages');
@@ -473,7 +473,7 @@ describe('the responses protocol', () => {
 	it('sends the system as instructions, nothing stored, the summary of the reasoning asked, every tool as it is', async () => {
 		const p = await page(
 			[events([text('ok'), completed(1)])],
-			`${RESPONSES}\nset endpoints key m sk-a\nset chat system be brief\nset models max_tokens m/x 500\nset models reasoning_effort m/x high`
+			`${RESPONSES}\nset endpoints key m sk-a\nset chat system-prompt be brief\nset models max_tokens m/x 500\nset models reasoning_effort m/x high`
 		);
 		await p.go();
 		expect(p.requests[0].url).toBe('http://m/v1/responses');

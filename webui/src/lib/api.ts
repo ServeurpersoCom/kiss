@@ -38,7 +38,7 @@ function protocol(config: ConfigReader, name: string): Protocol {
 	return protocols.find((p) => p.name === config.get('endpoints protocol', name))!;
 }
 
-// the header that carries the key of an endpoint unless its auth says: the one
+// the header that carries the key of an endpoint unless its auth-header says: the one
 // of its protocol
 export function fallback(config: ConfigReader, name: string): string {
 	return protocol(config, name).key;
@@ -49,8 +49,8 @@ export function endpoints(config: ConfigReader): Endpoint[] {
 	return remotes(config, 'endpoints', (name) => fallback(config, name)).map((r) => ({
 		...r,
 		protocol: protocol(config, r.name),
-		retries: Number(config.get('endpoints retries', r.name)),
-		pause: Number(config.get('endpoints pause', r.name))
+		retries: Number(config.get('endpoints max-retries', r.name)),
+		pause: Number(config.get('endpoints retry-pause', r.name))
 	}));
 }
 
@@ -58,7 +58,7 @@ export function endpoints(config: ConfigReader): Endpoint[] {
 // passes, the attempt about to be made, and how many the endpoint takes
 export type Retrying = (status: number, attempt: number, attempts: number) => void;
 
-// what a request carries: the key in the header its auth names, then the
+// what a request carries: the key in the header its auth-header names, then the
 // headers of the endpoint with those of its protocol; proxied, the key is the
 // one of the KiSS server, which places the key of the endpoint itself
 function sent(endpoint: Endpoint): Record<string, string> {

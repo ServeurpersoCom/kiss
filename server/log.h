@@ -9,7 +9,7 @@
 // happens, and the detail of it
 enum log_level { LOG_ERROR, LOG_INFO, LOG_DEBUG };
 
-// their names, as server log takes them
+// their names, as server log-level takes them
 constexpr const char * LOG_LEVELS[] = { "errors", "informational", "debugging" };
 
 #if defined(__GNUC__)
