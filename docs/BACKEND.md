@@ -513,9 +513,11 @@ every string and every name of a property is sealed as decoded, whatever escapes
 the JSON is written again, its numbers as they were written; any other text, a header and a refusal
 of the proxy are sealed as they are written. A page served elsewhere passes CORS: the server lets
 the headers it asks to send and shows every header it answers. A server that refuses the key of its
-route answers 502 with the fix, `set proxy key <name>`, so the page never takes it for a refusal of
-its own key; one that redirects answers 502 naming where, `set proxy url <name>`, since a redirect
-followed would carry the key elsewhere. A route the configuration does not name answers 404. A
+route answers 424 with the fix, `set proxy key <name>`, so the page never takes it for a refusal of
+its own key nor for a server down for a while, which it asks again; one that redirects answers 424
+naming where, `set proxy url <name>`, since a redirect followed would carry the key elsewhere; an
+url no client of the build reaches answers 424 too. A server that cannot be reached answers 502. A
+route the configuration does not name answers 404. A
 server that hides its own key some other way, deeper than the JSON a page decodes or in pieces
 across events, betrays a key it holds, which no filter stops, so a key goes only to a server trusted
 with it. The client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL

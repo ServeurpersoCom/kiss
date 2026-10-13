@@ -8,10 +8,13 @@
 // every header but those that stay on its side, each through the keychain of
 // every secret of this server: a stream of events event by event as it arrives,
 // any other body whole, JSON filtered as decoded and written again, any other
-// text as it is written. A server that refuses the key of the route answers 502
-// here, so the client never takes it for a refusal of the key of this server;
-// one that redirects answers 502 too, its key going to no address the route
-// does not name. The proxy knows no protocol: MCP and LLM endpoints pass alike.
+// text as it is written. A route the configuration makes unusable answers 424
+// here with the fix: a server that refuses the key of the route, so the client
+// never takes it for a refusal of the key of this server nor for a server down
+// for a while; one that redirects, its key going to no address the route does
+// not name; an url no client of this build reaches. A server that cannot be
+// reached answers 502. The proxy knows no protocol: MCP and LLM endpoints pass
+// alike.
 
 #include "proxy.h"
 
@@ -105,11 +108,16 @@ static void split_url(const std::string & url, std::string & host, std::string &
     path               = slash == std::string::npos ? "/" : url.substr(slash);
 }
 
-// a refusal of a route, logged and answered 502, its text through the keychain
-static void refuse(httplib::Response & res, const route_conf & r, const std::string & route, const std::string & why) {
+// a refusal of a route, logged and answered with its status, its text through
+// the keychain
+static void refuse(httplib::Response & res,
+                   const route_conf &  r,
+                   const std::string & route,
+                   httplib::StatusCode status,
+                   const std::string & why) {
     const std::string text = seal_text(why, r.secrets);
     log_error("Proxy", "Route proxy/%s: %s", route.c_str(), text.c_str());
-    res.status = httplib::StatusCode::BadGateway_502;
+    res.status = status;
     res.set_content(text + "\n", "text/plain");
 }
 
@@ -128,7 +136,8 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     const std::string path   = head + rest + (query == std::string::npos ? "" : req.target.substr(query));
     const auto        client = std::make_shared<httplib::Client>(host);
     if (!client->is_valid()) {
-        refuse(res, *r, route, r->url + " cannot be reached: a bad port, or https on a build without TLS");
+        refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
+               r->url + " cannot be reached: a bad port, or https on a build without TLS");
         return;
     }
     client->set_connection_timeout(r->timeout, 0);
@@ -157,16 +166,18 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     const auto stream = std::make_shared<httplib::ClientImpl::StreamHandle>(
         client->open_stream(req.method, path, {}, headers, req.body, req.get_header_value("Content-Type")));
     if (!stream->is_valid()) {
-        refuse(res, *r, route, r->url + " cannot be reached: " + httplib::to_string(stream->error));
+        refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
+               r->url + " cannot be reached: " + httplib::to_string(stream->error));
         return;
     }
     const int status = stream->response->status;
     if (status == httplib::StatusCode::Unauthorized_401 || status == httplib::StatusCode::Forbidden_403) {
-        refuse(res, *r, route, r->url + " answered " + std::to_string(status) + " -> set proxy key " + route);
+        refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
+               r->url + " answered " + std::to_string(status) + " -> set proxy key " + route);
         return;
     }
     if (status >= httplib::StatusCode::MultipleChoices_300 && status < httplib::StatusCode::BadRequest_400) {
-        refuse(res, *r, route,
+        refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
                r->url + " answered " + std::to_string(status) + " to " +
                    stream->response->get_header_value("Location") + " -> set proxy url " + route);
         return;
