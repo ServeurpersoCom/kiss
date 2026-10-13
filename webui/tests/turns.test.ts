@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant, Grant, ToolContext, Verdict } from '../src/lib/types.js';
 import type { Pulse } from '../src/lib/pulse.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
-import { app, dismiss, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
+import { app, askOf, dismiss, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 
 // a turn of the model the test holds: it writes, asks, ends or fails when
 // told, and stops with its signal
@@ -47,11 +47,18 @@ async function two() {
 	return { first, second, sent: Promise.all([a, b]) };
 }
 
-// the user answers the call shown
-function answer(verdict: Verdict): void {
-	const shown = app.asks[0];
-	if (shown?.kind !== 'grant') throw new Error('no call shown');
-	shown.settle(verdict);
+// the call a conversation shows
+function shown(id: string): Grant {
+	const ask = askOf(id);
+	if (ask?.kind !== 'grant') throw new Error('no call shown');
+	return ask.request;
+}
+
+// the user answers the call a conversation shows
+function answer(id: string, verdict: Verdict): void {
+	const ask = askOf(id);
+	if (ask?.kind !== 'grant') throw new Error('no call shown');
+	ask.settle(verdict);
 }
 
 // the answer a conversation ends on
@@ -109,14 +116,27 @@ describe('turns in several conversations', () => {
 		expect(last(second).error).toBeUndefined();
 	});
 
-	it('ask in turn, each question answered to the turn that asked it', async () => {
+	it('ask each in its own conversation, answered in any order to the turn that asked', async () => {
 		const { first, second, sent } = await two();
 		const asked = [held[0].ctx.grant(call('x')), held[1].ctx.grant(call('y'))];
-		expect(app.asks.map((q) => q.from)).toEqual([first, second]);
-		answer(ONCE);
-		expect(app.asks.map((q) => q.from)).toEqual([second]);
-		answer(ALWAYS);
+		expect([askOf(first)?.from, askOf(second)?.from]).toEqual([first, second]);
+		answer(second, ALWAYS);
+		expect(askOf(second)).toBeUndefined();
+		expect(askOf(first)?.from).toBe(first);
+		answer(first, ONCE);
 		expect(await Promise.all(asked)).toEqual<Verdict[]>([ONCE, ALWAYS]);
+		held.forEach((h) => h.end());
+		await sent;
+	});
+
+	it('show their questions one after the other within a conversation', async () => {
+		const { first, sent } = await two();
+		const asked = [held[0].ctx.grant(call('x')), held[0].ctx.grant(call('y'))];
+		expect(shown(first)).toEqual(call('x'));
+		answer(first, ONCE);
+		expect(shown(first)).toEqual(call('y'));
+		answer(first, REFUSE);
+		expect(await Promise.all(asked)).toEqual<Verdict[]>([ONCE, REFUSE]);
 		held.forEach((h) => h.end());
 		await sent;
 	});
@@ -127,7 +147,7 @@ describe('turns in several conversations', () => {
 		stop(first);
 		expect(await asked[0]).toBe(REFUSE);
 		expect(app.asks.map((q) => q.from)).toEqual([second]);
-		answer(ONCE);
+		answer(second, ONCE);
 		expect(await asked[1]).toBe(ONCE);
 		held[1].end();
 		await sent;
@@ -143,13 +163,13 @@ describe('turns in several conversations', () => {
 	});
 
 	it('leave the time the user takes on a question out of the clock of the turn that asks', async () => {
-		const { sent } = await two();
+		const { first, sent } = await two();
 		const [a, b] = held.map((h) => [h.pulse.start, h.pulse.since]);
 		let now = performance.now();
 		const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
 		const asked = held[0].ctx.grant(call('x'));
 		now += 5000;
-		answer(ONCE);
+		answer(first, ONCE);
 		await asked;
 		clock.mockRestore();
 		expect([held[0].pulse.start, held[0].pulse.since]).toEqual(a.map((t) => t + 5000));

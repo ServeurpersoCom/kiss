@@ -197,6 +197,84 @@ describe('a model list', () => {
 	});
 });
 
+describe('a batch that asks the user', () => {
+	// a question the test answers when it likes, counting the times it is asked
+	function pending() {
+		const asked: string[] = [];
+		let answer = (_: boolean) => {};
+		const confirm = (question: string) =>
+			new Promise<boolean>((settle) => {
+				asked.push(question);
+				answer = settle;
+			});
+		return { asked, confirm, answer: (yes: boolean) => answer(yes) };
+	}
+
+	it('lets the other batches run while the user thinks, then runs on the configuration as it stands', async () => {
+		const k = await page();
+		const q = pending();
+		const copy = k.run('copy running-config startup-config', 'llm', { confirm: q.confirm });
+		await vi.waitFor(() => expect(q.asked).toHaveLength(1));
+		expect((await k.run('set chat system-prompt blue', 'user')).ok).toBe(true);
+		q.answer(true);
+		expect((await copy).ok).toBe(true);
+		expect(q.asked).toEqual(['Copy running-config to startup-config?']);
+		expect((await k.run('show startup-config', 'user')).text).toBe('set chat system-prompt blue');
+	});
+
+	it('saves the file it offered, figured once, whatever comes before the user saves it', async () => {
+		const k = await page();
+		const list = [talk('ab12-1', 'one', 1)];
+		const all = shelf(list);
+		const offered: string[] = [];
+		let save = (_: boolean) => {};
+		const offer = (name: string, text: string) =>
+			new Promise<boolean>((settle) => {
+				offered.push(name + '\n' + text);
+				save = settle;
+			});
+		const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 9, 14, 0, 38));
+		const r = k.run('export conversations', 'user', { conversations: all.conversations, offer });
+		await vi.waitFor(() => expect(offered).toHaveLength(1));
+		clock.mockReturnValue(Date.UTC(2026, 9, 14, 0, 39));
+		list.unshift(talk('cd34-2', 'two', 2));
+		save(true);
+		const told = (await r).text;
+		clock.mockRestore();
+		expect(offered).toHaveLength(1);
+		expect(told).toBe(`! exported 1 conversation to ${offered[0].split('\n')[0]}`);
+		expect(offered[0]).not.toContain('cd34-2');
+	});
+
+	it('erases what its question named, never what came since', async () => {
+		const k = await page();
+		const list = [talk('ab12-1', 'one', 2), talk('cd34-2', 'two', 1)];
+		const all = shelf(list);
+		const q = pending();
+		const r = k.run('erase conversations', 'user', {
+			conversations: all.conversations,
+			confirm: q.confirm
+		});
+		await vi.waitFor(() => expect(q.asked).toHaveLength(1));
+		list.splice(0, 1, talk('ef56-3', 'three', 3));
+		q.answer(true);
+		expect((await r).text).toBe('- ab12-1 one\n- cd34-2 two');
+		expect(q.asked).toEqual(['Erase 2 conversations?']);
+		expect(list.map((c) => c.id)).toEqual(['ef56-3']);
+	});
+
+	it('applies nothing when the user says no', async () => {
+		const k = await page();
+		const q = pending();
+		const copy = k.run('copy running-config startup-config', 'llm', { confirm: q.confirm });
+		await vi.waitFor(() => expect(q.asked).toHaveLength(1));
+		await k.run('set chat system-prompt blue', 'user');
+		q.answer(false);
+		expect((await copy).text).toBe('% the user copied nothing');
+		expect((await k.run('show startup-config', 'user')).text).not.toContain('system-prompt');
+	});
+});
+
 describe('after a stop', () => {
 	it('a batch never starts', async () => {
 		const k = await page();

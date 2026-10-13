@@ -279,6 +279,10 @@ export interface Context extends Scope {
 	// configuration already holds, or one its source serves, read from the
 	// configuration the role reaches; a source that fails says why
 	admit(module: string, name: string): Promise<void>;
+	// what make gives, figured once for the batch, the n-th call giving back
+	// the n-th value when the batch runs again with an answer of the user, so
+	// a command figures with it what its question is about
+	once<T>(make: () => T): T;
 }
 
 // an image a tool hands back, base64 data, shown to the user only

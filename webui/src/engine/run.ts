@@ -213,19 +213,76 @@ export function start(): string[] {
 // one batch at a time, whoever sends it: the user or the model
 let queue: Promise<unknown> = Promise.resolve();
 
+// a question a batch asks the user: the batch leaves the queue as it stands,
+// nothing applied, and asks it outside, so the other batches of the page run
+// while the user thinks
+class Wait {
+	constructor(
+		readonly key: string,
+		readonly ask: () => Promise<unknown>
+	) {}
+}
+
+// the questions of a scope as a batch asks them: the answer the user already
+// gave to the same question, else a Wait that leaves the batch; and what the
+// batch figured once, given back in the same order each time it runs again
+function asking(
+	scope: Scope,
+	answers: Map<string, unknown>,
+	figured: unknown[]
+): Scope & Pick<Context, 'once'> {
+	let made = 0;
+	const known = <A extends unknown[], T>(kind: string, ask?: (...args: A) => Promise<T>) =>
+		ask &&
+		((...args: A): Promise<T> => {
+			const key = JSON.stringify([kind, ...args]);
+			if (answers.has(key)) return Promise.resolve(answers.get(key) as T);
+			throw new Wait(key, () => ask(...args));
+		});
+	return {
+		...scope,
+		grant: known('grant', scope.grant),
+		secret: known('secret', scope.secret),
+		confirm: known('confirm', scope.confirm),
+		offer: known('offer', scope.offer),
+		pick: known('pick', scope.pick),
+		once: <T>(make: () => T): T => {
+			if (made === figured.length) figured.push(make());
+			return figured[made++] as T;
+		}
+	};
+}
+
 // every line compiles before the first one runs, then runs on a copy of the
 // running configuration and of the title of its conversation, which replace
 // them only when all of them succeed: a batch applies whole or not at all, and
-// answers with what it changed; a command that writes the archive runs alone;
-// once the signal aborts, the batch neither starts, nor runs another line, nor
-// replaces anything; a batch that writes nothing and changes nothing says so
-export function run(text: string, role: Role, scope: Scope = {}): Promise<Outcome> {
-	const result = queue.then(() => batch(text, role, scope));
-	queue = result.catch(() => undefined);
-	return result;
+// answers with what it changed; a command that writes the archive runs alone,
+// and a command asks the user before it acts, figuring once what its question
+// is about; a batch that asks leaves the queue, then runs again from its first
+// line with the answer, on the configuration as it stands then; once the
+// signal aborts, the batch neither starts, nor runs another line, nor replaces
+// anything; a batch that writes nothing and changes nothing says so
+export async function run(text: string, role: Role, scope: Scope = {}): Promise<Outcome> {
+	const answers = new Map<string, unknown>();
+	const figured: unknown[] = [];
+	for (;;) {
+		const result = queue.then(() => batch(text, role, asking(scope, answers, figured)));
+		queue = result.catch(() => undefined);
+		try {
+			return await result;
+		} catch (e) {
+			if (!(e instanceof Wait)) throw e;
+			answers.set(e.key, await e.ask());
+			scope.signal?.throwIfAborted();
+		}
+	}
 }
 
-async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
+async function batch(
+	text: string,
+	role: Role,
+	scope: Scope & Pick<Context, 'once'>
+): Promise<Outcome> {
 	const { signal, conversation } = scope;
 	signal?.throwIfAborted();
 	const lines = splitLines(text);
@@ -261,6 +318,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 			try {
 				text = await step.run(ctx);
 			} catch (e) {
+				if (e instanceof Wait) throw e;
 				signal?.throwIfAborted();
 				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
 			}
@@ -290,6 +348,7 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 		try {
 			text = await step.run(ctx);
 		} catch (e) {
+			if (e instanceof Wait) throw e;
 			signal?.throwIfAborted();
 			return fail(i, (e as Error).message);
 		}
@@ -458,6 +517,7 @@ function completing(role: Role, known: Known, scope: Scope): Context {
 		schema,
 		modules,
 		known,
+		once: (make) => make(),
 		commands: commands.filter((c) => c.roles.includes(role)),
 		admit: (module, name) => admit(ctx, module, name)
 	};

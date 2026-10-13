@@ -63,13 +63,17 @@ export default {
 	// a file offered to the user, its content going to their disk alone, named
 	// after what it holds: a configuration with its secrets, the running-config,
 	// the startup-config or a save, then the minute, the conversations then the
-	// minute, one conversation then its title; nothing changes
+	// minute, one conversation then its title, figured once so the file saved
+	// is the one offered; nothing changes
 	async run(ctx, word) {
 		if (!ctx.offer) throw new Error('nobody is here to save the file');
-		const minute = localTime(Date.now());
-		const plan = word === null ? null : target(ctx, word);
-		const file =
-			plan !== null && named(ctx, plan) ? configFile(ctx, plan, minute) : packed(ctx, plan, minute);
+		const file = ctx.once(() => {
+			const minute = localTime(Date.now());
+			const plan = word === null ? null : target(ctx, word);
+			return plan !== null && named(ctx, plan)
+				? configFile(ctx, plan, minute)
+				: packed(ctx, plan, minute);
+		});
 		const saved = await ctx.offer(file.name, file.text);
 		ctx.signal?.throwIfAborted();
 		if (!saved) throw new Error('the user saved no file');

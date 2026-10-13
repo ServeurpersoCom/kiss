@@ -42,20 +42,24 @@ export default {
 		if (args.length > 1) throw beyond(['erase', args[0]], args.slice(1));
 		return args[0];
 	},
+	// what it erases is figured once, so the yes of the user erases what the
+	// question named and nothing that came since
 	async run(ctx, word) {
 		if (!ctx.confirm) throw new Error('nobody is here to confirm the erase');
-		const plan = target(ctx, word);
+		const plan = ctx.once(() => target(ctx, word));
 		if (named(ctx, plan)) {
 			const yes = await ctx.confirm(`Erase ${plan}?`);
 			ctx.signal?.throwIfAborted();
 			if (!yes) throw new Error('the user erased nothing');
 			return config(ctx, plan);
 		}
-		if (!ctx.conversations) throw new Error('no conversation to erase');
-		const list =
-			plan === CONVERSATIONS
-				? ctx.conversations.list().filter((c) => !c.pinned)
-				: [ctx.conversations.find(plan)];
+		const library = ctx.conversations;
+		if (!library) throw new Error('no conversation to erase');
+		const list = ctx.once(() =>
+			(plan === CONVERSATIONS ? library.list().filter((c) => !c.pinned) : [library.find(plan)]).map(
+				({ id, title }) => ({ id, title })
+			)
+		);
 		if (!list.length) throw new Error('no conversation to erase');
 		const question =
 			list.length === 1
@@ -64,7 +68,7 @@ export default {
 		const yes = await ctx.confirm(question);
 		ctx.signal?.throwIfAborted();
 		if (!yes) throw new Error('the user erased nothing');
-		await ctx.conversations.remove(list.map((c) => c.id));
+		await library.remove(list.map((c) => c.id));
 		return list
 			.map((c) => `- ${c.id.slice(0, ID_SHOWN)}${titled(c.title, (v) => ctx.schema.quote(v))}`)
 			.join('\n');

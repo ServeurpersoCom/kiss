@@ -2,8 +2,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import type { Verdict } from '../lib/types.js';
 	import { always, answers } from '../lib/types.js';
-	import { app, choose, deliver } from '../lib/state.svelte.js';
-	import { CLI } from '../lib/config.js';
+	import { app, askOf, choose, deliver } from '../lib/state.svelte.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };
 	const KIB = 1024;
@@ -20,10 +19,13 @@
 		void choose().then((text) => text !== null && settle(text));
 	}
 
+	// the question of the open conversation, the first it asks
+	const shown = $derived(askOf(app.current?.id));
+
 	let value = $state('');
 	// each question starts with an empty field, whatever settled the one before
 	$effect.pre(() => {
-		void app.asks[0]?.id;
+		void shown?.id;
 		value = '';
 	});
 
@@ -32,13 +34,9 @@
 
 	// a secret given by OK or Enter once typed, none by Cancel or Escape
 	function give(typed: string | null) {
-		const ask = app.asks[0];
-		if (ask?.kind !== 'secret' || typed === '') return;
-		ask.settle(typed);
+		if (shown?.kind !== 'secret' || typed === '') return;
+		shown.settle(typed);
 	}
-
-	// the title of the conversation a question comes from
-	const title = (id: string): string => app.conversations.find((c) => c.id === id)?.title || CLI;
 
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') give(null);
@@ -46,13 +44,9 @@
 	}
 </script>
 
-<!-- the first question waiting, each one drawn anew; one from another
-     conversation names it, as it holds the CLI until answered -->
-{#each app.asks.slice(0, 1) as ask (ask.id)}
+<!-- the first question of the open conversation, each one drawn anew -->
+{#each shown ? [shown] : [] as ask (ask.id)}
 	<div class="ask">
-		{#if ask.from !== app.current?.id}
-			<div class="note">From {title(ask.from)}</div>
-		{/if}
 		{#if ask.kind === 'grant'}
 			{@const grants = always(ask.request)}
 			{#if ask.request.kind === 'call'}

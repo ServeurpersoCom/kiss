@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { app, newChat, open, pin, remove } from '../lib/state.svelte.js';
+	import { app, askOf, newChat, open, pin, remove } from '../lib/state.svelte.js';
 	import type { Conversation } from '../lib/types.js';
 	import { CLI, NAME, dayName } from '../lib/config.js';
 	import { clock } from '../lib/clock.svelte.js';
@@ -41,7 +41,9 @@
 					<button class="title" onclick={() => open(c.id)} title={c.title || CLI}
 						>{c.title || CLI}</button
 					>
-					{#if c.id in app.replies}
+					{#if askOf(c.id)}
+						<span class="busy waiting" aria-label="Waiting for you"></span>
+					{:else if c.id in app.replies}
 						<span class="busy" aria-label="Answering"></span>
 					{/if}
 					<button class="act" onclick={() => pin(c.id)} aria-label={c.pinned ? 'Unpin' : 'Pin'}>
@@ -179,8 +181,8 @@
 	.item:hover .act {
 		display: flex;
 	}
-	/* a dot of the accent while the model answers in the conversation, giving
-	   way to the pin and the cross on hover */
+	/* a dot of the accent while the model answers in the conversation or a
+	   question waits in it, giving way to the pin and the cross on hover */
 	.busy {
 		flex: none;
 		width: 0.5rem;
@@ -188,6 +190,20 @@
 		margin: 0 0.75rem 0 0.5rem;
 		border-radius: 50%;
 		background: var(--accent);
+	}
+	/* blinking at 5 Hz while the conversation waits for the user to answer */
+	.waiting {
+		animation: blink 0.2s steps(1) infinite;
+	}
+	@keyframes blink {
+		50% {
+			opacity: 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.waiting {
+			animation: none;
+		}
 	}
 	.item:hover .busy {
 		display: none;

@@ -39,8 +39,8 @@ export const app = $state({
 	current: null as Conversation | null,
 	// the turns the model writes now, by conversation
 	replies: {} as Record<string, Assistant>,
-	// the questions to the user in the order they came, the first one shown,
-	// as each is answered in turn
+	// the questions to the user in the order they came, each conversation
+	// showing its first one, as each is answered in turn
 	asks: [] as Posed[],
 	// the conversation list, open over the thread on a narrow screen
 	sidebar: false
@@ -54,6 +54,10 @@ const pulses = new Map<string, Pulse>();
 
 // the clock of the turn a conversation answers now, if any
 export const pulseOf = (id: string): Pulse | undefined => pulses.get(id);
+
+// the question a conversation shows, the first it asks, if any
+export const askOf = (id: string | undefined): Posed | undefined =>
+	app.asks.find((q) => q.from === id);
 
 // the conversation as it settled, even while the model answers: a call not
 // sent yet never reaches the database, one running reaches it as stopped; a
@@ -310,9 +314,9 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 // the number of the last question posed
 let posed = 0;
 
-// a question to the user from a conversation, shown once those before it are
-// answered; the style tokens and sheets hold off while any question stands,
-// and the time it stands leaves the clock of the turn that asks
+// a question to the user from a conversation, shown in it once those it asked
+// before are answered; the style tokens and sheets hold off while any question
+// stands, and the time it stands leaves the clock of the turn that asks
 function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return new Promise((resolve) => {
 		const id = ++posed;

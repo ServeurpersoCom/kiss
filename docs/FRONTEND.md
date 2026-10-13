@@ -422,14 +422,18 @@ The question shows in the conversation, in a card marked by the accent: the chan
 for, with Once and Refuse, or the call with its real arguments, with Once, Always and Refuse, and
 what Always gives, `Always turns echo on`. A secret takes a masked field with OK and Cancel, an
 export Save or Cancel, an import Choose file or Cancel, an erase or a copy OK or Cancel; Enter and
-Escape answer too, never alone. One question shows at a time, in the order they come, whatever the
-conversation open: one from another conversation names it, as it holds every batch until answered.
-The Stop of a conversation answers no to its own questions. While a question stands the style tokens
-and sheets hold off, so nothing restyles, hides or covers the card. Monospace is for what a machine
-wrote: the calls of tools and their outputs, the commands of the CLI and their outputs, the lines
-and the arguments a card shows, code, and a block rendered plain, so a `-` and a `+` line up; the
-heads of the cards and of the commands, the answers and the error of a turn read in the font of the
-page.
+Escape answer too, never alone. A question shows in the conversation that asks it, one at a time in
+the order they come there, and the dot of that conversation in the sidebar blinks while it waits. A
+batch that asks leaves the queue of the CLI while the user thinks, nothing applied, so the other
+conversations and the commands of the user run meanwhile; it then runs again from its first line
+with the answer, on the configuration as it stands then. What a question is about is figured once:
+an export saves the very file it offered, an erase removes the conversations its question named and
+none that came since. The Stop of a conversation answers no to its own questions. While a question
+stands the style tokens and sheets hold off, so nothing restyles, hides or covers the card.
+Monospace is for what a machine wrote: the calls of tools and their outputs, the commands of the CLI
+and their outputs, the lines and the arguments a card shows, code, and a block rendered plain, so a
+`-` and a `+` line up; the heads of the cards and of the commands, the answers and the error of a
+turn read in the font of the page.
 
 ```
 ! each call asks, until always
@@ -678,10 +682,12 @@ while no conversation is open and staying at the top while the list scrolls, the
 the last answered first: the pinned ones under Pinned, the others under the day of their last
 answer, today, yesterday, then their date, in the language of the browser. Beside each, a pin pins
 it or puts it back under its day, and a cross deletes it once the user confirms, Enter or OK, Escape
-or a click elsewhere cancelling; while the model answers in it, a dot of the accent stands at its
-right, giving way to the pin and the cross on hover. Every item runs from the left edge of the page
-to the scrollbar, and a title too long fades out rather than losing letters to an ellipsis. A
-conversation dates from its last answer: a command, a version shown, a pin or a title dates nothing.
+or a click elsewhere cancelling; while the model answers in it or a question waits in it, a dot of
+the accent stands at its right, blinking at 5 Hz for the question, still under
+`prefers-reduced-motion`, giving way to the pin and the cross on hover. Every item runs from the
+left edge of the page to the scrollbar, and a title too long fades out rather than losing letters to
+an ellipsis. A conversation dates from its last answer: a command, a version shown, a pin or a title
+dates nothing.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
 under `kiss.saves`, the startup-config under `kiss.startup`, and the width of the sidebar under
