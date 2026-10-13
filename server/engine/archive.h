@@ -15,3 +15,7 @@ std::string archive_read(bool & found);
 // the file written whole, through a file beside it renamed over it, so a
 // failure never leaves half a file; the note that says so
 std::string archive_write(const layer & l);
+
+// the file gone, so the server starts on its factory configuration; the note
+// that says so
+std::string archive_erase();

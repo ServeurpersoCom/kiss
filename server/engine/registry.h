@@ -10,15 +10,27 @@
 #include <utility>
 
 // what a step runs on: the draft, who sends the batch, the secrets the user
-// typed, the stored keys of the secrets still to ask for, and whether the
-// batch writes server.conf once it holds
+// typed, the stored keys of the secrets still to ask for, the yes questions
+// still to ask, and whether the batch writes or erases server.conf once it
+// holds
 struct context {
-    layer &              draft;
-    engine_role          role;
-    const engine_typed & typed;
-    words_t &            asks;
-    bool                 save = false;
+    layer &                 draft;
+    engine_role             role;
+    const engine_typed &    typed;
+    words_t &               asks;
+    std::vector<engine_ask> questions = {};
+    bool                    save      = false;
+    bool                    erase     = false;
 };
+
+// whether the user lets a step do what question says: always on the console;
+// for an MCP client once the user answered yes under key, the question asked
+// as the batch ends until then
+bool engine_confirmed(context & ctx, const std::string & key, const std::string & question);
+
+// a write of server.conf once the batch holds, as copy and write ask it of the
+// user; false while it waits for their yes
+bool engine_save(context & ctx);
 
 using step_t = std::function<std::string(context &)>;
 

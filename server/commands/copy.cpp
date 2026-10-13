@@ -6,8 +6,9 @@
 #include "engine/run.h"
 #include "engine/schema.h"
 
-// copy running-config startup-config writes server.conf once the batch holds,
-// copy startup-config running-config reads it back into the draft
+// copy running-config startup-config writes server.conf once the batch holds
+// and, from an MCP client, the user says yes; copy startup-config
+// running-config reads it back into the draft
 static step_t compile_copy(const words_t & args) {
     if (args.size() < 2) {
         throw incomplete();
@@ -26,7 +27,7 @@ static step_t compile_copy(const words_t & args) {
             ctx.draft = startup_layer();
             return std::string();
         }
-        ctx.save = true;
+        engine_save(ctx);
         return std::string();
     };
 }

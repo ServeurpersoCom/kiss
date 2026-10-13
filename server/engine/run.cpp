@@ -111,7 +111,7 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
         }
         const auto        parts  = unstore(u.first);
         const std::string module = parts.first.substr(0, parts.first.find(' '));
-        engine_ask        ask{ u.first, u.second, true, {} };
+        engine_ask        ask{ u.first, u.second, true, {}, "" };
         for (const engine_key & k : find_module(module)->keys) {
             const std::string s = stored(module + " " + k.name, parts.second);
             if (k.kind == ENGINE_SECRET && draft.count(s)) {
@@ -126,9 +126,27 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
 static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) {
     std::vector<engine_ask> out;
     for (const std::string & s : keys) {
-        out.push_back({ s, url_of(draft, s), false, {} });
+        out.push_back({ s, url_of(draft, s), false, {}, "" });
     }
     return out;
+}
+
+bool engine_confirmed(context & ctx, const std::string & key, const std::string & question) {
+    const auto yes = ctx.typed.find(key);
+    if (ctx.role != ENGINE_MCP || (yes != ctx.typed.end() && yes->second == YES)) {
+        return true;
+    }
+    ctx.questions.push_back({ key, "", true, {}, question });
+    return false;
+}
+
+bool engine_save(context & ctx) {
+    const std::string copy = std::string("copy ") + RUNNING_CONFIG + " " + STARTUP_CONFIG;
+    if (!engine_confirmed(ctx, copy, std::string("copy ") + RUNNING_CONFIG + " to " + STARTUP_CONFIG)) {
+        return false;
+    }
+    ctx.save = true;
+    return true;
 }
 
 static engine_result failed(std::optional<size_t> line, bool alone, const std::string & message) {
@@ -150,11 +168,11 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // target, which it replaces only when all of them succeed and the rules of
 // every module hold; the batch answers with what it changed, and on the
 // running configuration the modules whose keys changed apply. A secret left
-// to ask for, or a url of an MCP client the user has not let, stops it once
-// every line ran, before the rules: what the user answers decides them. A
-// batch of an MCP client moves no secret. A save
-// writes the draft as the batch leaves it, once the rules hold and before it
-// replaces the target
+// to ask for, a url of an MCP client the user has not let, or a yes a command
+// of an MCP client waits for, stops it once every line ran, before the rules:
+// what the user answers decides them. A batch of an MCP client moves no
+// secret. A save writes the draft as the batch leaves it, and an erase
+// removes server.conf, once the rules hold and before it replaces the target
 static engine_result batch(layer &              target,
                            const std::string &  text,
                            engine_role          role,
@@ -194,6 +212,7 @@ static engine_result batch(layer &              target,
     std::vector<engine_ask> wanted = role == ENGINE_MCP ? unlet(target, draft, typed) : std::vector<engine_ask>{};
     const auto              typing = asked(draft, asks);
     wanted.insert(wanted.end(), typing.begin(), typing.end());
+    wanted.insert(wanted.end(), ctx.questions.begin(), ctx.questions.end());
     if (!wanted.empty()) {
         return { true, "", wanted };
     }
@@ -207,12 +226,15 @@ static engine_result batch(layer &              target,
     if (!broken.empty()) {
         return failed(std::nullopt, alone, join(broken, "\n"));
     }
-    if (ctx.save) {
-        try {
+    try {
+        if (ctx.save) {
             out.push_back(archive_write(draft));
-        } catch (const std::runtime_error & e) {
-            return failed(std::nullopt, alone, e.what());
         }
+        if (ctx.erase) {
+            out.push_back(archive_erase());
+        }
+    } catch (const std::runtime_error & e) {
+        return failed(std::nullopt, alone, e.what());
     }
     const words_t               change = diff(target, draft);
     const std::set<std::string> keys   = changed(target, draft);

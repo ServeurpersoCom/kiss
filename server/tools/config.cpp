@@ -7,9 +7,10 @@
 #include "yyjson.h"
 
 // a batch that writes a secret without its value asks the user to type it,
-// telling where each one goes, and one that gives an item a new url asks the
-// user to let it, the item reached at <module>/<item> of this server; it runs
-// again with what they answered
+// telling where each one goes, one that gives an item a new url asks the user
+// to let it, the item reached at <module>/<item> of this server, and one that
+// writes or erases a configuration asks their yes; it runs again with what
+// they answered
 static tool_result call(yyjson_val * args, const engine_typed & typed, const tool_tick &) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
     const engine_result r = engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP, typed);
@@ -18,7 +19,9 @@ static tool_result call(yyjson_val * args, const engine_typed & typed, const too
         for (const engine_ask & a : r.asks) {
             const auto parts = unstore(a.key);
             keys.push_back(a.key);
-            if (a.yes) {
+            if (!a.question.empty()) {
+                told.push_back(a.question);
+            } else if (a.yes) {
                 told.push_back("let " + parts.first.substr(0, parts.first.find(' ')) + "/" + parts.second + " proxy " +
                                a.to + (a.along.empty() ? "" : ", " + join(a.along, ", ") + " with it"));
             } else {
@@ -50,8 +53,10 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                     engine_platform() +
                     ", one command per line, as one batch that applies whole or not at all, the way Cisco IOS "
                     "reads them: set <module> <key> [item] <value>, no <module> <key> [item], show <module>, "
-                    "show running-config [all], show startup-config, show version, show logging, "
-                    "copy running-config startup-config or write memory. Its modules, with their keys: " +
+                    "show running-config [all], show startup-config, show diff <config> <config>, show version, "
+                    "show logging, copy running-config startup-config or write memory, erase running-config or "
+                    "erase startup-config, a copy, a write or an erase asking the user's yes with a card of the "
+                    "page. Its modules, with their keys: " +
                     join(modules, "; ") +
                     ". Every default fits as it is, so set only what differs. A secret never shows: show writes "
                     "! <module> <key> [item] is set for one that is set, and no line for one that is not. To set a "

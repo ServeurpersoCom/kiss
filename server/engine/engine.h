@@ -87,12 +87,14 @@ bool engine_register(engine_module (*make)());
 // what the user is to answer: a secret to type, by its stored key, and the
 // url of its item, where it goes, when its module has one; or, yes set, a url
 // to let an item take, by its stored key, that url, and the secrets of the
-// item that go with it
+// item that go with it; or, question set too, a yes to what a command does,
+// under the key that names it
 struct engine_ask {
     std::string              key;
     std::string              to;
     bool                     yes = false;
     std::vector<std::string> along;
+    std::string              question;
 };
 
 // what a batch answers: whether it holds and what it printed; a batch an MCP

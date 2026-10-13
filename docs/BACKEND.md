@@ -14,11 +14,13 @@ commands
   show <module> <item>
   show running-config [all]
   show startup-config
+  show diff <config> <config>       running-config or startup-config, each
   show version
   show logging
   copy running-config startup-config
   copy startup-config running-config
   write [memory]
+  erase running-config|startup-config
   <command> | begin|count|exclude|include <pattern>
   exit, quit                        the console only: stop the server
 
@@ -144,21 +146,25 @@ A batch compiles every line before the first one runs, runs them on a draft of t
 configuration, checks the rules of every module on the draft, then replaces the running
 configuration and applies the modules whose keys changed. A failure at any step applies nothing.
 
-The commands are those of the page that fit a server: `set`, `no`, `show <module>`, `show
-running-config [all]`, `show startup-config`, `show version`, `copy` between the running-config and
-the startup-config, and `write memory`, or `write` alone, IOS's way to save; and one of its own,
-`show logging`. A save writes the configuration as its batch leaves it, once the batch holds, so a
-batch that fails or waits for a secret writes nothing. A line takes a filter after a pipe, `begin`,
-`count`, `exclude` or `include`, as IOS does. A secret never prints: `show` writes `! server key is
-set`.
+The commands are those of the page that fit a server, with the same words and the same answers:
+`set`, `no`, `show <module>`, `show running-config [all]`, `show startup-config`, `show diff`
+between the running-config and the startup-config, `show version`, `copy` between them, `write
+memory`, or `write` alone, IOS's way to save, and `erase running-config`, back to the factory
+configuration, or `erase startup-config`, `server.conf` gone so the server starts on the factory
+configuration; and one of its own, `show logging`. A save or an erase of `server.conf` happens once
+the batch holds, so a batch that fails or waits for the user writes nothing. A line takes a filter
+after a pipe, `begin`, `count`, `exclude` or `include`, as IOS does. A secret never prints: `show`
+writes `! server key is set`.
 
 Two roles send batches. The administrator writes `server.conf` and the command line. An MCP client
 runs the config tool, whose lines a model may write, so it writes no value of a secret: `set` of a
-secret alone asks the user to type it.
+secret alone asks the user to type it. And as the page asks the user before its model copies or
+erases a configuration, a `copy` or a `write` to the startup-config and an `erase` from an MCP
+client wait for the user's yes, whatever the client lets the tool do.
 
 A module registers itself by existing, with its keys, its rules and what it applies: `server`
-rebinds its socket, `shells` rebuilds the tool list, `view` bounds what its tool returns. The engine
-knows no module by name, so a module joins without a change to the engine.
+rebinds its socket, `shells` rebuilds the tool list, `files` bounds what its tools return. The
+engine knows no module by name, so a module joins without a change to the engine.
 
 ### server.conf
 
@@ -415,14 +421,16 @@ client gives a route asks the user to let it, a yes field of the same form, `Let
 https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
 holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
 proxy/b proxy https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
-that changes. A line that writes the value of a secret is refused, and a client that takes no form,
-every client of the 2025 era, is told the secret goes in `server.conf` or on the console. The text
-every tool answers goes through the keychain of the server and reads `<removed>` where the value of
-a secret of the server stood, so a shell, `view` or `show logging` never hands a key on; a value the
-server never read, a line it refused, is no secret it knows. A module reads a secret `<removed>`:
-the keychain alone reads its value beside the engine, as a route sends its key and as the key of a
-client is checked. A line `server.conf` refuses is logged by its number, never by its text:
-`server.conf skips line 4: unterminated "`.
+that changes. A `copy`, a `write` or an `erase` asks a yes field the same way, `Copy running-config
+to startup-config for the KiSS server forge`, the batch running again once the user says yes. A line
+that writes the value of a secret is refused, and a client that takes no form, every client of the
+2025 era, is told the secret goes in `server.conf` or on the console. The text every tool answers
+goes through the keychain of the server and reads `<removed>` where the value of a secret of the
+server stood, so a shell, `view` or `show logging` never hands a key on; a value the server never
+read, a line it refused, is no secret it knows. A module reads a secret `<removed>`: the keychain
+alone reads its value beside the engine, as a route sends its key and as the key of a client is
+checked. A line `server.conf` refuses is logged by its number, never by its text: `server.conf skips
+line 4: unterminated "`.
 
 ## The shell contract
 

@@ -54,3 +54,12 @@ std::string archive_write(const layer & l) {
     }
     return comment(std::string("copied ") + RUNNING_CONFIG + " to " + STARTUP_CONFIG);
 }
+
+std::string archive_erase() {
+    std::error_code ec;
+    std::filesystem::remove(std::filesystem::u8path(g_path), ec);
+    if (ec) {
+        fail("cannot erase " + g_path + ": " + ec.message());
+    }
+    return comment(std::string("erased ") + STARTUP_CONFIG + ", the server starts on its factory configuration");
+}
