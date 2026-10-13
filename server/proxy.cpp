@@ -34,6 +34,9 @@ static const char * const SIDE_HEADERS[] = {
     "transfer-encoding",
     "upgrade",
     "host",
+    "forwarded",
+    "via",
+    "x-real-ip",
     "origin",
     "referer",
     "cookie",
@@ -49,11 +52,11 @@ static const char * const SIDE_HEADERS[] = {
 // the bytes of the body read and passed on at a time
 static const size_t PROXY_CHUNK = 16384;
 
-// a header that stays on its side: one of the list, or one of a proxy or of
-// CORS, which each side writes for itself
+// a header that stays on its side: one of the list, or one of a proxy, of a
+// hop a reverse proxy tells, or of CORS, which each side writes for itself
 static bool stays(const std::string & header) {
     const std::string h = lower(header);
-    if (starts_with(h, "proxy-") || starts_with(h, "access-control-")) {
+    if (starts_with(h, "proxy-") || starts_with(h, "x-forwarded-") || starts_with(h, "access-control-")) {
         return true;
     }
     for (const char * x : SIDE_HEADERS) {
