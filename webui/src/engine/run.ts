@@ -306,6 +306,15 @@ async function batch(text: string, role: Role, scope: Scope): Promise<Outcome> {
 	// the layers below the session are shared, so the registers a batch can
 	// move are those the session layer changes
 	const changed = draft.changed(running);
+	// the servers a rule asks are those of the draft for the user, who chose
+	// every url in it, and of the running configuration for the model
+	const source = role === 'user' ? draft : running;
+	for (const m of modules) {
+		if (!m.verify || !changed.some((k) => k.startsWith(m.name + ' '))) continue;
+		const reason = await m.verify(draft, running, source).catch((e: Error) => e.message);
+		signal?.throwIfAborted();
+		if (reason) return fail(null, `${m.name}: ${reason}`);
+	}
 	const lists = new Map<string, Promise<string[]>>();
 	const listed = (module: string) => {
 		if (!lists.has(module)) lists.set(module, inventory(ctx, module));
@@ -362,8 +371,7 @@ async function state(
 }
 
 // the secrets that go with the items a change gives a new url, as the
-// question tells them; an item sent through a proxy keeps its own at home,
-// the key of the proxy going there
+// question tells them
 function along(draft: ConfigReader, to: Record<string, Value | undefined>): string[] {
 	return Object.keys(to).flatMap((k) => {
 		const [key, name] = unstore(k);

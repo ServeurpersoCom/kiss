@@ -51,14 +51,14 @@ modules
     timeout <name> <seconds>        120
     retries <name> <count>          1800, a reply asked again on 408, 429, 5xx, 529
     pause <name> <seconds>          2, between two
-    proxy <name> <server>           guarded, the KiSS server that proxies it
+    proxy <name> <server>           guarded, the KiSS server whose route holds it
   mcp
     url <name> <url>                guarded
     key <name> <secret>
     auth <name> <Header[: Scheme]>  Authorization: Bearer
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        310
-    proxy <name> <server>           guarded, the KiSS server that proxies it
+    proxy <name> <server>           guarded, the KiSS server whose route holds it
   models                            show models lists them, by endpoint
     temperature <model> <number>
     top_p <model> <0..1>
@@ -173,9 +173,7 @@ of resolved values, they are guarded alike. Everything else, the model of the ch
 style, the headers, the sampling, the model changes freely, the change shown in its output.
 
 The secrets of an item go with it to a url the user lets the model give it: the question names them,
-`! endpoints key u goes with it`, so a key is never typed again for a url that changes. An item sent
-through a proxy keeps its own at home, the key of the proxy going there, so that question names
-none. A secret and
+`! endpoints key u goes with it`, so a key is never typed again for a url that changes. A secret and
 a url born in one batch go together, in either order, the url asking the user, who refuses both at
 once.
 
@@ -483,14 +481,17 @@ reads the line its result keeps of each, `Image image/png, 4096 bytes`.
   written, the images of a call in its output. `max_tokens` goes as `max_output_tokens`; `top_k`,
   `min_p`, the penalties and `seed` never go.
 
-An endpoint is reached directly at its url, or through a KiSS server that proxies it, as an MCP
-server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of `monstre`,
-an item of `mcp`, with the key, auth and headers of `monstre` beside the fixed headers of the
-protocol; the server sends the key of `hf`, which stays there, where its `proxy auth` says, so a key
-of a cloud API never reaches the browser. `no endpoints proxy hf` goes direct again. The proxy names
-a KiSS server of the page that has no proxy itself, and the model sets it only once the user agrees,
-as a url. A proxy that fails says why, `set proxy key hf` when the API refuses the key the server
-holds.
+An endpoint is reached directly at its url, or through the route of its name on a KiSS server, as
+an MCP server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of
+`monstre`, an item of `mcp`, with the key, auth and headers of `monstre` beside the fixed headers of
+the protocol; the route holds the url and the key of `hf`, so a key of a cloud API never reaches the
+browser, and the item here holds neither: `endpoints hf goes through mcp monstre, so its server is
+named there -> /no endpoints url hf`. The batch that sets a proxy asks the server for its routes,
+which it publishes as MCP resources: one without a route of that name, or without a key when the
+item held one, stops the batch with the fix, `set proxy key hf on mcp monstre`, so the model never
+cuts itself off its own endpoint. `no endpoints proxy hf` with a url goes direct again. The proxy
+names a KiSS server of the page that has no proxy itself, and the model sets it only once the user
+agrees, as a url.
 
 ```
 set endpoints url claude https://api.anthropic.com/v1
@@ -556,10 +557,10 @@ names it, `Preparing mcp sandbox - 812 ms`. A server that fails sits out the res
 error told to the model every round, and the next turn tries it again: a server that never answers
 costs one wait a turn, the tools of a turn the same from round to round.
 
-A server is reached directly at its url, or through a KiSS server that proxies it: `set mcp proxy
-exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, where the KiSS server proxies
-the server its `proxy` module names `exa`, with the key and headers of `backend`, the key of `exa`
-never sent; `no mcp proxy exa` goes direct again. One item, one set of tools, either way. The proxy
+A server is reached directly at its url, or through the route of its name on a KiSS server: `set
+mcp proxy exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, with the key and
+headers of `backend`, the route there holding the url and the key of `exa`, as for an endpoint; `no
+mcp proxy exa` with a url goes direct again. One item, one set of tools, either way. The proxy
 names another server of the page that has no proxy itself, and the model sets it only once the user
 agrees, as a url. The backend the page comes from is `backend` in the `client.conf` the project
 ships, `set mcp url backend mcp`, wherever it runs.

@@ -53,8 +53,19 @@ const FORGE: Info = {
 	description: 'server forge c6a4f05 (2026-10-11) on linux'
 };
 
-function server(tools: Declared[], info = FIXTURE): Server {
-	const s = new Server(info, { capabilities: { tools: {} } });
+// a server with its tools and, when it is a KiSS server, the routes it
+// publishes, each by name with whether it holds a key
+function server(tools: Declared[], info = FIXTURE, routes?: Record<string, boolean>): Server {
+	const capabilities = routes ? { tools: {}, resources: {} } : { tools: {} };
+	const s = new Server(info, { capabilities });
+	if (routes)
+		s.setRequestHandler('resources/list', () => ({
+			resources: Object.entries(routes).map(([name, keyed]) => ({
+				uri: `kiss:proxy/${name}`,
+				name,
+				_meta: { 'kiss/keyed': keyed }
+			}))
+		}));
 	s.setRequestHandler('tools/list', () => ({
 		tools: tools.map((t) => ({
 			name: t.name,
@@ -86,8 +97,8 @@ function legacy(tools: Declared[], info = FIXTURE) {
 }
 
 // a 2026 era endpoint
-function modern(tools: Declared[], info = FIXTURE) {
-	const handler = createMcpHandler(() => server(tools, info));
+function modern(tools: Declared[], info = FIXTURE, routes?: Record<string, boolean>) {
+	const handler = createMcpHandler(() => server(tools, info, routes));
 	return (req: Request) => handler.fetch(req);
 }
 
@@ -540,7 +551,7 @@ describe('an MCP server', () => {
 	});
 
 	it('reaches a server through the KiSS server that proxies it, with the key of that server', async () => {
-		const own = modern(SHELL);
+		const own = modern(SHELL, FIXTURE, { exa: true });
 		const proxied = modern([{ name: 'search', run: text('hit') }]);
 		const p = await page(
 			{
@@ -550,8 +561,7 @@ describe('an MCP server', () => {
 			[]
 		);
 		await p.engine.run(
-			'set mcp url kiss http://k/mcp\nset mcp key kiss K\nset mcp url exa http://e/mcp\n' +
-				'set mcp key exa E\nset mcp proxy exa kiss',
+			'set mcp url kiss http://k/mcp\nset mcp key kiss K\nset mcp proxy exa kiss',
 			'user'
 		);
 		expect((await p.engine.run('show tools', 'user')).text).toContain(
@@ -560,7 +570,7 @@ describe('an MCP server', () => {
 		expect(p.methods.e).toBeUndefined();
 		expect(p.auth).toContain('Bearer K');
 		expect(p.auth).not.toContain('Bearer E');
-		await p.engine.run('no mcp proxy exa', 'user');
+		await p.engine.run('no mcp proxy exa\nset mcp url exa http://e/mcp\nset mcp key exa E', 'user');
 		await p.engine.run('show tools', 'user');
 		expect(p.methods.e).toContain('tools/list');
 		expect(p.auth).toContain('Bearer E');
@@ -889,7 +899,7 @@ describe('an MCP server', () => {
 		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('on');
 	});
 
-	it('holding a key moves with it once the user lets the model move it, a proxy leaving it home', async () => {
+	it('holding a key moves with it once the user lets the model move it', async () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
 		const asked: Grant[] = [];
@@ -907,10 +917,5 @@ describe('an MCP server', () => {
 				]
 			}
 		]);
-		await p.engine.run('set mcp url k http://k/mcp', 'user');
-		expect((await p.engine.run('set mcp proxy a k', 'llm', { grant })).text).toBe(
-			'% the user refused the change'
-		);
-		expect(asked[1]).toEqual({ kind: 'change', lines: ['+ set mcp proxy a k'] });
 	});
 });

@@ -19,8 +19,13 @@ static const char * const CLIENT_CAPABILITIES_META = "io.modelcontextprotocol/cl
 // secret to type, a yes field per url to let
 static const char * const USER_FORM = "user";
 
-// a result the server does not keep: the tools follow the configuration, so a
-// client asks again rather than caching
+// a proxy route as a resource: its uri, the prefix and the name of the route,
+// and the key of its _meta, true when the route holds a key
+static const char * const ROUTE_URI        = "kiss:proxy/";
+static const char * const ROUTE_KEYED_META = "kiss/keyed";
+
+// a result the server does not keep: the tools and the routes follow the
+// configuration, so a client asks again rather than caching
 static const int TTL_MS = 0;
 
 static void server_info(yyjson_mut_doc *    doc,
@@ -51,7 +56,9 @@ void method_discover(httplib::Response & res, yyjson_val * id, const std::string
         for (const char * v : MODERN_VERSIONS) {
             yyjson_mut_arr_add_str(doc, list, v);
         }
-        yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "capabilities"), "tools");
+        yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc, out, "capabilities");
+        yyjson_mut_obj_add_obj(doc, caps, "tools");
+        yyjson_mut_obj_add_obj(doc, caps, "resources");
         yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);
         yyjson_mut_obj_add_str(doc, out, "cacheScope", "private");
         yyjson_mut_val * meta = yyjson_mut_obj_add_obj(doc, out, "_meta");
@@ -74,6 +81,7 @@ void method_initialize(httplib::Response & res, yyjson_val * id, yyjson_val * pa
         yyjson_mut_obj_add_strncpy(doc, out, "protocolVersion", chosen.c_str(), chosen.size());
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc, out, "capabilities");
         yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, caps, "tools"), "listChanged", false);
+        yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, caps, "resources"), "listChanged", false);
         server_info(doc, yyjson_mut_obj_add_obj(doc, out, "serverInfo"), server, version);
     });
 }
@@ -91,6 +99,32 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
             yyjson_doc * schema = yyjson_read(t.input.c_str(), t.input.size(), 0);
             yyjson_mut_obj_add_val(doc, item, "inputSchema", yyjson_val_mut_copy(doc, yyjson_doc_get_root(schema)));
             yyjson_doc_free(schema);
+        }
+        if (modern) {
+            yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);
+            yyjson_mut_obj_add_str(doc, out, "cacheScope", "private");
+        }
+    });
+}
+
+// every proxy route as a resource kiss:proxy/<name>, named after the route,
+// telling whether it holds a key, so a client that sends a server through a
+// route sees the route and its key before it does
+void method_resources_list(httplib::Response & res, yyjson_val * id, bool modern) {
+    std::vector<std::pair<std::string, bool>> routes;
+    engine_with([&](const engine_reader & config) {
+        for (const std::string & name : config.names("proxy")) {
+            routes.emplace_back(name, config.get("proxy key", name).has_value());
+        }
+    });
+    jsonrpc_result(res, id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
+        yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc, out, "resources");
+        for (const auto & [name, keyed] : routes) {
+            const std::string uri  = std::string(ROUTE_URI) + name;
+            yyjson_mut_val *  item = yyjson_mut_arr_add_obj(doc, list);
+            yyjson_mut_obj_add_strncpy(doc, item, "uri", uri.c_str(), uri.size());
+            yyjson_mut_obj_add_strncpy(doc, item, "name", name.c_str(), name.size());
+            yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, item, "_meta"), ROUTE_KEYED_META, keyed);
         }
         if (modern) {
             yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);

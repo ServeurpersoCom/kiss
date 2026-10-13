@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Server, createMcpHandler } from '@modelcontextprotocol/server';
 import type { Conversation, Grant, Library, Verdict } from '../src/lib/types.js';
 import { append, fresh, named, parse, serialize } from '../src/lib/conversation.js';
 import { localTime } from '../src/lib/config.js';
@@ -19,6 +20,33 @@ async function page(site = ''): Promise<Engine> {
 function models(ids: string[]): Response {
 	return new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
 		headers: { 'content-type': 'application/json' }
+	});
+}
+
+// a KiSS server at http://k/mcp that publishes its routes, each by name with
+// whether it holds a key; every other url answers the model list ids, the
+// headers of each request kept by url
+function kiss(
+	routes: Record<string, boolean>,
+	sent: Record<string, Record<string, string>> = {},
+	ids = ['m']
+) {
+	const handler = createMcpHandler(() => {
+		const s = new Server({ name: 'k', version: '1' }, { capabilities: { resources: {} } });
+		s.setRequestHandler('resources/list', () => ({
+			resources: Object.entries(routes).map(([name, keyed]) => ({
+				uri: `kiss:proxy/${name}`,
+				name,
+				_meta: { 'kiss/keyed': keyed }
+			}))
+		}));
+		return s;
+	});
+	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+		const req = new Request(input, init);
+		if (new URL(req.url).pathname.endsWith('/mcp')) return handler.fetch(req);
+		sent[req.url] = (init?.headers ?? {}) as Record<string, string>;
+		return models(ids);
 	});
 }
 
@@ -361,26 +389,17 @@ describe('the display', () => {
 });
 
 describe('a proxy', () => {
-	it('proxies an endpoint through a KiSS server, its key kept there, the key of the server sent', async () => {
+	it('sends an endpoint through the route of its name on a KiSS server, the key of the server sent', async () => {
 		const k = await page();
 		const sent: Record<string, Record<string, string>> = {};
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (url: string, init: RequestInit) => {
-				sent[url] = init.headers as Record<string, string>;
-				return models(['m']);
-			})
-		);
+		const routes: Record<string, boolean> = { hf: true, claude: true, bare: false };
+		vi.stubGlobal('fetch', kiss(routes, sent));
 		await k.run(
 			[
 				'set mcp url kiss http://k/mcp',
 				'set mcp key kiss K',
-				'set endpoints url hf http://h/v1',
-				'set endpoints key hf H',
 				'set endpoints proxy hf kiss',
-				'set endpoints url claude http://c/v1',
 				'set endpoints protocol claude messages',
-				'set endpoints key claude C',
 				'set endpoints proxy claude kiss'
 			].join('\n'),
 			'user'
@@ -393,16 +412,42 @@ describe('a proxy', () => {
 			'anthropic-version': expect.any(String)
 		});
 		expect(claude['x-api-key']).toBeUndefined();
-		expect(Object.keys(sent).filter((u) => /^http:\/\/[hc]\//.test(u))).toEqual([]);
+		delete routes.claude;
+		expect((await k.run('set endpoints timeout claude 5', 'user')).ok).toBe(true);
+		expect((await k.run('set endpoints url hf http://h/v1', 'user')).text).toBe(
+			'% endpoints: endpoints hf goes through mcp kiss, so its server is named there -> /no endpoints url hf'
+		);
 		expect((await k.run('set endpoints proxy hf nowhere', 'user')).text).toContain(
 			'endpoints proxy hf: no mcp nowhere'
 		);
-		expect((await k.run('no endpoints proxy hf', 'llm')).ok).toBe(true);
-		expect((await k.run('set endpoints proxy hf kiss', 'llm')).text).toBe(
-			'% nobody is here to agree to the change'
+		expect((await k.run('set endpoints proxy nope kiss', 'user')).text).toBe(
+			'% endpoints: mcp kiss has no route nope -> set proxy url nope <url> on mcp kiss'
+		);
+		await k.run('set endpoints url bare http://b/v1\nset endpoints key bare B', 'user');
+		expect(
+			(
+				await k.run(
+					'set endpoints proxy bare kiss\nno endpoints url bare\nno endpoints key bare',
+					'user'
+				)
+			).text
+		).toBe(
+			'% endpoints: endpoints bare holds a key and route bare of mcp kiss none -> set proxy key bare on mcp kiss\n' +
+				'% nothing applied'
+		);
+		expect((await k.run('no endpoints proxy hf\nset endpoints url hf http://h/v1', 'llm')).ok).toBe(
+			false
+		);
+		await k.run(
+			'no endpoints proxy hf\nset endpoints url hf http://h/v1\nset endpoints key hf H',
+			'user'
 		);
 		await k.run('show models', 'user');
 		expect(sent['http://h/v1/models']).toEqual({ Authorization: 'Bearer H' });
+		expect(
+			(await k.run('set endpoints proxy hf kiss\nno endpoints url hf\nno endpoints key hf', 'llm'))
+				.text
+		).toBe('% nobody is here to agree to the change\n% nothing applied');
 	});
 });
 
@@ -648,7 +693,8 @@ describe('the firewall', () => {
 
 	it('asks the user before the model sends a server through a proxy, never to go direct', async () => {
 		const k = await page();
-		await k.run('set mcp url k http://k/mcp\nset mcp url x http://x/mcp', 'user');
+		vi.stubGlobal('fetch', kiss({ x: false }));
+		await k.run('set mcp url k http://k/mcp', 'user');
 		const refuse = user(REFUSE);
 		expect((await k.run('set mcp proxy x k', 'llm', refuse)).text).toBe(
 			'% the user refused the change'
@@ -936,7 +982,7 @@ describe('client.conf', () => {
 		expect(k.settings.get('endpoints key', 's')).toBeUndefined();
 		expect(
 			k.defaults(
-				'set chat system red\nshow running-config\nset mcp proxy a b\nset mcp url a http://a/mcp\nset mcp url b http://b/mcp'
+				'set chat system red\nshow running-config\nset mcp proxy a b\nset mcp url b http://b/mcp'
 			)
 		).toEqual(['show running-config: client.conf holds set lines only']);
 		expect(k.start()).toEqual([]);
@@ -1342,12 +1388,15 @@ describe('a page', () => {
 
 describe('every key', () => {
 	// the item a named key of a module takes in these laws, m unless told: the
-	// keys of endpoints go to n, so m keeps the protocol every parameter goes by
+	// keys of endpoints go to n, so m keeps the protocol every parameter goes by;
+	// a proxy goes to p, an item that names no server of its own
 	const ITEMS: Record<string, string> = {
 		endpoints: 'n',
 		models: 'm/x',
 		tools: 'client_config',
-		mcp: 'b'
+		mcp: 'b',
+		'endpoints proxy': 'p',
+		'mcp proxy': 'p'
 	};
 	// values to try for a key by its kind, the first it takes that is not its
 	// default kept; api-key places a key, c names the server a proxy takes
@@ -1361,17 +1410,16 @@ describe('every key', () => {
 	// takes a value written out, each the first value it takes
 	async function full() {
 		const k = await page();
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => models(['x']))
-		);
+		vi.stubGlobal('fetch', kiss({ p: false }, {}, ['x']));
 		await k.run('set endpoints url m http://m/v1\nset mcp url c http://c/mcp', 'user');
 		const { modules } = await import('../src/engine/registry.js');
 		const untaken: string[] = [];
 		for (const m of modules) {
 			for (const [name, def] of Object.entries(m.keys)) {
 				if (def.kind === 'secret') continue;
-				const item = def.named ? ` ${def.names?.(modules)[0] ?? ITEMS[m.name] ?? 'm'}` : '';
+				const item = def.named
+					? ` ${def.names?.(modules)[0] ?? ITEMS[`${m.name} ${name}`] ?? ITEMS[m.name] ?? 'm'}`
+					: '';
 				const bounds = [def.min, def.max, 1, 2].filter((n) => n !== undefined).map(String);
 				const tries =
 					def.kind === 'enum' ? [...def.values!] : def.kind === 'number' ? bounds : TRIES[def.kind];

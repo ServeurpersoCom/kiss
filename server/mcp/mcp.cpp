@@ -136,6 +136,8 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
         method_tools_list(res, id, modern);
     } else if (method == "tools/call") {
         method_tools_call(req, res, body, id, modern, params);
+    } else if (method == "resources/list") {
+        method_resources_list(res, id, modern);
     } else {
         jsonrpc_error(res, modern ? 404 : 200, id, JSONRPC_METHOD_NOT_FOUND, "unknown method " + method);
     }

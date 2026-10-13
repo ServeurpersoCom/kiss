@@ -1,6 +1,7 @@
 import type { Module } from '../lib/types.js';
 import { DEFAULT_PROTOCOL, PROTOCOLS, endpoints, fallback, listModels } from '../lib/api.js';
 import { rules } from '../lib/remote.js';
+import { routed } from '../lib/mcp.js';
 
 export default {
 	name: 'endpoints',
@@ -22,12 +23,16 @@ export default {
 		retries: { kind: 'number', min: 0, integer: true, default: '1800', named: true },
 		// seconds between two of them
 		pause: { kind: 'number', min: 0, default: '2', named: true },
-		// the KiSS server, an item of mcp, that proxies this one, reached at
-		// proxy/<name> beside its MCP, with its key and headers
+		// the KiSS server, an item of mcp, whose route of the same name holds the
+		// url and the key of this one, reached at proxy/<name> beside its MCP,
+		// with its key and headers
 		proxy: { kind: 'string', named: true, guard: true, of: 'mcp' }
 	},
 	validate(config) {
 		return rules(config, 'endpoints', (name) => fallback(config, name));
+	},
+	verify(config, before, source) {
+		return routed('endpoints', config, before, source);
 	},
 	// every endpoint lists its models
 	async check(config) {

@@ -1,6 +1,6 @@
 import type { Module } from '../lib/types.js';
 import { rules } from '../lib/remote.js';
-import { aggregate, served } from '../lib/mcp.js';
+import { aggregate, routed, served } from '../lib/mcp.js';
 import { tools } from '../lib/tools.js';
 
 export default {
@@ -16,12 +16,16 @@ export default {
 		headers: { kind: 'string', named: true },
 		// seconds a call of a tool may take, until the turn stops at the latest
 		timeout: { kind: 'number', min: 0.1, default: '310', named: true },
-		// the KiSS server of another item that proxies this one, reached at
-		// proxy/<name> beside its url, with its key and headers
+		// the KiSS server of another item whose route of the same name holds the
+		// url and the key of this one, reached at proxy/<name> beside its url,
+		// with its key and headers
 		proxy: { kind: 'string', named: true, guard: true, of: 'mcp' }
 	},
 	validate(config) {
 		return rules(config, 'mcp');
+	},
+	verify(config, before, source) {
+		return routed('mcp', config, before, source);
 	},
 	// every server connects as soon as the configuration names it, so the first
 	// round that needs its tools finds them listed

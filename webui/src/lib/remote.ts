@@ -1,11 +1,13 @@
 import type { ConfigReader, Image } from './types.js';
 import { BEARER, credential, placement } from './keychain.js';
+import { SLASH } from './config.js';
 
 // an item of a collection module that names a remote server by a url, the
 // header that carries its key, the headers sent besides it and the seconds it
-// has to answer: endpoints and mcp; proxied, it goes through a KiSS server,
-// the key and the headers those of that server; sign reads the key through
-// the keychain as a request leaves, so no remote holds its value
+// has to answer: endpoints and mcp; proxied, it goes through a route of a KiSS
+// server, which holds its url and its key, the key and the headers those of
+// that server; sign reads the key through the keychain as a request leaves, so
+// no remote holds its value
 export interface Remote {
 	name: string;
 	url: string;
@@ -20,6 +22,10 @@ const PROXY = 'proxy';
 
 // the module whose items name the KiSS servers a proxy takes, by their MCP
 const SERVERS = 'mcp';
+
+// the keys of an item that name its server, which a proxied item leaves to
+// the route of its KiSS server
+const ROUTED = ['url', 'key', 'auth', 'headers'];
 
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
@@ -53,11 +59,12 @@ function own(config: ConfigReader, module: string, name: string, fallback: strin
 	};
 }
 
-// every item of the module that has a url, sorted by name; an item with a
-// proxy, an MCP server or an endpoint alike, reaches its server through the
-// proxy of the KiSS server the proxy names, at proxy/<name> beside its MCP,
-// with the key, auth and headers of that server, in its own seconds; fallback
-// gives where the key of an item goes when its auth does not say
+// every item of the module that has a url or a proxy, sorted by name; an item
+// with a proxy, an MCP server or an endpoint alike, reaches its server through
+// the route of its name on the KiSS server the proxy names, at proxy/<name>
+// beside its MCP, with the key, auth and headers of that server, in its own
+// seconds; fallback gives where the key of an item goes when its auth does not
+// say
 export function remotes(
 	config: ConfigReader,
 	module: string,
@@ -65,7 +72,7 @@ export function remotes(
 ): Remote[] {
 	return config
 		.names(module)
-		.filter((name) => config.get(`${module} url`, name))
+		.filter((name) => config.get(`${module} url`, name) || config.get(`${module} proxy`, name))
 		.map((name) => {
 			const proxy = config.get(`${module} proxy`, name);
 			const item = own(config, module, name, fallback(name));
@@ -81,10 +88,11 @@ export function remotes(
 		});
 }
 
-// the rules of such a module: every item has a url of its own, a proxy names
-// a KiSS server, another item of mcp that has no proxy itself, and no server
-// is reached twice, a relative url resolved against the page, since the same
-// server reached twice serves the same names twice; its auth is Header or
+// the rules of such a module: every item has a url of its own or a proxy, a
+// proxy names a KiSS server, another item of mcp that has no proxy itself, and
+// leaves the url, key, auth and headers of the item to the route there; no
+// server is reached twice, a relative url resolved against the page, since the
+// same server reached twice serves the same names twice; its auth is Header or
 // Header: Scheme, its headers are Name: value pairs, none of them the header
 // that carries its key, placed by its auth or else as fallback says
 export function rules(
@@ -92,7 +100,9 @@ export function rules(
 	module: string,
 	fallback: (name: string) => string = () => BEARER
 ): string | null {
-	const names = config.names(module).filter((n) => !config.get(`${module} url`, n));
+	const names = config
+		.names(module)
+		.filter((n) => !config.get(`${module} url`, n) && !config.get(`${module} proxy`, n));
 	if (names.length) return `${module} ${names.join(' ')} has no url`;
 	for (const name of config.names(module)) {
 		const proxy = config.get(`${module} proxy`, name);
@@ -103,6 +113,12 @@ export function rules(
 			return `${module} proxy ${name}: no ${SERVERS} ${proxy}`;
 		if (config.get(`${SERVERS} proxy`, proxy) !== undefined)
 			return `${module} proxy ${name}: ${SERVERS} ${proxy} has a proxy itself`;
+		const held = ROUTED.filter((k) => config.get(`${module} ${k}`, name) !== undefined);
+		if (held.length)
+			return (
+				`${module} ${name} goes through ${SERVERS} ${proxy}, so its server is named there -> ` +
+				held.map((k) => `${SLASH}no ${module} ${k} ${name}`).join(', ')
+			);
 	}
 	const owner = new Map<string, string>();
 	for (const remote of remotes(config, module)) {

@@ -37,6 +37,11 @@ const connections = new Map<string, Connection>();
 // the HTTP status of a server that takes no request without the right key
 const UNAUTHORIZED = 401;
 
+// a route a KiSS server publishes as a resource: kiss:proxy/<name>, its _meta
+// telling whether the route holds a key
+const ROUTE_URI = 'kiss:proxy/';
+const ROUTE_KEYED_META = 'kiss/keyed';
+
 // the one input a server may ask of KiSS: a form whose fields are secrets,
 // text each typed in the masked field of the page, or yes or no, the user
 // confirming what the server says; the user answers them all, or leaving one
@@ -261,6 +266,50 @@ export async function served(config: ConfigReader, down: Map<string, string>): P
 			}
 		})
 	);
+}
+
+// a route of a KiSS server: its name, and whether it holds a key
+interface Route {
+	name: string;
+	keyed: boolean;
+}
+
+// the routes a server publishes now, none from a server that serves no
+// resources
+async function routes(remote: Remote): Promise<Route[]> {
+	const c = await connection(remote).client;
+	if (!c.getServerCapabilities()?.resources) return [];
+	const options = { cacheMode: 'refresh' as const, timeout: MCP_CONNECT_TIMEOUT_MS };
+	const { resources } = await c.listResources(undefined, options);
+	return resources
+		.filter((r) => r.uri.startsWith(ROUTE_URI))
+		.map((r) => ({
+			name: r.uri.slice(ROUTE_URI.length),
+			keyed: r._meta?.[ROUTE_KEYED_META] === true
+		}));
+}
+
+// every item of the module the batch sends through a new proxy finds the
+// route of its name on that server, a route with a key when the item held one
+// here, so the server it names keeps taking the requests the item sends
+export async function routed(
+	module: string,
+	config: ConfigReader,
+	before: ConfigReader,
+	source: ConfigReader
+): Promise<string | null> {
+	for (const name of config.names(module)) {
+		const proxy = config.get(`${module} proxy`, name);
+		if (proxy === undefined || proxy === before.get(`${module} proxy`, name)) continue;
+		const server = remotes(source, 'mcp').find((r) => r.name === proxy);
+		if (!server) continue;
+		const route = (await routes(server)).find((r) => r.name === name);
+		if (!route)
+			return `mcp ${proxy} has no route ${name} -> set proxy url ${name} <url> on mcp ${proxy}`;
+		if (!route.keyed && before.get(`${module} key`, name) !== undefined)
+			return `${module} ${name} holds a key and route ${name} of mcp ${proxy} none -> set proxy key ${name} on mcp ${proxy}`;
+	}
+	return null;
 }
 
 // the servers that take no request without the right key, by name

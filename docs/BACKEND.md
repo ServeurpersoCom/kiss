@@ -479,7 +479,8 @@ The server is stateless and speaks both eras on `POST /mcp`:
 - 2025-11-25: `initialize` answers without `Mcp-Session-Id`. Any other version a client asks for gets
   2025-11-25, as the protocol states.
 
-Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools/call`, `ping`.
+Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools/call`,
+`resources/list`, `ping`.
 
 The `serverInfo` of either era names the server by its hostname, its title `KiSS Operating System`,
 its version, and as its description the line it gives of itself in `show version`:
@@ -489,13 +490,14 @@ its version, and as its description the line it gives of itself in `show version
 
 The server proxies the servers its `proxy` module names, MCP servers and LLM endpoints alike, each
 at `proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
-this machine sees, or one whose key stays on the server. The page reaches a route through its proxy
-key, `set mcp proxy deepwiki backend` beside `set mcp url deepwiki https://mcp.deepwiki.com/mcp`, or
-`set endpoints proxy hf backend` beside `set endpoints url hf https://router.huggingface.co/v1`, and
-the server holds the route, `set proxy url hf https://router.huggingface.co/v1` and `set proxy key
-hf`; the model may add a route through the config tool, the user letting its url and typing its key,
-the form naming where each goes. `show proxy` writes after each route where a client reaches it, `!
-proxy/hf proxies https://router.huggingface.co/v1`.
+this machine sees, or one whose key stays on the server. The server holds the route, `set proxy url
+hf https://router.huggingface.co/v1` and `set proxy key hf`, and the page reaches it by the item of
+the same name, `set endpoints proxy hf backend` or `set mcp proxy deepwiki backend`, which holds no
+url or key of its own; the model may add a route through the config tool, the user letting its url
+and typing its key, the form naming where each goes. `resources/list` publishes every route as
+`kiss:proxy/<name>`, its `_meta` `kiss/keyed` telling whether it holds a key, so the page checks the
+route before it sends an item there. `show proxy` writes after each route where a client reaches it,
+`! proxy/hf proxies https://router.huggingface.co/v1`.
 
 The proxy speaks HTTP and knows no protocol: a request to `proxy/<name>/<rest>` goes to the url of
 the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/completions` to

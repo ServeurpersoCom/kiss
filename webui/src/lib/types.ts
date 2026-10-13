@@ -65,6 +65,11 @@ export interface Module {
 	keys: Record<string, Key>;
 	// rule across keys, checked on every change, returns a reason when broken
 	validate?(config: ConfigReader, modules: readonly Module[]): string | null;
+	// rule that asks the servers the configuration names, checked when a batch
+	// changes the module, before it applies: before is the configuration it
+	// replaces, source the one whose servers are asked; returns a reason when
+	// broken
+	verify?(config: ConfigReader, before: ConfigReader, source: ConfigReader): Promise<string | null>;
 	// live verification run on every save, resolves to what to warn of, never
 	// stopping the save
 	check?(config: ConfigReader): Promise<string | null>;
