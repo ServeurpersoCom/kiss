@@ -5,6 +5,7 @@
 
 #include "client.conf.hpp"
 #include "engine/engine.h"
+#include "engine/keychain.h"
 #include "index.html.gz.hpp"
 #include "listener.h"
 #include "log.h"
@@ -53,14 +54,6 @@ static bool host_allowed(const httplib::Request & req) {
     return (listener_loopback(name) || name == bound_host) && (port == bound || (port.empty() && bound == "80"));
 }
 
-static bool same_key(const std::string & a, const std::string & b) {
-    unsigned char diff = (unsigned char) (a.size() != b.size());
-    for (size_t i = 0; i < a.size() || i < b.size(); i++) {
-        diff |= (unsigned char) ((i < a.size() ? a[i] : 0) ^ (i < b.size() ? b[i] : 0));
-    }
-    return diff == 0;
-}
-
 // who may call /mcp: on loopback, a client without Origin, a command line, or
 // the page this server serves; anyone else, and everyone off loopback, with
 // the key as a bearer token; why not, otherwise
@@ -73,13 +66,12 @@ static bool authorized(const httplib::Request & req, std::string & why) {
     if (listener_loopback(bound_host) && (origin.empty() || origin == self)) {
         return true;
     }
-    const auto key = engine_get("server key");
-    if (!key) {
+    if (!engine_get("server key")) {
         why = "another origin calls this server with the key, and server key is not set";
         return false;
     }
     const std::string bearer = req.get_header_value("Authorization");
-    if (bearer.compare(0, 7, "Bearer ") != 0 || !same_key(bearer.substr(7), *key)) {
+    if (bearer.compare(0, 7, "Bearer ") != 0 || !keychain_admits(bearer.substr(7))) {
         why = "the key is missing or wrong";
         return false;
     }

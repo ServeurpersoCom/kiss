@@ -1,5 +1,5 @@
 import type { Module } from '../lib/types.js';
-import { DEFAULT_PROTOCOL, PROTOCOLS, endpoints, listModels } from '../lib/api.js';
+import { DEFAULT_PROTOCOL, PROTOCOLS, endpoints, fallback, listModels } from '../lib/api.js';
 import { rules } from '../lib/remote.js';
 
 export default {
@@ -9,6 +9,9 @@ export default {
 		// how the endpoint speaks, a file of protocols/ by its name
 		protocol: { kind: 'enum', values: PROTOCOLS, default: DEFAULT_PROTOCOL, named: true },
 		key: { kind: 'secret', named: true },
+		// the header that carries the key, Header or Header: Scheme, the one of
+		// the protocol unless set
+		auth: { kind: 'string', named: true },
 		// sent with every request, Name: value pairs split by ;
 		headers: { kind: 'string', named: true },
 		// seconds the endpoint has to start answering: a model list, the start of
@@ -24,7 +27,7 @@ export default {
 		proxy: { kind: 'string', named: true, guard: true, of: 'mcp' }
 	},
 	validate(config) {
-		return rules(config, 'endpoints');
+		return rules(config, 'endpoints', (name) => fallback(config, name));
 	},
 	// every endpoint lists its models
 	async check(config) {

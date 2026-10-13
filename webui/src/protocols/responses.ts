@@ -1,5 +1,6 @@
 import type { Message, Protocol } from '../lib/types.js';
-import { bearer, dataUrl } from '../lib/remote.js';
+import { dataUrl } from '../lib/remote.js';
+import { BEARER } from '../lib/keychain.js';
 
 // the Responses API of OpenAI, stateless: the history goes whole as items
 // every round, nothing stored on the server; the reasoning streams as its
@@ -54,7 +55,8 @@ export default {
 	path: '/responses',
 	models: '/models',
 	described: false,
-	auth: (key, headers) => ({ ...bearer(key), ...headers }),
+	key: BEARER,
+	headers: (headers) => headers,
 	drops: ['top_k', 'min_p', 'presence_penalty', 'frequency_penalty', 'seed'],
 	body(r) {
 		const p = r.parameters;

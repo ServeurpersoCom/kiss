@@ -45,7 +45,7 @@ modules
   proxy
     url <item> <url>                a server proxied at proxy/<item>
     key <item> <secret>
-    auth <item> bearer|x-api-key    bearer, where the key goes
+    auth <item> <Header[: Scheme]>  Authorization: Bearer
     headers <item> <Name: value; ...>
     timeout <item> <seconds>        300
 
@@ -78,7 +78,8 @@ file; no file grows with the features.
 ```
 webui/                   the page, as FRONTEND.md describes it
 server/main.cpp          the start: defaults, startup-config, console, listener
-server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run
+server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run,
+                         and the keychain with its seal
 server/commands/         one file per command, registered by existing
 server/modules/          one file per module: its keys, rules, how it applies to the server
 server/tools/            one file per tool source, registered by existing
@@ -93,6 +94,8 @@ server/job.cpp|h         spawn, pipes, tree kill, per OS
 server/output.cpp|h      UTF-8 repair and head plus tail truncation
 server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
 server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
+server/tests/seal.cpp    the laws of the seal, built and run with the server, a broken law failing
+                         the build
 server/server.conf       the factory configuration the binary embeds
 server/client.conf       the client.conf the server serves when its directory has none
 vendor/                  cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
@@ -207,7 +210,7 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `view quality`          | number | the JPEG quality of an image made again, 1 to 100               |
 | `proxy url <item>`      | string | URL of a server this server proxies at `proxy/<item>`           |
 | `proxy key <item>`      | secret | key sent to that server                                         |
-| `proxy auth <item>`     | enum   | `bearer` or `x-api-key`, where the key goes                     |
+| `proxy auth <item>`     | string | the header of the key, `Header` or `Header: Scheme`             |
 | `proxy headers <item>`  | string | more headers sent to it, `Name: value; Name: value`             |
 | `proxy timeout <item>`  | number | seconds it may stay silent                                      |
 
@@ -384,10 +387,12 @@ holds it; the secrets of the route go with it once the user lets it, and the for
 proxy/b proxy https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
 that changes. A line that writes the value of a secret is refused, and a client that takes no form,
 every client of the 2025 era, is told the secret goes in `server.conf` or on the console. The text
-every tool answers reads `<removed>` where the value of a secret of the server stood, so a shell,
-`view` or `show logging` never hands a key on; a value under 8 characters is no key and stays, and a
-value the server never read, a line it refused, is no secret it knows. A line `server.conf` refuses
-is logged by its number, never by its text: `server.conf skips line 4: unterminated "`.
+every tool answers goes through the keychain of the server and reads `<removed>` where the value of
+a secret of the server stood, so a shell, `view` or `show logging` never hands a key on; a value the
+server never read, a line it refused, is no secret it knows. A module reads a secret `<removed>`:
+the keychain alone reads its value beside the engine, as a route sends its key and as the key of a
+client is checked. A line `server.conf` refuses is logged by its number, never by its text:
+`server.conf skips line 4: unterminated "`.
 
 ## The shell contract
 
@@ -497,15 +502,24 @@ the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/com
 `https://router.huggingface.co/v1/chat/completions`. Each request is built anew with its method, its
 body and every header but those that stay on its side (`Host`, `Origin`, `Cookie`, `Authorization`,
 `x-api-key`, `Accept-Encoding`, the length and the connection), then the headers of the route, which
-replace those of the same name, and its key, as a bearer token or, for the Messages API of
-Anthropic, `set proxy auth claude x-api-key`; the key of this server never goes on. The answer comes
-back with its status and every header but those that stay on its side, its body streamed as it
-arrives, uncompressed. A page served elsewhere passes CORS: the server lets the headers it asks to
-send and shows every header it answers. A server that refuses the key of its route answers 502 with
-the fix, `set proxy key <name>`, so the page never takes it for a refusal of its own key; one that
-redirects answers 502 naming where, `set proxy url <name>`, since a redirect followed would carry
-the key elsewhere. A route the configuration does not name answers 404. The client speaks HTTPS:
-LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
+replace those of the same name and never name the header of its key, then its key in the header
+`proxy auth` names, `Header` or `Header: Scheme`, a bearer token unless set, `set proxy auth claude
+x-api-key` for the Messages API of Anthropic; the key of this server never goes on. The answer comes
+back with its status and every header but those that stay on its side, each through the keychain,
+every secret of the configuration the route was read from read `<removed>`: a stream of events event
+by event as it arrives, its data lines joined as a client joins them, an event the stream leaves
+open dropped as a client drops it, any other body whole, uncompressed. JSON goes through yyjson:
+every string and every name of a property is sealed as decoded, whatever escapes wrote the key, and
+the JSON is written again, its numbers as they were written; any other text, a header and a refusal
+of the proxy are sealed as they are written. A page served elsewhere passes CORS: the server lets
+the headers it asks to send and shows every header it answers. A server that refuses the key of its
+route answers 502 with the fix, `set proxy key <name>`, so the page never takes it for a refusal of
+its own key; one that redirects answers 502 naming where, `set proxy url <name>`, since a redirect
+followed would carry the key elsewhere. A route the configuration does not name answers 404. A
+server that hides its own key some other way, deeper than the JSON a page decodes or in pieces
+across events, betrays a key it holds, which no filter stops, so a key goes only to a server trusted
+with it. The client speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL
+elsewhere.
 
 ## HTTP and security
 

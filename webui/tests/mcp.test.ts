@@ -4,7 +4,15 @@ import {
 	WebStandardStreamableHTTPServerTransport,
 	createMcpHandler
 } from '@modelcontextprotocol/server';
-import type { Assistant, Grant, Message, Round, ToolContext, Verdict } from '../src/lib/types.js';
+import type {
+	Assistant,
+	Entry,
+	Grant,
+	Message,
+	Round,
+	ToolContext,
+	Verdict
+} from '../src/lib/types.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 import { line, pulse } from '../src/lib/pulse.js';
 import { STOPPED, settled } from '../src/lib/conversation.js';
@@ -405,7 +413,7 @@ describe('an MCP server', () => {
 		expect((await p.engine.run('set mcp url pod /mcp', 'user')).ok).toBe(true);
 	});
 
-	it('never lets the model read a secret an endpoint or a server answers back', async () => {
+	it('sends and stores no secret a server answers back, escaped or not, the screen showing it', async () => {
 		const ECHO: Declared = {
 			name: 'echo',
 			run: async (_args, _signal, again) => {
@@ -415,7 +423,7 @@ describe('an MCP server', () => {
 			}
 		};
 		const refusing = async () =>
-			new Response(JSON.stringify({ error: { message: 'bad key sk-endpoint-0001' } }), {
+			new Response('{"error":{"message":"bad key \\u0073k-proj-endpoint-0001"}}', {
 				status: 401,
 				headers: { 'content-type': 'application/json' }
 			});
@@ -425,20 +433,25 @@ describe('an MCP server', () => {
 			stream([{ content: 'done' }])
 		]);
 		await p.engine.run(
-			'set endpoints url k http://k/v1\nset endpoints key k sk-endpoint-0001\n' +
+			'set endpoints url k http://k/v1\nset endpoints key k sk-proj-endpoint-0001\n' +
 				'set mcp url a http://a/mcp\nset tools use echo on',
 			'user'
 		);
 		p.secrets.push('typed-secret-0002');
 		const t = await p.go();
 		await t.done;
-		const read = JSON.stringify(p.bodies);
-		expect(t.reply.rounds[0].calls[0].result).toContain('sk-endpoint-0001');
-		expect(t.reply.rounds[1].calls[0].result).toContain('typed-secret-0002');
-		expect(read).not.toContain('sk-endpoint-0001');
-		expect(read).not.toContain('typed-secret-0002');
-		expect(read).toContain('bad key <removed>');
-		expect(read).toContain('token <removed> taken');
+		expect(t.reply.rounds[0].calls[0].result).toContain('bad key sk-proj-endpoint-0001');
+		const sent = JSON.stringify(p.bodies);
+		const { serialize } = await import('../src/lib/conversation.js');
+		const kept = serialize([
+			{ id: 'c', title: 't', updated: 0, leaf: null, entries: [{ ...t.reply, id: 'e' } as Entry] }
+		]);
+		for (const out of [sent, kept]) {
+			expect(out).not.toContain('sk-proj-endpoint-0001');
+			expect(out).not.toContain('typed-secret-0002');
+			expect(out).toContain('bad key <removed>');
+			expect(out).toContain('token <removed> taken');
+		}
 	});
 
 	it('asks the user for the secrets a server wants, then asks the call again with them', async () => {
@@ -702,12 +715,12 @@ describe('an MCP server', () => {
 	it('is never reached by a batch of the model before the user lets it, nor closed by one', async () => {
 		let models = 0;
 		const y = async () => (models++, new Response('{"data":[]}'));
-		const p = await page({ a: legacy(SHELL), x: legacy(SHELL), y }, []);
-		await p.engine.run('set mcp url a http://a/mcp', 'user');
-		await vi.waitFor(() => expect(p.methods.a).toContain('tools/list'));
-		const before = p.methods.a.length;
+		const p = await page({ w: legacy(SHELL), x: legacy(SHELL), y }, []);
+		await p.engine.run('set mcp url w http://w/mcp', 'user');
+		await vi.waitFor(() => expect(p.methods.w).toContain('tools/list'));
+		const before = p.methods.w.length;
 		const refuse = async () => REFUSE;
-		const r = await p.engine.run('no mcp a\nset mcp url x http://x/mcp\nshow tools', 'llm', {
+		const r = await p.engine.run('no mcp w\nset mcp url x http://x/mcp\nshow tools', 'llm', {
 			grant: refuse
 		});
 		expect(r.text).toContain('the user refused the change');
@@ -715,7 +728,7 @@ describe('an MCP server', () => {
 		await p.engine.run('set endpoints url y http://y/v1\nshow models', 'llm', { grant: refuse });
 		expect(models).toBe(0);
 		await p.engine.run('show tools', 'user');
-		expect(p.methods.a).toHaveLength(before);
+		expect(p.methods.w).toHaveLength(before);
 	});
 
 	it('tells what it left out in the one system message, after the system prompt', async () => {

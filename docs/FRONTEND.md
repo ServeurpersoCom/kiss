@@ -46,6 +46,7 @@ modules
     protocol <name> chat|messages|responses
                                     chat
     key <name> <secret>
+    auth <name> <Header[: Scheme]>  the header of the protocol
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        120
     retries <name> <count>          1800, a reply asked again on 408, 429, 5xx, 529
@@ -54,6 +55,7 @@ modules
   mcp
     url <name> <url>                guarded
     key <name> <secret>
+    auth <name> <Header[: Scheme]>  Authorization: Bearer
     headers <name> <Name: value; ...>
     timeout <name> <seconds>        310
     proxy <name> <server>           guarded, the KiSS server that proxies it
@@ -247,15 +249,15 @@ lower case, keys and values verbatim. Everything else the page tells the user or
 with a capital, the result of a call KiSS writes, the error of a turn, the status line, unless it
 opens on a URL, written as it is; what a server answers goes as it came.
 
-| Module      | Keys                                                                                             |
-| ----------- | ------------------------------------------------------------------------------------------------ |
-| `chat`      | `model`, `system`                                                                                |
-| `display`   | `thinking`, `tools`, `render <thinking or reply>`, `preview`                                     |
-| `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `headers <name>`, `timeout <name>` |
-| `mcp`       | `url <name>` guarded, `key <name>` secret, `headers <name>`, `timeout <name>`                    |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                             |
-| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                    |
-| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                                    |
+| Module      | Keys                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
+| `chat`      | `model`, `system`                                                                                               |
+| `display`   | `thinking`, `tools`, `render <thinking or reply>`, `preview`                                                    |
+| `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth <name>`, `headers <name>`, `timeout <name>` |
+| `mcp`       | `url <name>` guarded, `key <name>` secret, `auth <name>`, `headers <name>`, `timeout <name>`                    |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                            |
+| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                   |
+| `tools`     | `rounds`, `use <tool>` guarded when opening, `preview <tool>`                                                   |
 
 ### Laws
 
@@ -301,10 +303,15 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   site set over the factory, `show running-config all` every key of every module as `show <module>`
   lists it.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
-- No secret the page knows reaches the model: what a server or an endpoint answers back, an error,
-  a result or a note, reads `<removed>` where the value of a key stood, a value typed in the form
-  of a server included; a value under 8 characters is no key and stays. Headers carry no key:
-  `Authorization` and `x-api-key` come from the key of the item alone.
+- The keychain of the page is the one reader of the value of a key beside the engine that holds it:
+  a module reads a secret `<removed>`, and the key goes out at one place, the header its `auth`
+  names, `Header` or `Header: Scheme`, read as the request leaves. What leaves the memory of the
+  page is sealed: the request to the model, a conversation stored or exported, every string in it
+  and every name of a property read `<removed>` where a secret the page has known this session
+  stood, a value typed in the form of a server and a key replaced since included. A string is sealed
+  as decoded, so a key escaped or streamed in pieces is caught, and a conversation kept before is
+  sealed as it leaves again. The screen shows what came. The headers of an item never name the
+  header its `auth` writes.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
 - The secrets of an item go with it to a url the model writes once the user lets it, the question
@@ -456,10 +463,11 @@ when the list of the endpoint says the model sees them or says nothing; a model 
 reads the line its result keeps of each, `Image image/png, 4096 bytes`.
 
 - `chat`, by default: the chat completions of OpenAI, the open standard of llama.cpp, vLLM and
-  Hugging Face, the key as a bearer token. A tool message holds text only, so the images of a round
-  follow its results in one user message; `architecture.input_modalities` in the list, as
-  llama-server and Hugging Face give it, says whether the model sees them.
-- `messages`: the Messages API of Anthropic, the key in `x-api-key` with the headers a page needs,
+  Hugging Face, the key as a bearer token unless `auth` says. A tool message holds text only, so
+  the images of a round follow its results in one user message; `architecture.input_modalities` in
+  the list, as llama-server and Hugging Face give it, says whether the model sees them.
+- `messages`: the Messages API of Anthropic, the key in `x-api-key` unless `auth` says, with the
+  headers a page needs,
   the betas the headers of the endpoint name joining its own,
   the thinking summarized and sent back as it came, the prompt cached up to its last block, every
   tool streaming its arguments, the images of a call in its result, unless
@@ -469,19 +477,20 @@ reads the line its result keeps of each, `Image image/png, 4096 bytes`.
   tokens the model writes and whether it thinks, `models max_tokens` over it; `min_p`, the penalties
   and `seed` never go.
 - `responses`: the Responses API of OpenAI, stateless, the whole history sent every round and
-  nothing stored on the server, the key as a bearer token, the system prompt as its instructions,
+  nothing stored on the server, the key as a bearer token unless `auth` says, the system prompt as
+  its instructions,
   the reasoning streamed as its summary and sent back encrypted as it came, every tool as it is
   written, the images of a call in its output. `max_tokens` goes as `max_output_tokens`; `top_k`,
   `min_p`, the penalties and `seed` never go.
 
 An endpoint is reached directly at its url, or through a KiSS server that proxies it, as an MCP
 server is: `set endpoints proxy hf monstre` reaches `hf` at `proxy/hf` beside the url of `monstre`,
-an item of `mcp`, with the key and headers of `monstre`, the key as a bearer token beside the fixed
-headers of the protocol; the server sends the key of `hf`, which stays there, where its `proxy auth`
-says, so a key of a cloud API never reaches the browser. `no endpoints proxy hf` goes direct again.
-The proxy names a KiSS server of the page that has no proxy itself, and the model sets it only once
-the user agrees, as a url. A proxy that fails says why, `set proxy key hf` when the API refuses the
-key the server holds.
+an item of `mcp`, with the key, auth and headers of `monstre` beside the fixed headers of the
+protocol; the server sends the key of `hf`, which stays there, where its `proxy auth` says, so a key
+of a cloud API never reaches the browser. `no endpoints proxy hf` goes direct again. The proxy names
+a KiSS server of the page that has no proxy itself, and the model sets it only once the user agrees,
+as a url. A proxy that fails says why, `set proxy key hf` when the API refuses the key the server
+holds.
 
 ```
 set endpoints url claude https://api.anthropic.com/v1
@@ -493,8 +502,10 @@ set endpoints protocol openai responses
 
 The Claude API speaks `chat` too, once the headers of its endpoint name the page,
 `anthropic-dangerous-direct-browser-access: true`, and give `anthropic-version: 2023-06-01`, which
-its list needs. Every MCP server sends its key as a bearer token. Every endpoint and every MCP
-server sends the headers it is given besides, `Name: value` pairs split by `;`, to it alone.
+its list needs. Every MCP server sends its key as a bearer token unless `auth` says:
+`set mcp auth exa x-api-key`, `set endpoints auth azure api-key`, `set endpoints auth h
+'Authorization: Token'`. Every endpoint and every MCP server sends the headers it is given besides,
+`Name: value` pairs split by `;`, to it alone.
 
 Every model holds its own request parameters, sent under their OpenAI names and only when set.
 

@@ -1,9 +1,10 @@
 // proxy.cpp: the proxy module: the servers this server proxies, MCP servers and
 // LLM endpoints alike, each at proxy/<name> of this server: the URL of the
-// server, the key sent to it and where it goes, more headers, and the seconds
-// the server may stay silent
+// server, the key sent to it and the header that carries it, more headers, and
+// the seconds the server may stay silent
 
 #include "engine/engine.h"
+#include "engine/keychain.h"
 #include "engine/text.h"
 #include "log.h"
 
@@ -12,8 +13,7 @@
 static const char * const PROXY_TIMEOUT = "300";
 
 // the headers the proxy writes itself, which a route never sets
-static const char * const OWN_HEADERS[] = { "host",       "content-length", "transfer-encoding",
-                                            "connection", "authorization",  "x-api-key" };
+static const char * const OWN_HEADERS[] = { "host", "content-length", "transfer-encoding", "connection" };
 
 // a route is a path of this server, so its name is a word a path takes
 static bool route_word(const std::string & s) {
@@ -25,9 +25,9 @@ static bool route_word(const std::string & s) {
     return !s.empty();
 }
 
-// why the headers of a route do not read, Name: value; Name: value, empty
-// when they do
-static std::string header_problem(const std::string & headers) {
+// why the headers of a route do not read, Name: value; Name: value, none of
+// them the header of its key, empty when they do
+static std::string header_problem(const std::string & headers, const std::string & keyed) {
     for (const std::string & pair : split(headers, ';')) {
         const std::string h     = trim(pair);
         const size_t      colon = h.find(':');
@@ -42,6 +42,9 @@ static std::string header_problem(const std::string & headers) {
             if (name == own) {
                 return name + " is written by the proxy";
             }
+        }
+        if (name == lower(keyed)) {
+            return trim(h.substr(0, colon)) + " is the header proxy auth writes";
         }
     }
     return "";
@@ -59,7 +62,12 @@ static std::string validate(const engine_reader & config) {
         if (!starts_with(*url, "http://") && !starts_with(*url, "https://")) {
             return "proxy url " + route + " " + *url + " opens with http:// or https://";
         }
-        const std::string problem = header_problem(config.get("proxy headers", route).value_or(""));
+        const std::string auth = config.get("proxy auth", route).value_or(BEARER);
+        std::string       keyed, scheme;
+        if (!placement(auth, keyed, scheme)) {
+            return "proxy auth " + route + ": \"" + auth + "\" is not Header or Header: Scheme";
+        }
+        const std::string problem = header_problem(config.get("proxy headers", route).value_or(""), keyed);
         if (!problem.empty()) {
             return "proxy headers " + route + ": " + problem;
         }
@@ -86,11 +94,10 @@ static engine_module make_proxy() {
     engine_key key("key", ENGINE_SECRET);
     key.named = true;
 
-    // where the key goes: a bearer token, or the x-api-key of the Anthropic API
-    engine_key auth("auth", ENGINE_ENUM);
-    auth.named  = true;
-    auth.values = { "bearer", "x-api-key" };
-    auth.reset  = "bearer";
+    // the header that carries the key, Header or Header: Scheme
+    engine_key auth("auth", ENGINE_STRING);
+    auth.named = true;
+    auth.reset = BEARER;
 
     engine_key headers("headers", ENGINE_STRING);
     headers.named = true;
@@ -105,7 +112,8 @@ static engine_module make_proxy() {
     m.name = "proxy";
     m.role =
         "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> beside its own "
-        "mcp, its key going to its url alone, as a bearer token or as x-api-key; a client reaches one there with the "
+        "mcp, its key going to its url alone, in the header its auth names, Header or Header: Scheme, and every secret "
+        "of this server filtered from the answer; a client reaches one there with the "
         "key of this server, the page by set mcp proxy or set endpoints proxy <name> <this server>, and a route opens "
         "nothing before a client does";
     m.keys.push_back(url);

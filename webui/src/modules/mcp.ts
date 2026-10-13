@@ -8,8 +8,10 @@ export default {
 	keys: {
 		// a Streamable HTTP endpoint, the MCP url of the server
 		url: { kind: 'url', named: true, guard: true },
-		// sent as a bearer token
 		key: { kind: 'secret', named: true },
+		// the header that carries the key, Header or Header: Scheme, a bearer
+		// token unless set
+		auth: { kind: 'string', named: true },
 		// sent with every request, Name: value pairs split by ;
 		headers: { kind: 'string', named: true },
 		// seconds a call of a tool may take, until the turn stops at the latest

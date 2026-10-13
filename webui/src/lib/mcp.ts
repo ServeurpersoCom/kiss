@@ -14,7 +14,7 @@ import type { ConfigReader, Image, Outcome, Tool, ToolContext } from './types.js
 import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
 import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
-import { learn } from './secrets.js';
+import { learn } from './keychain.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
 // server, kept while its url and key stay, with the tool list it serves, asked
@@ -22,9 +22,11 @@ import { learn } from './secrets.js';
 // on and the tools the model sees stay the same from round to round; a
 // request that fails drops the client, and the next use connects again
 
-// a client, its tool list, and whether that list came
+// a client, the signature of the server it connected to, its tool list, and
+// whether that list came
 interface Connection {
 	remote: Remote;
+	signed: string;
 	tools: Promise<Tool[]>;
 	client: Promise<Client>;
 	settled: boolean;
@@ -170,7 +172,7 @@ async function called(
 
 // a server as the configuration names it: its name, url, key, headers and
 // timeout; a change of any makes it another server
-const signature = (remote: Remote): string => JSON.stringify(remote);
+const signature = (remote: Remote): string => JSON.stringify([remote, remote.sign()]);
 
 // the tools a client lists now, each called through that client
 async function listed(remote: Remote, c: Client): Promise<Tool[]> {
@@ -202,11 +204,13 @@ function watch(made: Connection): void {
 
 function connection(remote: Remote): Connection {
 	const held = connections.get(remote.name);
-	if (held && signature(held.remote) === signature(remote)) return held;
+	const signed = signature(remote);
+	if (held && held.signed === signed) return held;
 	if (held) drop(remote.name);
 	const client = connect(remote);
 	const made: Connection = {
 		remote,
+		signed,
 		client,
 		tools: client.then((c) => listed(remote, c)),
 		settled: false

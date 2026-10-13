@@ -287,13 +287,24 @@ describe('a turn', () => {
 		expect(p.engine.settings.get('display thinking')).toBe('closed');
 	});
 
-	it('names the endpoint and the line of a stream that does not read', async () => {
+	it('names the endpoint and the event of a stream that does not read', async () => {
 		const garbled = () =>
 			new Response('data: {"choices"\n\n', { headers: { 'content-type': 'text/event-stream' } });
 		const p = await page([garbled]);
 		await expect(p.go()).rejects.toThrow(
-			'http://m/v1 sent a line that does not read: data: {"choices"'
+			'http://m/v1 sent an event that does not read: {"choices"'
 		);
+	});
+
+	it('reads an event once closed, its data lines joined, never one the stream leaves open', async () => {
+		const text =
+			'data: {"choices":[{"delta":\r\ndata: {"content":"hi"}}]}\r\n\r\n' +
+			'data: {"choices":[{"delta":{"content":"sk-left-open"}}]}\n';
+		const open = () => new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+		const p = await page([open]);
+		await expect(p.go()).rejects.toThrow('ended before [DONE]');
+		expect(JSON.stringify(p.reply)).toContain('hi');
+		expect(JSON.stringify(p.reply)).not.toContain('sk-left-open');
 	});
 });
 

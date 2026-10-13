@@ -13,6 +13,12 @@ layer & factory_layer() {
 }
 
 std::optional<std::string> reader::get(const std::string & key, const std::string & item) const {
+    const auto         value = reveal(key, item);
+    const engine_key * def   = find_key(key);
+    return value && def && def->kind == ENGINE_SECRET ? std::optional<std::string>(REMOVED) : value;
+}
+
+std::optional<std::string> reader::reveal(const std::string & key, const std::string & item) const {
     const std::string s       = stored(key, item);
     const layer &     factory = factory_layer();
     for (const layer * l : { &over, &factory }) {
@@ -64,7 +70,7 @@ static std::optional<std::string> held(const reader & config, const std::string 
             return std::nullopt;
         }
     }
-    return config.get(key, item);
+    return config.reveal(key, item);
 }
 
 words_t diff(const layer & from, const layer & to) {

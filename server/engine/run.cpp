@@ -10,7 +10,6 @@
 #include "log.h"
 
 #include <algorithm>
-#include <cstring>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -376,40 +375,6 @@ void engine_start(const std::string & path, const std::string & version) {
             m.apply(reader(g_running));
         }
     }
-}
-
-// the shortest value masked as a secret: a shorter one is no key, and would
-// mask common text
-static const size_t SECRET_SHORTEST = 8;
-
-std::string engine_mask(const std::string & text) {
-    words_t secrets;
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        const reader                config(g_running);
-        for (const engine_module & m : schema_modules()) {
-            for (const engine_key & k : m.keys) {
-                if (k.kind != ENGINE_SECRET) {
-                    continue;
-                }
-                for (const std::string & item : k.named ? config.names(m.name) : words_t{ "" }) {
-                    const auto value = config.get(m.name + " " + k.name, item);
-                    if (value && value->size() >= SECRET_SHORTEST) {
-                        secrets.push_back(*value);
-                    }
-                }
-            }
-        }
-    }
-    std::sort(secrets.begin(), secrets.end(),
-              [](const std::string & a, const std::string & b) { return a.size() > b.size(); });
-    std::string out = text;
-    for (const std::string & s : secrets) {
-        for (size_t at = out.find(s); at != std::string::npos; at = out.find(s, at + std::strlen(REMOVED))) {
-            out.replace(at, s.size(), REMOVED);
-        }
-    }
-    return out;
 }
 
 // a batch that changes the running configuration says who changed it, as IOS

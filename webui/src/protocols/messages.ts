@@ -103,13 +103,13 @@ export default {
 	path: '/messages',
 	models: '/models?limit=1000',
 	described: true,
+	key: 'x-api-key',
 	// the betas of the endpoint join the one the binding of thinking needs,
 	// as the API takes a list of them, instead of replacing it
-	auth(key, headers) {
+	headers(headers) {
 		const beta = Object.keys(headers).find((n) => n.toLowerCase() === BETA);
 		const { [beta ?? BETA]: theirs, ...rest } = headers;
 		return {
-			...(key ? { 'x-api-key': key } : {}),
 			'anthropic-version': VERSION,
 			'anthropic-dangerous-direct-browser-access': 'true',
 			...rest,

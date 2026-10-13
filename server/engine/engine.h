@@ -54,11 +54,14 @@ struct engine_key {
 };
 
 // what a module reads: the value of a key through every layer, none when no
-// layer holds one, and the items of a collection
+// layer holds one, a secret set read <removed>, and the items of a
+// collection; reveal gives a secret as it is, to the keychain and to the
+// engine as it saves, copies or compares
 struct engine_reader {
-    virtual ~engine_reader()                                                                             = default;
-    virtual std::optional<std::string> get(const std::string & key, const std::string & item = "") const = 0;
-    virtual std::vector<std::string>   names(const std::string & module) const                           = 0;
+    virtual ~engine_reader()                                                                                = default;
+    virtual std::optional<std::string> get(const std::string & key, const std::string & item = "") const    = 0;
+    virtual std::optional<std::string> reveal(const std::string & key, const std::string & item = "") const = 0;
+    virtual std::vector<std::string>   names(const std::string & module) const                              = 0;
 };
 
 // a module owns the keys spelled after its name: "server" owns "server port"
@@ -135,11 +138,6 @@ void engine_start(const std::string & path, const std::string & version);
 // one batch at a time, whoever sends it; typed fills the set lines of secrets
 // written without their value
 engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed = {});
-
-// a text as a client may read it: the value of every secret the running
-// configuration holds replaced by <removed>, the longest first, so a tool
-// that shows a log or a file never hands a key on
-std::string engine_mask(const std::string & text);
 
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");

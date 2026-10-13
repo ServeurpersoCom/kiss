@@ -26,7 +26,7 @@ import { Values } from './values.js';
 import { SaveArchive } from './archive.js';
 import { complete, partialWord } from './complete.js';
 import { didYouMean } from './near.js';
-import { scrub } from '../lib/secrets.js';
+import { hold } from '../lib/keychain.js';
 
 const schema = new KeySchema(modules);
 
@@ -65,25 +65,22 @@ const QUOTE = /["']/;
 // the running configuration, read only, for the rest of the page
 export const settings: ConfigReader = running;
 
-// the values of every secret the running configuration holds
+// the values of every secret the running configuration holds, the ones the
+// keychain filters from every answer of the network
 function secrets(): string[] {
 	const out: string[] = [];
 	for (const [key, def] of schema.list()) {
 		if (def.kind !== 'secret') continue;
 		const names = def.named ? running.names(key.split(' ')[0]) : [undefined];
 		for (const name of names) {
-			const value = running.get(key, name);
+			const value = running.reveal(key, name);
 			if (value !== undefined) out.push(String(value));
 		}
 	}
 	return out;
 }
 
-// a value as the model may read it, every secret the page knows masked: one a
-// server or an endpoint answers back, in an error or in a result
-export function mask<T>(value: T): T {
-	return scrub(value, secrets());
-}
+hold(secrets);
 
 // one compiled line: what runs on the draft, then the filter of its output, if
 // any
@@ -358,7 +355,7 @@ async function state(
 		if (name !== undefined && !config.names(module).includes(name)) {
 			if (!(await listed(module)).includes(name)) continue;
 		}
-		const value = config.get(key, name);
+		const value = config.reveal(key, name);
 		if (value !== undefined) out[k] = value;
 	}
 	return out;

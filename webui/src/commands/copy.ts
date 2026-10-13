@@ -23,7 +23,7 @@ export function values(ctx: Context, name: string): Record<string, Value> {
 // module declares anymore or a value its key no longer takes left out
 export function effective(ctx: Context, name: string): Record<string, Value> {
 	const config = ctx.config.reader(values(ctx, name));
-	return Object.fromEntries(config.stored().map((k) => [k, config.get(...unstore(k))!]));
+	return Object.fromEntries(config.stored().map((k) => [k, config.reveal(...unstore(k))!]));
 }
 
 // a configuration as the lines that show it, or with secrets the lines that

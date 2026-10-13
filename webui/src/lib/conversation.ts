@@ -1,4 +1,5 @@
 import type { Conversation, Entry, Message, Round } from './types.js';
+import { seal } from './keychain.js';
 
 // conversations as a file: a marker naming what it holds, then the
 // conversations as the browser stores them, ids included
@@ -116,7 +117,7 @@ export function latest(c: Conversation, id: string): string {
 	return [...c.entries].reverse().find(under)!.id;
 }
 
-// one conversation or many, as they settled
+// one conversation or many, as they settled, sealed by the keychain
 export function serialize(conversations: readonly Conversation[]): string {
 	const file = {
 		[MARK]: KIND,
@@ -129,7 +130,7 @@ export function serialize(conversations: readonly Conversation[]): string {
 			entries: stored(c.entries)
 		}))
 	};
-	return JSON.stringify(file, null, INDENT) + '\n';
+	return seal(file, INDENT) + '\n';
 }
 
 // the one conversation a prefix of its id names

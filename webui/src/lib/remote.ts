@@ -1,13 +1,15 @@
 import type { ConfigReader, Image } from './types.js';
+import { BEARER, credential, placement } from './keychain.js';
 
-// an item of a collection module that names a remote server by a url, an
-// optional key, the headers sent besides it and the seconds it has to answer:
-// endpoints and mcp; proxied, it goes through a KiSS server, the key and the
-// headers those of that server
+// an item of a collection module that names a remote server by a url, the
+// header that carries its key, the headers sent besides it and the seconds it
+// has to answer: endpoints and mcp; proxied, it goes through a KiSS server,
+// the key and the headers those of that server; sign reads the key through
+// the keychain as a request leaves, so no remote holds its value
 export interface Remote {
 	name: string;
 	url: string;
-	key: string;
+	sign(): Record<string, string>;
 	headers: Record<string, string>;
 	timeout: number;
 	proxied: boolean;
@@ -18,10 +20,6 @@ const PROXY = 'proxy';
 
 // the module whose items name the KiSS servers a proxy takes, by their MCP
 const SERVERS = 'mcp';
-
-// the headers that carry a key, which only the key of an item writes, so a
-// key is a secret wherever it goes
-const KEYED = ['authorization', 'x-api-key'];
 
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
@@ -41,12 +39,14 @@ function pairs(text: string): [string, string][] {
 		});
 }
 
-// an item as it names its server: its url, key, headers and seconds
-function own(config: ConfigReader, module: string, name: string): Remote {
+// an item as it names its server: its url, key placed by its auth or else as
+// fallback says, headers and seconds
+function own(config: ConfigReader, module: string, name: string, fallback: string): Remote {
+	const auth = String(config.get(`${module} auth`, name) ?? '') || fallback;
 	return {
 		name,
 		url: String(config.get(`${module} url`, name)),
-		key: String(config.get(`${module} key`, name) ?? ''),
+		sign: () => credential(config, auth, module, name),
 		headers: Object.fromEntries(pairs(String(config.get(`${module} headers`, name) ?? ''))),
 		timeout: Number(config.get(`${module} timeout`, name)),
 		proxied: false
@@ -56,20 +56,26 @@ function own(config: ConfigReader, module: string, name: string): Remote {
 // every item of the module that has a url, sorted by name; an item with a
 // proxy, an MCP server or an endpoint alike, reaches its server through the
 // proxy of the KiSS server the proxy names, at proxy/<name> beside its MCP,
-// with the key and headers of that server, in its own seconds
-export function remotes(config: ConfigReader, module: string): Remote[] {
+// with the key, auth and headers of that server, in its own seconds; fallback
+// gives where the key of an item goes when its auth does not say
+export function remotes(
+	config: ConfigReader,
+	module: string,
+	fallback: (name: string) => string = () => BEARER
+): Remote[] {
 	return config
 		.names(module)
 		.filter((name) => config.get(`${module} url`, name))
 		.map((name) => {
 			const proxy = config.get(`${module} proxy`, name);
-			if (proxy === undefined) return own(config, module, name);
-			const server = own(config, SERVERS, proxy);
+			const item = own(config, module, name, fallback(name));
+			if (proxy === undefined) return item;
+			const server = own(config, SERVERS, String(proxy), BEARER);
 			return {
 				...server,
 				name,
 				url: new URL(`${PROXY}/${name}`, new URL(server.url, location.href)).href,
-				timeout: own(config, module, name).timeout,
+				timeout: item.timeout,
 				proxied: true
 			};
 		});
@@ -78,9 +84,14 @@ export function remotes(config: ConfigReader, module: string): Remote[] {
 // the rules of such a module: every item has a url of its own, a proxy names
 // a KiSS server, another item of mcp that has no proxy itself, and no server
 // is reached twice, a relative url resolved against the page, since the same
-// server reached twice serves the same names twice; its headers are Name:
-// value pairs, none of them carrying a key
-export function rules(config: ConfigReader, module: string): string | null {
+// server reached twice serves the same names twice; its auth is Header or
+// Header: Scheme, its headers are Name: value pairs, none of them the header
+// that carries its key, placed by its auth or else as fallback says
+export function rules(
+	config: ConfigReader,
+	module: string,
+	fallback: (name: string) => string = () => BEARER
+): string | null {
 	const names = config.names(module).filter((n) => !config.get(`${module} url`, n));
 	if (names.length) return `${module} ${names.join(' ')} has no url`;
 	for (const name of config.names(module)) {
@@ -104,22 +115,21 @@ export function rules(config: ConfigReader, module: string): string | null {
 		const text = String(config.get(`${module} headers`, name) ?? '');
 		const bad = pairs(text).find(([n, v]) => !n || !v);
 		if (bad) return `${module} headers ${name}: "${bad[1] || bad[0]}" is not Name: value`;
-		const keyed = pairs(text).find(([n]) => KEYED.includes(n.toLowerCase()));
-		if (keyed)
-			return `${module} headers ${name}: ${keyed[0]} carries a key -> set ${module} key ${name}`;
+		const auth = String(config.get(`${module} auth`, name) ?? '');
+		if (auth && !placement(auth))
+			return `${module} auth ${name}: "${auth}" is not Header or Header: Scheme`;
+		const [header] = placement(auth || fallback(name))!;
+		const both = pairs(text).find(([n]) => n.toLowerCase() === header.toLowerCase());
+		if (both)
+			return `${module} headers ${name}: ${both[0]} is the header ${module} auth ${name} writes`;
 	}
 	return null;
 }
 
-// a key as a bearer token, none without a key
-export function bearer(key: string): Record<string, string> {
-	return key ? { Authorization: `Bearer ${key}` } : {};
-}
-
-// what a request to an MCP server carries: its key as a bearer token, then its
-// headers, which may override it
+// what a request to an MCP server carries: its key placed by its auth, then
+// its headers
 export function headers(remote: Remote): Record<string, string> {
-	return { ...bearer(remote.key), ...remote.headers };
+	return { ...remote.sign(), ...remote.headers };
 }
 
 // an image as a URL that holds it, for a protocol that takes images so

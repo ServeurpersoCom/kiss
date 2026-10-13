@@ -1,6 +1,7 @@
 import type { ConfigReader, Delta, Protocol, Request } from './types.js';
 import { MODEL_SEPARATOR, SLASH } from './config.js';
-import { bearer, remotes, type Remote } from './remote.js';
+import { seal } from './keychain.js';
+import { remotes, type Remote } from './remote.js';
 import chatProtocol from '../protocols/chat.js';
 
 // the client of every endpoint: the model list, and a request streamed in the
@@ -32,11 +33,22 @@ export interface Endpoint extends Remote {
 	pause: number;
 }
 
+// the protocol an endpoint speaks
+function protocol(config: ConfigReader, name: string): Protocol {
+	return protocols.find((p) => p.name === config.get('endpoints protocol', name))!;
+}
+
+// the header that carries the key of an endpoint unless its auth says: the one
+// of its protocol
+export function fallback(config: ConfigReader, name: string): string {
+	return protocol(config, name).key;
+}
+
 // every endpoint that has a url, sorted by name, each with its protocol
 export function endpoints(config: ConfigReader): Endpoint[] {
-	return remotes(config, 'endpoints').map((r) => ({
+	return remotes(config, 'endpoints', (name) => fallback(config, name)).map((r) => ({
 		...r,
-		protocol: protocols.find((p) => p.name === config.get('endpoints protocol', r.name))!,
+		protocol: protocol(config, r.name),
 		retries: Number(config.get('endpoints retries', r.name)),
 		pause: Number(config.get('endpoints pause', r.name))
 	}));
@@ -46,12 +58,14 @@ export function endpoints(config: ConfigReader): Endpoint[] {
 // passes, the attempt about to be made, and how many the endpoint takes
 export type Retrying = (status: number, attempt: number, attempts: number) => void;
 
-// the headers that carry the key: those of the protocol, or, proxied, the key
-// of the KiSS server as a bearer token beside the fixed headers of the
-// protocol, the server placing the key of the endpoint itself
-function auth(endpoint: Endpoint): Record<string, string> {
-	if (!endpoint.proxied) return endpoint.protocol.auth(endpoint.key, endpoint.headers);
-	return { ...endpoint.protocol.auth('', {}), ...bearer(endpoint.key), ...endpoint.headers };
+// what a request carries: the key in the header its auth names, then the
+// headers of the endpoint with those of its protocol; proxied, the key is the
+// one of the KiSS server, which places the key of the endpoint itself
+function sent(endpoint: Endpoint): Record<string, string> {
+	return {
+		...endpoint.sign(),
+		...endpoint.protocol.headers(endpoint.headers)
+	};
 }
 
 // what an endpoint answered wrong, with the command that fixes it when the
@@ -91,8 +105,7 @@ function notAnLlm(res: Response): EndpointError {
 
 // a request the endpoint answers within its timeout, as far as read takes the
 // answer, or less when the signal of the caller aborts; what read leaves of a
-// body streams on that signal alone; it carries the key as the protocol does,
-// then the headers of the endpoint, which may override it
+// body streams on that signal alone
 async function request<T>(
 	endpoint: Endpoint,
 	path: string,
@@ -108,7 +121,7 @@ async function request<T>(
 	try {
 		const res = await fetch(`${endpoint.url}${path}`, {
 			...init,
-			headers: { ...auth(endpoint), ...init.headers },
+			headers: { ...sent(endpoint), ...init.headers },
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
 			// a network or CORS failure: nothing answers at that URL
@@ -149,7 +162,7 @@ export async function describe(
 	model: string,
 	signal?: AbortSignal
 ): Promise<Listed | undefined> {
-	const id = `${endpoint.url}${endpoint.protocol.models} ${endpoint.key}`;
+	const id = `${endpoint.url}${endpoint.protocol.models} ${JSON.stringify(endpoint.sign())}`;
 	let all = lists.get(id);
 	if (!all) {
 		all = list(endpoint, signal);
@@ -223,9 +236,10 @@ async function opened(
 }
 
 // one delta per server sent event, read by the protocol of the endpoint from
-// the data of the event, up to the event that ends the stream, which may carry
-// the last count: a stream closed before it is cut short, never a finished
-// answer
+// the data of the event, its data lines joined by LF, once the blank line that
+// closes it came, up to the event that ends the stream, which may carry the
+// last count: a stream closed before it is cut short, never a finished answer,
+// and an event it leaves open is never read
 export async function* chat(
 	endpoint: Endpoint,
 	req: Request,
@@ -236,26 +250,31 @@ export async function* chat(
 	const init = {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(protocol.body(req))
+		// what the model reads leaves sealed, whatever the history holds
+		body: seal(protocol.body(req))
 	};
 	const stream = await opened(endpoint, init, signal, retrying);
 	const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 	const read = protocol.reader();
 	let buffer = '';
+	let data: string[] = [];
 	for (;;) {
 		const { value, done } = await reader.read();
 		if (done) throw new Error(`the stream ended before ${protocol.last}`);
 		buffer += value;
 		let nl: number;
 		while ((nl = buffer.indexOf('\n')) >= 0) {
-			const line = buffer.slice(0, nl).trim();
+			const line = buffer.slice(0, nl).replace(/\r$/, '');
 			buffer = buffer.slice(nl + 1);
-			if (!line.startsWith(DATA)) continue;
+			if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
+			if (line || !data.length) continue;
+			const event = data.join('\n').trim();
+			data = [];
 			let d: Delta | undefined;
 			try {
-				d = read(line.slice(DATA.length).trim());
+				d = read(event);
 			} catch {
-				throw new Error(`${endpoint.url} sent a line that does not read: ${line}`);
+				throw new Error(`${endpoint.url} sent an event that does not read: ${event}`);
 			}
 			if (!d) continue;
 			if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);

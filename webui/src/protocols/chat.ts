@@ -1,5 +1,6 @@
 import type { Call, Message, Protocol } from '../lib/types.js';
-import { bearer, dataUrl } from '../lib/remote.js';
+import { dataUrl } from '../lib/remote.js';
+import { BEARER } from '../lib/keychain.js';
 
 // OpenAI chat completions, the open standard of llama.cpp, vLLM and Hugging
 // Face: one delta per event until [DONE], the endpoint counting the tokens it
@@ -62,7 +63,8 @@ export default {
 	path: '/chat/completions',
 	models: '/models',
 	described: true,
-	auth: (key, headers) => ({ ...bearer(key), ...headers }),
+	key: BEARER,
+	headers: (headers) => headers,
 	drops: [],
 	// one system message, first, as every template takes it
 	body: (r) => ({

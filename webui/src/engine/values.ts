@@ -1,4 +1,5 @@
 import type { Config, Schema, Value } from '../lib/types.js';
+import { REMOVED } from '../lib/config.js';
 import { stored, unstore } from './schema.js';
 
 // a configuration: the keys set in the session, over the values the site
@@ -17,6 +18,11 @@ export class Values implements Config {
 	}
 
 	get(key: string, name?: string): Value | undefined {
+		const value = this.reveal(key, name);
+		return value !== undefined && this.schema.find(key)?.kind === 'secret' ? REMOVED : value;
+	}
+
+	reveal(key: string, name?: string): Value | undefined {
 		const k = stored(key, name);
 		if (this.map.has(k)) return this.map.get(k);
 		if (this.site.has(k)) return this.site.get(k);

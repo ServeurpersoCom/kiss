@@ -110,8 +110,12 @@ export interface Command<P = void> {
 // keys are written as typed: "chat model", "endpoints url" with an item name
 export interface ConfigReader {
 	// the value in force: the session layer, else the site, else the factory
-	// configuration, else the reset value of the key
+	// configuration, else the reset value of the key; a secret set reads
+	// <removed>
 	get(key: string, name?: string): Value | undefined;
+	// the value in force, a secret as it is: what the keychain reads as a
+	// request leaves, and the engine as it saves, copies or compares
+	reveal(key: string, name?: string): Value | undefined;
 	// the items of a collection module some layer names
 	names(module: string): string[];
 }
@@ -405,9 +409,9 @@ export interface Delta {
 
 // how an endpoint speaks: a file of protocols/, named as endpoints protocol
 // takes it; the path it posts a request to, the path that lists its models
-// and whether a request reads what it lists of its model, the headers of a
-// request, its own with the key and those of the endpoint over them, the
-// parameters of models it never sends, the body of a
+// and whether a request reads what it lists of its model, where it takes a
+// key, Header or Header: Scheme, its own headers with those of the endpoint
+// over them, the parameters of models it never sends, the body of a
 // request, the event that ends a stream, and a reader of one stream, which
 // tells what the data of each event adds, none for an event that adds nothing
 export interface Protocol {
@@ -415,7 +419,8 @@ export interface Protocol {
 	path: string;
 	models: string;
 	described: boolean;
-	auth(key: string, headers: Record<string, string>): Record<string, string>;
+	key: string;
+	headers(headers: Record<string, string>): Record<string, string>;
 	drops: readonly string[];
 	body(request: Request): object;
 	last: string;

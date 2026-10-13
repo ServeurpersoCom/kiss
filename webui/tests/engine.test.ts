@@ -98,11 +98,11 @@ describe('a batch', () => {
 		expect((await k.run('no chat system', 'user')).text).toBe(
 			'- set chat system blue\n+ set chat system red'
 		);
-		const key = await k.run('set endpoints url a http://a/v1\nset endpoints key a sk-123', 'user');
-		expect(key.text).toBe('+ ! endpoints key a is set\n+ set endpoints url a http://a/v1');
-		await k.run('set endpoints timeout a 9', 'user');
-		expect((await k.run('no endpoints a', 'user')).text).toBe(
-			'- ! endpoints key a is set\n- set endpoints timeout a 9\n- set endpoints url a http://a/v1'
+		const key = await k.run('set endpoints url x http://x/v1\nset endpoints key x sk-123', 'user');
+		expect(key.text).toBe('+ ! endpoints key x is set\n+ set endpoints url x http://x/v1');
+		await k.run('set endpoints timeout x 9', 'user');
+		expect((await k.run('no endpoints x', 'user')).text).toBe(
+			'- ! endpoints key x is set\n- set endpoints timeout x 9\n- set endpoints url x http://x/v1'
 		);
 	});
 
@@ -231,7 +231,7 @@ describe('a secret', () => {
 				(await k.run(`set endpoints url ${item} http://${item}2/v1`, 'llm', { grant })).ok
 			).toBe(true);
 		}
-		expect(k.settings.get('endpoints key', 'u')).toBe('sk-user');
+		expect(k.settings.reveal('endpoints key', 'u')).toBe('sk-user');
 		expect(k.settings.get('endpoints url', 'u')).toBe('http://u2/v1');
 		expect((await k.run('set endpoints key u sk-model', 'llm')).ok).toBe(true);
 		const secret = async () => 'sk-typed';
@@ -407,21 +407,57 @@ describe('a proxy', () => {
 });
 
 describe('the headers of a server', () => {
-	it('carry no key, which goes in the key of the item, a secret', async () => {
+	it('name no header the auth of the item writes, the one of its protocol unless set', async () => {
 		const k = await page();
-		for (const name of ['Authorization', 'x-api-key']) {
-			expect(
-				(
-					await k.run(
-						`set endpoints url a http://a/v1\nset endpoints headers a '${name}: sk-a'`,
-						'user'
-					)
-				).text
-			).toContain(`endpoints headers a: ${name} carries a key -> set endpoints key a`);
-		}
-		expect(
-			(await k.run("set mcp url b http://b/mcp\nset mcp headers b 'Authorization: x'", 'user')).text
-		).toContain('mcp headers b: Authorization carries a key -> set mcp key b');
+		await k.run('set endpoints url a http://a/v1\nset mcp url b http://b/mcp', 'user');
+		expect((await k.run("set endpoints headers a 'authorization: x'", 'user')).text).toContain(
+			'endpoints headers a: authorization is the header endpoints auth a writes'
+		);
+		expect((await k.run("set mcp headers b 'Authorization: x'", 'user')).text).toContain(
+			'mcp headers b: Authorization is the header mcp auth b writes'
+		);
+		await k.run('set endpoints protocol a messages', 'user');
+		expect((await k.run("set endpoints headers a 'x-api-key: x'", 'user')).text).toContain(
+			'endpoints headers a: x-api-key is the header endpoints auth a writes'
+		);
+		expect((await k.run("set endpoints headers a 'Authorization: x'", 'user')).ok).toBe(true);
+		expect((await k.run('set endpoints auth a Authorization', 'user')).text).toContain(
+			'endpoints headers a: Authorization is the header endpoints auth a writes'
+		);
+		expect((await k.run("set endpoints auth a 'a/b: c'", 'user')).text).toContain(
+			'endpoints auth a: "a/b: c" is not Header or Header: Scheme'
+		);
+	});
+
+	it('leave the key to auth, which places it as Header or Header: Scheme', async () => {
+		const k = await page();
+		const sent: Record<string, Record<string, string>> = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init: RequestInit) => {
+				sent[url] = init.headers as Record<string, string>;
+				return models(['m']);
+			})
+		);
+		await k.run(
+			[
+				'set endpoints url a http://a/v1',
+				'set endpoints key a sk-a',
+				'set endpoints auth a api-key',
+				'set endpoints url b http://b/v1',
+				'set endpoints key b sk-b',
+				"set endpoints auth b 'Authorization: Token'",
+				'set endpoints url c http://c/v1',
+				'set endpoints key c sk-c',
+				'set endpoints protocol c messages'
+			].join('\n'),
+			'user'
+		);
+		await k.run('show models', 'user');
+		expect(sent['http://a/v1/models']).toEqual({ 'api-key': 'sk-a' });
+		expect(sent['http://b/v1/models']).toEqual({ Authorization: 'Token sk-b' });
+		expect(sent['http://c/v1/models?limit=1000']).toMatchObject({ 'x-api-key': 'sk-c' });
+		expect(sent['http://c/v1/models?limit=1000'].Authorization).toBeUndefined();
 	});
 
 	it('go with every request to it alone, after its key, as Name: value pairs', async () => {
@@ -665,7 +701,8 @@ describe('the firewall', () => {
 			'! the user typed mcp key a\n+ ! mcp key a is set'
 		);
 		expect(asked).toEqual(['mcp key a']);
-		expect(k.settings.get('mcp key', 'a')).toBe('sk-typed');
+		expect(k.settings.get('mcp key', 'a')).toBe('<removed>');
+		expect(k.settings.reveal('mcp key', 'a')).toBe('sk-typed');
 		expect((await k.run('set mcp key a', 'llm', { secret: async () => null })).text).toBe(
 			'% no value given for mcp key a'
 		);
@@ -685,7 +722,7 @@ describe('the firewall', () => {
 		const out = (await k.run('set mcp key a <removed>', 'llm')).text;
 		expect(out).toContain('"<removed>" stands for a secret kept out of view, it is no value');
 		expect(out).toContain('-> the line without a value asks the user');
-		expect(k.settings.get('mcp key', 'a')).toBe('sk-a');
+		expect(k.settings.reveal('mcp key', 'a')).toBe('sk-a');
 	});
 
 	it('reads a secret replaced as one line, its values out of view', async () => {
@@ -1153,32 +1190,32 @@ describe('a copy', () => {
 describe('show', () => {
 	it('reads a module four ways, key before item as everywhere', async () => {
 		const k = await page();
-		await k.run('set endpoints url a http://a/v1\nset endpoints url b http://b/v1', 'user');
-		await k.run('set endpoints key a sk-a', 'user');
+		await k.run('set endpoints url x http://x/v1\nset endpoints url y http://y/v1', 'user');
+		await k.run('set endpoints key x sk-x', 'user');
 		expect((await k.run('show endpoints', 'user')).text).toBe(
 			[
-				'! endpoints key a is set',
-				'set endpoints pause a 2',
-				'set endpoints protocol a chat',
-				'set endpoints retries a 1800',
-				'set endpoints timeout a 120',
-				'set endpoints url a http://a/v1',
-				'set endpoints pause b 2',
-				'set endpoints protocol b chat',
-				'set endpoints retries b 1800',
-				'set endpoints timeout b 120',
-				'set endpoints url b http://b/v1'
+				'! endpoints key x is set',
+				'set endpoints pause x 2',
+				'set endpoints protocol x chat',
+				'set endpoints retries x 1800',
+				'set endpoints timeout x 120',
+				'set endpoints url x http://x/v1',
+				'set endpoints pause y 2',
+				'set endpoints protocol y chat',
+				'set endpoints retries y 1800',
+				'set endpoints timeout y 120',
+				'set endpoints url y http://y/v1'
 			].join('\n')
 		);
 		expect((await k.run('show endpoints url', 'user')).text).toBe(
-			'set endpoints url a http://a/v1\nset endpoints url b http://b/v1'
+			'set endpoints url x http://x/v1\nset endpoints url y http://y/v1'
 		);
-		expect((await k.run('show endpoints url b', 'user')).text).toBe(
-			'set endpoints url b http://b/v1'
+		expect((await k.run('show endpoints url y', 'user')).text).toBe(
+			'set endpoints url y http://y/v1'
 		);
-		expect((await k.run('show endpoints key b', 'user')).text).toBe('! endpoints key b is not set');
-		expect((await k.run('show endpoints a', 'user')).text).toBe(
-			'! endpoints key a is set\nset endpoints pause a 2\nset endpoints protocol a chat\nset endpoints retries a 1800\nset endpoints timeout a 120\nset endpoints url a http://a/v1'
+		expect((await k.run('show endpoints key y', 'user')).text).toBe('! endpoints key y is not set');
+		expect((await k.run('show endpoints x', 'user')).text).toBe(
+			'! endpoints key x is set\nset endpoints pause x 2\nset endpoints protocol x chat\nset endpoints retries x 1800\nset endpoints timeout x 120\nset endpoints url x http://x/v1'
 		);
 		expect((await k.run('show chat zz', 'user')).text).toContain('unknown key');
 	});
@@ -1313,9 +1350,9 @@ describe('every key', () => {
 		mcp: 'b'
 	};
 	// values to try for a key by its kind, the first it takes that is not its
-	// default kept; c names the server a proxy takes
+	// default kept; api-key places a key, c names the server a proxy takes
 	const TRIES: Record<string, string[]> = {
-		string: ['m/x', 'X-A: 1', 'c'],
+		string: ['m/x', 'api-key', 'X-A: 1', 'c'],
 		url: ['http://n/v1'],
 		css: ['#123456', '2px', '700', 'serif', '1.5']
 	};

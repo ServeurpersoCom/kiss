@@ -23,6 +23,7 @@ struct reader : engine_reader {
     explicit reader(const layer & l) : over(l) {}
 
     std::optional<std::string> get(const std::string & key, const std::string & item) const override;
+    std::optional<std::string> reveal(const std::string & key, const std::string & item) const override;
     std::vector<std::string>   names(const std::string & module) const override;
 };
 

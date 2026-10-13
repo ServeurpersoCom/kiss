@@ -61,6 +61,7 @@ endforeach()
 # themselves by existing, so every source is compiled into the executable,
 # never into a library the linker could leave out.
 file(GLOB SERVER_SOURCES CONFIGURE_DEPENDS server/*.cpp server/*/*.cpp)
+list(FILTER SERVER_SOURCES EXCLUDE REGEX "/server/tests/")
 add_executable(server ${SERVER_SOURCES} ${EMBEDDED})
 target_include_directories(server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR})
 if(MSVC)
@@ -74,3 +75,10 @@ if(WIN32)
     target_link_libraries(server PRIVATE ws2_32)
 endif()
 add_dependencies(server version)
+
+# seal_test: the laws of the seal of the keychain, run once built, a broken law
+# failing the build
+add_executable(seal_test server/tests/seal.cpp server/engine/seal.cpp server/engine/text.cpp)
+target_include_directories(seal_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server)
+target_link_libraries(seal_test PRIVATE yyjson)
+add_custom_command(TARGET seal_test POST_BUILD COMMAND seal_test)

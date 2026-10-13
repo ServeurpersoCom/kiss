@@ -3,6 +3,7 @@
 #include "mcp/methods.h"
 
 #include "engine/engine.h"
+#include "engine/keychain.h"
 #include "log.h"
 #include "mcp/jsonrpc.h"
 #include "tools.h"
@@ -121,7 +122,8 @@ static std::string asked_json(yyjson_val * id, const tool_result & r) {
     });
 }
 
-// the result of a tool call, its text masked of every secret of the server
+// the result of a tool call, its text filtered of every secret of the server,
+// so a tool that shows a log or a file never hands a key on
 static std::string call_json(yyjson_val * id, bool modern, const tool_result & r) {
     if (!r.asks.empty()) {
         return asked_json(id, r);
@@ -129,7 +131,7 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_result & r
     return jsonrpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
         if (!r.text.empty() || r.image.empty()) {
-            const std::string text  = engine_mask(r.text);
+            const std::string text  = seal_text(r.text, keychain_running());
             yyjson_mut_val *  block = yyjson_mut_arr_add_obj(doc, content);
             yyjson_mut_obj_add_str(doc, block, "type", "text");
             yyjson_mut_obj_add_strncpy(doc, block, "text", text.c_str(), text.size());

@@ -8,7 +8,7 @@ import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
-import { mask, run, settings } from '../engine/run.js';
+import { run, settings } from '../engine/run.js';
 
 // whether the user lets the model make this call: a tool in consent asks, and
 // always turns it on, as the user
@@ -41,8 +41,7 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 	const tool = tools.find((t) => t.name === c.name && settings.get('tools use', t.name) !== OFF);
 	const args = object(c.args);
 	if (!tool || !args) {
-		// what no tool reads, or what does not read, cannot be masked, so none
-		// of it is kept
+		// what no tool reads, or what does not read, is kept as no arguments
 		c.args = '{}';
 		c.result = tool ? 'The arguments are not a JSON object' : `Unknown tool "${c.name}"`;
 		c.ok = false;
@@ -98,9 +97,7 @@ async function setup(
 		.filter((part) => part)
 		.join('\n\n');
 	const info = endpoint.protocol.described ? await describe(endpoint, model, signal) : undefined;
-	// whatever the model reads goes through the mask, so a secret a server or an
-	// endpoint answers back never reaches it
-	const request: Request = mask({ model, system, messages, tools, parameters, info });
+	const request: Request = { model, system, messages, tools, parameters, info };
 	return { endpoint, request, tools };
 }
 
