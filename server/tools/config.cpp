@@ -63,11 +63,12 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                     "secret, write its line without the value, set proxy key <name>: the user types it in a field "
                     "you never see, so never ask for it in the chat. A url no configuration holds yet asks the user "
                     "to let it with a card of the page as the line runs: run the line, never ask in the chat first.";
-    t.input = R"({"type":"object","properties":{)"
-              R"("description":{"type":"string","description":"Why I'm configuring the server, written first"},)"
-              R"("lines":{"type":"string","description":"CLI lines, one per line"}},)"
-              R"("required":["description","lines"],"additionalProperties":false})";
-    t.call  = call;
+    t.input =
+        R"({"type":"object","properties":{)"
+        R"("description":{"type":"string","minLength":1,"description":"Why I'm configuring the server, written first"},)"
+        R"("lines":{"type":"string","minLength":1,"description":"CLI lines, one per line"}},)"
+        R"("required":["description","lines"],"additionalProperties":false})";
+    t.call = call;
     return { t };
 }
 

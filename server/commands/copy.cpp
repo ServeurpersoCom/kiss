@@ -37,7 +37,7 @@ static words_t next_copy(const words_t & args) {
 }
 
 static command make_copy() {
-    return { { "copy" }, false, compile_copy, next_copy };
+    return { { "copy" }, false, compile_copy, next_copy, true };
 }
 
 ENGINE_COMMAND(make_copy);

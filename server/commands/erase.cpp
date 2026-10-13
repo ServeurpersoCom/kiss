@@ -33,7 +33,7 @@ static words_t next_erase(const words_t & args) {
 }
 
 static command make_erase() {
-    return { { "erase" }, false, compile_erase, next_erase };
+    return { { "erase" }, false, compile_erase, next_erase, true };
 }
 
 ENGINE_COMMAND(make_erase);

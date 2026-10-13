@@ -1,9 +1,9 @@
 // files.cpp: the laws of the files the tools on files reach, run as the build
-// ends: a path is taken from the working directory, a text loads whole with
-// its bytes as they are and refuses a binary or a file past its limit, bytes
-// are written in place with their directories made and the mode and the link
-// of the file kept, and a string is found where it first occurs, its count
-// telling whether it is unique
+// ends: a path is taken from the working directory and refused with a NUL in
+// it, a text loads whole with its bytes as they are and refuses a binary or a
+// file past its limit, bytes are written in place with their directories made
+// and the mode and the link of the file kept, and a string is found where it
+// first occurs, its count telling whether it is unique
 
 #include "file.h"
 
@@ -36,6 +36,8 @@ int main() {
 
     law(file_path(cwd, "a/b.txt") == root / "a/b.txt", "a relative path starts at the working directory");
     law(file_path(cwd, (root / "x").u8string()) == root / "x", "an absolute path stays as it is");
+    law(file_refused(std::string("f.txt\0.sh", 9)) == "Path holds a NUL byte" && file_refused("f.txt").empty(),
+        "a path holding a NUL names no file");
 
     const std::string bytes = "\xEF\xBB\xBFone\r\ntwo\r\n\xC3\xA9t\xC3\xA9";
     law(file_write(root / "deep/er/f.txt", bytes).empty(), "a file is written with its directories made");

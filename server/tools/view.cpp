@@ -235,10 +235,14 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
 }
 
 static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & tick) {
-    const std::string given = yyjson_get_str(yyjson_obj_get(args, "path"));
-    yyjson_val *      range = yyjson_obj_get(args, "view_range");
-    long long         first = 1, last = -1;
-    const bool        ranged = range && !yyjson_is_null(range);
+    yyjson_val *      named = yyjson_obj_get(args, "path");
+    const std::string given(yyjson_get_str(named), yyjson_get_len(named));
+    if (!file_refused(given).empty()) {
+        return { file_refused(given), true };
+    }
+    yyjson_val * range = yyjson_obj_get(args, "view_range");
+    long long    first = 1, last = -1;
+    const bool   ranged = range && !yyjson_is_null(range);
     if (ranged) {
         yyjson_val * a = yyjson_arr_get(range, 0);
         yyjson_val * b = yyjson_arr_get(range, 1);
@@ -296,8 +300,8 @@ static std::vector<tool> view_tool(const engine_reader & config) {
                     "- Text files: Displays numbered lines. You can optionally specify a view_range to see specific "
                     "lines.";
     t.input = R"({"type":"object","properties":{)"
-              R"("description":{"type":"string","description":"Why I need to view this, written first"},)"
-              R"("path":{"type":"string","description":"The file or the directory"},)"
+              R"("description":{"type":"string","minLength":1,"description":"Why I need to view this, written first"},)"
+              R"("path":{"type":"string","minLength":1,"description":"The file or the directory"},)"
               R"("view_range":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2,)"
               R"("description":"Lines [start, end] of a text file, from 1, end -1 for the last"}},)"
               R"("required":["description","path"],"additionalProperties":false})";

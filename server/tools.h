@@ -57,7 +57,8 @@ bool tools_register(tool_source source);
 // every tool the configuration serves
 std::vector<tool> tools_list(const engine_reader & config);
 
-// the arguments against the schema of the tool: no key outside its
-// properties, every required key present, a required string not empty;
-// the message of the first failure, empty when they hold
+// the arguments against the schema of the tool, as JSON Schema reads them: no
+// key outside its properties, every required key present, a string of a
+// string property, never shorter than its minLength; the message of the first
+// failure, empty when they hold
 std::string tools_check(const tool & t, yyjson_val * args);

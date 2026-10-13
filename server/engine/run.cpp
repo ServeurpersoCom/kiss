@@ -48,7 +48,8 @@ struct step {
 };
 
 // a line as the schema alone reads it: the command and its arguments checked,
-// its filter compiled; a lone line that stops short lists what may follow it
+// one that runs alone refused among others, its filter compiled; a lone line
+// that stops short lists what may follow it
 static step compile(const std::string & text, bool alone) {
     const auto [head, spec]       = split_filter(text);
     const words_t           words = tokenize(head);
@@ -58,6 +59,9 @@ static step compile(const std::string & text, bool alone) {
     }
     try {
         const auto [cmd, args] = resolve(words);
+        if (cmd->alone && !alone) {
+            fail(join(cmd->path, " ") + " runs alone, on a line of its own");
+        }
         return { cmd->compile(args), filter };
     } catch (const incomplete &) {
         const std::string next = join(next_words(words), " ");

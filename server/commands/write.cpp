@@ -26,7 +26,7 @@ static words_t next_write(const words_t & args) {
 }
 
 static command make_write() {
-    return { { "write" }, false, compile_write, next_write };
+    return { { "write" }, false, compile_write, next_write, true };
 }
 
 ENGINE_COMMAND(make_write);

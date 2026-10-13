@@ -15,6 +15,10 @@ fs::path file_path(const std::string & cwd, const std::string & given) {
     return path.is_relative() ? fs::u8path(cwd) / path : path;
 }
 
+std::string file_refused(const std::string & given) {
+    return given.find('\0') == std::string::npos ? "" : "Path holds a NUL byte";
+}
+
 std::string file_load(const fs::path & path, size_t limit, std::string & text) {
     std::error_code       ec;
     const fs::file_status st = fs::status(path, ec);

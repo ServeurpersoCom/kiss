@@ -56,7 +56,7 @@ tools
   <hostname>_config                 description lines
   <hostname>_<shell>                description command
   <hostname>_view                   description path [view_range]
-  <hostname>_str_replace            description path old_str [new_str]
+  <hostname>_str_replace            description path old_str new_str
   <hostname>_create_file            description path file_text
 ```
 
@@ -151,8 +151,10 @@ The commands are those of the page that fit a server, with the same words and th
 between the running-config and the startup-config, `show version`, `copy` between them, `write
 memory`, or `write` alone, IOS's way to save, and `erase running-config`, back to the factory
 configuration, or `erase startup-config`, `server.conf` gone so the server starts on the factory
-configuration; and one of its own, `show logging`. A save or an erase of `server.conf` happens once
-the batch holds, so a batch that fails or waits for the user writes nothing. A line takes a filter
+configuration; and one of its own, `show logging`. `copy`, `write` and `erase` run alone, on a line
+of their own, as on the page, so a batch never both writes and erases `server.conf`. A save or an
+erase of `server.conf` happens once the batch holds, so a batch that fails or waits for the user
+writes nothing. A line takes a filter
 after a pipe, `begin`, `count`, `exclude` or `include`, as IOS does. A secret never prints: `show`
 writes `! server key is set`.
 
@@ -328,9 +330,12 @@ Every tool takes `description` first, why the call is made, then what it does: i
 first and says so, for a model to write the why before the what. A model still writes its arguments
 in the order it likes, so KiSS shows `description` on a folded call by its name, wherever it stands:
 `display preview-argument description` is its default, which `tools preview-argument <tool>`
-overrides for one tool. The schema of a tool is its law: a key outside it, a required key missing or
-a required string empty refuses the call before it runs, with `Unknown argument <key>` or `<Key>
-argument required`, so a misnamed argument never runs as if it were absent.
+overrides for one tool. The schema of a tool is its law, as JSON Schema reads it: a key outside it,
+a required key missing, a string property given something else, or a string shorter than its
+`minLength` refuses the call before it runs, with `Unknown argument <key>`, `<Key> argument
+required` or `<Key> argument is a string`, so a misnamed argument never runs as if it were absent.
+A string the tool needs is never empty because its schema says `minLength` 1, and a string that may
+be empty says nothing.
 
 A result is plain text in sentences, no prompt and no `!`: the CLI is the config tool alone. The
 model wrote the call and keeps it in its context, so a result never echoes it.
@@ -382,12 +387,16 @@ every other tool off in KiSS, a machine is open to the model for reading only.
 A shell writes a file through a heredoc, whose quoting differs from bash to PowerShell and breaks on
 the text it carries. These two tools write the bytes of a JSON string as they are, the same on every
 OS, and a model trained on `str_replace` and `create_file` calls them as it learned them. Both take
-`path` as `view` does, and write in place: the mode, the owner and the links of a file stay.
+`path` as `view` does, a path holding a NUL refused with `Path holds a NUL byte`, as every OS would
+cut it to another path. They write in place: the mode, the owner and the links of a file stay, and
+an error of the disk on the way, a full one, can leave the file partial, the call failing with
+`Cannot write the file: <reason>`.
 
-`<name>_str_replace` takes `description`, `path`, `old_str` and `new_str`, empty by default to
-delete. The file loads whole, up to `files max-load` bytes, and `old_str` must occur in it exactly
-once, byte for byte: a CRLF file takes an `old_str` in CRLF. The result says where the change went,
-so the model can view the lines around it:
+`<name>_str_replace` takes `description`, `path`, `old_str` and `new_str`, all four required, so a
+model that forgets `new_str` is told so and a deletion is a `new_str` written empty. The file loads
+whole, up to `files max-load` bytes, and `old_str` must occur in it exactly once, byte for byte: a
+CRLF file takes an `old_str` in CRLF. The result says where the change went, so the model can view
+the lines around it:
 
 ```
 Replaced at line 42 of src/main.cpp, 18 -> 25 bytes
@@ -398,8 +407,8 @@ Replaced at line 42 of src/main.cpp, 18 -> 25 bytes
 
 `<name>_create_file` takes `description`, `path` and `file_text`, makes the directories the path
 needs and writes the file whole, over the one already there: `Created src/new.cpp, 12 lines, 345
-bytes`, or `Overwrote` when it existed. `file_text` is never empty, as no required string is; an
-empty file is a command of the shell.
+bytes`, or `Overwrote` when it existed. `file_text` may be empty: `Created .gitkeep, 0 lines, 0
+bytes`.
 
 ### The config tool
 

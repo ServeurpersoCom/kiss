@@ -16,13 +16,16 @@ struct replacer {
 };
 
 static tool_result str_replace(const replacer & r, yyjson_val * args) {
-    const std::string given = yyjson_get_str(yyjson_obj_get(args, "path"));
-    const std::string old   = yyjson_get_str(yyjson_obj_get(args, "old_str"));
-    yyjson_val *      with  = yyjson_obj_get(args, "new_str");
-    if (with && !yyjson_is_str(with)) {
-        return { "New_str is a string", true };
+    const auto text_of = [args](const char * name) {
+        yyjson_val * v = yyjson_obj_get(args, name);
+        return std::string(yyjson_get_str(v), yyjson_get_len(v));
+    };
+    const std::string given = text_of("path");
+    const std::string old   = text_of("old_str");
+    const std::string fresh = text_of("new_str");
+    if (!file_refused(given).empty()) {
+        return { file_refused(given), true };
     }
-    const std::string fresh = with ? std::string(yyjson_get_str(with), yyjson_get_len(with)) : "";
 
     const fs::path    path = file_path(r.cwd, given);
     std::string       text;
@@ -60,11 +63,11 @@ static std::vector<tool> str_replace_tool(const engine_reader & config) {
                     ". The string to replace must appear exactly once in the file.";
     t.input =
         R"({"type":"object","properties":{)"
-        R"("description":{"type":"string","description":"Why I'm making this edit, written first"},)"
-        R"("path":{"type":"string","description":"The file to edit"},)"
-        R"("old_str":{"type":"string","description":"The string to replace, unique in the file"},)"
-        R"("new_str":{"type":"string","default":"","description":"The string to replace it with, empty to delete"}},)"
-        R"("required":["description","path","old_str"],"additionalProperties":false})";
+        R"("description":{"type":"string","minLength":1,"description":"Why I'm making this edit, written first"},)"
+        R"("path":{"type":"string","minLength":1,"description":"The file to edit"},)"
+        R"("old_str":{"type":"string","minLength":1,"description":"The string to replace, unique in the file"},)"
+        R"("new_str":{"type":"string","description":"The string to replace it with, empty to delete"}},)"
+        R"("required":["description","path","old_str","new_str"],"additionalProperties":false})";
     t.call = [r](yyjson_val * args, const engine_typed &, const tool_tick &) {
         return str_replace(r, args);
     };

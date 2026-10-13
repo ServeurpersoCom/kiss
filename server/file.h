@@ -12,6 +12,10 @@ constexpr size_t FILE_CHUNK = 65536;
 // a path relative to the working directory, or absolute
 std::filesystem::path file_path(const std::string & cwd, const std::string & given);
 
+// the message for a path no file bears, a NUL in it, which every OS would cut
+// to another path; empty when it may name a file
+std::string file_refused(const std::string & given);
+
 // the whole of a text file of at most limit bytes, a NUL in its first chunk
 // telling a binary; the message of what keeps it from loading, empty when
 // it loads

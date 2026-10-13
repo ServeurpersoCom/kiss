@@ -55,11 +55,20 @@ std::string tools_check(const tool & t, yyjson_val * args) {
     }
     yyjson_val * required;
     yyjson_arr_foreach(yyjson_obj_get(root, "required"), i, n, required) {
-        const char * name   = yyjson_get_str(required);
-        yyjson_val * given  = yyjson_obj_get(args, name);
-        const bool   string = yyjson_equals_str(yyjson_obj_get(yyjson_obj_get(properties, name), "type"), "string");
-        if (!given || (string && (!yyjson_is_str(given) || yyjson_get_len(given) == 0))) {
-            return capital(name) + " argument required";
+        if (!yyjson_obj_get(args, yyjson_get_str(required))) {
+            return capital(yyjson_get_str(required)) + " argument required";
+        }
+    }
+    yyjson_obj_foreach(args, i, n, key, value) {
+        yyjson_val * property = yyjson_obj_get(properties, yyjson_get_str(key));
+        if (!yyjson_equals_str(yyjson_obj_get(property, "type"), "string")) {
+            continue;
+        }
+        if (!yyjson_is_str(value)) {
+            return capital(yyjson_get_str(key)) + " argument is a string";
+        }
+        if (yyjson_get_len(value) < yyjson_get_uint(yyjson_obj_get(property, "minLength"))) {
+            return capital(yyjson_get_str(key)) + " argument required";
         }
     }
     return "";

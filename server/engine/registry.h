@@ -43,6 +43,8 @@ struct command {
     step_t (*compile)(const words_t & args);
     // candidates for the next argument; a candidate in <> names what to type
     words_t (*complete)(const words_t & args);
+    // it writes or erases server.conf, so it runs on a line of its own
+    bool alone = false;
 };
 
 // a file in commands/ registers its command by existing
