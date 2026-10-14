@@ -81,11 +81,13 @@
 	}
 
 	// Escape stops the turn, unless something on the page answered it; a
-	// character typed outside a field goes to the composer
+	// character typed outside a field goes to the composer, a shortcut does
+	// not: Cmd, or Ctrl without Alt, since AltGr reads as Ctrl+Alt on Windows
+	// and Option types characters on macOS
 	function onwindowkeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || e.isComposing) return;
 		if (e.key === 'Escape') return halt();
-		if (e.key.length !== 1 || e.key === ' ' || e.ctrlKey || e.metaKey || e.altKey) return;
+		if (e.key.length !== 1 || e.key === ' ' || e.metaKey || (e.ctrlKey && !e.altKey)) return;
 		if ((e.target as Element).closest?.(EDITABLE) || document.querySelector(MODAL)) return;
 		field.focus();
 	}
