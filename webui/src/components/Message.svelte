@@ -66,9 +66,12 @@
 		draft = null;
 	}
 
+	// Escape cancels the edit and goes no further
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') cancel();
-		else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			cancel();
+		} else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			save();
 		}

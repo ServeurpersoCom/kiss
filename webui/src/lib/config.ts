@@ -144,3 +144,5 @@ export const DB_VERSION = 1;
 export const DB_STORE = 'conversations';
 // the width of the sidebar as the user last dragged it, in pixels, 0 when closed
 export const SIDEBAR_STORAGE_KEY = 'kiss.sidebar';
+// the text being typed in each conversation, as the composer left it
+export const DRAFTS_STORAGE_KEY = 'kiss.drafts';

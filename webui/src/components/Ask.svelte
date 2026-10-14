@@ -32,15 +32,14 @@
 	// the first way to answer takes the keyboard as the question shows
 	const focused: Attachment<HTMLElement> = (node) => node.focus();
 
-	// a secret given by OK or Enter once typed, none by Cancel or Escape
+	// a secret given by OK or Enter once typed, none by Cancel
 	function give(typed: string | null) {
 		if (shown?.kind !== 'secret' || typed === '') return;
 		shown.settle(typed);
 	}
 
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') give(null);
-		else if (e.key === 'Enter') give(value);
+		if (e.key === 'Enter') give(value);
 	}
 </script>
 

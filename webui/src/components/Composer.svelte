@@ -1,13 +1,35 @@
 <script lang="ts">
-	import { app, send, stop } from '../lib/state.svelte.js';
+	import { app, askOf, send, stop } from '../lib/state.svelte.js';
+	import { NEW_DRAFT, draftOf, keep } from '../lib/drafts.js';
 	import { known, suggest } from '../engine/run.js';
 	import type { Known } from '../lib/types.js';
 	import { extend } from '../engine/complete.js';
 	import Icon from './Icon.svelte';
 	import { SLASH } from '../lib/config.js';
 
+	// a key typed elsewhere than in a field reaches the composer, unless a modal
+	// stands over the page; a touch screen opens no keyboard by itself
+	const EDITABLE = 'input, textarea, select, [contenteditable]';
+	const MODAL = '[aria-modal="true"]';
+	const TOUCH = '(hover: none)';
+
 	let text = $state('');
 	let field: HTMLTextAreaElement;
+
+	// each conversation shows its own draft, kept as it is typed
+	const key = $derived(app.current?.id ?? NEW_DRAFT);
+	$effect.pre(() => {
+		text = draftOf(key);
+		requestAnimationFrame(resize);
+	});
+
+	// the keyboard comes back to the field on another conversation and once
+	// the question of the conversation is answered; a question takes it itself
+	const asked = $derived(!!askOf(app.current?.id));
+	$effect(() => {
+		void key;
+		if (!asked && !matchMedia(TOUCH).matches) field.focus();
+	});
 
 	// the items the modules know, listed again each time a line opens on the CLI
 	let items: Known = $state({});
@@ -28,6 +50,7 @@
 		const next = SLASH + extend(text.slice(SLASH.length), found);
 		if (next === text) return;
 		text = next;
+		keep(key, text);
 		field.focus();
 		requestAnimationFrame(resize);
 	}
@@ -47,8 +70,24 @@
 		const line = text.trim();
 		if (!line || (busy && !line.startsWith(SLASH))) return;
 		text = '';
+		keep(key, text);
 		requestAnimationFrame(resize);
 		send(line);
+	}
+
+	// the turn of the open conversation stops, by the Stop button as by Escape
+	function halt() {
+		if (busy && app.current) stop(app.current.id);
+	}
+
+	// Escape stops the turn, unless something on the page answered it; a
+	// character typed outside a field goes to the composer
+	function onwindowkeydown(e: KeyboardEvent) {
+		if (e.defaultPrevented || e.isComposing) return;
+		if (e.key === 'Escape') return halt();
+		if (e.key.length !== 1 || e.key === ' ' || e.ctrlKey || e.metaKey || e.altKey) return;
+		if ((e.target as Element).closest?.(EDITABLE) || document.querySelector(MODAL)) return;
+		field.focus();
 	}
 
 	// on a CLI line Tab completes, and keeps the keyboard in the field when
@@ -65,6 +104,8 @@
 		}
 	}
 </script>
+
+<svelte:window onkeydown={onwindowkeydown} />
 
 {#if hints.length}
 	<div class="hints">
@@ -85,15 +126,14 @@
 	<textarea
 		bind:this={field}
 		bind:value={text}
-		oninput={resize}
+		oninput={() => (keep(key, text), resize())}
 		{onkeydown}
+		autocomplete="off"
 		placeholder="Message, or {SLASH} for the CLI"
 		rows="1"
 	></textarea>
 	{#if busy}
-		<button type="button" onclick={() => app.current && stop(app.current.id)} aria-label="Stop"
-			><Icon name="stop" /></button
-		>
+		<button type="button" onclick={halt} aria-label="Stop"><Icon name="stop" /></button>
 	{:else}
 		<button type="submit" disabled={!text.trim()} aria-label="Send"><Icon name="send" /></button>
 	{/if}

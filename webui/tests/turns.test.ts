@@ -3,6 +3,7 @@ import type { Assistant, Grant, ToolContext, Verdict } from '../src/lib/types.js
 import type { Pulse } from '../src/lib/pulse.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
 import { app, askOf, dismiss, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
+import { NEW_DRAFT, draftOf, keep } from '../src/lib/drafts.js';
 
 // a turn of the model the test holds: it writes, asks, ends or fails when
 // told, and stops with its signal
@@ -230,5 +231,25 @@ describe('a slash command during a turn', () => {
 		held[0].end();
 		await sent;
 		expect(last(id).rounds[0].text).toBe('done');
+	});
+});
+
+describe('a draft', () => {
+	it('belongs to its conversation and goes with it, the one of a new chat staying', async () => {
+		const { first, second, sent } = await two();
+		keep(first, 'half typed');
+		keep(second, 'other');
+		keep(NEW_DRAFT, 'not sent yet');
+		expect(draftOf(first)).toBe('half typed');
+		await remove([second]);
+		expect([draftOf(first), draftOf(second), draftOf(NEW_DRAFT)]).toEqual([
+			'half typed',
+			'',
+			'not sent yet'
+		]);
+		keep(first, '');
+		expect(draftOf(first)).toBe('');
+		held[0].end();
+		await sent;
 	});
 });

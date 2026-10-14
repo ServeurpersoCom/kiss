@@ -2,6 +2,7 @@ import type { Assistant, Conversation, Grant, Library, Verdict } from './types.j
 import { REFUSE } from './types.js';
 import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH, capital } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
+import { prune } from './drafts.js';
 import { turn } from './agent.js';
 import {
 	append,
@@ -77,6 +78,7 @@ function follow(): void {
 // the conversations of the browser, the one the URL names open
 export async function restore(): Promise<void> {
 	app.conversations = await listConversations();
+	prune(app.conversations.map((c) => c.id));
 	follow();
 	addEventListener('hashchange', follow);
 }
@@ -102,10 +104,12 @@ export async function pin(id: string): Promise<void> {
 }
 
 // out of the list first: no save reaches the database after the delete; the
-// turns of the conversations deleted stop, and their questions are answered no
+// turns of the conversations deleted stop, their questions are answered no, and
+// their drafts go
 export async function remove(ids: readonly string[]): Promise<void> {
 	for (const id of ids) stop(id);
 	app.conversations = app.conversations.filter((c) => !ids.includes(c.id));
+	prune(app.conversations.map((c) => c.id));
 	if (app.current && ids.includes(app.current.id)) newChat();
 	await deleteConversations(ids);
 }
