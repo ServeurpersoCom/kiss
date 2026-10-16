@@ -72,6 +72,9 @@ export interface Conversation {
 	entries: Entry[];
 	// the entry the thread ends on, none while the conversation is empty
 	leaf: string | null;
+	// in the page only, a conversation of a KiSS server while a turn of the
+	// server answers in it
+	answering?: true;
 }
 
 export interface Outcome {

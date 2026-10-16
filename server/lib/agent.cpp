@@ -347,6 +347,7 @@ static void turn(std::string                     id,
         },
         keychain_running());
     log_info("Agent", "%.8s %s in %.0f ms", id.c_str(), error ? error->c_str() : "answered", system);
+    library_answering(id, false);
     std::lock_guard<std::mutex> lock(g_mutex);
     g_turns.erase(id);
 }
@@ -387,6 +388,7 @@ std::string agent_answer(const std::string & id, const std::string & user) {
         g_turns.erase(id);
         return why;
     }
+    library_answering(id, true);
     std::thread(turn, id, entry, before, stop).detach();
     return "";
 }

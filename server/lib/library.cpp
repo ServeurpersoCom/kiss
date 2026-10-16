@@ -30,6 +30,7 @@ struct held {
     uint64_t     version   = 0;
     uint64_t     structure = 0;
     std::string  live;
+    bool         answering = false;
 };
 
 static std::mutex              g_mutex;
@@ -170,6 +171,16 @@ bool library_grow(const std::string &                               id,
     return false;
 }
 
+void library_answering(const std::string & id, bool answering) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const auto                  it = find_held(id);
+    if (it != g_held.end()) {
+        it->answering = answering;
+        it->version   = ++g_version;
+        g_changed.notify_all();
+    }
+}
+
 void library_remove(const words_t & ids) {
     std::lock_guard<std::mutex> lock(g_mutex);
     for (const std::string & id : ids) {
@@ -279,7 +290,7 @@ static std::string grown(const conversation_entry & e,
 
 // what a follower holds of a conversation sent whole
 static library_held whole(const held & h) {
-    library_held out{ h.version, h.structure, {} };
+    library_held out{ h.version, h.structure, false, {} };
     for (const conversation_entry & e : h.c.entries) {
         if (e.id == h.live) {
             out.shape = shape_of(e);
@@ -297,11 +308,16 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
     if (!f.started) {
         f.started = true;
         std::string list;
+        std::string answering;
         for (const held & h : g_held) {
             list += (list.empty() ? "" : ",") + conversation_json(h.c, secrets);
             f.held[h.c.id] = whole(h);
+            if (h.answering) {
+                answering += set_event(quoted(h.c.id) + ",\"answering\"", "true");
+                f.held[h.c.id].answering = true;
+            }
         }
-        return set_event("", "{\"conversations\":[" + list + "]}");
+        return set_event("", "{\"conversations\":[" + list + "]}") + answering;
     }
     std::string out;
     for (const held & h : g_held) {
@@ -309,7 +325,15 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
         if (it == f.held.end() || it->second.structure != h.structure) {
             out += set_event(quoted(h.c.id), conversation_json(h.c, secrets));
             f.held[h.c.id] = whole(h);
+            if (h.answering) {
+                out += set_event(quoted(h.c.id) + ",\"answering\"", "true");
+                f.held[h.c.id].answering = true;
+            }
             continue;
+        }
+        if (it->second.answering != h.answering) {
+            out += set_event(quoted(h.c.id) + ",\"answering\"", h.answering ? "true" : "null");
+            it->second.answering = h.answering;
         }
         if (it->second.version == h.version) {
             continue;

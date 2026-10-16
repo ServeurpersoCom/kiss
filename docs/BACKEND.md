@@ -318,13 +318,16 @@ tells every page.
   page that comes back gets every conversation as it stands. A comment each second tells a page that
   left; the stream ends when the listener moves.
 - `POST /conversations/<action>` applies an action of the user, a JSON body, and answers 204, or 400
-  with why not: `send {text, id?}`, a message in a conversation, a new one without id, answered
-  with `{id}`, the agent answering it; `edit {id, entry, text}`, a version beside a message of the
+  with why not: `send {text, id?}`, a message after the thread, the agent answering it, and
+  `command {input, output, ok, id?}`, a command the page ran, both opening a conversation without
+  id and answered with `{id}`; `edit {id, entry, text}`, a version beside a message of the
   user; `retry {id, entry}`, a new answer to a message or beside an answer; `stop {id}`;
   `pin {id, pinned}`, `browse {id, entry}`, the thread going to the last entry written
   under that one, `drop {id, entry}`, a command entry leaving, its conversation going when it was
   the last one, `erase {ids}`. While a turn runs in a conversation, every action on it but `stop`,
   `pin` and `erase` waits for it to end.
+- While a turn answers in a conversation, `{"set":["<id>","answering"],"value":true}` tells it, and
+  `null` once it ended.
 - A turn that grows its answer sends what it gained, never the conversation again: the text a
   string gained, a round or a call that came, a call whole once its outcome came.
 

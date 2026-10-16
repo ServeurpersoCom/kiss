@@ -35,6 +35,7 @@ modules
   chat
     model <model>                   the one model of the one endpoint
     system-prompt <text>            none
+    agent <server>                  none, the page answers itself
   display
     thinking closed|open|inference  closed
     tool-calls closed|open|inference
@@ -257,7 +258,7 @@ opens on a URL, written as it is; what a server answers goes as it came.
 
 | Module      | Keys                                                                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `chat`      | `model`, `system-prompt`                                                                                                                                                                   |
+| `chat`      | `model`, `system-prompt`, `agent`                                                                                                                                                          |
 | `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
@@ -622,6 +623,16 @@ as BACKEND.md sets it: the server ends its own run first and the model reads why
 miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds the gap is meant.
 
 ## Conversations
+
+`set chat agent <server>` names a KiSS server, an item of `mcp`, whose agent answers the
+conversations opened from then on: a message goes to the server, which runs the turn, holds the
+conversation and writes it, the browser closed or not. The page follows the conversations of that
+server by one stream of events, beside those of the browser, and never writes one: retry, edit,
+versions, pin, delete and Stop go to the server, and every page following it sees them. A command
+still runs on the page, its output entering the conversation through the server. The page a KiSS
+server serves names that server `backend` and makes it the agent; a page served elsewhere answers
+itself until a line names one. No question of the server reaches the page yet: a call the server
+would ask about is refused.
 
 A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment
 it entered, and the conversation holds its leaf, the entry the thread ends on. The thread is the

@@ -247,6 +247,12 @@ int main() {
         law(library_follow(late, 10, secrets) == "data: {\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"!\"}\n\n",
             "a follower that came during a turn gets what grew since it came");
         law(!library_grow("one", "gone", [](conversation_entry &) {}), "an entry gone grows no more");
+        library_answering("one", true);
+        law(library_follow(late, 10, secrets) == "data: {\"set\":[\"one\",\"answering\"],\"value\":true}\n\n",
+            "a follower is told a turn answers");
+        library_answering("one", false);
+        law(library_follow(late, 10, secrets) == "data: {\"set\":[\"one\",\"answering\"],\"value\":null}\n\n",
+            "and that it ended");
         library_follow(f, 10, secrets);
     }
     library_remove({ "one" });

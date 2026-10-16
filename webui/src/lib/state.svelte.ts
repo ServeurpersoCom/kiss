@@ -1,5 +1,6 @@
 import type { Assistant, Conversation } from './types.js';
 import type { Grant, Library, Verdict } from '../engine/engine.js';
+import { app, type Asking, type Posed } from './app.svelte.js';
 import { REFUSE } from '../engine/engine.js';
 import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH, capital } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
@@ -22,31 +23,9 @@ import { locked } from './mcp.js';
 import { redact, run, settings } from '../engine/run.js';
 import { hold } from '../modules/style.js';
 import { held, pulse, type Pulse } from './pulse.js';
+import { act, agent, homed } from './sync.js';
 
-// what the page asks the user, and how the answer settles it: a change or a
-// call the model asks for, the value of a secret key, a file to save, a file
-// to read, or a yes
-type Asking =
-	| { kind: 'grant'; request: Grant; settle(verdict: Verdict): void }
-	| { kind: 'secret'; key: string; note?: string; settle(value: string | null): void }
-	| { kind: 'offer'; name: string; text: string; settle(saved: boolean): void }
-	| { kind: 'pick'; settle(text: string | null): void }
-	| { kind: 'confirm'; question: string; settle(yes: boolean): void };
-// a question as it waits for the user, numbered, with the conversation it
-// comes from
-type Posed = Asking & { id: number; from: string };
-
-export const app = $state({
-	conversations: [] as Conversation[],
-	current: null as Conversation | null,
-	// the turns the model writes now, by conversation
-	replies: {} as Record<string, Assistant>,
-	// the questions to the user in the order they came, each conversation
-	// showing its first one, as each is answered in turn
-	asks: [] as Posed[],
-	// the conversation list, open over the thread on a narrow screen
-	sidebar: false
-});
+export { app };
 
 // what stops each turn, by conversation
 const controllers = new Map<string, AbortController>();
@@ -63,9 +42,10 @@ export const askOf = (id: string | undefined): Posed | undefined =>
 
 // the conversation as it settled, even while the model answers: a call not
 // sent yet never reaches the database, one running reaches it as stopped; a
-// conversation deleted meanwhile stays deleted
+// conversation deleted meanwhile stays deleted, and one of a KiSS server is
+// the server's to write
 async function save(conversation: Conversation): Promise<void> {
-	if (!app.conversations.some((c) => c.id === conversation.id)) return;
+	if (!app.conversations.some((c) => c.id === conversation.id) || homed(conversation.id)) return;
 	const snapshot = $state.snapshot(conversation) as Conversation;
 	await putConversations([{ ...snapshot, entries: stored(snapshot.entries) }]);
 }
@@ -76,9 +56,13 @@ function follow(): void {
 	app.current = app.conversations.find((c) => c.id === id) ?? null;
 }
 
-// the conversations of the browser, the one the URL names open
+// the conversations of the browser beside those of a KiSS server, the one
+// the URL names open
 export async function restore(): Promise<void> {
-	app.conversations = await listConversations();
+	const local = await listConversations();
+	app.conversations = [...local, ...app.conversations.filter((c) => homed(c.id))].sort(
+		(a, b) => b.updated - a.updated
+	);
 	prune(app.conversations.map((c) => c.id));
 	follow();
 	addEventListener('hashchange', follow);
@@ -99,6 +83,7 @@ export function newChat(): void {
 export async function pin(id: string): Promise<void> {
 	const conversation = app.conversations.find((c) => c.id === id);
 	if (!conversation) return;
+	if (homed(id)) return void (await act('pin', { id, pinned: !conversation.pinned }));
 	if (conversation.pinned) delete conversation.pinned;
 	else conversation.pinned = true;
 	await save(conversation);
@@ -108,6 +93,9 @@ export async function pin(id: string): Promise<void> {
 // turns of the conversations deleted stop, their questions are answered no, and
 // their drafts go
 export async function remove(ids: readonly string[]): Promise<void> {
+	const remote = ids.filter(homed);
+	if (remote.length) await act('erase', { ids: remote });
+	ids = ids.filter((id) => !homed(id));
 	for (const id of ids) stop(id);
 	app.conversations = app.conversations.filter((c) => !ids.includes(c.id));
 	prune(app.conversations.map((c) => c.id));
@@ -193,8 +181,30 @@ function explain(error: Error): string {
 // whether it went through
 export async function send(text: string): Promise<boolean> {
 	const cli = text.startsWith(SLASH);
+	const id = app.current?.id;
+	if (id ? homed(id) : agent() && !cli) return remote(id, text);
 	const conversation = current(cli ? '' : text);
 	return enter(conversation, conversation.leaf, text);
+}
+
+// a line in a conversation of a KiSS server, or a message opening one: a
+// message goes to its agent, a command runs on the page and its output enters
+// the conversation through the server; whether it went through
+async function remote(id: string | undefined, text: string): Promise<boolean> {
+	try {
+		if (!text.startsWith(SLASH)) {
+			const sent = await act('send', id ? { id, text } : { text });
+			if (!id && sent.id) open(sent.id);
+			return true;
+		}
+		const input = text.slice(SLASH.length);
+		const result = await run(input, 'user', reach(id!));
+		await act('command', { id, input: redact(input), output: result.text, ok: result.ok });
+		return result.ok;
+	} catch (e) {
+		console.error((e as Error).message);
+		return false;
+	}
 }
 
 // every MCP server that takes no request without the right key asks the user
@@ -216,6 +226,8 @@ export async function edit(id: string, text: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || entry?.role !== 'user' || entry.text === text) return;
 	if (app.current.id in app.replies) return;
+	if (homed(app.current.id))
+		return void (await act('edit', { id: app.current.id, entry: id, text }));
 	await enter(app.current, entry.parent, text);
 }
 
@@ -224,6 +236,7 @@ export async function edit(id: string, text: string): Promise<void> {
 export async function retry(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || !entry || app.current.id in app.replies) return;
+	if (homed(app.current.id)) return void (await act('retry', { id: app.current.id, entry: id }));
 	const user = entry.role === 'assistant' ? entry.parent : entry.role === 'user' ? id : null;
 	if (user) await answer(app.current, user);
 }
@@ -234,6 +247,7 @@ export async function retry(id: string): Promise<void> {
 export async function dismiss(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || entry?.role !== 'cli') return;
+	if (homed(app.current.id)) return void (await act('drop', { id: app.current.id, entry: id }));
 	drop(app.current, id);
 	if (app.current.entries.length) await save(app.current);
 	else await remove([app.current.id]);
@@ -242,6 +256,7 @@ export async function dismiss(id: string): Promise<void> {
 // another version shows, as it was last written in
 export async function browse(id: string): Promise<void> {
 	if (!app.current || app.current.id in app.replies) return;
+	if (homed(app.current.id)) return void (await act('browse', { id: app.current.id, entry: id }));
 	app.current.leaf = latest(app.current, id);
 	await save(app.current);
 }
@@ -358,6 +373,7 @@ function reach(from: string) {
 
 // the turn of a conversation aborts, and every question it asks is answered no
 export function stop(id: string): void {
+	if (homed(id)) void act('stop', { id });
 	controllers.get(id)?.abort();
 	for (const ask of app.asks.filter((q) => q.from === id)) {
 		if (ask.kind === 'grant') ask.settle(REFUSE);
