@@ -17,10 +17,12 @@ commands
   show diff <config> <config>       running-config or startup-config, each
   show version
   show logging
+  show conversations
   copy running-config startup-config
   copy startup-config running-config
   write [memory]
   erase running-config|startup-config
+  erase conversations|<id>          every one but the pinned ones, or one by its id
   <command> | begin|count|exclude|include <pattern>
   exit, quit                        the console only: stop the server
 
@@ -101,6 +103,9 @@ server/lib/job.cpp|h       spawn, pipes, tree kill, per OS
 server/lib/output.cpp|h    UTF-8 repair and head plus tail truncation
 server/lib/file.cpp|h      the files the tools on files reach: a path, a text loaded whole, a write
                            in place, a string found
+server/lib/conversation.cpp|h
+                           the conversations as a file, read as the page reads it
+server/lib/library.cpp|h   the conversations of the server, a file each in conversations/
 server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
 server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
 server/lib/prompts.cpp|h   the texts of prompts.json, read once
@@ -108,6 +113,9 @@ server/lib/utf8.h          the UTF-8 boundary of Windows: argv, fopen
 server/tests/seal.cpp      the laws of the seal, built and run with the server, a broken law failing
                            the build
 server/tests/files.cpp     the laws of lib/file.cpp, built and run the same way
+server/tests/conversation.cpp
+                           the laws of lib/conversation.cpp and lib/library.cpp, built and run the
+                           same way
 server/server.conf         the factory configuration the binary embeds
 server/client.conf         the client.conf the server serves when its directory has none
 vendor/                    cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
@@ -156,7 +164,8 @@ The commands are those of the page that fit a server, with the same words and th
 between the running-config and the startup-config, `show version`, `copy` between them, `write
 memory`, or `write` alone, IOS's way to save, and `erase running-config`, back to the factory
 configuration, or `erase startup-config`, `server.conf` gone so the server starts on the factory
-configuration; and one of its own, `show logging`. `copy`, `write` and `erase` run alone, on a line
+configuration; `show conversations`, and `erase conversations`, every one but the pinned ones, or
+`erase <id>`, one by its id, a prefix being enough; and one of its own, `show logging`. `copy`, `write` and `erase` run alone, on a line
 of their own, as on the page, so a batch never both writes and erases `server.conf`. A save or an
 erase of `server.conf` happens once the batch holds, so a batch that fails or waits for the user
 writes nothing. A line takes a filter
@@ -255,6 +264,15 @@ full in the file.
 Each machine serves the shells it has: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1
 on Windows, and PowerShell 7 wherever it is installed; on Windows the bash of Git Bash or of WSL
 joins when its program is on the PATH.
+
+## Conversations
+
+The conversations of a server live in `conversations/` of the directory it runs in, next to
+`server.conf`, a file each, `<id>.json`, in the format the page exports: that conversation alone,
+named by its id. The server reads them all as it starts; a file that does not read as the page
+reads it is logged and left out. Copying a file out exports a conversation, copying one in imports
+it at the next start. `show conversations` lists them, the newest first, and `erase` removes a
+conversation with its file.
 
 ## Running
 

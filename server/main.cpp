@@ -2,11 +2,13 @@
 // site configuration and the MCP of the machine
 //
 // The server starts on server.conf of the directory it runs in, over the
-// defaults it embeds, then listens; a terminal it runs in the foreground of
-// opens the console, anything else runs it as a daemon. It takes no argument.
+// defaults it embeds, reads the conversations of that directory, then
+// listens; a terminal it runs in the foreground of opens the console, anything
+// else runs it as a daemon. It takes no argument.
 
 #include "engine/engine.h"
 #include "lib/console.h"
+#include "lib/library.h"
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/prompts.h"
@@ -20,6 +22,8 @@
 
 // the startup-config, in the directory the server runs in
 static const char * const STARTUP_FILE = "server.conf";
+// the conversations, a file each, in the directory the server runs in
+static const char * const LIBRARY_DIR  = "conversations";
 
 static void on_signal(int) {
     listener_stop();
@@ -48,6 +52,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
     engine_start(STARTUP_FILE, KISS_VERSION);
+    library_open(LIBRARY_DIR);
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);

@@ -1,5 +1,6 @@
 /build
 /client.conf
+/conversations
 /server.conf
 webui/dist
 webui/node_modules

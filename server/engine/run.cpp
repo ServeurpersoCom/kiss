@@ -8,6 +8,7 @@
 #include "engine/parse.h"
 #include "engine/registry.h"
 #include "engine/schema.h"
+#include "lib/library.h"
 #include "lib/log.h"
 
 #include <algorithm>
@@ -176,8 +177,9 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // to ask for, a url of an MCP client the user has not let, or a yes a command
 // of an MCP client waits for, stops it once every line ran, before the rules:
 // what the user answers decides them. A batch of an MCP client moves no
-// secret. A save writes the draft as the batch leaves it, and an erase
-// removes server.conf, once the rules hold and before it replaces the target
+// secret. A save writes the draft as the batch leaves it, an erase removes
+// server.conf, and the conversations erased go, once the rules hold and
+// before it replaces the target
 static engine_result batch(layer &              target,
                            const std::string &  text,
                            engine_role          role,
@@ -238,6 +240,7 @@ static engine_result batch(layer &              target,
         if (ctx.erase) {
             out.push_back(archive_erase());
         }
+        library_remove(ctx.forget);
     } catch (const std::runtime_error & e) {
         return failed(std::nullopt, alone, e.what());
     }

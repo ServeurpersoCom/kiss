@@ -11,8 +11,8 @@
 
 // what a step runs on: the draft, who sends the batch, the secrets the user
 // typed, the stored keys of the secrets still to ask for, the yes questions
-// still to ask, and whether the batch writes or erases server.conf once it
-// holds
+// still to ask, whether the batch writes or erases server.conf once it holds,
+// and the conversations it erases then
 struct context {
     layer &                 draft;
     engine_role             role;
@@ -21,6 +21,7 @@ struct context {
     std::vector<engine_ask> questions = {};
     bool                    save      = false;
     bool                    erase     = false;
+    words_t                 forget    = {};
 };
 
 // whether the user lets a step do what question says: always on the console;
