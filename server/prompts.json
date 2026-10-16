@@ -142,9 +142,13 @@
 		}
 	},
 	"modules": {
+		"chat": "the model the agent of this server answers with, endpoint/model, empty for the one model of the one endpoint, and its system prompt",
+		"endpoints": "the LLM endpoints the agent of this server talks to: the url, the protocol it speaks, the key and the header that carries it, Header or Header: Scheme, more headers, the seconds it may stay silent, the times a reply is asked again on a status that passes and the seconds between two",
 		"files": "the tools on files, <hostname>_view, <hostname>_str_replace and <hostname>_create_file: the bytes of text view returns, the bytes of a file a tool loads whole, the megapixels an image decodes to, the longest side and the JPEG quality of an image made again",
+		"models": "the parameters of a model, the item endpoint/model, each sent only when set",
 		"proxy": "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> with the key of this server, the page by set mcp proxy or set endpoints proxy <name> <its name for this server>; the key of a route goes to its url alone, in the header its auth-header names, Header or Header: Scheme, and a route without a key reaches its url without one",
 		"server": "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, the directory its tools start in, its log level",
-		"shells": "a tool <hostname>_<shell> per shell whose program this machine has: the command reading a script on stdin, its seconds, its bytes of output"
+		"shells": "a tool <hostname>_<shell> per shell whose program this machine has: the command reading a script on stdin, its seconds, its bytes of output",
+		"tools": "the tools the agent of this server calls, each by its own name on this server (bash, view, config): off, the model never sees it, consent, each call asks the user, on; and the rounds of tool calls a turn takes at most"
 	}
 }

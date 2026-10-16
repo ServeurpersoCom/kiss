@@ -9,10 +9,13 @@
 #include "yyjson.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -363,26 +366,34 @@ static void add_link(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, c
     }
 }
 
+// a call, its outcome once it ran
+static yyjson_mut_val * call_val(yyjson_mut_doc * d, const conversation_call & c) {
+    yyjson_mut_val * call = yyjson_mut_obj(d);
+    add_text(d, call, "id", c.id);
+    add_text(d, call, "name", c.name);
+    add_text(d, call, "args", c.args);
+    if (c.ok) {
+        add_text(d, call, "result", c.result);
+        yyjson_mut_obj_add_bool(d, call, "ok", *c.ok);
+    }
+    if (!c.images.empty()) {
+        yyjson_mut_val * images = yyjson_mut_obj_add_arr(d, call, "images");
+        for (const conversation_image & i : c.images) {
+            yyjson_mut_val * image = yyjson_mut_arr_add_obj(d, images);
+            add_text(d, image, "mime", i.mime);
+            add_text(d, image, "data", i.data);
+        }
+    }
+    return call;
+}
+
 static yyjson_mut_val * round_val(yyjson_mut_doc * d, const conversation_round & r) {
     yyjson_mut_val * o = yyjson_mut_obj(d);
     add_text(d, o, "reasoning", r.reasoning);
     add_text(d, o, "text", r.text);
     yyjson_mut_val * calls = yyjson_mut_obj_add_arr(d, o, "calls");
     for (const conversation_call & c : r.calls) {
-        yyjson_mut_val * call = yyjson_mut_arr_add_obj(d, calls);
-        add_text(d, call, "id", c.id);
-        add_text(d, call, "name", c.name);
-        add_text(d, call, "args", c.args);
-        add_text(d, call, "result", c.result);
-        yyjson_mut_obj_add_bool(d, call, "ok", c.ok);
-        if (!c.images.empty()) {
-            yyjson_mut_val * images = yyjson_mut_obj_add_arr(d, call, "images");
-            for (const conversation_image & i : c.images) {
-                yyjson_mut_val * image = yyjson_mut_arr_add_obj(d, images);
-                add_text(d, image, "mime", i.mime);
-                add_text(d, image, "data", i.data);
-            }
-        }
+        yyjson_mut_arr_append(calls, call_val(d, c));
     }
     if (r.opaque) {
         yyjson_mut_val * opaque = yyjson_mut_obj_add_obj(d, o, "opaque");
@@ -462,6 +473,21 @@ std::string conversation_json(const conversation & c, const words_t & secrets) {
     return sealed(doc.get(), conversation_val(doc.get(), c), secrets);
 }
 
+std::string conversation_entry_json(const conversation_entry & e, const words_t & secrets) {
+    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    return sealed(doc.get(), entry_val(doc.get(), e), secrets);
+}
+
+std::string conversation_round_json(const conversation_round & r, const words_t & secrets) {
+    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    return sealed(doc.get(), round_val(doc.get(), r), secrets);
+}
+
+std::string conversation_call_json(const conversation_call & c, const words_t & secrets) {
+    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    return sealed(doc.get(), call_val(doc.get(), c), secrets);
+}
+
 std::string conversation_file(const std::vector<conversation> & conversations, const words_t & secrets) {
     const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
     yyjson_mut_val *                      root = yyjson_mut_obj(doc.get());
@@ -471,6 +497,91 @@ std::string conversation_file(const std::vector<conversation> & conversations, c
         yyjson_mut_arr_append(list, conversation_val(doc.get(), c));
     }
     return sealed(doc.get(), root, secrets) + "\n";
+}
+
+std::vector<conversation_round> conversation_settled(const std::vector<conversation_round> & rounds) {
+    std::vector<conversation_round> out;
+    for (conversation_round r : rounds) {
+        std::vector<conversation_call> calls;
+        for (conversation_call c : r.calls) {
+            if (!c.ok && c.sent) {
+                c.result = STOPPED;
+                c.ok     = false;
+            }
+            if (c.ok) {
+                calls.push_back(std::move(c));
+            }
+        }
+        r.calls = std::move(calls);
+        if (!r.reasoning.empty() || !r.text.empty() || !r.calls.empty()) {
+            out.push_back(std::move(r));
+        }
+    }
+    return out;
+}
+
+conversation conversation_stored(const conversation & c) {
+    conversation out = c;
+    for (conversation_entry & e : out.entries) {
+        if (e.role == ROLE_ASSISTANT) {
+            e.rounds = conversation_settled(e.rounds);
+        }
+    }
+    return out;
+}
+
+std::string conversation_uuid() {
+    static std::mutex   m;
+    static std::mt19937 rng{ std::random_device{}() };
+    unsigned char       b[16];
+    {
+        std::lock_guard<std::mutex> lock(m);
+        for (unsigned char & x : b) {
+            x = (unsigned char) rng();
+        }
+    }
+    // the bits that say it is random, version 4, variant 10
+    b[6]                          = (unsigned char) ((b[6] & 0x0f) | 0x40);
+    b[8]                          = (unsigned char) ((b[8] & 0x3f) | 0x80);
+    static const char * const HEX = "0123456789abcdef";
+    std::string               out;
+    for (int i = 0; i < 16; i++) {
+        if (i == 4 || i == 6 || i == 8 || i == 10) {
+            out += '-';
+        }
+        out += HEX[b[i] >> 4];
+        out += HEX[b[i] & 15];
+    }
+    return out;
+}
+
+double conversation_now() {
+    using namespace std::chrono;
+    return (double) duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
+size_t conversation_append(conversation & c, const std::optional<std::string> & parent, conversation_entry e) {
+    e.id     = conversation_uuid();
+    e.parent = parent;
+    e.time   = conversation_now();
+    c.leaf   = e.id;
+    c.entries.push_back(std::move(e));
+    return c.entries.size() - 1;
+}
+
+std::vector<conversation_entry> conversation_path(const conversation & c) {
+    std::map<std::string, const conversation_entry *> by_id;
+    for (const conversation_entry & e : c.entries) {
+        by_id[e.id] = &e;
+    }
+    std::vector<conversation_entry> out;
+    for (std::optional<std::string> id = c.leaf; id;) {
+        const conversation_entry * e = by_id[*id];
+        out.push_back(*e);
+        id = e->parent;
+    }
+    std::reverse(out.begin(), out.end());
+    return out;
 }
 
 std::string conversation_latest(const conversation & c, const std::string & id) {

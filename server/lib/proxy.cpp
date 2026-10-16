@@ -22,6 +22,7 @@
 #include "engine/keychain.h"
 #include "engine/text.h"
 #include "lib/log.h"
+#include "lib/remote.h"
 
 #include <memory>
 #include <optional>
@@ -100,14 +101,6 @@ static std::optional<route_conf> route_of(const std::string & name) {
     return r;
 }
 
-// https://host:port/path as httplib takes it: the part it connects to, then
-// the path of every request
-static void split_url(const std::string & url, std::string & host, std::string & path) {
-    const size_t slash = url.find('/', url.find("://") + 3);
-    host               = url.substr(0, slash);
-    path               = slash == std::string::npos ? "/" : url.substr(slash);
-}
-
 // a refusal of a route, logged and answered with its status, its text through
 // the keychain
 static void refuse(httplib::Response & res,
@@ -129,7 +122,7 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         return;
     }
     std::string host, base;
-    split_url(r->url, host, base);
+    remote_split(r->url, host, base);
     // the rest joins the url with one slash, whether the url ends with one or not
     const std::string head   = rest.empty() ? base : base.substr(0, base.find_last_not_of('/') + 1);
     const size_t      query  = req.target.find('?');

@@ -53,6 +53,26 @@ modules
                                     Authorization: Bearer
     headers <item> <Name: value; ...>
     timeout <item> <seconds>        300
+  endpoints
+    url <item> <url>                an LLM the agent talks to
+    protocol <item> chat            chat
+    key <item> <secret>
+    auth-header <item> <Header[: Scheme]>
+                                    the one of the protocol
+    headers <item> <Name: value; ...>
+    timeout <item> <seconds>        120, the endpoint stays silent at most
+    max-retries <item> <count>      1800, on a status that passes
+    retry-pause <item> <seconds>    2
+  chat
+    model <endpoint/model>          the one model of the one endpoint
+    system-prompt <text>            none
+  models
+    temperature, top_p, top_k, min_p, max_tokens, presence_penalty,
+    frequency_penalty, seed, reasoning_effort <endpoint/model> <value>
+                                    sent only when set
+  tools
+    max-rounds <count>              1000
+    use <tool> off|consent|on       consent, the tools of the server on
 
 tools
   <hostname>_config                 description lines
@@ -108,6 +128,10 @@ server/lib/conversation.cpp|h
 server/lib/library.cpp|h   the conversations of the server, a file each in conversations/, and
                            what each follower is to apply
 server/lib/sync.cpp|h      the stream of events of the conversations and the actions of a page
+server/lib/agent.cpp|h     the agent: a turn per conversation, on its own thread
+server/lib/api.cpp|h       the client of the endpoints: the model list, a reply streamed
+server/lib/remote.cpp|h    a server an item names: its url, key and headers, and their rules
+server/protocols/          one file per protocol an endpoint speaks: chat
 server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
 server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
 server/lib/prompts.cpp|h   the texts of prompts.json, read once
@@ -118,6 +142,7 @@ server/tests/files.cpp     the laws of lib/file.cpp, built and run the same way
 server/tests/conversation.cpp
                            the laws of lib/conversation.cpp and lib/library.cpp, built and run the
                            same way
+server/tests/protocol.cpp  the laws of the protocols, built and run the same way
 server/server.conf         the factory configuration the binary embeds
 server/client.conf         the client.conf the server serves when its directory has none
 vendor/                    cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
@@ -293,9 +318,21 @@ tells every page.
   page that comes back gets every conversation as it stands. A comment each second tells a page that
   left; the stream ends when the listener moves.
 - `POST /conversations/<action>` applies an action of the user, a JSON body, and answers 204, or 400
-  with why not: `pin {id, pinned}`, `browse {id, entry}`, the thread going to the last entry written
+  with why not: `send {text, id?}`, a message in a conversation, a new one without id, answered
+  with `{id}`, the agent answering it; `edit {id, entry, text}`, a version beside a message of the
+  user; `retry {id, entry}`, a new answer to a message or beside an answer; `stop {id}`;
+  `pin {id, pinned}`, `browse {id, entry}`, the thread going to the last entry written
   under that one, `drop {id, entry}`, a command entry leaving, its conversation going when it was
-  the last one, `erase {ids}`.
+  the last one, `erase {ids}`. While a turn runs in a conversation, every action on it but `stop`,
+  `pin` and `erase` waits for it to end.
+- A turn that grows its answer sends what it gained, never the conversation again: the text a
+  string gained, a round or a call that came, a call whole once its outcome came.
+
+  ```
+  data: {"add":["<id>","entries",3,"rounds",0,"text"],"text":"Hel"}
+  data: {"add":["<id>","entries",3,"rounds"],"value":{...}}
+  data: {"set":["<id>","entries",3,"rounds",0,"calls",0],"value":{...}}
+  ```
 
 ## Running
 
@@ -390,6 +427,27 @@ be empty says nothing.
 
 A result is plain text in sentences, no prompt and no `!`: the CLI is the config tool alone. The
 model wrote the call and keeps it in its context, so a result never echoes it.
+
+### The agent
+
+The server runs the agent of KiSS itself, the twin of the one of the page, with no browser open: a
+message a page sends, `POST /conversations/send`, starts a turn on its own thread, which answers
+round by round, each round reading the running configuration as it stands, until a round calls
+nothing or `tools max-rounds` is reached. The modules it reads are those of the page: `endpoints`,
+`chat`, `models` and `tools`, with the same keys.
+
+The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
+as a router names its interfaces: `forge_bash` is how a client sees it, and the configuration of the
+machine, which no other machine reads, names it `bash`. So the factory configuration turns them on
+for every machine, `set tools use bash on`, and a tool of another server stays in `consent`. No page
+asks the user yet: a call in `consent` answers `Nobody is here to allow the call`, as does one that
+asks a secret.
+
+The turn writes its answer in the conversation as it streams, the pages that follow it getting each
+piece; the conversation is written to its file before a turn, before each call reaches its tool and
+once the turn ends, as it settled, so a server that stops mid turn starts again on what it held, a
+call sent marked `Stopped before it answered: the tool may have acted`. `POST /conversations/stop`
+ends a turn at once, its request closed, no call running after it.
 
 ### Shell tools
 
@@ -660,8 +718,8 @@ through the binary.
 3. The view tool.
 4. Windows: process layer, OEM decoding, the PowerShell bootstrap, checked on Windows 10 and 11.
 5. Static builds of the three platforms.
-6. The storage tool for conversations and configuration, called by KiSS and never by the model.
+6. The conversations, a file each, the agent of the server, and the pages that follow them.
 
 Then the server grows by modules alone, the engine unchanged, as `proxy` proxies servers:
 
-- `mcp`: an MCP client of the server itself, the agentic loop run on the backend.
+- `mcp`: an MCP client of the server itself, the tools of other servers offered to its agent.

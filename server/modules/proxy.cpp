@@ -7,13 +7,11 @@
 #include "engine/keychain.h"
 #include "engine/text.h"
 #include "lib/log.h"
+#include "lib/remote.h"
 
 // the seconds a proxied server may stay silent, ten less than the 310 the page
 // waits on a call of an MCP server
 static const char * const PROXY_TIMEOUT = "300";
-
-// the headers the proxy writes itself, which a route never sets
-static const char * const OWN_HEADERS[] = { "host", "content-length", "transfer-encoding", "connection" };
 
 // a route is a path of this server, so its name is a word a path takes
 static bool route_word(const std::string & s) {
@@ -25,54 +23,13 @@ static bool route_word(const std::string & s) {
     return !s.empty();
 }
 
-// why the headers of a route do not read, Name: value; Name: value, none of
-// them the header of its key, empty when they do
-static std::string header_problem(const std::string & headers, const std::string & keyed) {
-    for (const std::string & pair : split(headers, ';')) {
-        const std::string h     = trim(pair);
-        const size_t      colon = h.find(':');
-        if (h.empty()) {
-            continue;
-        }
-        if (colon == std::string::npos || trim(h.substr(0, colon)).empty()) {
-            return "\"" + h + "\" is no Name: value";
-        }
-        const std::string name = lower(trim(h.substr(0, colon)));
-        for (const char * own : OWN_HEADERS) {
-            if (name == own) {
-                return name + " is written by the proxy";
-            }
-        }
-        if (name == lower(keyed)) {
-            return trim(h.substr(0, colon)) + " is the header proxy auth-header writes";
-        }
-    }
-    return "";
-}
-
 static std::string validate(const engine_reader & config) {
     for (const std::string & route : config.names("proxy")) {
         if (!route_word(route)) {
             return "proxy " + route + ": a route name takes a-z, 0-9, _ and - only, as a path does";
         }
-        const auto url = config.get("proxy url", route);
-        if (!url) {
-            return "proxy url " + route + " is not set";
-        }
-        if (!starts_with(*url, "http://") && !starts_with(*url, "https://")) {
-            return "proxy url " + route + " " + *url + " opens with http:// or https://";
-        }
-        const std::string auth = config.get("proxy auth-header", route).value_or(BEARER);
-        std::string       keyed, scheme;
-        if (!placement(auth, keyed, scheme)) {
-            return "proxy auth-header " + route + ": \"" + auth + "\" is not Header or Header: Scheme";
-        }
-        const std::string problem = header_problem(config.get("proxy headers", route).value_or(""), keyed);
-        if (!problem.empty()) {
-            return "proxy headers " + route + ": " + problem;
-        }
     }
-    return "";
+    return remote_rules(config, "proxy", [](const std::string &) { return std::string(BEARER); });
 }
 
 static void apply(const engine_reader & config) {

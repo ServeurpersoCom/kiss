@@ -98,3 +98,11 @@ add_executable(conversation_test server/tests/conversation.cpp server/lib/conver
 target_include_directories(conversation_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server)
 target_link_libraries(conversation_test PRIVATE yyjson)
 add_custom_command(TARGET conversation_test POST_BUILD COMMAND conversation_test)
+
+# protocol_test: the laws of the protocols, a request as it goes and an event
+# as it reads, run once built, a broken law failing the build
+add_executable(protocol_test server/tests/protocol.cpp server/protocols/chat.cpp server/lib/conversation.cpp
+               server/engine/parse.cpp server/engine/seal.cpp server/engine/text.cpp)
+target_include_directories(protocol_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server)
+target_link_libraries(protocol_test PRIVATE httplib yyjson)
+add_custom_command(TARGET protocol_test POST_BUILD COMMAND protocol_test)

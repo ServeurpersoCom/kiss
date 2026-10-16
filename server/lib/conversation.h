@@ -20,14 +20,16 @@ struct conversation_image {
     std::string data;
 };
 
-// one tool call of a round, with its outcome
+// one tool call of a round, with its outcome once it ran; sent, in memory
+// only, once it reaches its tool
 struct conversation_call {
     std::string                     id;
     std::string                     name;
     std::string                     args;
     std::string                     result;
-    bool                            ok = false;
+    std::optional<bool>             ok;
     std::vector<conversation_image> images;
+    bool                            sent = false;
 };
 
 // what the protocol a round streamed in needs back: its name, and its items as
@@ -101,8 +103,38 @@ std::vector<conversation> conversation_parse(const std::string & text);
 // one conversation as JSON, as the page writes it, every secret sealed
 std::string conversation_json(const conversation & c, const words_t & secrets);
 
+// a part of a conversation as JSON, the same way
+std::string conversation_entry_json(const conversation_entry & e, const words_t & secrets);
+std::string conversation_round_json(const conversation_round & r, const words_t & secrets);
+std::string conversation_call_json(const conversation_call & c, const words_t & secrets);
+
 // a file holding conversations, as the page writes one, every secret sealed
 std::string conversation_file(const std::vector<conversation> & conversations, const words_t & secrets);
+
+// the outcome of a call stopped once sent: its tool may have acted
+constexpr const char * STOPPED = "Stopped before it answered: the tool may have acted";
+
+// what of a turn holds once it stops: the calls that ran, those sent as
+// stopped, and the rounds that streamed something; a call never sent never ran
+std::vector<conversation_round> conversation_settled(const std::vector<conversation_round> & rounds);
+
+// the conversation as it settled, even while the model answers
+conversation conversation_stored(const conversation & c);
+
+// a random UUID, version 4 of RFC 9562
+std::string conversation_uuid();
+
+// now, in milliseconds since the epoch
+double conversation_now();
+
+// a message entering the conversation after an entry, none for a first one,
+// with a new id and the moment it entered; the leaf moves to it; returns its
+// index
+size_t conversation_append(conversation & c, const std::optional<std::string> & parent, conversation_entry e);
+
+// the entries from the first one to the leaf: the thread, and the history the
+// model reads
+std::vector<conversation_entry> conversation_path(const conversation & c);
 
 // the last entry written under an entry, itself included: a branch comes back
 // as it was last written in

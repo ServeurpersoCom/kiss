@@ -4,6 +4,7 @@
 #include "lib/sync.h"
 
 #include "engine/keychain.h"
+#include "lib/agent.h"
 #include "lib/library.h"
 #include "lib/listener.h"
 #include "lib/log.h"
@@ -52,9 +53,71 @@ static const conversation_entry * entry_of(const conversation & c, const std::st
     return nullptr;
 }
 
-// what the action does, the message of what keeps it from it, empty once done
-static std::string act(const std::string & action, yyjson_val * body) {
-    std::string id, entry;
+// the characters a title takes of the first message, as the page cuts it
+static const size_t TITLE_LENGTH = 60;
+
+// the first characters of a text, whole UTF-8 characters
+static std::string cut(const std::string & text, size_t characters) {
+    size_t i = 0;
+    for (size_t n = 0; i < text.size(); i++) {
+        if (((unsigned char) text[i] & 0xC0) != 0x80 && n++ == characters) {
+            break;
+        }
+    }
+    return text.substr(0, i);
+}
+
+// a message of the user entering a conversation after an entry, the model
+// answering it; the conversation names it while it has no title
+static std::string say(const std::string &                id,
+                       const std::optional<std::string> & parent,
+                       bool                               after_leaf,
+                       const std::string &                text) {
+    std::string       user;
+    const std::string why = library_change(
+        id,
+        [&](conversation & c) {
+            if (c.title.empty()) {
+                c.title = cut(text, TITLE_LENGTH);
+            }
+            conversation_entry e;
+            e.role = ROLE_USER;
+            e.text = text;
+            user   = c.entries[conversation_append(c, after_leaf ? c.leaf : parent, e)].id;
+            return std::string();
+        },
+        keychain_running());
+    return why.empty() ? agent_answer(id, user) : why;
+}
+
+// the message of a busy conversation, which waits for its turn to end
+static const char * const BUSY = "a turn runs in this conversation";
+
+// what the action does, the message of what keeps it from it, empty once
+// done; created names a conversation a message opened
+static std::string act(const std::string & action, yyjson_val * body, std::string & created) {
+    std::string id, entry, text;
+    if (action == "send") {
+        if (!text_field(body, "text", text) || trim(text).empty()) {
+            return "the body holds no text";
+        }
+        if (text_field(body, "id", id)) {
+            if (agent_busy(id)) {
+                return BUSY;
+            }
+            created = id;
+            return say(id, std::nullopt, true, text);
+        }
+        conversation c;
+        c.id                  = conversation_uuid();
+        c.updated             = conversation_now();
+        const std::string why = library_create(c, keychain_running());
+        if (!why.empty()) {
+            return why;
+        }
+        created = c.id;
+        return say(c.id, std::nullopt, false, text);
+    }
     if (action == "erase") {
         yyjson_val * ids = yyjson_obj_get(body, "ids");
         if (!yyjson_is_arr(ids)) {
@@ -71,11 +134,18 @@ static std::string act(const std::string & action, yyjson_val * body) {
             }
             gone.push_back(one);
         }
+        for (const std::string & one : gone) {
+            agent_stop(one);
+        }
         library_remove(gone);
         return "";
     }
     if (!text_field(body, "id", id)) {
         return "the body names no id";
+    }
+    if (action == "stop") {
+        agent_stop(id);
+        return "";
     }
     const words_t secrets = keychain_running();
     if (action == "pin") {
@@ -93,6 +163,34 @@ static std::string act(const std::string & action, yyjson_val * body) {
     }
     if (!text_field(body, "entry", entry)) {
         return "the body names no entry";
+    }
+    if (agent_busy(id)) {
+        return BUSY;
+    }
+    // the entry as the conversation holds it, a copy
+    std::optional<conversation_entry> found;
+    library_each([&](const conversation & c) {
+        if (c.id == id) {
+            const conversation_entry * e = entry_of(c, entry);
+            if (e) {
+                found = *e;
+            }
+        }
+    });
+    if (action == "edit") {
+        if (!text_field(body, "text", text) || trim(text).empty()) {
+            return "the body holds no text";
+        }
+        if (!found || found->role != ROLE_USER) {
+            return "\"" + entry + "\" is not a message of the user";
+        }
+        return found->text == text ? "" : say(id, found->parent, false, text);
+    }
+    if (action == "retry") {
+        if (!found || found->role == ROLE_CLI) {
+            return "\"" + entry + "\" is not a message of the user nor an answer";
+        }
+        return agent_answer(id, found->role == ROLE_ASSISTANT ? *found->parent : entry);
     }
     if (action == "browse") {
         return library_change(
@@ -132,9 +230,10 @@ void sync_action(const httplib::Request & req, httplib::Response & res, const st
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(req.body.data(), req.body.size(), 0), yyjson_doc_free);
     yyjson_val *                      body = doc ? yyjson_doc_get_root(doc.get()) : nullptr;
     std::string                       why  = yyjson_is_obj(body) ? "" : "the body is no JSON object";
+    std::string                       created;
     try {
         if (why.empty()) {
-            why = act(action, body);
+            why = act(action, body, created);
         }
     } catch (const std::runtime_error & e) {
         why = e.what();
@@ -146,5 +245,9 @@ void sync_action(const httplib::Request & req, httplib::Response & res, const st
         return;
     }
     log_info("Sync", "%s %s %s", req.remote_addr.c_str(), action.c_str(), req.body.c_str());
+    if (action == "send") {
+        res.set_content("{\"id\":\"" + created + "\"}", "application/json");
+        return;
+    }
     res.status = 204;
 }

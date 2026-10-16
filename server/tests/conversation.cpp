@@ -195,6 +195,60 @@ int main() {
             "one", [](conversation &) { return std::string("no"); }, secrets) == "no" &&
             library_follow(f, 10, secrets).empty(),
         "a change refused changes nothing and tells nobody");
+    {
+        // a turn grows an entry: a follower gets what it gained, never the
+        // whole conversation again
+        std::string live;
+        library_change(
+            "one",
+            [&](conversation & c) {
+                conversation_entry e;
+                e.role = ROLE_ASSISTANT;
+                live   = c.entries[conversation_append(c, c.leaf, e)].id;
+                return std::string();
+            },
+            secrets);
+        library_follow(f, 10, secrets);
+        const std::string at = "[\"one\",\"entries\",3,";
+        law(library_grow("one", live, [](conversation_entry &) {}) &&
+                library_follow(f, 10, secrets).rfind("data: {\"set\":[\"one\"],", 0) == 0,
+            "an entry a turn starts to grow comes whole with its conversation");
+        law(library_grow("one", live, [](conversation_entry & e) { e.rounds.emplace_back(); }) &&
+                library_follow(f, 10, secrets) ==
+                    "data: {\"add\":" + at +
+                        "\"rounds\"],\"value\":{\"reasoning\":\"\",\"text\":\"\",\"calls\":[]}}\n\n",
+            "a round that comes is pushed");
+        library_grow("one", live, [](conversation_entry & e) {
+            e.rounds[0].text += "Hel";
+            e.rounds[0].calls.push_back({ "c1", "ba", "{\"c", "", std::nullopt, {}, false });
+        });
+        library_grow("one", live, [](conversation_entry & e) {
+            e.rounds[0].text += "lo sk-secret-0001";
+            e.rounds[0].calls[0].name += "sh";
+        });
+        law(library_follow(f, 10, secrets) ==
+                "data: {\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"Hello <removed>\"}\n\n" +
+                    "data: {\"add\":" + at +
+                    "\"rounds\",0,\"calls\"],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":\"{\\\"c\"}}\n\n",
+            "what a string gained comes as text, sealed, a call that comes is pushed whole");
+        library_grow("one", live, [](conversation_entry & e) {
+            e.rounds[0].calls[0].args += "\":1}";
+            e.rounds[0].calls[0].result = "done";
+            e.rounds[0].calls[0].ok     = true;
+        });
+        law(library_follow(f, 10, secrets) ==
+                "data: {\"set\":" + at +
+                    "\"rounds\",0,\"calls\",0],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":" +
+                    "\"{\\\"c\\\":1}\",\"result\":\"done\",\"ok\":true}}\n\n",
+            "a call whose outcome came is set whole");
+        library_follower late;
+        library_follow(late, 0, secrets);
+        library_grow("one", live, [](conversation_entry & e) { e.rounds[0].text += "!"; });
+        law(library_follow(late, 10, secrets) == "data: {\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"!\"}\n\n",
+            "a follower that came during a turn gets what grew since it came");
+        law(!library_grow("one", "gone", [](conversation_entry &) {}), "an entry gone grows no more");
+        library_follow(f, 10, secrets);
+    }
     library_remove({ "one" });
     law(listed().empty() && !fs::exists(root / "one.json") && fs::exists(root / "two.json"),
         "an erased conversation goes with its file alone");
