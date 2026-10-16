@@ -14,6 +14,11 @@ std::string agent_answer(const std::string & id, const std::string & user);
 // whether a turn runs in a conversation
 bool agent_busy(const std::string & id);
 
+// what the user answers to what a turn asks in a conversation: once, always,
+// refuse; the message of what keeps it from reaching the turn, empty once it
+// does
+std::string agent_grant(const std::string & id, const std::string & verdict);
+
 // the turn of a conversation stops: its request closes, no call runs after
 // it, and the answer keeps what settled before
 void agent_stop(const std::string & id);

@@ -31,6 +31,7 @@ struct held {
     uint64_t     structure = 0;
     std::string  live;
     bool         answering = false;
+    std::string  asking;
 };
 
 static std::mutex              g_mutex;
@@ -181,6 +182,16 @@ void library_answering(const std::string & id, bool answering) {
     }
 }
 
+void library_asking(const std::string & id, const std::string & question) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const auto                  it = find_held(id);
+    if (it != g_held.end()) {
+        it->asking  = question;
+        it->version = ++g_version;
+        g_changed.notify_all();
+    }
+}
+
 void library_remove(const words_t & ids) {
     std::lock_guard<std::mutex> lock(g_mutex);
     for (const std::string & id : ids) {
@@ -290,11 +301,26 @@ static std::string grown(const conversation_entry & e,
 
 // what a follower holds of a conversation sent whole
 static library_held whole(const held & h) {
-    library_held out{ h.version, h.structure, false, {} };
+    library_held out{ h.version, h.structure, false, "", {} };
     for (const conversation_entry & e : h.c.entries) {
         if (e.id == h.live) {
             out.shape = shape_of(e);
         }
+    }
+    return out;
+}
+
+// what a follower is told of the turn of a conversation, each part once it
+// differs from what the follower holds: whether it answers, what it asks
+static std::string turn_of(const held & h, library_held & mine) {
+    std::string out;
+    if (mine.answering != h.answering) {
+        out += set_event(quoted(h.c.id) + ",\"answering\"", h.answering ? "true" : "null");
+        mine.answering = h.answering;
+    }
+    if (mine.asking != h.asking) {
+        out += set_event(quoted(h.c.id) + ",\"asking\"", h.asking.empty() ? "null" : h.asking);
+        mine.asking = h.asking;
     }
     return out;
 }
@@ -308,16 +334,13 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
     if (!f.started) {
         f.started = true;
         std::string list;
-        std::string answering;
+        std::string turns;
         for (const held & h : g_held) {
             list += (list.empty() ? "" : ",") + conversation_json(h.c, secrets);
             f.held[h.c.id] = whole(h);
-            if (h.answering) {
-                answering += set_event(quoted(h.c.id) + ",\"answering\"", "true");
-                f.held[h.c.id].answering = true;
-            }
+            turns += turn_of(h, f.held[h.c.id]);
         }
-        return set_event("", "{\"conversations\":[" + list + "]}") + answering;
+        return set_event("", "{\"conversations\":[" + list + "]}") + turns;
     }
     std::string out;
     for (const held & h : g_held) {
@@ -325,16 +348,10 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
         if (it == f.held.end() || it->second.structure != h.structure) {
             out += set_event(quoted(h.c.id), conversation_json(h.c, secrets));
             f.held[h.c.id] = whole(h);
-            if (h.answering) {
-                out += set_event(quoted(h.c.id) + ",\"answering\"", "true");
-                f.held[h.c.id].answering = true;
-            }
+            out += turn_of(h, f.held[h.c.id]);
             continue;
         }
-        if (it->second.answering != h.answering) {
-            out += set_event(quoted(h.c.id) + ",\"answering\"", h.answering ? "true" : "null");
-            it->second.answering = h.answering;
-        }
+        out += turn_of(h, it->second);
         if (it->second.version == h.version) {
             continue;
         }

@@ -91,6 +91,30 @@ describe('the conversations of a KiSS server', () => {
 		expect(homed('b')).toBe(false);
 	});
 
+	it('ask what a turn of the server asks, the answer going to the server, the question leaving with it', async () => {
+		const s = server();
+		app.conversations = [];
+		app.asks = [];
+		follow(config('backend'));
+		s.push({ set: [], value: { conversations: [conversation('a', 'A', 1)] } });
+		const request = { kind: 'call', tool: 'web_search_exa', args: '{"q":"x"}' };
+		s.push({ set: ['a', 'asking'], value: request });
+		await vi.waitFor(() => expect(app.asks.map((q) => q.from)).toEqual(['a']));
+		const ask = app.asks[0];
+		expect(ask.kind === 'grant' && ask.request).toEqual(request);
+		if (ask.kind === 'grant') ask.settle('always');
+		await vi.waitFor(() =>
+			expect(s.sent.some((r) => r.url.endsWith('/conversations/answer'))).toBe(true)
+		);
+		const post = s.sent.find((r) => r.url.endsWith('/conversations/answer'))!;
+		expect(JSON.parse(String(post.init?.body))).toEqual({ id: 'a', verdict: 'always' });
+		s.push({ set: ['a', 'asking'], value: null });
+		s.push({ set: ['a', 'asking'], value: request });
+		await vi.waitFor(() => expect(app.asks.length).toBe(1));
+		s.push({ set: ['a', 'asking'], value: null });
+		await vi.waitFor(() => expect(app.asks).toEqual([]));
+	});
+
 	it('send the actions of the user to the server, and leave the page with it', async () => {
 		const s = server();
 		app.conversations = [];

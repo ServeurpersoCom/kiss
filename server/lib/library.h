@@ -43,6 +43,10 @@ bool library_grow(const std::string &                               id,
 // in memory only
 void library_answering(const std::string & id, bool answering);
 
+// what a turn asks the user in a conversation now, JSON, none when empty,
+// every follower woken; held in memory only
+void library_asking(const std::string & id, const std::string & question);
+
 // the conversations gone, file and all, every follower woken; throws what
 // keeps one from going, those before it gone
 void library_remove(const words_t & ids);
@@ -72,6 +76,7 @@ struct library_held {
     uint64_t      version   = 0;
     uint64_t      structure = 0;
     bool          answering = false;
+    std::string   asking;
     library_shape shape;
 };
 
@@ -85,8 +90,8 @@ struct library_follower {
 
 // what a follower is to apply, as events: every conversation at its first
 // call; after it, a conversation changed otherwise than by growth, whole, one
-// gone, as null, whether a turn answers in it, true or null, and what an
-// entry a turn writes grew by: the text a string
+// gone, as null, whether a turn answers in it, true or null, what it asks
+// the user, the question or null, and what an entry a turn writes grew by: the text a string
 // gained, a round or a call that came, a call whole once its outcome came; it
 // waits up to wait_ms for a change, nothing when none came
 std::string library_follow(library_follower & f, int wait_ms, const words_t & secrets);

@@ -631,8 +631,9 @@ server by one stream of events, beside those of the browser, and never writes on
 versions, pin, delete and Stop go to the server, and every page following it sees them. A command
 still runs on the page, its output entering the conversation through the server. The page a KiSS
 server serves names that server `backend` and makes it the agent; a page served elsewhere answers
-itself until a line names one. No question of the server reaches the page yet: a call the server
-would ask about is refused.
+itself until a line names one. A call the server asks about shows on every page following the
+conversation as the consent card, the first answer going back to the server and withdrawing the card
+everywhere.
 
 A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment
 it entered, and the conversation holds its leaf, the entry the thread ends on. The thread is the

@@ -162,6 +162,10 @@ static std::string act(const std::string & action, yyjson_val * body, std::strin
         agent_stop(id);
         return "";
     }
+    if (action == "answer") {
+        std::string verdict;
+        return text_field(body, "verdict", verdict) ? agent_grant(id, verdict) : "the body names no verdict";
+    }
     const words_t secrets = keychain_running();
     if (action == "pin") {
         yyjson_val * pinned = yyjson_obj_get(body, "pinned");

@@ -1,6 +1,6 @@
 import type { Assistant, Conversation } from './types.js';
 import type { Grant, Library, Verdict } from '../engine/engine.js';
-import { app, type Asking, type Posed } from './app.svelte.js';
+import { app, pose as posing, type Asking, type Posed } from './app.svelte.js';
 import { REFUSE } from '../engine/engine.js';
 import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH, capital } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
@@ -21,7 +21,6 @@ import {
 import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
 import { redact, run, settings } from '../engine/run.js';
-import { hold } from '../modules/style.js';
 import { held, pulse, type Pulse } from './pulse.js';
 import { act, agent, homed } from './sync.js';
 
@@ -331,27 +330,12 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	}
 }
 
-// the number of the last question posed
-let posed = 0;
-
-// a question to the user from a conversation, shown in it once those it asked
-// before are answered; the style tokens and sheets hold off while any question
-// stands, and the time it stands leaves the clock of the turn that asks
+// a question to the user from a conversation; the time it stands leaves the
+// clock of the turn that asks
 function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
-	return new Promise((resolve) => {
-		const id = ++posed;
-		const asked = performance.now();
-		hold(true);
-		// the first answer settles it, any later one finds it gone
-		const settle = (answer: T) => {
-			if (!app.asks.some((q) => q.id === id)) return;
-			app.asks = app.asks.filter((q) => q.id !== id);
-			hold(app.asks.length > 0);
-			const p = pulses.get(from);
-			if (p) held(p, performance.now() - asked);
-			resolve(answer);
-		};
-		app.asks.push({ ...ask(settle), id, from });
+	return posing(from, ask, (ms) => {
+		const p = pulses.get(from);
+		if (p) held(p, ms);
 	});
 }
 

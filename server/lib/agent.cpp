@@ -4,6 +4,7 @@
 #include "lib/agent.h"
 
 #include "engine/keychain.h"
+#include "engine/parse.h"
 #include "engine/schema.h"
 #include "lib/api.h"
 #include "lib/library.h"
@@ -12,8 +13,10 @@
 #include "lib/tools.h"
 #include "yyjson.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -28,6 +31,53 @@ static const char * const USE_OFF = "off";
 // the stop of the turn of each conversation
 static std::mutex                                       g_mutex;
 static std::map<std::string, std::shared_ptr<api_stop>> g_turns;
+
+// a question a turn waits on, and the verdict that settles it
+struct question_t {
+    std::mutex              mutex;
+    std::condition_variable settled;
+    std::string             verdict;
+};
+
+// the verdicts a user gives a call in consent
+static const char * const VERDICTS[] = { "once", "always", "refuse" };
+static const char * const ALWAYS     = "always";
+static const char * const REFUSE     = "refuse";
+
+// the question each turn waits on, by conversation
+static std::map<std::string, std::shared_ptr<question_t>> g_questions;
+
+// a question settled, the first verdict winning, empty when a stop wakes it
+static void settle_question(const std::string & id, const std::string & verdict) {
+    std::shared_ptr<question_t> q;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        const auto                  it = g_questions.find(id);
+        if (it == g_questions.end()) {
+            return;
+        }
+        q = it->second;
+    }
+    std::lock_guard<std::mutex> lock(q->mutex);
+    if (q->verdict.empty()) {
+        q->verdict = verdict;
+    }
+    q->settled.notify_all();
+}
+
+std::string agent_grant(const std::string & id, const std::string & verdict) {
+    if (std::find(std::begin(VERDICTS), std::end(VERDICTS), verdict) == std::end(VERDICTS)) {
+        return "\"" + verdict + "\" is not once, always or refuse";
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (!g_questions.count(id)) {
+            return "nothing is asked in this conversation";
+        }
+    }
+    settle_question(id, verdict);
+    return "";
+}
 
 bool agent_busy(const std::string & id) {
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -45,6 +95,7 @@ void agent_stop(const std::string & id) {
     }
     if (stop) {
         stop->stop();
+        settle_question(id, "");
     }
 }
 
@@ -186,9 +237,36 @@ static void keep(const std::string & id) {
     library_change(id, [](conversation &) { return std::string(); }, keychain_running());
 }
 
+// what the user answers a question of a turn, the question shown to every
+// page following the conversation while it stands
+static std::string ask(const std::string & id, const std::string & question, api_stop & stop) {
+    const auto q = std::make_shared<question_t>();
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_questions[id] = q;
+    }
+    library_asking(id, question);
+    std::string verdict;
+    {
+        std::unique_lock<std::mutex> lock(q->mutex);
+        q->settled.wait(lock, [&] { return !q->verdict.empty() || stop.stopped; });
+        verdict = q->verdict;
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_questions.erase(id);
+    }
+    library_asking(id, "");
+    if (stop.stopped) {
+        throw api_error("Stopped");
+    }
+    return verdict;
+}
+
 // a call runs and its outcome enters it: a call reaches a tool not off as the
 // configuration stands when it goes, with arguments it reads as an object; a
-// tool in consent asks the user, and nobody is here to answer yet
+// tool in consent asks the user, the turn waiting for a page to answer: once,
+// always, which turns the tool on, or refuse
 static void call(const std::string &           id,
                  const std::string &           entry,
                  size_t                        r,
@@ -234,8 +312,23 @@ static void call(const std::string &           id,
         return;
     }
     if (use != USE_ON) {
-        settle(called.args, "Nobody is here to allow the call", false, {});
-        return;
+        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+        yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
+        yyjson_mut_doc_set_root(made.get(), q);
+        yyjson_mut_obj_add_str(made.get(), q, "kind", "call");
+        yyjson_mut_obj_add_strncpy(made.get(), q, "tool", called.name.data(), called.name.size());
+        yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
+        const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
+        log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
+        const std::string verdict = ask(id, question.get(), stop);
+        log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
+        if (verdict == REFUSE) {
+            settle(called.args, "The user refused the call", false, {});
+            return;
+        }
+        if (verdict == ALWAYS) {
+            engine_run("set tools use " + quote(called.name) + " " + USE_ON, ENGINE_ADMIN);
+        }
     }
     const std::string refused = found ? tools_check(*found, args) : "";
     if (!refused.empty()) {

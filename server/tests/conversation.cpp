@@ -253,6 +253,13 @@ int main() {
         library_answering("one", false);
         law(library_follow(late, 10, secrets) == "data: {\"set\":[\"one\",\"answering\"],\"value\":null}\n\n",
             "and that it ended");
+        library_asking("one", "{\"kind\":\"call\",\"tool\":\"x\",\"args\":\"{}\"}");
+        law(library_follow(late, 10, secrets) ==
+                "data: {\"set\":[\"one\",\"asking\"],\"value\":{\"kind\":\"call\",\"tool\":\"x\",\"args\":\"{}\"}}\n\n",
+            "a follower is told what a turn asks the user");
+        library_asking("one", "");
+        law(library_follow(late, 10, secrets) == "data: {\"set\":[\"one\",\"asking\"],\"value\":null}\n\n",
+            "and that it asks no more");
         library_follow(f, 10, secrets);
     }
     library_remove({ "one" });

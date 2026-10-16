@@ -1,7 +1,8 @@
 import type { Assistant, Conversation } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { remotes, type Remote } from './remote.js';
-import { app } from './app.svelte.js';
+import type { Verdict } from '../engine/engine.js';
+import { app, last, pose, withdraw } from './app.svelte.js';
 
 // the conversations of the KiSS server chat agent names: the page follows
 // them by one stream of events and never writes one, the server alone
@@ -17,6 +18,9 @@ export const SYNC_RETRY_MS = 2000;
 
 // the server each conversation of a server lives on, by conversation id
 const homes = new Map<string, string>();
+// the question each conversation of a server shows for its turn, by its
+// number, while the turn asks it
+const questions = new Map<string, number>();
 // the server followed now, by where it goes and with what key, and what ends
 // its stream
 let followed: { server: Remote; key: string; stop: AbortController } | null = null;
@@ -37,15 +41,31 @@ type Event =
 function forget(server: string): void {
 	app.conversations = app.conversations.filter((c) => homes.get(c.id) !== server);
 	for (const [id, home] of homes) if (home === server) homes.delete(id);
+	for (const [id, n] of questions) {
+		if (homes.has(id)) continue;
+		withdraw(n);
+		questions.delete(id);
+	}
 	if (app.current && !app.conversations.includes(app.current)) app.current = null;
 	for (const id of Object.keys(app.replies))
 		if (!app.conversations.some((c) => c.id === id)) delete app.replies[id];
 }
 
-// the conversation the page shows, the one the URL names, and the answer each
-// conversation of a server writes now, as the objects the page holds now
+// the conversation the page shows, the one the URL names, the answer each
+// conversation of a server writes now, as the objects the page holds now, and
+// the question its turn asks, which the server takes the answer of
 function settle(id: string): void {
 	const c = app.conversations.find((x) => x.id === id);
+	const request = c?.asking;
+	if (request && !questions.has(id)) {
+		void pose<Verdict>(id, (answer) => ({ kind: 'grant', request, settle: answer })).then(
+			(verdict) => act('answer', { id, verdict }).catch((e: Error) => console.error(e.message))
+		);
+		questions.set(id, last());
+	} else if (!request && questions.has(id)) {
+		withdraw(questions.get(id)!);
+		questions.delete(id);
+	}
 	if (location.hash.slice(1) === id) app.current = c ?? null;
 	const leaf = c?.entries.find((e) => e.id === c.leaf);
 	if (c?.answering && leaf?.role === 'assistant') app.replies[id] = leaf as Assistant;
