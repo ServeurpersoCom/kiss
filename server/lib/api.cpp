@@ -63,16 +63,15 @@ void api_stop::stop() {
     g_woken.notify_all();
 }
 
-// a client of the endpoint, closed by a stop while it waits
-static std::shared_ptr<httplib::Client> client_of(const endpoint & e, api_stop & stop, std::string & path) {
+std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path) {
     std::string host;
-    remote_split(e.server.url, host, path);
+    remote_split(r.url, host, path);
     const auto client = std::make_shared<httplib::Client>(host);
     if (!client->is_valid()) {
-        throw api_error(e.server.url + " cannot be reached: a bad port, or https on a build without TLS", URL_FIX);
+        throw api_error(r.url + " cannot be reached: a bad port, or https on a build without TLS", URL_FIX);
     }
-    const time_t seconds = (time_t) e.server.timeout;
-    const long   micros  = (long) ((e.server.timeout - (double) seconds) * 1e6);
+    const time_t seconds = (time_t) r.timeout;
+    const long   micros  = (long) ((r.timeout - (double) seconds) * 1e6);
     client->set_connection_timeout(seconds, micros);
     client->set_read_timeout(seconds, micros);
     std::lock_guard<std::mutex> lock(stop.mutex);
@@ -109,7 +108,7 @@ static api_error failure(const endpoint & e, int status, const std::string & typ
 
 std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop) {
     std::string base;
-    const auto  client = client_of(e, stop, base);
+    const auto  client = api_client(e.server, stop, base);
     const auto  res    = client->Get(joined(base, e.speaks->models), remote_headers(e.server));
     if (!res) {
         throw api_error(e.server.url + " does not answer", URL_FIX);
@@ -191,7 +190,7 @@ static std::shared_ptr<httplib::ClientImpl::StreamHandle> opened(const endpoint 
                                                                  const std::function<void(int, int, int)> & retrying) {
     for (int attempt = 1;; attempt++) {
         std::string base;
-        keep              = client_of(e, stop, base);
+        keep              = api_client(e.server, stop, base);
         const auto stream = std::make_shared<httplib::ClientImpl::StreamHandle>(keep->open_stream(
             "POST", joined(base, e.speaks->path), {}, remote_headers(e.server), body, "application/json"));
         if (stop.stopped) {

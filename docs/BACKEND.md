@@ -70,6 +70,13 @@ modules
     temperature, top_p, top_k, min_p, max_tokens, presence_penalty,
     frequency_penalty, seed, reasoning_effort <endpoint/model> <value>
                                     sent only when set
+  mcp
+    url <item> <url>                an MCP server the agent calls
+    key <item> <secret>
+    auth-header <item> <Header[: Scheme]>
+                                    Authorization: Bearer
+    headers <item> <Name: value; ...>
+    timeout <item> <seconds>        310, a call takes at most
   tools
     max-rounds <count>              1000
     use <tool> off|consent|on       consent, the tools of the server on
@@ -130,6 +137,7 @@ server/lib/library.cpp|h   the conversations of the server, a file each in conve
 server/lib/sync.cpp|h      the stream of events of the conversations and the actions of a page
 server/lib/agent.cpp|h     the agent: a turn per conversation, on its own thread
 server/lib/api.cpp|h       the client of the endpoints: the model list, a reply streamed
+server/lib/mcp.cpp|h       the client of the MCP servers the agent calls
 server/lib/remote.cpp|h    a server an item names: its url, key and headers, and their rules
 server/protocols/          one file per protocol an endpoint speaks: chat
 server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
@@ -143,6 +151,8 @@ server/tests/conversation.cpp
                            the laws of lib/conversation.cpp and lib/library.cpp, built and run the
                            same way
 server/tests/protocol.cpp  the laws of the protocols, built and run the same way
+server/tests/mcp.cpp       the laws of lib/mcp.cpp against a server of the test, built and run the
+                           same way
 server/server.conf         the factory configuration the binary embeds
 server/client.conf         the client.conf the server serves when its directory has none
 vendor/                    cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
@@ -442,7 +452,13 @@ nothing or `tools max-rounds` is reached. The modules it reads are those of the 
 The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
 as a router names its interfaces: `forge_bash` is how a client sees it, and the configuration of the
 machine, which no other machine reads, names it `bash`. So the factory configuration turns them on
-for every machine, `set tools use bash on`, and a tool of another server stays in `consent`. No page
+for every machine, `set tools use bash on`, and a tool of another server stays in `consent`.
+
+It calls the tools of the MCP servers the `mcp` module names as well, each by the name its server
+gives it, after the tools of the server, a name served twice staying with the first. A server is
+reached over Streamable HTTP, its session opened and its tools listed once, kept while its url, key
+and headers stay; a server that does not answer sits out the round, logged, and is asked again the
+next one. No page
 asks the user yet: a call in `consent` answers `Nobody is here to allow the call`, as does one that
 asks a secret.
 
@@ -722,7 +738,3 @@ through the binary.
 4. Windows: process layer, OEM decoding, the PowerShell bootstrap, checked on Windows 10 and 11.
 5. Static builds of the three platforms.
 6. The conversations, a file each, the agent of the server, and the pages that follow them.
-
-Then the server grows by modules alone, the engine unchanged, as `proxy` proxies servers:
-
-- `mcp`: an MCP client of the server itself, the tools of other servers offered to its agent.

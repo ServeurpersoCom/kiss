@@ -8,6 +8,7 @@
 #include "lib/api.h"
 #include "lib/library.h"
 #include "lib/log.h"
+#include "lib/mcp.h"
 #include "lib/tools.h"
 #include "yyjson.h"
 
@@ -16,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
 
 // what a call reads when no tool reads it, and why a call does not run
@@ -48,15 +50,17 @@ void agent_stop(const std::string & id) {
 
 // what one round reads of the running configuration, as it stands when the
 // round starts: the endpoints, the model chosen, the system prompt, the
-// parameters of every model, numbers as numbers, each tool not off by its own
-// name, and the rounds a turn takes
+// parameters of every model, numbers as numbers, each tool of the server not
+// off by its own name, then each tool of every MCP server not off, a name
+// served twice staying with the first; a server that does not answer sits
+// out the round
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
     std::string                                                             system;
     std::map<std::string, std::vector<std::pair<std::string, std::string>>> parameters;
     std::vector<tool>                                                       tools;
-    int                                                                     rounds = 0;
+    std::vector<mcp_tool>                                                   served;
 };
 
 // a string as JSON, the way a parameter of a model goes
@@ -67,13 +71,16 @@ static std::string json_string(const std::string & s) {
     return text.get();
 }
 
-static setup_t setup() {
-    setup_t s;
+static setup_t setup(api_stop & stop) {
+    setup_t             s;
+    std::vector<remote> servers;
     engine_with([&](const engine_reader & config) {
-        s.endpoints             = api_endpoints(config);
-        s.chosen                = config.get("chat model").value_or("");
-        s.system                = config.get("chat system-prompt").value_or("");
-        s.rounds                = std::stoi(config.get("tools max-rounds").value_or("1"));
+        s.endpoints = api_endpoints(config);
+        s.chosen    = config.get("chat model").value_or("");
+        s.system    = config.get("chat system-prompt").value_or("");
+        for (const std::string & name : config.names("mcp")) {
+            servers.push_back(remote_of(config, "mcp", name, BEARER));
+        }
         const engine_module * m = find_module("models");
         for (const std::string & item : config.names("models")) {
             for (const engine_key & k : m->keys) {
@@ -86,6 +93,29 @@ static setup_t setup() {
         for (tool & t : tools_list(config)) {
             if (config.get("tools use", t.suffix).value_or(USE_OFF) != USE_OFF) {
                 s.tools.push_back(std::move(t));
+            }
+        }
+    });
+    std::vector<mcp_tool> listed;
+    for (const remote & r : servers) {
+        try {
+            const std::vector<mcp_tool> tools = mcp_tools(r, stop);
+            listed.insert(listed.end(), tools.begin(), tools.end());
+        } catch (const std::exception & e) {
+            if (stop.stopped) {
+                throw;
+            }
+            log_error("Agent", "MCP server %s sits out: %s", r.name.c_str(), e.what());
+        }
+    }
+    std::set<std::string> taken;
+    for (const tool & t : s.tools) {
+        taken.insert(t.suffix);
+    }
+    engine_with([&](const engine_reader & config) {
+        for (const mcp_tool & t : listed) {
+            if (config.get("tools use", t.name).value_or(USE_OFF) != USE_OFF && taken.insert(t.name).second) {
+                s.served.push_back(t);
             }
         }
     });
@@ -159,9 +189,15 @@ static void keep(const std::string & id) {
 // a call runs and its outcome enters it: a call reaches a tool not off as the
 // configuration stands when it goes, with arguments it reads as an object; a
 // tool in consent asks the user, and nobody is here to answer yet
-static void call(const std::string & id, const std::string & entry, size_t r, size_t c, api_stop & stop) {
+static void call(const std::string &           id,
+                 const std::string &           entry,
+                 size_t                        r,
+                 size_t                        c,
+                 api_stop &                    stop,
+                 const std::vector<mcp_tool> & served) {
     const conversation_call called = reply_of(id, entry).rounds[r].calls[c];
     std::optional<tool>     found;
+    std::optional<remote>   server;
     std::string             use;
     engine_with([&](const engine_reader & config) {
         for (tool & t : tools_list(config)) {
@@ -169,6 +205,13 @@ static void call(const std::string & id, const std::string & entry, size_t r, si
             if (t.suffix == called.name && u != USE_OFF) {
                 found = std::move(t);
                 use   = u;
+            }
+        }
+        for (const mcp_tool & t : served) {
+            const std::string u = config.get("tools use", t.name).value_or(USE_OFF);
+            if (!found && !server && t.name == called.name && u != USE_OFF && config.get("mcp url", t.server)) {
+                server = remote_of(config, "mcp", t.server, BEARER);
+                use    = u;
             }
         }
     });
@@ -184,8 +227,9 @@ static void call(const std::string & id, const std::string & entry, size_t r, si
     };
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(called.args.data(), called.args.size(), 0), yyjson_doc_free);
     yyjson_val * args = called.args.empty() ? nullptr : doc ? yyjson_doc_get_root(doc.get()) : nullptr;
-    if (!found || (!called.args.empty() && !yyjson_is_obj(args))) {
-        settle(NO_ARGS, found ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"", false,
+    if ((!found && !server) || (!called.args.empty() && !yyjson_is_obj(args))) {
+        settle(NO_ARGS,
+               found || server ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"", false,
                {});
         return;
     }
@@ -193,7 +237,7 @@ static void call(const std::string & id, const std::string & entry, size_t r, si
         settle(called.args, "Nobody is here to allow the call", false, {});
         return;
     }
-    const std::string refused = tools_check(*found, args);
+    const std::string refused = found ? tools_check(*found, args) : "";
     if (!refused.empty()) {
         settle(called.args, refused, false, {});
         return;
@@ -201,6 +245,19 @@ static void call(const std::string & id, const std::string & entry, size_t r, si
     grow(id, entry, stop, [&](conversation_entry & e) { e.rounds[r].calls[c].sent = true; });
     keep(id);
     log_info("Agent", "%.8s calls %s", id.c_str(), called.name.c_str());
+    if (server) {
+        mcp_outcome out;
+        try {
+            out = mcp_call(*server, called.name, called.args.empty() ? NO_ARGS : called.args, stop);
+        } catch (const std::exception & e) {
+            if (stop.stopped) {
+                throw;
+            }
+            out.text = e.what();
+        }
+        settle(called.args, out.text, out.ok, out.images);
+        return;
+    }
     const tool_outcome out = found->run(args, {}, [&stop] { return !stop.stopped; });
     if (stop.stopped) {
         throw api_error("Stopped");
@@ -237,7 +294,7 @@ static bool round(const std::string &                     id,
                   size_t                                  r,
                   api_stop &                              stop,
                   spent_t &                               spent) {
-    const setup_t     s     = setup();
+    const setup_t     s     = setup(stop);
     const auto        pick  = api_pick(s.endpoints, s.chosen, stop);
     const endpoint &  e     = pick.first;
     const std::string model = pick.second;
@@ -252,6 +309,9 @@ static bool round(const std::string &                     id,
     }
     for (const tool & t : s.tools) {
         req.tools.push_back({ t.suffix, t.description, t.input });
+    }
+    for (const mcp_tool & t : s.served) {
+        req.tools.push_back({ t.name, t.description, t.input });
     }
     if (e.speaks->described) {
         req.info = api_describe(e, model, stop);
@@ -302,7 +362,7 @@ static bool round(const std::string &                     id,
         if (stop.stopped) {
             throw api_error("Stopped");
         }
-        call(id, entry, r, c, stop);
+        call(id, entry, r, c, stop, s.served);
     }
     return n > 0;
 }
@@ -318,8 +378,10 @@ static void turn(std::string                     id,
     std::optional<std::string> error;
     size_t                     r = 0;
     try {
-        const int rounds = setup().rounds;
-        bool      more   = true;
+        int rounds = 0;
+        engine_with(
+            [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
+        bool more = true;
         for (; more && r < (size_t) rounds; r++) {
             more = round(id, entry, before, r, *stop, spent);
         }

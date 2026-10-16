@@ -103,6 +103,10 @@ struct api_stop {
     void stop();
 };
 
+// a client of a remote server, its seconds those of the item, closed by a
+// stop while it waits; path is the path of its url
+std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path);
+
 // the models an endpoint serves, by id, each as its list writes it, JSON
 std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop);
 

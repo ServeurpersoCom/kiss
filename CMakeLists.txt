@@ -106,3 +106,17 @@ add_executable(protocol_test server/tests/protocol.cpp server/protocols/chat.cpp
 target_include_directories(protocol_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server)
 target_link_libraries(protocol_test PRIVATE httplib yyjson)
 add_custom_command(TARGET protocol_test POST_BUILD COMMAND protocol_test)
+
+# mcp_test: the laws of the client of the MCP servers, against a server of
+# the test, built on every source of the server but its start, run once
+# built, a broken law failing the build
+set(SERVER_LIBRARY ${SERVER_SOURCES})
+list(FILTER SERVER_LIBRARY EXCLUDE REGEX "/server/main.cpp$")
+add_executable(mcp_test server/tests/mcp.cpp ${SERVER_LIBRARY} ${EMBEDDED})
+add_dependencies(mcp_test version)
+target_include_directories(mcp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(mcp_test PRIVATE httplib yyjson stb Threads::Threads)
+if(WIN32)
+    target_link_libraries(mcp_test PRIVATE ws2_32)
+endif()
+add_custom_command(TARGET mcp_test POST_BUILD COMMAND mcp_test)
