@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ConfigReader } from '../src/lib/types.js';
-import { credential, hold, learn, placement, seal } from '../src/lib/keychain.js';
+import type { ConfigReader } from '../src/engine/engine.js';
+import { credential, hold, learn, placement, secrets } from '../src/engine/keychain.js';
+import { seal as sealed } from '../src/engine/seal.js';
+
+// a value sealed with every secret the keychain knows, as the page seals it
+const seal = (value: unknown): string => sealed(value, secrets());
 
 // a configuration that holds one key, sk-1, for item a of endpoints
 const config = {
@@ -51,10 +55,8 @@ describe('the keychain', () => {
 			eager: true
 		});
 		const readers = Object.keys(files).filter((f) => /\.reveal\(/.test(files[f]));
-		expect(readers.filter((f) => !/\/(engine|commands)\/|\/lib\/keychain\.ts$/.test(f))).toEqual(
-			[]
-		);
-		expect(readers).toContain('../src/lib/keychain.ts');
+		expect(readers.filter((f) => !/\/(engine|commands)\//.test(f))).toEqual([]);
+		expect(readers).toContain('../src/engine/keychain.ts');
 	});
 
 	it('takes a secret that holds another whole', () => {

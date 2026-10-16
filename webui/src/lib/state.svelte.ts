@@ -1,5 +1,6 @@
-import type { Assistant, Conversation, Grant, Library, Verdict } from './types.js';
-import { REFUSE } from './types.js';
+import type { Assistant, Conversation } from './types.js';
+import type { Grant, Library, Verdict } from '../engine/engine.js';
+import { REFUSE } from '../engine/engine.js';
 import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH, capital } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
 import { prune } from './drafts.js';

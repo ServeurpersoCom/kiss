@@ -10,11 +10,12 @@ import type {
 	InputRequest,
 	InputRequiredResult
 } from '@modelcontextprotocol/client';
-import type { ConfigReader, Image, Outcome, Tool, ToolContext } from './types.js';
+import type { Image, Outcome, Tool, ToolContext } from './types.js';
+import type { ConfigReader } from '../engine/engine.js';
 import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
 import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
-import { learn } from './keychain.js';
+import { learn } from '../engine/keychain.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
 // server, kept while its url and key stay, with the tool list it serves, asked
@@ -185,7 +186,7 @@ async function listed(remote: Remote, c: Client): Promise<Tool[]> {
 	return tools.map((t): Tool => ({
 		name: t.name,
 		description: t.description ?? '',
-		parameters: t.inputSchema,
+		input: t.inputSchema,
 		async run(ctx, args) {
 			try {
 				return await called(ctx, remote, c, { name: t.name, arguments: args });

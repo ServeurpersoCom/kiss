@@ -76,45 +76,50 @@ The binary also serves the KiSS page, so one download gives a working harness: s
 
 ## The repository
 
-Front and back are one project and peers, `webui/` and `server/`, laid out alike: the same
-`engine/`, `commands/`, `modules/` and `tools/` on both sides, a file per concept. A feature adds a
-file; no file grows with the features.
+Front and back are one project and peers, `webui/src/` and `server/`, laid out alike: the same
+`prompts.json`, `engine/`, `commands/`, `modules/`, `tools/` and `lib/` on both sides, a file per
+concept, the engine file for file. A feature adds a file; no file grows with the features.
 
 ```
-webui/                   the page, as FRONTEND.md describes it
-server/main.cpp          the start: defaults, startup-config, console, listener
-server/engine/           the CLI: text, parse, filter, near, schema, values, registry, archive, run,
-                         and the keychain with its seal
-server/commands/         one file per command, registered by existing
-server/modules/          one file per module: its keys, rules, how it applies to the server
-server/tools/            one file per tool source, registered by existing
-server/mcp/              the MCP: the entry of both eras, the JSON-RPC answers, the methods
-server/listener.cpp|h    the socket, moved when server listen-address or listen-port changes
-server/http.cpp|h        the routes and the checks of Host, Origin and the key
-server/proxy.cpp|h       the proxy of the servers the proxy module names
-server/console.cpp|h     the console of the interactive mode, opened on a terminal in the foreground
-server/term.h            the terminal of the console, per OS: raw mode, a key, the width
-server/log.cpp|h         the log: [Module] Line
-server/job.cpp|h         spawn, pipes, tree kill, per OS
-server/output.cpp|h      UTF-8 repair and head plus tail truncation
-server/file.cpp|h        the files the tools on files reach: a path, a text loaded whole, a write
-                         in place, a string found
-server/image.cpp|h       an image as a model is sent it: sized, turned, resized, made a JPEG
-server/utf8.h            the UTF-8 boundary of Windows: argv, fopen
-server/tests/seal.cpp    the laws of the seal, built and run with the server, a broken law failing
-                         the build
-server/tests/files.cpp   the laws of file.cpp, built and run the same way
-server/server.conf       the factory configuration the binary embeds
-server/client.conf       the client.conf the server serves when its directory has none
-vendor/                  cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
-tools/public/            index.html.gz, the page the binary embeds
-tools/xxd.cmake          embeds a file as a C array
-tools/version.cmake      the git commit of the build
-CMakeLists.txt           the server, built without npm, into build/server
-buildwebui.sh            builds the page in webui/ and gzips it into tools/public/, optional, first
-build.sh                 builds the server with CMake alone
-build.cmd                the same on Windows, with Visual Studio Build Tools and Ninja
-format.sh                clang-format over the C++, vendors excluded
+webui/                     the page, as FRONTEND.md describes it
+server/main.cpp            the start: prompts, defaults, startup-config, console, listener
+server/prompts.json        what a model reads of the server: its tools, its modules
+server/engine/             the CLI: text, parse, filter, near, schema, values, registry, archive,
+                           run, complete, and the keychain with its seal
+server/commands/           one file per command, registered by existing
+server/modules/            one file per module: its keys, rules, how it applies to the server
+server/tools/              one file per tool source, registered by existing
+server/mcp/                the MCP: the entry of both eras, the JSON-RPC answers, the methods
+server/lib/listener.cpp|h  the socket, moved when server listen-address or listen-port changes
+server/lib/http.cpp|h      the routes and the checks of Host, Origin and the key
+server/lib/proxy.cpp|h     the proxy of the servers the proxy module names
+server/lib/console.cpp|h   the console of the interactive mode, opened on a terminal in the
+                           foreground
+server/lib/term.h          the terminal of the console, per OS: raw mode, a key, the width
+server/lib/log.cpp|h       the log: [Module] Line
+server/lib/job.cpp|h       spawn, pipes, tree kill, per OS
+server/lib/output.cpp|h    UTF-8 repair and head plus tail truncation
+server/lib/file.cpp|h      the files the tools on files reach: a path, a text loaded whole, a write
+                           in place, a string found
+server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
+server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
+server/lib/prompts.cpp|h   the texts of prompts.json, read once
+server/lib/utf8.h          the UTF-8 boundary of Windows: argv, fopen
+server/tests/seal.cpp      the laws of the seal, built and run with the server, a broken law failing
+                           the build
+server/tests/files.cpp     the laws of lib/file.cpp, built and run the same way
+server/server.conf         the factory configuration the binary embeds
+server/client.conf         the client.conf the server serves when its directory has none
+vendor/                    cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
+tools/public/              index.html.gz, the page the binary embeds
+tools/xxd.cmake            embeds a file as a C array
+tools/version.cmake        the git commit of the build
+CMakeLists.txt             the server, built without npm, into build/server
+buildwebui.sh              builds the page in webui/ and gzips it into tools/public/, optional,
+                           first
+build.sh                   builds the server with CMake alone
+build.cmd                  the same on Windows, with Visual Studio Build Tools and Ninja
+format.sh                  clang-format over the C++, vendors excluded
 ```
 
 Every file has one source: the binary embeds `server/client.conf` and `server/server.conf` as
@@ -324,7 +329,12 @@ which keeps the name valid for every model API. Two machines never collide, and 
 
 A description is short: what the tool does and the machine it acts on, `Run a bash command on
 forge`. A cut output, a timeout or a resized image, the result tells. Only the hostname changes it,
-so the tool list stays the same from turn to turn and the prompt cache of the model holds.
+so the tool list stays the same from turn to turn and the prompt cache of the model holds. Every
+text a model reads of the server lives in `server/prompts.json`, as every one of the page lives in
+`webui/src/prompts.json`: each tool with its description and the JSON Schema of its arguments,
+`{hostname}`, `{platform}`, `{shell}` and `{modules}` standing for what only the running server
+knows, and each module with what it sets. A module that has no text there stops the server as it
+starts.
 
 Every tool takes `description` first, why the call is made, then what it does: its schema lists it
 first and says so, for a model to write the why before the what. A model still writes its arguments
@@ -414,11 +424,11 @@ bytes`.
 
 `<name>_config` takes `description` and `lines`, runs the lines as a batch of CLI on the engine and
 answers with its output and its change, as the `client_config` tool of the page does. Its
-description lists every module with its keys and what it is, from the modules themselves, so the
-model knows the server before it reads a line of it. KiSS configures every backend from the page
-through it, under the consent firewall when the model calls it, and any other MCP client gets the
-same CLI. A change of `server listen-address` or `server listen-port` moves the listener at once,
-once the address is checked free.
+description lists every module with its keys and what it sets, from the modules themselves and
+`prompts.json`, so the model knows the server before it reads a line of it. KiSS configures every
+backend from the page through it, under the consent firewall when the model calls it, and any other
+MCP client gets the same CLI. A change of `server listen-address` or `server listen-port` moves the
+listener at once, once the address is checked free.
 
 A secret never crosses the context of the model. The administrator writes it in `server.conf` or on
 the console. An MCP client writes `set server key` alone: the batch applies nothing, and the call

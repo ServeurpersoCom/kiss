@@ -1,15 +1,15 @@
-import type { Command, Context, Conversation } from '../lib/types.js';
+import type { Conversation } from '../lib/types.js';
+import type { Command, Context } from '../engine/engine.js';
 import {
 	CONVERSATION,
 	CONVERSATIONS,
 	CONFIG_EXTENSION,
 	FILE_EXTENSION,
 	ID_SHOWN,
-	beyond,
-	comment,
 	fileName,
 	localTime
 } from '../lib/config.js';
+import { beyond, comment } from '../engine/text.js';
 import { configs, listed, named, target } from './copy.js';
 
 // what export names: the conversation the batch was sent in, or a word, a

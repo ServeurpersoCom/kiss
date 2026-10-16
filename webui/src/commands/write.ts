@@ -1,5 +1,5 @@
-import type { Command } from '../lib/types.js';
-import { RUNNING_CONFIG, STARTUP_CONFIG, beyond } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { RUNNING_CONFIG, STARTUP_CONFIG, beyond } from '../engine/text.js';
 import copy from './copy.js';
 import { choose } from '../engine/near.js';
 

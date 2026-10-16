@@ -1,6 +1,7 @@
-import type { ConfigReader, Key, KeyWords, Known, Module, Schema, Value } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import { NAME_PATTERN, REMOVED, comment } from '../lib/config.js';
+import type { ConfigReader, Key, KeyWords, Known, Module, Schema, Value } from './engine.js';
+import { Incomplete } from './text.js';
+import { NAME_PATTERN } from '../lib/config.js';
+import { REMOVED, comment } from './text.js';
 import { choose, didYouMean, pick } from './near.js';
 
 const URL_PROTOCOLS = ['http:', 'https:'];

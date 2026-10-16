@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import type { Verdict } from '../lib/types.js';
-	import { always, answers } from '../lib/types.js';
+	import type { Verdict } from '../engine/engine.js';
+	import { always, answers } from '../engine/engine.js';
 	import { app, askOf, choose, deliver } from '../lib/state.svelte.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };

@@ -1,12 +1,10 @@
-import type { ConfigReader } from './types.js';
-import { REMOVED } from './config.js';
+import type { ConfigReader } from './engine.js';
 
 // the keychain of the page: the one place the value of a key is read, as the
-// header of a request leaves, and the one seal of what leaves the memory of
-// the page, the request to the model, a conversation stored or exported,
-// every secret the page has known read <removed> in every string it holds;
-// a secret goes out where it must, and nothing kept or sent to the model
-// holds it
+// header of a request leaves, and the one list of every secret the page has
+// known, which the seal reads <removed> in what leaves the memory of the page,
+// the request to the model, a conversation stored or exported; a secret goes
+// out where it must, and nothing kept or sent to the model holds it
 
 // where a key goes when nothing else says: Header, or Header: Scheme
 export const BEARER = 'Authorization: Bearer';
@@ -33,7 +31,7 @@ export function learn(value: string): void {
 
 // every secret the page knows, the longest first, so a secret that holds
 // another goes whole
-function secrets(): string[] {
+export function secrets(): string[] {
 	held().forEach(learn);
 	return [...known].sort((a, b) => b.length - a.length);
 }
@@ -59,28 +57,4 @@ export function credential(
 	learn(key);
 	const [header, scheme] = placement(auth) ?? placement(BEARER)!;
 	return key ? { [header]: scheme ? `${scheme} ${key}` : key } : {};
-}
-
-// a text with every secret replaced by <removed>
-function filter(text: string, all: readonly string[]): string {
-	return all.reduce((t, s) => t.split(s).join(REMOVED), text);
-}
-
-// a JSON value with every string it holds sealed, the names of its
-// properties included
-function sealed(value: unknown, all: readonly string[]): unknown {
-	if (typeof value === 'string') return filter(value, all);
-	if (Array.isArray(value)) return value.map((v) => sealed(v, all));
-	if (value && typeof value === 'object')
-		return Object.fromEntries(
-			Object.entries(value).map(([k, v]) => [filter(k, all), sealed(v, all)])
-		);
-	return value;
-}
-
-// a value as JSON, every string it holds sealed as decoded, a name of a
-// property as a value, so a secret escaped or streamed in pieces is whole
-// there
-export function seal(value: unknown, indent?: string): string {
-	return JSON.stringify(sealed(JSON.parse(JSON.stringify(value)), secrets()), null, indent);
 }

@@ -3,9 +3,9 @@
 // tools, how much the log says and how much of it show logging keeps
 
 #include "engine/engine.h"
-#include "listener.h"
-#include "log.h"
-#include "tools.h"
+#include "lib/listener.h"
+#include "lib/log.h"
+#include "lib/tools.h"
 
 #include <filesystem>
 #include <system_error>
@@ -123,9 +123,6 @@ static engine_module make_server() {
 
     engine_module m;
     m.name = "server";
-    m.role =
-        "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, "
-        "the directory its tools start in, its log level";
     m.keys.push_back(address);
     m.keys.push_back(port);
     m.keys.push_back(hostname);

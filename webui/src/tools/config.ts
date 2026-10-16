@@ -1,6 +1,6 @@
 import type { Tool } from '../lib/types.js';
-import prompts from '../lib/prompts.json';
-import { ERROR_PREFIX } from '../lib/config.js';
+import prompts from '../prompts.json';
+import { ERROR_PREFIX } from '../engine/text.js';
 
 // the lines a call holds, none when they are no string
 const text = (args: Record<string, unknown>): string =>
@@ -8,15 +8,8 @@ const text = (args: Record<string, unknown>): string =>
 
 export default {
 	name: 'client_config',
-	description: prompts.client_config,
-	parameters: {
-		type: 'object',
-		properties: {
-			description: { type: 'string', description: "Why I'm configuring the page, written first" },
-			lines: { type: 'string', description: 'one or more CLI lines, one command per line' }
-		},
-		required: ['description', 'lines']
-	},
+	description: prompts.tools.config.description,
+	input: prompts.tools.config.input,
 	stored(ctx, args) {
 		return { ...args, lines: ctx.redact(text(args)) };
 	},

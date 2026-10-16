@@ -2,7 +2,7 @@
 // linear light, turned as its EXIF says, laid on white, encoded as JPEG, an
 // opaque PNG that fits kept when it weighs less than its JPEG
 
-#include "image.h"
+#include "lib/image.h"
 
 #include "stb_image.h"
 #include "stb_image_resize2.h"

@@ -35,10 +35,6 @@ static engine_module make_files() {
 
     engine_module m;
     m.name = "files";
-    m.role =
-        "the tools on files, <hostname>_view, <hostname>_str_replace and <hostname>_create_file: the bytes of text "
-        "view returns, the bytes of a file a tool loads whole, the megapixels an image decodes to, the longest side "
-        "and the JPEG quality of an image made again";
     m.keys.push_back(output);
     m.keys.push_back(load);
     m.keys.push_back(megapixels);

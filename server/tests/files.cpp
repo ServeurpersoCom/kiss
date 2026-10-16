@@ -5,7 +5,7 @@
 // and the mode and the link of the file kept, and a string is found where it
 // first occurs, its count telling whether it is unique
 
-#include "file.h"
+#include "lib/file.h"
 
 #include <cstdio>
 #include <random>

@@ -1,5 +1,6 @@
-import type { ConfigReader, Image } from './types.js';
-import { BEARER, credential, placement } from './keychain.js';
+import type { Image } from './types.js';
+import type { ConfigReader } from '../engine/engine.js';
+import { BEARER, credential, placement } from '../engine/keychain.js';
 
 // an item of a collection module that names a remote server by a url, the
 // header that carries its key, the headers sent besides it and the seconds it

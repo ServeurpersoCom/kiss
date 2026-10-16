@@ -15,14 +15,6 @@ export const STARTUP_STORAGE_KEY = 'kiss.startup';
 export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
 // between the endpoint and the model id in the name of a model: prod/qwen3:8b
 export const MODEL_SEPARATOR = '/';
-// the configuration the page runs, and the one it starts with, as IOS names
-// them; neither is a save name
-export const RUNNING_CONFIG = 'running-config';
-export const STARTUP_CONFIG = 'startup-config';
-export const ERROR_PREFIX = '% ';
-export const COMMENT_PREFIX = '!';
-// a line of output that is not a command: a heading, a note, a warning
-export const comment = (text: string): string => `${COMMENT_PREFIX} ${text}`;
 // a line of the page to the user or the model, its first letter capital, but
 // for one that opens on a URL, written as it is
 const URL_START = /^[a-z][a-z0-9+.-]*:\/\//;
@@ -37,14 +29,10 @@ export const CLI = 'CLI';
 // title reads it, nothing while the conversation has none
 export const titled = (title: string, quote: (value: string) => string): string =>
 	title ? ` ${quote(title)}` : '';
-// what stands for a secret kept out of view, in the lines the history keeps;
-// never a value, as its brackets tell
-export const REMOVED = '<removed>';
 // the factory configuration the page carries, and the optional file next to
 // the page that a site writes over it: set lines both
 export const FACTORY_FILE = 'factory client.conf';
 export const SITE_CONFIG_URL = 'client.conf';
-export const PIPE = '|';
 // a word this many edits away from a candidate per three letters is a typo
 export const TYPO_LETTERS_PER_EDIT = 3;
 
@@ -118,16 +106,9 @@ export function stamp(time: number, locale?: string): string {
 	return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(time);
 }
 
-// the words a line holds past its end: what they follow, then themselves
-export function beyond(head: readonly string[], rest: readonly string[]): Error {
-	return new Error(`nothing goes after ${head.join(' ')}: ${rest.join(' ')}`);
-}
-
-// conversations: the word naming every one of them, and their files, named
-// after a title without the characters a file name cannot hold
-export const ALL = 'all';
-// what export and erase name for every conversation, and the name of the file
-// one conversation goes to
+// conversations: what export and erase name for every one of them, the name of
+// the file one conversation goes to, and their files, named after a title
+// without the characters a file name cannot hold
 export const CONVERSATIONS = 'conversations';
 export const CONVERSATION = 'conversation';
 // the length an id shows, unique among a few thousand conversations

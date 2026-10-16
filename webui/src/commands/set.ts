@@ -1,6 +1,6 @@
-import type { Command, Context, Value } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import { comment } from '../lib/config.js';
+import type { Command, Context, Value } from '../engine/engine.js';
+import { Incomplete } from '../engine/text.js';
+import { comment } from '../engine/text.js';
 
 // no value for a secret: it is asked of the user
 interface Plan {

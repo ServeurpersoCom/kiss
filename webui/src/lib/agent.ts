@@ -1,8 +1,8 @@
 import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } from './types.js';
-import { ALWAYS, REFUSE } from './types.js';
+import { ALWAYS, REFUSE } from '../engine/engine.js';
 import { chat, describe, pick } from './api.js';
 import { aggregate, connecting, relist } from './mcp.js';
-import prompts from './prompts.json';
+import prompts from '../prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
@@ -93,7 +93,7 @@ async function setup(
 	const { tools, problems } = await aggregate(settings, own, down);
 	for (const problem of problems) if (!told.includes(problem)) told.push(problem);
 	// the system prompt, then what the turn left out
-	const system = [prompt, told.length ? [prompts.problems, ...told].join('\n') : '']
+	const system = [prompt, told.length ? [prompts.notes.problems, ...told].join('\n') : '']
 		.filter((part) => part)
 		.join('\n\n');
 	const info = endpoint.protocol.described ? await describe(endpoint, model, signal) : undefined;

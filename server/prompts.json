@@ -1,0 +1,150 @@
+{
+	"tools": {
+		"config": {
+			"description": "Runs lines of the CLI of the KiSS server {hostname} on {platform}, one command per line, as one batch that applies whole or not at all, the way Cisco IOS reads them: set <module> <key> [item] <value>, no <module> <key> [item], show <module>, show running-config [all], show startup-config, show diff <config> <config>, show version, show logging, copy running-config startup-config or write memory, erase running-config or erase startup-config, a copy, a write or an erase asking the user's yes with a card of the page. Its modules, with their keys: {modules}. Every default fits as it is, so set only what differs. A secret never shows: show writes ! <module> <key> [item] is set for one that is set, and no line for one that is not. To set a secret, write its line without the value, set proxy key <name>: the user types it in a field you never see, so never ask for it in the chat. A url no configuration holds yet asks the user to let it with a card of the page as the line runs: run the line, never ask in the chat first.",
+			"input": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Why I'm configuring the server, written first"
+					},
+					"lines": {
+						"type": "string",
+						"minLength": 1,
+						"description": "CLI lines, one per line"
+					}
+				},
+				"required": [
+					"description",
+					"lines"
+				],
+				"additionalProperties": false
+			}
+		},
+		"create_file": {
+			"description": "Create a new file with content on {hostname}, its directories made, a file already there written over.",
+			"input": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Why I'm creating this file, written first"
+					},
+					"path": {
+						"type": "string",
+						"minLength": 1,
+						"description": "The file to create, written second"
+					},
+					"file_text": {
+						"type": "string",
+						"description": "The content of the file, written last"
+					}
+				},
+				"required": [
+					"description",
+					"path",
+					"file_text"
+				],
+				"additionalProperties": false
+			}
+		},
+		"shells": {
+			"description": "Run a {shell} command on {hostname}",
+			"input": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Why I'm running this command, written first"
+					},
+					"command": {
+						"type": "string",
+						"minLength": 1,
+						"description": "The command to run, as the shell reads it on stdin"
+					}
+				},
+				"required": [
+					"description",
+					"command"
+				],
+				"additionalProperties": false
+			}
+		},
+		"str_replace": {
+			"description": "Replace a unique string in a file with another string on {hostname}. The string to replace must appear exactly once in the file.",
+			"input": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Why I'm making this edit, written first"
+					},
+					"path": {
+						"type": "string",
+						"minLength": 1,
+						"description": "The file to edit"
+					},
+					"old_str": {
+						"type": "string",
+						"minLength": 1,
+						"description": "The string to replace, unique in the file"
+					},
+					"new_str": {
+						"type": "string",
+						"description": "The string to replace it with, empty to delete"
+					}
+				},
+				"required": [
+					"description",
+					"path",
+					"old_str",
+					"new_str"
+				],
+				"additionalProperties": false
+			}
+		},
+		"view": {
+			"description": "Supports viewing text, images, and directory listings on {hostname}.\n\nSupported path types:\n- Directories: Lists files and directories up to 2 levels deep, ignoring hidden items and the contents of node_modules\n- Image files (PNG, JPEG, GIF, WebP): Displays the image visually\n- Text files: Displays numbered lines. You can optionally specify a view_range to see specific lines.",
+			"input": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Why I need to view this, written first"
+					},
+					"path": {
+						"type": "string",
+						"minLength": 1,
+						"description": "The file or the directory"
+					},
+					"view_range": {
+						"type": "array",
+						"items": {
+							"type": "integer"
+						},
+						"minItems": 2,
+						"maxItems": 2,
+						"description": "Lines [start, end] of a text file, from 1, end -1 for the last"
+					}
+				},
+				"required": [
+					"description",
+					"path"
+				],
+				"additionalProperties": false
+			}
+		}
+	},
+	"modules": {
+		"files": "the tools on files, <hostname>_view, <hostname>_str_replace and <hostname>_create_file: the bytes of text view returns, the bytes of a file a tool loads whole, the megapixels an image decodes to, the longest side and the JPEG quality of an image made again",
+		"proxy": "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> with the key of this server, the page by set mcp proxy or set endpoints proxy <name> <its name for this server>; the key of a route goes to its url alone, in the header its auth-header names, Header or Header: Scheme, and a route without a key reaches its url without one",
+		"server": "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, the directory its tools start in, its log level",
+		"shells": "a tool <hostname>_<shell> per shell whose program this machine has: the command reading a script on stdin, its seconds, its bytes of output"
+	}
+}

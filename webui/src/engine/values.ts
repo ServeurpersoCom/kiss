@@ -1,5 +1,5 @@
-import type { Config, Schema, Value } from '../lib/types.js';
-import { REMOVED } from '../lib/config.js';
+import type { Config, Schema, Value } from './engine.js';
+import { REMOVED } from './text.js';
 import { stored, unstore } from './schema.js';
 
 // a configuration: the keys set in the session, over the values the site

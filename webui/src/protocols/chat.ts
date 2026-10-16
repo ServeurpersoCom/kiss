@@ -1,6 +1,6 @@
 import type { Call, Message, Protocol } from '../lib/types.js';
 import { dataUrl } from '../lib/remote.js';
-import { BEARER } from '../lib/keychain.js';
+import { BEARER } from '../engine/keychain.js';
 
 // OpenAI chat completions, the open standard of llama.cpp, vLLM and Hugging
 // Face: one delta per event until [DONE], the endpoint counting the tokens it
@@ -76,7 +76,7 @@ export default {
 		],
 		tools: r.tools.map((t) => ({
 			type: 'function',
-			function: { name: t.name, description: t.description, parameters: t.parameters }
+			function: { name: t.name, description: t.description, parameters: t.input }
 		})),
 		stream: true,
 		stream_options: { include_usage: true }

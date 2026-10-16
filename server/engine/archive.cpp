@@ -3,7 +3,7 @@
 #include "engine/archive.h"
 
 #include "engine/text.h"
-#include "utf8.h"
+#include "lib/utf8.h"
 
 #include <cstdio>
 #include <filesystem>

@@ -1,6 +1,6 @@
 // seal.cpp: a text, JSON and a stream of events, every secret read <removed>
 
-#include "seal.h"
+#include "engine/seal.h"
 
 #include "yyjson.h"
 

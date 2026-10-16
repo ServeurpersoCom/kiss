@@ -7,9 +7,9 @@
 // stream, a refusal of the proxy, and the result of a tool; JSON as decoded,
 // any other text as it is written
 
-#include "engine.h"
-#include "seal.h"
-#include "text.h"
+#include "engine/engine.h"
+#include "engine/seal.h"
+#include "engine/text.h"
 
 #include <string>
 

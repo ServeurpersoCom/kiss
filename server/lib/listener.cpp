@@ -1,10 +1,10 @@
 // listener.cpp: the socket the server listens on
 
-#include "listener.h"
+#include "lib/listener.h"
 
 #include "engine/engine.h"
-#include "http.h"
-#include "log.h"
+#include "lib/http.h"
+#include "lib/log.h"
 
 #include <atomic>
 #include <cstring>

@@ -1,4 +1,4 @@
-import type { Key, Module } from '../lib/types.js';
+import type { Key, Module } from '../engine/engine.js';
 import page from '../tokens.css?raw';
 
 // the properties a token takes the values of, the first its default fits

@@ -1,16 +1,16 @@
 // http.cpp: the routes of the server: the page, its site configuration, the
 // MCP and the servers it proxies, behind the checks of Host, Origin and the key
 
-#include "http.h"
+#include "lib/http.h"
 
 #include "client.conf.hpp"
 #include "engine/engine.h"
 #include "engine/keychain.h"
 #include "index.html.gz.hpp"
-#include "listener.h"
-#include "log.h"
+#include "lib/listener.h"
+#include "lib/log.h"
+#include "lib/proxy.h"
 #include "mcp/mcp.h"
-#include "proxy.h"
 #include "version.h"
 
 #include <fstream>

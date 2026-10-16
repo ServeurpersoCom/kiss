@@ -1,4 +1,4 @@
-import { COMMENT_PREFIX, PIPE } from '../lib/config.js';
+import { COMMENT_PREFIX, PIPE } from './text.js';
 
 // one command per line; blank lines and comments are skipped
 export function splitLines(text: string): string[] {

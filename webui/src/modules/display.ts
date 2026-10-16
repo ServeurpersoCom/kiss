@@ -1,4 +1,4 @@
-import type { Module } from '../lib/types.js';
+import type { Module } from '../engine/engine.js';
 import {
 	BLOCKS,
 	CLOSED,

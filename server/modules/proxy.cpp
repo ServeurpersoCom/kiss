@@ -6,7 +6,7 @@
 #include "engine/engine.h"
 #include "engine/keychain.h"
 #include "engine/text.h"
-#include "log.h"
+#include "lib/log.h"
 
 // the seconds a proxied server may stay silent, ten less than the 310 the page
 // waits on a call of an MCP server
@@ -110,12 +110,6 @@ static engine_module make_proxy() {
 
     engine_module m;
     m.name = "proxy";
-    m.role =
-        "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> with the key of "
-        "this server, the page by set mcp proxy or set endpoints proxy <name> <its name for this server>; the key of "
-        "a route goes to its url alone, in the header its auth-header names, Header or Header: Scheme, and a route "
-        "without "
-        "a key reaches its url without one";
     m.keys.push_back(url);
     m.keys.push_back(key);
     m.keys.push_back(auth);

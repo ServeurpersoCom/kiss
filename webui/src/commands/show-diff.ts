@@ -1,6 +1,6 @@
-import type { Command } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import { beyond, comment } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { Incomplete } from '../engine/text.js';
+import { beyond, comment } from '../engine/text.js';
 import { choose } from '../engine/near.js';
 import { configs, effective } from './copy.js';
 

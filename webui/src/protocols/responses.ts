@@ -1,6 +1,6 @@
 import type { Message, Protocol } from '../lib/types.js';
 import { dataUrl } from '../lib/remote.js';
-import { BEARER } from '../lib/keychain.js';
+import { BEARER } from '../engine/keychain.js';
 
 // the Responses API of OpenAI, stateless: the history goes whole as items
 // every round, nothing stored on the server; the reasoning streams as its
@@ -70,7 +70,7 @@ export default {
 							type: 'function',
 							name: t.name,
 							description: t.description,
-							parameters: t.parameters,
+							parameters: t.input,
 							strict: false
 						}))
 					}

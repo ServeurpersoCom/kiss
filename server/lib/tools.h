@@ -4,7 +4,7 @@
 // which gives its tools from the configuration it reads
 
 #include "engine/engine.h"
-#include "log.h"
+#include "lib/log.h"
 
 #include <functional>
 #include <string>
@@ -13,14 +13,15 @@
 
 struct yyjson_val;
 
-// the text of a result, and an image as base64 with its MIME type
-struct tool_result {
-    tool_result(std::string t, bool e) : text(std::move(t)), error(e) {}
+// what a call answers: whether it went, its text, and an image as base64 with
+// its MIME type
+struct tool_outcome {
+    tool_outcome(bool o, std::string t) : ok(o), text(std::move(t)) {}
 
-    tool_result(std::string data, std::string type) : error(false), image(std::move(data)), mime(std::move(type)) {}
+    tool_outcome(std::string data, std::string type) : ok(true), image(std::move(data)), mime(std::move(type)) {}
 
+    bool                    ok;
     std::string             text;
-    bool                    error;
     std::string             image;
     std::string             mime;
     // how the call ended as the log tells it, when the tool says more than
@@ -36,13 +37,13 @@ struct tool_result {
 using tool_tick = std::function<bool()>;
 
 struct tool {
-    std::string                                                                                       suffix;
-    std::string                                                                                       description;
+    std::string                                                                                        suffix;
+    std::string                                                                                        description;
     // the JSON schema of the arguments, description first, so a model writes
     // why before what and a folded call shows it
-    std::string                                                                                       input;
+    std::string                                                                                        input;
     // typed holds the secrets the user typed when the call is asked again
-    std::function<tool_result(yyjson_val * args, const engine_typed & typed, const tool_tick & tick)> call;
+    std::function<tool_outcome(yyjson_val * args, const engine_typed & typed, const tool_tick & tick)> run;
 };
 
 // a tool name stays within what every model API takes

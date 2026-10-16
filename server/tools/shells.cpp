@@ -1,8 +1,9 @@
 // shells.cpp: one tool per shell whose program is found, named after it: the
 // command on stdin, the merged output back with the exit code and the duration
 
-#include "job.h"
-#include "tools.h"
+#include "lib/job.h"
+#include "lib/prompts.h"
+#include "lib/tools.h"
 #include "yyjson.h"
 
 #include <chrono>
@@ -16,13 +17,13 @@ struct shell {
 };
 
 // a result with how the call ended, as the log tells it
-static tool_result ended(tool_result r, const std::string & outcome, log_level level) {
+static tool_outcome ended(tool_outcome r, const std::string & outcome, log_level level) {
     r.outcome = outcome;
     r.level   = level;
     return r;
 }
 
-static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tick) {
+static tool_outcome run(const shell & s, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *     command = yyjson_obj_get(args, "command");
     const auto       t0      = std::chrono::steady_clock::now();
     const job_result r       = job_run(s.command, s.cwd, std::string(yyjson_get_str(command), yyjson_get_len(command)),
@@ -31,21 +32,21 @@ static tool_result run(const shell & s, yyjson_val * args, const tool_tick & tic
         (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
     if (!r.started) {
-        return ended({ "Cannot start " + s.command + ": " + r.error, true }, "cannot start", LOG_ERROR);
+        return ended({ false, "Cannot start " + s.command + ": " + r.error }, "cannot start", LOG_ERROR);
     }
     std::string text = r.output;
     if (!text.empty() && text.back() != '\n') {
         text += '\n';
     }
     if (r.cancelled) {
-        return ended({ text + "Cancelled", true }, "cancelled", LOG_INFO);
+        return ended({ false, text + "Cancelled" }, "cancelled", LOG_INFO);
     }
     if (r.timed_out) {
         const std::string after = std::to_string(s.timeout) + " s";
-        return ended({ text + "Killed after " + after, true }, "killed after " + after, LOG_ERROR);
+        return ended({ false, text + "Killed after " + after }, "killed after " + after, LOG_ERROR);
     }
     const std::string code = std::to_string(r.exit_code);
-    return ended({ text + "Exit code " + code + " (" + std::to_string(ms) + " ms)", r.exit_code != 0 }, "exit " + code,
+    return ended({ r.exit_code == 0, text + "Exit code " + code + " (" + std::to_string(ms) + " ms)" }, "exit " + code,
                  LOG_INFO);
 }
 
@@ -65,13 +66,13 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
 
         tool t;
         t.suffix      = name;
-        t.description = "Run a " + name + " command on " + config.get("server hostname").value_or("");
-        t.input =
-            R"({"type":"object","properties":{)"
-            R"("description":{"type":"string","minLength":1,"description":"Why I'm running this command, written first"},)"
-            R"("command":{"type":"string","minLength":1,"description":"The command to run, as the shell reads it on stdin"}},)"
-            R"("required":["description","command"],"additionalProperties":false})";
-        t.call = [s](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+        t.description = prompts_description(
+            "shells", {
+                          { "shell",    name                                       },
+                          { "hostname", config.get("server hostname").value_or("") }
+        });
+        t.input = prompts_input("shells");
+        t.run   = [s](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
             return run(s, args, tick);
         };
         tools.push_back(t);

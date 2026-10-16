@@ -1,6 +1,6 @@
-import type { Command, Context, Group } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import { beyond, comment } from '../lib/config.js';
+import type { Command, Context, Group } from '../engine/engine.js';
+import { Incomplete } from '../engine/text.js';
+import { beyond, comment } from '../engine/text.js';
 import { choose } from '../engine/near.js';
 
 // show chat, show tools use, show tools use bash_tool, and show tools bash_tool:

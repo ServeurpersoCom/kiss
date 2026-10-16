@@ -1,4 +1,4 @@
-import type { Archive, Save, Value } from '../lib/types.js';
+import type { Archive, Save, Value } from './engine.js';
 import { ARCHIVE_STORAGE_KEY, STARTUP_STORAGE_KEY } from '../lib/config.js';
 
 // what the browser keeps under a key, none when it keeps nothing readable

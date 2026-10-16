@@ -1,6 +1,6 @@
 // output.cpp: the output of a process as a tool returns it
 
-#include "output.h"
+#include "lib/output.h"
 
 #include <algorithm>
 

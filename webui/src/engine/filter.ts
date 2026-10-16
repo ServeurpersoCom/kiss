@@ -1,4 +1,4 @@
-import { comment } from '../lib/config.js';
+import { comment } from './text.js';
 import { choose } from './near.js';
 
 type Lines = (lines: string[]) => string[];

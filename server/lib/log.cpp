@@ -1,6 +1,6 @@
 // log.cpp: the log of the server
 
-#include "log.h"
+#include "lib/log.h"
 
 #include <atomic>
 #include <cstdarg>

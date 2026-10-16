@@ -1,5 +1,5 @@
-import type { Command } from '../lib/types.js';
-import { comment } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { comment } from '../engine/text.js';
 
 export default {
 	path: ['show', 'title'],

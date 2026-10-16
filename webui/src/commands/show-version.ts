@@ -1,5 +1,6 @@
-import type { Command } from '../lib/types.js';
-import { SYSTEM, comment } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { SYSTEM } from '../lib/config.js';
+import { comment } from '../engine/text.js';
 import { served } from '../lib/mcp.js';
 
 // the system, then the page, then every KiSS server the page reaches, each

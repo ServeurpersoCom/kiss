@@ -1,14 +1,7 @@
-import type { Command, Context } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import {
-	CONVERSATIONS,
-	ID_SHOWN,
-	RUNNING_CONFIG,
-	STARTUP_CONFIG,
-	beyond,
-	comment,
-	titled
-} from '../lib/config.js';
+import type { Command, Context } from '../engine/engine.js';
+import { Incomplete } from '../engine/text.js';
+import { CONVERSATIONS, ID_SHOWN, titled } from '../lib/config.js';
+import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
 import { configs, named, target } from './copy.js';
 
 // what erase names, a prefix being enough: every conversation but the pinned

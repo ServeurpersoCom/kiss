@@ -1,8 +1,8 @@
 // file.cpp: the files the tools on files reach
 
-#include "file.h"
+#include "lib/file.h"
 
-#include "utf8.h"
+#include "lib/utf8.h"
 
 #include <algorithm>
 #include <cerrno>

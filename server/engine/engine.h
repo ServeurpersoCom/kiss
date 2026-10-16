@@ -67,8 +67,6 @@ struct engine_reader {
 // a module owns the keys spelled after its name: "server" owns "server listen-port"
 struct engine_module {
     std::string                                                                         name;
-    // what the module is, as the config tool tells it
-    std::string                                                                         role;
     std::vector<engine_key>                                                             keys;
     // the rule across keys, checked on every change: why the configuration
     // breaks it, empty when it holds
@@ -113,10 +111,11 @@ using engine_typed = std::map<std::string, std::string>;
 // the platform this server runs on: linux, macos or windows
 const char * engine_platform();
 
-// the words that may follow the start of a line, as Tab and ? of the console
-// complete it: the commands, their keys and items, a filter after a pipe; a
-// word in <> names what to type
-std::vector<std::string> engine_next(const std::string & head);
+// the words that may complete a line being typed, as Tab and ? of the console
+// complete it: the commands, their keys and items, a filter after a pipe, each
+// starting as the word the line ends on; a word in <> names what to type and
+// shows only before a word is started
+std::vector<std::string> engine_suggest(const std::string & text);
 
 // the system, as a router names its own
 constexpr const char * ENGINE_SYSTEM = "KiSS Operating System";

@@ -1,5 +1,6 @@
-import type { Command } from '../lib/types.js';
-import { beyond, comment, localTime } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { localTime } from '../lib/config.js';
+import { beyond, comment } from '../engine/text.js';
 import { listed } from './copy.js';
 import { choose } from '../engine/near.js';
 

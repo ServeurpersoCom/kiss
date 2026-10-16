@@ -1,4 +1,4 @@
-import type { Module } from '../lib/types.js';
+import type { Module } from '../engine/engine.js';
 import { rules } from '../lib/remote.js';
 import { aggregate, routed, served } from '../lib/mcp.js';
 import { tools } from '../lib/tools.js';

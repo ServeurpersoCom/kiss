@@ -5,12 +5,13 @@
 // defaults it embeds, then listens; a terminal it runs in the foreground of
 // opens the console, anything else runs it as a daemon. It takes no argument.
 
-#include "console.h"
 #include "engine/engine.h"
-#include "listener.h"
-#include "log.h"
+#include "lib/console.h"
+#include "lib/listener.h"
+#include "lib/log.h"
+#include "lib/prompts.h"
+#include "lib/utf8.h"
 #include "server.conf.hpp"
-#include "utf8.h"
 #include "version.h"
 
 #include <csignal>
@@ -33,6 +34,12 @@ int main(int argc, char ** argv) {
     }
 
     log_info("Server", "%s, %s", ENGINE_SYSTEM, engine_component("", KISS_VERSION).c_str());
+
+    const std::string missing = prompts_check();
+    if (!missing.empty()) {
+        log_error("Server", "%s", missing.c_str());
+        return 1;
+    }
 
     const std::string refused =
         engine_factory(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));

@@ -1,4 +1,4 @@
-import type { Module } from '../lib/types.js';
+import type { Module } from '../engine/engine.js';
 import { DEFAULT_PROTOCOL, PROTOCOLS, endpoints, fallback, listModels } from '../lib/api.js';
 import { rules } from '../lib/remote.js';
 import { routed } from '../lib/mcp.js';

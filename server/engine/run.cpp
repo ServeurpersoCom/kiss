@@ -3,11 +3,12 @@
 #include "engine/run.h"
 
 #include "engine/archive.h"
+#include "engine/complete.h"
 #include "engine/filter.h"
 #include "engine/parse.h"
 #include "engine/registry.h"
 #include "engine/schema.h"
-#include "log.h"
+#include "lib/log.h"
 
 #include <algorithm>
 #include <mutex>
@@ -64,7 +65,7 @@ static step compile(const std::string & text, bool alone) {
         }
         return { cmd->compile(args), filter };
     } catch (const incomplete &) {
-        const std::string next = join(next_words(words), " ");
+        const std::string next = join(complete(words, ""), " ");
         if (!alone) {
             fail("\"" + head + "\" misses words, it may go on with: " + next);
         }
@@ -425,14 +426,23 @@ void engine_with(const std::function<void(const engine_reader &)> & read) {
     read(reader(g_running));
 }
 
-std::vector<std::string> engine_next(const std::string & head) {
+std::vector<std::string> engine_suggest(const std::string & text) {
     std::lock_guard<std::mutex> lock(g_mutex);
     try {
-        const auto [line, spec] = split_filter(head);
+        const std::string partial = partial_word(text);
+        const auto [line, spec]   = split_filter(text.substr(0, text.size() - partial.size()));
         if (spec) {
-            return trim(*spec).empty() ? filter_names() : words_t{};
+            words_t names;
+            if (trim(*spec).empty()) {
+                for (const std::string & n : filter_names()) {
+                    if (starts_with(n, lower(partial))) {
+                        names.push_back(n);
+                    }
+                }
+            }
+            return names;
         }
-        return next_words(tokenize(line));
+        return complete(tokenize(line), partial);
     } catch (...) {
         // a line still being typed may not read yet: nothing follows it
         return {};

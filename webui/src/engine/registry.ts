@@ -1,5 +1,5 @@
-import type { Command, Module } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
+import type { Command, Module } from './engine.js';
+import { Incomplete } from './text.js';
 import { didYouMean } from './near.js';
 
 const PATH_WORD = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;

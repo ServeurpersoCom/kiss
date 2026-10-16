@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Server, createMcpHandler } from '@modelcontextprotocol/server';
-import type { Conversation, Grant, Library, Verdict } from '../src/lib/types.js';
+import type { Conversation } from '../src/lib/types.js';
+import type { Grant, Library, Verdict } from '../src/engine/engine.js';
 import { append, fresh, named, parse, serialize } from '../src/lib/conversation.js';
 import { localTime } from '../src/lib/config.js';
-import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/lib/types.js';
+import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/engine/engine.js';
 
 type Engine = typeof import('../src/engine/run.js');
 

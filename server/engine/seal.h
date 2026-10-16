@@ -4,7 +4,7 @@
 // the names of its properties included, and in a stream of events event by
 // event
 
-#include "text.h"
+#include "engine/text.h"
 
 #include <string>
 

@@ -1,5 +1,6 @@
 import type { Conversation, Entry, Message, Round } from './types.js';
-import { seal } from './keychain.js';
+import { secrets } from '../engine/keychain.js';
+import { seal } from '../engine/seal.js';
 
 // conversations as a file: a marker naming what it holds, then the
 // conversations as the browser stores them, ids included
@@ -130,7 +131,7 @@ export function serialize(conversations: readonly Conversation[]): string {
 			entries: stored(c.entries)
 		}))
 	};
-	return seal(file, INDENT) + '\n';
+	return seal(file, secrets(), INDENT) + '\n';
 }
 
 // the one conversation a prefix of its id names

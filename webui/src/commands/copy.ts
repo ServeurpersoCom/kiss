@@ -1,13 +1,7 @@
-import type { Command, Context, Value } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
-import {
-	CONVERSATIONS,
-	NAME_PATTERN,
-	RUNNING_CONFIG,
-	STARTUP_CONFIG,
-	beyond,
-	comment
-} from '../lib/config.js';
+import type { Command, Context, Value } from '../engine/engine.js';
+import { Incomplete } from '../engine/text.js';
+import { CONVERSATIONS, NAME_PATTERN } from '../lib/config.js';
+import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
 import { choose, pick } from '../engine/near.js';
 import { unstore } from '../engine/schema.js';
 

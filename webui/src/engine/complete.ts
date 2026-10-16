@@ -1,4 +1,4 @@
-import type { Context } from '../lib/types.js';
+import type { Context } from './engine.js';
 import { walk } from './registry.js';
 
 // what may follow the words, the partial word filtering the candidates: path

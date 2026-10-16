@@ -1,4 +1,4 @@
-import type { Module } from '../lib/types.js';
+import type { Module } from '../engine/engine.js';
 import { NAME } from '../lib/config.js';
 import { display } from '../lib/display.svelte.js';
 import { served } from '../lib/mcp.js';

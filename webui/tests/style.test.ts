@@ -3,7 +3,7 @@ import { compile } from 'svelte/compiler';
 import { scope } from '../src/lib/config.js';
 import style from '../src/modules/style.js';
 import { app, send, stop } from '../src/lib/state.svelte.js';
-import type { Config } from '../src/lib/types.js';
+import type { Config } from '../src/engine/engine.js';
 
 // the browser database stays out: the conversations live in the page alone
 vi.mock('../src/lib/db.js', () => ({

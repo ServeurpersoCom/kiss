@@ -1,4 +1,4 @@
-import type { Command } from '../lib/types.js';
+import type { Command } from '../engine/engine.js';
 import { choose } from '../engine/near.js';
 
 // no endpoints prod names an item of a collection, no chat model a key; a

@@ -4,16 +4,9 @@ import {
 	WebStandardStreamableHTTPServerTransport,
 	createMcpHandler
 } from '@modelcontextprotocol/server';
-import type {
-	Assistant,
-	Entry,
-	Grant,
-	Message,
-	Round,
-	ToolContext,
-	Verdict
-} from '../src/lib/types.js';
-import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
+import type { Assistant, Entry, Message, Round, ToolContext } from '../src/lib/types.js';
+import type { Grant, Verdict } from '../src/engine/engine.js';
+import { ALWAYS, ONCE, REFUSE } from '../src/engine/engine.js';
 import { line, pulse } from '../src/lib/pulse.js';
 import { STOPPED, settled } from '../src/lib/conversation.js';
 

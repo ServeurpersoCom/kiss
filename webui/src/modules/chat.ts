@@ -1,4 +1,4 @@
-import type { Module } from '../lib/types.js';
+import type { Module } from '../engine/engine.js';
 import { EndpointError, endpoints, listModels, pick } from '../lib/api.js';
 import { MODEL_SEPARATOR, SLASH } from '../lib/config.js';
 

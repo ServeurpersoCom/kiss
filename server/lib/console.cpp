@@ -3,12 +3,13 @@
 // follow, the log passing above the line being typed; exit, quit, Ctrl-C and
 // Ctrl-D on an empty line stop the server
 
-#include "console.h"
+#include "lib/console.h"
 
+#include "engine/complete.h"
 #include "engine/engine.h"
 #include "engine/text.h"
-#include "log.h"
-#include "term.h"
+#include "lib/log.h"
+#include "lib/term.h"
 
 #include <algorithm>
 #include <csignal>
@@ -216,73 +217,52 @@ static int key(std::string & bytes) {
     return c;
 }
 
-// the line before the cursor split on its last word: the words the engine
-// reads, and the one being typed
-static void split_word(std::string & head, std::string & word) {
-    const std::string typed = g_text.substr(0, g_cursor);
-    const size_t      cut   = typed.find_last_of(" |");
-    head                    = cut == std::string::npos ? "" : typed.substr(0, cut + 1);
-    word                    = typed.substr(head.size());
-}
-
-// the words that may follow which start as the word typed, no <hint>
-static words_t matching(const words_t & next, const std::string & word) {
-    words_t out;
-    for (const std::string & w : next) {
-        if (w[0] != '<' && starts_with(lower(w), lower(word))) {
-            out.push_back(w);
-        }
-    }
-    return out;
-}
-
-// what may follow the words before the cursor: the words of the engine, and
+// what may complete the line before the cursor: the words of the engine, and
 // at the start of the line the words that stop the server
-static words_t next_of(const std::string & head) {
-    words_t next = engine_next(head);
-    if (trim(head).empty()) {
-        next.insert(next.end(), QUIT.begin(), QUIT.end());
+static words_t suggest(const std::string & typed) {
+    words_t           next    = engine_suggest(typed);
+    const std::string partial = partial_word(typed);
+    if (trim(typed.substr(0, typed.size() - partial.size())).empty()) {
+        for (const std::string & q : QUIT) {
+            if (starts_with(q, lower(partial))) {
+                next.push_back(q);
+            }
+        }
     }
     return next;
 }
 
-// Tab: the word the only match spells, else the start every match shares,
-// else the matches listed
+// the words of the candidates, no <hint>
+static words_t words(const words_t & found) {
+    words_t out;
+    std::copy_if(found.begin(), found.end(), std::back_inserter(out),
+                 [](const std::string & f) { return f[0] != '<'; });
+    return out;
+}
+
+// Tab: the line completed as far as the candidates agree, else the
+// candidates listed
 static void complete() {
-    std::string head, word;
-    split_word(head, word);
-    const words_t hits = matching(next_of(head), word);
+    const std::string typed = g_text.substr(0, g_cursor);
+    const words_t     hits  = words(suggest(typed));
     if (hits.empty()) {
         return;
     }
-    std::string common = hits[0];
-    for (const std::string & h : hits) {
-        size_t n = 0;
-        while (n < common.size() && n < h.size() && common[n] == h[n]) {
-            n++;
-        }
-        common.resize(n);
-    }
-    if (hits.size() == 1) {
-        common += " ";
-    }
-    if (common.size() <= word.size()) {
+    const std::string line = extend(typed, hits);
+    if (line == typed) {
         below(join(hits, "  "));
         return;
     }
     edit([&]() {
-        g_text   = head + common + g_text.substr(g_cursor);
-        g_cursor = head.size() + common.size();
+        g_text   = line + g_text.substr(g_cursor);
+        g_cursor = line.size();
     });
 }
 
 // ?: what may follow the line, or the words the word typed starts
 static void help() {
-    std::string head, word;
-    split_word(head, word);
-    const words_t next  = next_of(head);
-    const words_t words = word.empty() ? next : matching(next, word);
-    below(words.empty() ? std::string(ERROR_PREFIX) + "nothing may follow" : join(words, "  "));
+    const words_t next = suggest(g_text.substr(0, g_cursor));
+    below(next.empty() ? std::string(ERROR_PREFIX) + "nothing may follow" : join(next, "  "));
 }
 
 static void editor() {

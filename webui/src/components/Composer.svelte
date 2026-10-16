@@ -2,7 +2,7 @@
 	import { app, askOf, send, stop } from '../lib/state.svelte.js';
 	import { NEW_DRAFT, draftOf, keep } from '../lib/drafts.js';
 	import { known, suggest } from '../engine/run.js';
-	import type { Known } from '../lib/types.js';
+	import type { Known } from '../engine/engine.js';
 	import { extend } from '../engine/complete.js';
 	import Icon from './Icon.svelte';
 	import { SLASH } from '../lib/config.js';

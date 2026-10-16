@@ -1,6 +1,7 @@
 import type { Conversation } from './types.js';
 import { DB_NAME, DB_STORE, DB_VERSION } from './config.js';
-import { seal } from './keychain.js';
+import { secrets } from '../engine/keychain.js';
+import { seal } from '../engine/seal.js';
 
 // one IndexedDB connection for the whole page, opened on first use and
 // opened again after a failure
@@ -58,7 +59,7 @@ function write(each: (store: IDBObjectStore) => void): Promise<void> {
 
 // conversations stored as the keychain seals them, no secret kept
 export function putConversations(conversations: readonly Conversation[]): Promise<void> {
-	return write((s) => conversations.forEach((c) => s.put(JSON.parse(seal(c)))));
+	return write((s) => conversations.forEach((c) => s.put(JSON.parse(seal(c, secrets())))));
 }
 
 export function deleteConversations(ids: readonly string[]): Promise<void> {

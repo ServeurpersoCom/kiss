@@ -92,23 +92,27 @@ inlined. It talks to an OpenAI compatible endpoint and to MCP servers straight f
 KiSS server of `server/`, described in `BACKEND.md`, is one MCP server among others.
 
 ```
-webui/client.conf      the factory configuration the page bundles
-webui/src/engine/      the CLI: parse, schema, values, registry, run, archive
-webui/src/commands/    one file per command, registered by existing
-webui/src/modules/     one file per module: its keys, rules, checks, how it applies to the page
-webui/src/tools/       the tools of KiSS itself: client_config, the CLI as the model calls it
-webui/src/protocols/   one file per protocol an endpoint speaks: chat, messages, responses
-webui/src/lib/         the page side: agent, api, mcp, state, conversation, db
-webui/src/components/  thread, message, round, ask, dialog, composer, sidebar
-webui/src/markdown/    the remark and rehype stack and its incremental renderer
-webui/src/tokens.css   the tokens of the page, read as the keys of style
-webui/tests/           the laws, under vitest and happy-dom
+webui/client.conf       the factory configuration the page bundles
+webui/src/main.ts       the start: site configuration, startup-config, conversations, page
+webui/src/prompts.json  what a model reads of the page: its tools, its notes
+webui/src/engine/       the CLI: text, parse, filter, near, schema, values, registry, archive, run,
+                        complete, and the keychain with its seal
+webui/src/commands/     one file per command, registered by existing
+webui/src/modules/      one file per module: its keys, rules, checks, how it applies to the page
+webui/src/tools/        one file per tool, registered by existing: config, the CLI as the model
+                        calls it
+webui/src/protocols/    one file per protocol an endpoint speaks: chat, messages, responses
+webui/src/lib/          the page side: agent, api, mcp, state, conversation, db
+webui/src/components/   thread, message, round, ask, dialog, composer, sidebar
+webui/src/markdown/     the remark and rehype stack and its incremental renderer
+webui/src/tokens.css    the tokens of the page, read as the keys of style
+webui/tests/            the laws, under vitest and happy-dom
 ```
 
 A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing. A command
-imports `lib/types.ts` and `lib/config.ts` only and reaches everything else through its `Context`; a
-module or a tool is where the configuration meets the page, it imports what it drives in `lib/`. A
-plugin declared wrong or twice stops the page at load, never later.
+imports the engine, `lib/types.ts` and `lib/config.ts` only and reaches everything else through its
+`Context`; a module or a tool is where the configuration meets the page, it imports what it drives in
+`lib/`. A plugin declared wrong or twice stops the page at load, never later.
 
 ## The engine
 

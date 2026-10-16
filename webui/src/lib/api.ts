@@ -1,6 +1,8 @@
-import type { ConfigReader, Delta, Protocol, Request } from './types.js';
+import type { Delta, Protocol, Request } from './types.js';
+import type { ConfigReader } from '../engine/engine.js';
 import { MODEL_SEPARATOR, SLASH } from './config.js';
-import { seal } from './keychain.js';
+import { secrets } from '../engine/keychain.js';
+import { seal } from '../engine/seal.js';
 import { remotes, type Remote } from './remote.js';
 import chatProtocol from '../protocols/chat.js';
 
@@ -251,7 +253,7 @@ export async function* chat(
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		// what the model reads leaves sealed, whatever the history holds
-		body: seal(protocol.body(req))
+		body: seal(protocol.body(req), secrets())
 	};
 	const stream = await opened(endpoint, init, signal, retrying);
 	const reader = stream.pipeThrough(new TextDecoderStream()).getReader();

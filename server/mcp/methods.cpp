@@ -4,9 +4,9 @@
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
-#include "log.h"
+#include "lib/log.h"
+#include "lib/tools.h"
 #include "mcp/jsonrpc.h"
-#include "tools.h"
 
 #include <algorithm>
 #include <chrono>
@@ -136,7 +136,7 @@ void method_resources_list(httplib::Response & res, yyjson_val * id, bool modern
 // a call that asks the user: an input_required result whose one form has a
 // text field per secret and a yes field per url, by stored key, the call
 // coming again with the answers
-static std::string asked_json(yyjson_val * id, const tool_result & r) {
+static std::string asked_json(yyjson_val * id, const tool_outcome & r) {
     return jsonrpc_input_required_json(id, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * form =
             yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "inputRequests"), USER_FORM);
@@ -158,7 +158,7 @@ static std::string asked_json(yyjson_val * id, const tool_result & r) {
 
 // the result of a tool call, its text filtered of every secret of the server,
 // so a tool that shows a log or a file never hands a key on
-static std::string call_json(yyjson_val * id, bool modern, const tool_result & r) {
+static std::string call_json(yyjson_val * id, bool modern, const tool_outcome & r) {
     if (!r.asks.empty()) {
         return asked_json(id, r);
     }
@@ -176,7 +176,7 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_result & r
             yyjson_mut_obj_add_strncpy(doc, block, "data", r.image.c_str(), r.image.size());
             yyjson_mut_obj_add_strncpy(doc, block, "mimeType", r.mime.c_str(), r.mime.size());
         }
-        yyjson_mut_obj_add_bool(doc, out, "isError", r.error);
+        yyjson_mut_obj_add_bool(doc, out, "isError", !r.ok);
     });
 }
 
@@ -225,8 +225,8 @@ struct call_log {
             .count();
     }
 
-    void end(const tool_result & r, const char * how) const {
-        const std::string outcome = !r.outcome.empty() ? r.outcome : r.error ? "failed" : "done";
+    void end(const tool_outcome & r, const char * how) const {
+        const std::string outcome = !r.outcome.empty() ? r.outcome : r.ok ? "done" : "failed";
         if (r.level == LOG_ERROR) {
             log_error("MCP", "Call %s: %s in %lld ms", tool.c_str(), outcome.c_str(), ms());
         } else {
@@ -294,30 +294,28 @@ void method_tools_call(const httplib::Request &            req,
         const std::string refused = tools_check(t, args);
         if (!refused.empty()) {
             log_error("MCP", "Call %s: refused, %s", called.c_str(), refused.c_str());
-            res.set_content(call_json(id, modern, { refused, true }), "application/json");
+            res.set_content(call_json(id, modern, { false, refused }), "application/json");
             return;
         }
         engine_typed typed;
         const bool   given = answered(params, typed);
         const bool   forms = modern && takes_forms(params);
-        const auto   run   = [t, args, typed, given, forms](const tool_tick & tick) -> tool_result {
+        const auto   run   = [t, args, typed, given, forms](const tool_tick & tick) -> tool_outcome {
             if (!given) {
-                return { "The user answered nothing", true };
+                return { false, "The user answered nothing" };
             }
-            const tool_result r = t.call(args, typed, tick);
+            const tool_outcome r = t.run(args, typed, tick);
             if (!r.asks.empty() && !forms) {
-                return {
-                    "This client shows the user no form: a secret or a url it asks goes in server.conf or on "
-                        "the console of the server",
-                    true
-                };
+                return { false,
+                         "This client shows the user no form: a secret or a url it asks goes in server.conf or on "
+                             "the console of the server" };
             }
             return r;
         };
         const call_log log{ called };
         log.start(args);
         if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
-            const tool_result r = run([&req]() { return !req.is_connection_closed(); });
+            const tool_outcome r = run([&req]() { return !req.is_connection_closed(); });
             if (req.is_connection_closed()) {
                 log.gone();
                 return;
@@ -329,8 +327,8 @@ void method_tools_call(const httplib::Request &            req,
         res.set_header("Cache-Control", "no-cache");
         res.set_chunked_content_provider(
             "text/event-stream", [body, run, log, id, modern](size_t, httplib::DataSink & sink) {
-                bool              gone = false;
-                const tool_result r    = run([&]() {
+                bool               gone = false;
+                const tool_outcome r    = run([&]() {
                     gone = gone || !sink.write(":\n\n", 3);
                     return !gone;
                 });

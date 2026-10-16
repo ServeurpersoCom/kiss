@@ -1,11 +1,12 @@
 // view.cpp: the view tool: a directory two levels deep with the size of each
 // entry, an image as an image block, a text file with numbered lines
 
-#include "file.h"
-#include "image.h"
-#include "output.h"
-#include "tools.h"
-#include "utf8.h"
+#include "lib/file.h"
+#include "lib/image.h"
+#include "lib/output.h"
+#include "lib/prompts.h"
+#include "lib/tools.h"
+#include "lib/utf8.h"
 #include "yyjson.h"
 
 #include <chrono>
@@ -80,7 +81,7 @@ static bool shown(const fs::path & rel) {
 
 // every entry two levels deep, sorted by path, each with the size of all it
 // holds, as find and du -sh list them, then the count of the hidden ones
-static tool_result listing(const fs::path & root, const std::string & given, size_t budget, ticker & t) {
+static tool_outcome listing(const fs::path & root, const std::string & given, size_t budget, ticker & t) {
     std::map<std::string, uintmax_t> sizes = {
         { "", 0 }
     };
@@ -89,7 +90,7 @@ static tool_result listing(const fs::path & root, const std::string & given, siz
     for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end; it.increment(ec)) {
         if (!t.alive()) {
-            return { "Cancelled", true };
+            return { false, "Cancelled" };
         }
         const fs::path rel = it->path().lexically_relative(root);
         if (it.depth() <= 1 && shown(rel)) {
@@ -128,7 +129,7 @@ static tool_result listing(const fs::path & root, const std::string & given, siz
         kept.add(line.data(), line.size());
     }
     const std::string tail = hidden ? ", " + std::to_string(hidden) + " hidden" : "";
-    return { kept.text() + output_counted((long long) sizes.size() - 1, "entry", "entries") + tail, false };
+    return { true, kept.text() + output_counted((long long) sizes.size() - 1, "entry", "entries") + tail };
 }
 
 static std::string base64(const std::string & in) {
@@ -155,27 +156,27 @@ static std::string described(const std::string & mime, int w, int h, size_t byte
 
 // the lines first to last of a text file, numbered, last -1 for the end of
 // the file; the file streams through, so its size bounds nothing but time
-static tool_result
+static tool_outcome
 file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last, bool ranged, ticker & t) {
     std::string head(FILE_CHUNK, '\0');
     head.resize(fread(&head[0], 1, head.size(), f));
     if (!image_type(head).empty()) {
         if (size > v.load) {
-            return { "Image larger than " + std::to_string(v.load) + " bytes", true };
+            return { false, "Image larger than " + std::to_string(v.load) + " bytes" };
         }
         std::string data = head;
         char        buf[FILE_CHUNK];
         for (size_t got; (got = fread(buf, 1, sizeof(buf), f)) > 0;) {
             if (!t.alive()) {
-                return { "Cancelled", true };
+                return { false, "Cancelled" };
             }
             data.append(buf, got);
         }
         const image_sent sent = image_fit(data, v.limits);
         if (!sent.error.empty()) {
-            return { sent.error, true };
+            return { false, sent.error };
         }
-        tool_result r(base64(sent.data), sent.mime);
+        tool_outcome r(base64(sent.data), sent.mime);
         r.text = "Image " + described(sent.source_mime, sent.source_width, sent.source_height, data.size());
         if (sent.made) {
             r.text += ", sent as " + described(sent.mime, sent.width, sent.height, sent.data.size());
@@ -184,7 +185,7 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
         return r;
     }
     if (memchr(head.data(), '\0', head.size())) {
-        return { "Binary file", true };
+        return { false, "Binary file" };
     }
 
     output_buffer kept(v.output);
@@ -201,7 +202,7 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
     };
     while (!chunk.empty()) {
         if (!t.alive()) {
-            return { "Cancelled", true };
+            return { false, "Cancelled" };
         }
         for (size_t at = 0;;) {
             const size_t nl = chunk.find('\n', at);
@@ -221,24 +222,22 @@ file(FILE * f, uintmax_t size, const viewer & v, long long first, long long last
     }
     const long long total = number - 1;
     if (ranged && first > total) {
-        return { "Line " + std::to_string(first) + " is past the end, the file has " +
-                     output_counted(total, "line", "lines"),
-                 true };
+        return { false, "Line " + std::to_string(first) + " is past the end, the file has " +
+                            output_counted(total, "line", "lines") };
     }
     if (!ranged) {
-        return { kept.text() + output_counted(total, "line", "lines"), false };
+        return { true, kept.text() + output_counted(total, "line", "lines") };
     }
     const long long end = last < 0 || last > total ? total : last;
-    return { kept.text() + "Lines " + std::to_string(first) + "-" + std::to_string(end) + " of " +
-                 std::to_string(total),
-             false };
+    return { true, kept.text() + "Lines " + std::to_string(first) + "-" + std::to_string(end) + " of " +
+                       std::to_string(total) };
 }
 
-static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & tick) {
+static tool_outcome view(const viewer & v, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *      named = yyjson_obj_get(args, "path");
     const std::string given(yyjson_get_str(named), yyjson_get_len(named));
     if (!file_refused(given).empty()) {
-        return { file_refused(given), true };
+        return { false, file_refused(given) };
     }
     yyjson_val * range = yyjson_obj_get(args, "view_range");
     long long    first = 1, last = -1;
@@ -247,12 +246,12 @@ static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & t
         yyjson_val * a = yyjson_arr_get(range, 0);
         yyjson_val * b = yyjson_arr_get(range, 1);
         if (!yyjson_is_arr(range) || yyjson_arr_size(range) != 2 || !yyjson_is_int(a) || !yyjson_is_int(b)) {
-            return { "View_range is two line numbers, [start, end]", true };
+            return { false, "View_range is two line numbers, [start, end]" };
         }
         first = std::max<long long>(1, yyjson_get_sint(a));
         last  = yyjson_get_sint(b);
         if (last != -1 && last < first) {
-            return { "View_range ends before it starts", true };
+            return { false, "View_range ends before it starts" };
         }
     }
 
@@ -260,21 +259,21 @@ static tool_result view(const viewer & v, yyjson_val * args, const tool_tick & t
     std::error_code       ec;
     const fs::file_status st = fs::status(path, ec);
     if (ec || !fs::exists(st)) {
-        return { "No such file or directory: " + path.u8string(), true };
+        return { false, "No such file or directory: " + path.u8string() };
     }
     ticker t{ tick };
     if (fs::is_directory(st)) {
         return listing(path, given, v.output, t);
     }
     if (!fs::is_regular_file(st)) {
-        return { "Not a regular file or a directory", true };
+        return { false, "Not a regular file or a directory" };
     }
     const uintmax_t size = fs::file_size(path, ec);
     FILE *          f    = utf8_fopen(path.u8string().c_str(), "rb");
     if (ec || !f) {
-        return { std::string("Cannot read the file: ") + strerror(errno), true };
+        return { false, std::string("Cannot read the file: ") + strerror(errno) };
     }
-    const tool_result r = file(f, size, v, first, last, ranged, t);
+    const tool_outcome r = file(f, size, v, first, last, ranged, t);
     fclose(f);
     return r;
 }
@@ -290,22 +289,11 @@ static std::vector<tool> view_tool(const engine_reader & config) {
 
     tool t;
     t.suffix      = "view";
-    t.description = "Supports viewing text, images, and directory listings on " +
-                    config.get("server hostname").value_or("") +
-                    ".\n\n"
-                    "Supported path types:\n"
-                    "- Directories: Lists files and directories up to 2 levels deep, ignoring hidden items and "
-                    "the contents of node_modules\n"
-                    "- Image files (PNG, JPEG, GIF, WebP): Displays the image visually\n"
-                    "- Text files: Displays numbered lines. You can optionally specify a view_range to see specific "
-                    "lines.";
-    t.input = R"({"type":"object","properties":{)"
-              R"("description":{"type":"string","minLength":1,"description":"Why I need to view this, written first"},)"
-              R"("path":{"type":"string","minLength":1,"description":"The file or the directory"},)"
-              R"("view_range":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2,)"
-              R"("description":"Lines [start, end] of a text file, from 1, end -1 for the last"}},)"
-              R"("required":["description","path"],"additionalProperties":false})";
-    t.call  = [v](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+    t.description = prompts_description("view", {
+                                                    { "hostname", config.get("server hostname").value_or("") }
+    });
+    t.input       = prompts_input("view");
+    t.run         = [v](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
         return view(v, args, tick);
     };
     return { t };

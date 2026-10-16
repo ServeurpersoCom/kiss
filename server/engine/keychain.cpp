@@ -1,9 +1,9 @@
 // keychain.cpp: the placement of a key, the check of a key presented and the
 // list of the secrets
 
-#include "keychain.h"
+#include "engine/keychain.h"
 
-#include "schema.h"
+#include "engine/schema.h"
 
 #include <algorithm>
 #include <cstring>

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Assistant, Grant, ToolContext, Verdict } from '../src/lib/types.js';
+import type { Assistant, ToolContext } from '../src/lib/types.js';
+import type { Grant, Verdict } from '../src/engine/engine.js';
 import type { Pulse } from '../src/lib/pulse.js';
-import { ALWAYS, ONCE, REFUSE } from '../src/lib/types.js';
+import { ALWAYS, ONCE, REFUSE } from '../src/engine/engine.js';
 import { app, askOf, dismiss, edit, newChat, remove, send, stop } from '../src/lib/state.svelte.js';
 import { NEW_DRAFT, draftOf, keep } from '../src/lib/drafts.js';
 

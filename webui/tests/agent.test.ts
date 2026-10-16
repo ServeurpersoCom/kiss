@@ -1,14 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-	Assistant,
-	Grant,
-	Message,
-	Request,
-	Round,
-	ToolContext,
-	Verdict
-} from '../src/lib/types.js';
-import { ONCE } from '../src/lib/types.js';
+import type { Assistant, Message, Request, Round, ToolContext } from '../src/lib/types.js';
+import type { Grant, Verdict } from '../src/engine/engine.js';
+import { ONCE } from '../src/engine/engine.js';
 import { pulse } from '../src/lib/pulse.js';
 import { STOPPED } from '../src/lib/conversation.js';
 import chat from '../src/protocols/chat.js';

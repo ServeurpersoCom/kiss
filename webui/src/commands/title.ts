@@ -1,5 +1,5 @@
-import type { Command } from '../lib/types.js';
-import { Incomplete } from '../lib/types.js';
+import type { Command } from '../engine/engine.js';
+import { Incomplete } from '../engine/text.js';
 import { TITLE_LENGTH } from '../lib/config.js';
 
 export default {

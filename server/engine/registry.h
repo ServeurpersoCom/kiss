@@ -56,6 +56,23 @@ bool engine_command(command (*make)());
 // they stop short of one
 std::pair<const command *, words_t> resolve(const words_t & words);
 
-// what may follow the words: path words while the path goes on, then the
-// arguments the command proposes
-words_t next_words(const words_t & words);
+// where the words of a line lead among the commands
+struct walk_t {
+    // the deepest command whose whole path the words spell
+    const command *              found = nullptr;
+    // words consumed by that command's path
+    size_t                       depth = 0;
+    // commands still matching after the last consumed word
+    std::vector<const command *> pool;
+    // words consumed by the walk, matched command or not
+    size_t                       consumed = 0;
+    // the word that matched several path words, with those words
+    std::string                  ambiguous;
+    words_t                      names;
+};
+
+// IOS lookup: each word may be any unambiguous prefix of a path word, an exact
+// word always wins, and the walk stops at the first word no path continues
+// with; right after a command whose first argument names a module, the names
+// of the modules compete with the path words, a prefix of both being ambiguous
+walk_t walk(const words_t & words);

@@ -141,7 +141,7 @@ export default {
 						tools: r.tools.map((t) => ({
 							name: t.name,
 							description: t.description,
-							input_schema: t.parameters,
+							input_schema: t.input,
 							eager_input_streaming: true
 						}))
 					}

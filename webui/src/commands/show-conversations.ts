@@ -1,5 +1,6 @@
-import type { Command } from '../lib/types.js';
-import { ID_SHOWN, comment, localTime, titled } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { ID_SHOWN, localTime, titled } from '../lib/config.js';
+import { comment } from '../engine/text.js';
 
 export default {
 	path: ['show', 'conversations'],

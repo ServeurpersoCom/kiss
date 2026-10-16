@@ -3,7 +3,7 @@
 
 #include "engine/registry.h"
 #include "engine/run.h"
-#include "log.h"
+#include "lib/log.h"
 
 static step_t compile_show_logging(const words_t & args) {
     if (!args.empty()) {

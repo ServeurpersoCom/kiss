@@ -22,25 +22,7 @@ bool engine_command(command (*make)()) {
     return true;
 }
 
-struct walk_t {
-    // the deepest command whose whole path the words spell
-    const command *              found = nullptr;
-    // words consumed by that command's path
-    size_t                       depth = 0;
-    // commands still matching after the last consumed word
-    std::vector<const command *> pool;
-    // words consumed by the walk, matched command or not
-    size_t                       consumed = 0;
-    // the word that matched several path words, with those words
-    std::string                  ambiguous;
-    words_t                      names;
-};
-
-// IOS lookup: each word may be any unambiguous prefix of a path word, an exact
-// word always wins, and the walk stops at the first word no path continues
-// with; right after a command whose first argument names a module, the names
-// of the modules compete with the path words, a prefix of both being ambiguous
-static walk_t walk(const words_t & words) {
+walk_t walk(const words_t & words) {
     walk_t w;
     for (const command & c : commands()) {
         w.pool.push_back(&c);
@@ -133,27 +115,4 @@ std::pair<const command *, words_t> resolve(const words_t & words) {
     const std::string word = words[w.consumed];
     fail("unknown " + (w.consumed ? "word \"" + word + "\" after " + head : "command \"" + word + "\"") +
          did_you_mean(word, names));
-}
-
-words_t next_words(const words_t & words) {
-    const walk_t w = walk(words);
-    if (!w.ambiguous.empty()) {
-        return {};
-    }
-    std::set<std::string> found;
-    if (w.consumed == words.size()) {
-        for (const command * c : w.pool) {
-            if (c->path.size() > w.consumed) {
-                found.insert(c->path[w.consumed]);
-            }
-        }
-    }
-    if (w.found && w.found->complete && (w.consumed == words.size() || w.depth == w.consumed)) {
-        for (const std::string & a : w.found->complete(words_t(words.begin() + (long) w.depth, words.end()))) {
-            found.insert(a);
-        }
-    }
-    words_t out(found.begin(), found.end());
-    std::stable_partition(out.begin(), out.end(), [](const std::string & s) { return s[0] != '<'; });
-    return out;
 }

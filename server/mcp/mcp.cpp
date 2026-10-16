@@ -8,7 +8,7 @@
 
 #include "mcp/mcp.h"
 
-#include "log.h"
+#include "lib/log.h"
 #include "mcp/jsonrpc.h"
 #include "mcp/methods.h"
 

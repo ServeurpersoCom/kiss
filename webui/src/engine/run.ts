@@ -1,22 +1,9 @@
-import type {
-	ConfigReader,
-	Context,
-	Key,
-	Known,
-	Outcome,
-	Role,
-	Scope,
-	Value
-} from '../lib/types.js';
-import { Incomplete, REFUSE } from '../lib/types.js';
-import {
-	ERROR_PREFIX,
-	FACTORY_FILE,
-	REMOVED,
-	SITE_CONFIG_URL,
-	beyond,
-	comment
-} from '../lib/config.js';
+import type { Outcome } from '../lib/types.js';
+import type { ConfigReader, Context, Key, Known, Role, Scope, Value } from './engine.js';
+import { Incomplete } from './text.js';
+import { REFUSE } from './engine.js';
+import { FACTORY_FILE, SITE_CONFIG_URL } from '../lib/config.js';
+import { ERROR_PREFIX, REMOVED, beyond, comment } from './text.js';
 import factoryText from '../../client.conf?raw';
 import { splitFilter, splitLines, tokenize } from './parse.js';
 import { FILTER_NAMES, compileFilter } from './filter.js';
@@ -26,7 +13,7 @@ import { Values } from './values.js';
 import { SaveArchive } from './archive.js';
 import { complete, partialWord } from './complete.js';
 import { didYouMean } from './near.js';
-import { hold } from '../lib/keychain.js';
+import { hold } from './keychain.js';
 
 const schema = new KeySchema(modules);
 

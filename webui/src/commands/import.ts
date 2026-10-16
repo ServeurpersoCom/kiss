@@ -1,5 +1,6 @@
-import type { Command } from '../lib/types.js';
-import { ID_SHOWN, comment, titled } from '../lib/config.js';
+import type { Command } from '../engine/engine.js';
+import { ID_SHOWN, titled } from '../lib/config.js';
+import { comment } from '../engine/text.js';
 import { splitLines } from '../engine/parse.js';
 
 // whether a text reads as JSON

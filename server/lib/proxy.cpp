@@ -16,12 +16,12 @@
 // reached answers 502. The proxy knows no protocol: MCP and LLM endpoints pass
 // alike.
 
-#include "proxy.h"
+#include "lib/proxy.h"
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
 #include "engine/text.h"
-#include "log.h"
+#include "lib/log.h"
 
 #include <memory>
 #include <optional>
