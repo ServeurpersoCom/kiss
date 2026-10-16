@@ -3,6 +3,7 @@
 #include "engine/archive.h"
 
 #include "engine/text.h"
+#include "lib/file.h"
 #include "lib/utf8.h"
 
 #include <cstdio>
@@ -37,20 +38,9 @@ std::string archive_read(bool & found) {
 }
 
 std::string archive_write(const layer & l) {
-    const std::string tmp = g_path + ".tmp";
-    FILE *            f   = utf8_fopen(tmp.c_str(), "wb");
-    if (!f) {
-        fail("cannot write " + tmp);
-    }
-    const std::string text = join(layer_lines(l, true), "\n") + "\n";
-    const bool        ok   = fwrite(text.data(), 1, text.size(), f) == text.size();
-    if (fclose(f) != 0 || !ok) {
-        fail("cannot write " + tmp);
-    }
-    std::error_code ec;
-    std::filesystem::rename(std::filesystem::u8path(tmp), std::filesystem::u8path(g_path), ec);
-    if (ec) {
-        fail("cannot write " + g_path + ": " + ec.message());
+    const std::string why = file_replace(std::filesystem::u8path(g_path), join(layer_lines(l, true), "\n") + "\n");
+    if (!why.empty()) {
+        fail(g_path + ": " + why);
     }
     return comment(std::string("copied ") + RUNNING_CONFIG + " to " + STARTUP_CONFIG);
 }

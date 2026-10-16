@@ -1,7 +1,7 @@
 #pragma once
 // file.h: the files the tools on files reach: a path as a tool takes it, a
 // text loaded whole, bytes written over a file in place, and where a string
-// occurs in a text
+// occurs in a text; and a file the server keeps, replaced whole
 
 #include <filesystem>
 #include <string>
@@ -25,6 +25,11 @@ std::string file_load(const std::filesystem::path & path, size_t limit, std::str
 // links stay, its parent directories made first; the message of the failure,
 // empty when it is written
 std::string file_write(const std::filesystem::path & path, const std::string & bytes);
+
+// the bytes as the whole file, written beside it then renamed over it, so a
+// failure never leaves half a file; its parent directories made first; the
+// message of the failure, empty when it is written
+std::string file_replace(const std::filesystem::path & path, const std::string & bytes);
 
 // the times what occurs in text, none overlapping, and where the first starts
 struct file_found {

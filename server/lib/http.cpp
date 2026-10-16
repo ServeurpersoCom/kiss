@@ -1,5 +1,6 @@
 // http.cpp: the routes of the server: the page, its site configuration, the
-// MCP and the servers it proxies, behind the checks of Host, Origin and the key
+// MCP, the servers it proxies and the conversations, behind the checks of
+// Host, Origin and the key
 
 #include "lib/http.h"
 
@@ -10,6 +11,7 @@
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/proxy.h"
+#include "lib/sync.h"
 #include "mcp/mcp.h"
 #include "version.h"
 
@@ -22,6 +24,10 @@ static const char * const SITE_FILE = "client.conf";
 // the path of a proxied server, its route name then the rest of the path
 // captured
 static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+)(/.*)?)";
+
+// the stream of the conversations, and the path of an action, captured
+static const char * const EVENTS_PATH = "/events";
+static const std::string  ACTION_PATH = std::string("/conversations/(") + SYNC_ACTIONS + ")";
 
 // the name and the port of a Host header: example.com:8089, [::1]:8089
 static void host_header(const std::string & value, std::string & name, std::string & port) {
@@ -76,6 +82,20 @@ static bool authorized(const httplib::Request & req, std::string & why) {
         return false;
     }
     return true;
+}
+
+// whether a request passes, else refused with why, the page told to send the
+// key
+static bool admitted(const httplib::Request & req, httplib::Response & res) {
+    std::string why;
+    if (authorized(req, why)) {
+        return true;
+    }
+    log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
+    res.status = 401;
+    res.set_header("WWW-Authenticate", "Bearer");
+    res.set_content(why + "\n", "text/plain");
+    return false;
 }
 
 // a page served elsewhere reads the answers of /mcp, the key keeping out who
@@ -143,15 +163,9 @@ void http_routes(httplib::Server & server) {
 
     server.Post("/mcp", [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        std::string why;
-        if (!authorized(req, why)) {
-            log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
-            res.status = 401;
-            res.set_header("WWW-Authenticate", "Bearer");
-            res.set_content(why + "\n", "text/plain");
-            return;
+        if (admitted(req, res)) {
+            mcp_post(req, res, KISS_VERSION);
         }
-        mcp_post(req, res, KISS_VERSION);
     });
 
     // the server keeps no session: no stream to open, none to close
@@ -174,17 +188,34 @@ void http_routes(httplib::Server & server) {
     const auto forward = [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
         res.set_header("Access-Control-Expose-Headers", "*");
-        std::string why;
-        if (!authorized(req, why)) {
-            log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
-            res.status = 401;
-            res.set_header("WWW-Authenticate", "Bearer");
-            res.set_content(why + "\n", "text/plain");
-            return;
+        if (admitted(req, res)) {
+            proxy(req, res, req.matches[1], req.matches[2]);
         }
-        proxy(req, res, req.matches[1], req.matches[2]);
     };
     server.Post(ROUTE_PATH, forward);
     server.Get(ROUTE_PATH, forward);
     server.Delete(ROUTE_PATH, forward);
+
+    // the conversations, beside the MCP: the stream a page follows them by,
+    // and the actions of its user
+    const auto preflight = [](const httplib::Request & req, httplib::Response & res) {
+        cors(req, res);
+        res.status = 204;
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    };
+    server.Options(EVENTS_PATH, preflight);
+    server.Options(ACTION_PATH, preflight);
+    server.Get(EVENTS_PATH, [](const httplib::Request & req, httplib::Response & res) {
+        cors(req, res);
+        if (admitted(req, res)) {
+            sync_events(req, res);
+        }
+    });
+    server.Post(ACTION_PATH, [](const httplib::Request & req, httplib::Response & res) {
+        cors(req, res);
+        if (admitted(req, res)) {
+            sync_action(req, res, req.matches[1]);
+        }
+    });
 }

@@ -19,11 +19,13 @@ static step_t compile_erase(const words_t & args) {
     }
     const std::string word = args[0];
     return [word](context & ctx) {
-        const std::vector<conversation> all   = library_list();
-        words_t                         names = { CONVERSATIONS, RUNNING_CONFIG, STARTUP_CONFIG };
-        for (const conversation & c : all) {
+        // what each conversation is named by and shows as
+        std::vector<conversation> all;
+        words_t                   names = { CONVERSATIONS, RUNNING_CONFIG, STARTUP_CONFIG };
+        library_each([&](const conversation & c) {
+            all.push_back({ c.id, c.title, c.updated, c.pinned, {}, {} });
             names.push_back(c.id);
-        }
+        });
         const std::string name = choose(word, names, "configuration or conversation");
         if (name == RUNNING_CONFIG || name == STARTUP_CONFIG) {
             if (!engine_confirmed(ctx, "erase " + name, "erase " + name)) {

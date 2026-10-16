@@ -17,6 +17,10 @@ void listener_move(const std::string & host, int port);
 // the address the server listens on now
 void listener_address(std::string & host, int & port);
 
+// the listener the server runs now, counted from the start: a stream that
+// outlives no listener ends once this changes
+unsigned listener_epoch();
+
 // listens on the address of the running configuration, moved when it changes,
 // until listener_stop; false when an address cannot be listened on
 bool listener_run();

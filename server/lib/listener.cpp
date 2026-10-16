@@ -20,11 +20,12 @@
 #    include <unistd.h>
 #endif
 
-static std::mutex        g_mutex;
-static httplib::Server * g_server = nullptr;
-static std::string       g_host;
-static int               g_port = 0;
-static std::atomic<bool> g_quit{ false };
+static std::mutex            g_mutex;
+static httplib::Server *     g_server = nullptr;
+static std::string           g_host;
+static int                   g_port = 0;
+static std::atomic<bool>     g_quit{ false };
+static std::atomic<unsigned> g_epoch{ 0 };
 
 // localhost, or a loopback address as written: IPv4 in 127.0.0.0/8, or ::1
 bool listener_loopback(const std::string & host) {
@@ -83,6 +84,7 @@ bool listener_bindable(const std::string & host, int port, std::string & why) {
 void listener_move(const std::string & host, int port) {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_server && (host != g_host || port != g_port)) {
+        ++g_epoch;
         g_server->stop();
     }
 }
@@ -93,8 +95,13 @@ void listener_address(std::string & host, int & port) {
     port = g_port;
 }
 
+unsigned listener_epoch() {
+    return g_epoch;
+}
+
 void listener_stop() {
     g_quit = true;
+    ++g_epoch;
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_server) {
         g_server->stop();

@@ -102,10 +102,12 @@ server/lib/log.cpp|h       the log: [Module] Line
 server/lib/job.cpp|h       spawn, pipes, tree kill, per OS
 server/lib/output.cpp|h    UTF-8 repair and head plus tail truncation
 server/lib/file.cpp|h      the files the tools on files reach: a path, a text loaded whole, a write
-                           in place, a string found
+                           in place, a string found; a file the server keeps, replaced whole
 server/lib/conversation.cpp|h
                            the conversations as a file, read as the page reads it
-server/lib/library.cpp|h   the conversations of the server, a file each in conversations/
+server/lib/library.cpp|h   the conversations of the server, a file each in conversations/, and
+                           what each follower is to apply
+server/lib/sync.cpp|h      the stream of events of the conversations and the actions of a page
 server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
 server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
 server/lib/prompts.cpp|h   the texts of prompts.json, read once
@@ -273,6 +275,27 @@ named by its id. The server reads them all as it starts; a file that does not re
 reads it is logged and left out. Copying a file out exports a conversation, copying one in imports
 it at the next start. `show conversations` lists them, the newest first, and `erase` removes a
 conversation with its file.
+
+The pages that show them follow them, as many as are open, and never write one: the server alone
+changes a conversation, its file written whole again through a file beside it renamed over it, then
+tells every page.
+
+- `GET /events`, beside the MCP, is a stream of events: the first sets every conversation, each
+  next one sets a conversation that changed, whole, or one that went, as null.
+
+  ```
+  data: {"set":[],"value":{"conversations":[...]}}
+  data: {"set":["<id>"],"value":{...}}
+  data: {"set":["<id>"],"value":null}
+  ```
+
+  The server keeps no log of events: it holds the version of each conversation a page has, and a
+  page that comes back gets every conversation as it stands. A comment each second tells a page that
+  left; the stream ends when the listener moves.
+- `POST /conversations/<action>` applies an action of the user, a JSON body, and answers 204, or 400
+  with why not: `pin {id, pinned}`, `browse {id, entry}`, the thread going to the last entry written
+  under that one, `drop {id, entry}`, a command entry leaving, its conversation going when it was
+  the last one, `erase {ids}`.
 
 ## Running
 
@@ -602,7 +625,8 @@ speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL else
 ## HTTP and security
 
 - `GET /` serves the embedded page, `GET /client.conf` the site configuration, `POST /mcp` the MCP,
-  `/proxy/<name>` the servers it proxies, behind the same checks.
+  `/proxy/<name>` the servers it proxies, `GET /events` and `POST /conversations/<action>` the
+  conversations, behind the same checks.
   The site configuration is `client.conf` of the directory the server runs in, else the one it
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.

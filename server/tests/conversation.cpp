@@ -1,12 +1,17 @@
 // conversation.cpp: the laws of the conversations as files, run as the build
 // ends: a file reads as the page reads it, whole or refused with the very
-// place the page names, and the library holds one conversation per file named
-// by its id, leaves out a file that does not read, and erases a file with its
-// conversation
+// place the page names, and writes back as the page wrote it; the tree comes
+// back to a branch as it was last written in and closes over an entry that
+// leaves; the library holds one conversation per file named by its id, leaves
+// out a file that does not read, writes a change whole, never a secret, and
+// tells a follower every conversation, then each change, whole, and each one
+// gone
 
+#include "lib/file.h"
 #include "lib/library.h"
 #include "yyjson.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -88,6 +93,33 @@ static void write(const fs::path & path, const std::string & text) {
 
 int main() {
     const std::vector<conversation> read = conversation_parse(DEMO);
+    {
+        const std::string                 back = conversation_file(read, {});
+        const std::shared_ptr<yyjson_doc> a(yyjson_read(DEMO, strlen(DEMO), 0), yyjson_doc_free);
+        const std::shared_ptr<yyjson_doc> b(yyjson_read(back.data(), back.size(), 0), yyjson_doc_free);
+        law(b && yyjson_equals(yyjson_doc_get_root(a.get()), yyjson_doc_get_root(b.get())),
+            "a file writes back as the page wrote it");
+    }
+    {
+        // a tree: e1, its answers e2 then e4, e3 under e2, e5 a command under e4
+        conversation t;
+        t.entries = {
+            { "e1", std::nullopt },
+            { "e2", "e1"         },
+            { "e3", "e2"         },
+            { "e4", "e1"         },
+            { "e5", "e4"         }
+        };
+        t.leaf = "e5";
+        law(conversation_latest(t, "e2") == "e3" && conversation_latest(t, "e1") == "e5" &&
+                conversation_latest(t, "e5") == "e5",
+            "a branch comes back as it was last written in");
+        conversation_drop(t, "e4");
+        law(t.entries.size() == 4 && t.entries[3].parent == std::optional<std::string>("e1") && t.leaf == "e5",
+            "what follows an entry that leaves follows its parent");
+        conversation_drop(t, "e5");
+        law(t.leaf == std::optional<std::string>("e1"), "a leaf that leaves gives the leaf to its parent");
+    }
     law(read.size() == 1 && read[0].id == "c" && read[0].title == "Demo" && read[0].updated == 1760000000000 &&
             read[0].pinned,
         "a file the page writes reads with its id, title, date and pin");
@@ -129,11 +161,45 @@ int main() {
     write(root / "bad.json", "{");
     write(root / "notes.txt", "x");
     library_open(root.u8string());
-    const std::vector<conversation> listed = library_list();
-    law(listed.size() == 1 && listed[0].id == "one", "a file holds the conversation its name names, else stays out");
+    const auto listed = [] {
+        words_t ids;
+        library_each([&](const conversation & c) { ids.push_back(c.id); });
+        return ids;
+    };
+    law(listed() == words_t{ "one" }, "a file holds the conversation its name names, else stays out");
+
+    library_follower f;
+    const words_t    secrets = { "sk-secret-0001" };
+    law(library_follow(f, 0, secrets).find("{\"set\":[],\"value\":{\"conversations\":[{\"id\":\"one\"") == 6,
+        "a follower first gets every conversation");
+    law(library_follow(f, 10, secrets).empty(), "a follower gets nothing while nothing changes");
+    const std::string pinned = library_change(
+        "one",
+        [](conversation & c) {
+            c.pinned = false;
+            c.title  = "key sk-secret-0001";
+            return std::string();
+        },
+        secrets);
+    const std::string changed = library_follow(f, 10, secrets);
+    law(pinned.empty() &&
+            changed.rfind("data: {\"set\":[\"one\"],\"value\":{\"id\":\"one\",\"title\":\"key <removed>\"", 0) == 0 &&
+            changed.find("pinned") == std::string::npos,
+        "a follower gets a changed conversation whole, its secrets sealed");
+    std::string kept;
+    file_load(root / "one.json", SIZE_MAX, kept);
+    law(kept.find("key <removed>") != std::string::npos && kept.find("sk-secret") == std::string::npos &&
+            !fs::exists(root / "one.json.tmp") && conversation_parse(kept).size() == 1,
+        "a change writes the whole file again, read as the page reads it, no secret in it");
+    law(library_change(
+            "one", [](conversation &) { return std::string("no"); }, secrets) == "no" &&
+            library_follow(f, 10, secrets).empty(),
+        "a change refused changes nothing and tells nobody");
     library_remove({ "one" });
-    law(library_list().empty() && !fs::exists(root / "one.json") && fs::exists(root / "two.json"),
+    law(listed().empty() && !fs::exists(root / "one.json") && fs::exists(root / "two.json"),
         "an erased conversation goes with its file alone");
+    law(library_follow(f, 10, secrets) == "data: {\"set\":[\"one\"],\"value\":null}\n\n",
+        "a follower gets an erased conversation as null");
 
     fs::remove_all(root);
     printf("conversation_test: %zu laws, %zu broken\n", g_laws, g_fails);

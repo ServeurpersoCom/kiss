@@ -27,16 +27,12 @@ static step_t compile_show_conversations(const words_t & args) {
         fail(beyond({ "show", CONVERSATIONS }, args));
     }
     return [](context &) {
-        const std::vector<conversation> all = library_list();
-        if (all.empty()) {
-            return comment("no conversation yet");
-        }
         words_t out;
-        for (const conversation & c : all) {
+        library_each([&](const conversation & c) {
             out.push_back(
                 comment("  " + c.id.substr(0, ID_SHOWN) + " " + local_time(c.updated) + conversation_titled(c.title)));
-        }
-        return join(out, "\n");
+        });
+        return out.empty() ? comment("no conversation yet") : join(out, "\n");
     };
 }
 

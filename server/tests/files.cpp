@@ -3,7 +3,8 @@
 // it, a text loads whole with its bytes as they are and refuses a binary or a
 // file past its limit, bytes are written in place with their directories made
 // and the mode and the link of the file kept, and a string is found where it
-// first occurs, its count telling whether it is unique
+// first occurs, its count telling whether it is unique; a file the server
+// keeps is replaced whole
 
 #include "lib/file.h"
 
@@ -67,6 +68,9 @@ int main() {
 #endif
 
     law(file_write(root / "deep", "x").rfind("Cannot write the file: ", 0) == 0, "a directory is not written over");
+    law(file_replace(root / "kept/c.json", "one").empty() && file_replace(root / "kept/c.json", "two").empty() &&
+            loaded(root / "kept/c.json") == "two" && !fs::exists(root / "kept/c.json.tmp"),
+        "a file replaced holds the new bytes whole, nothing left beside it");
 
     const file_found once = file_find("a\nbc\nd", "bc");
     law(once.count == 1 && once.at == 2, "a unique string is found where it starts");

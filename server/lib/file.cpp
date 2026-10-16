@@ -72,6 +72,18 @@ std::string file_write(const fs::path & path, const std::string & bytes) {
     return "";
 }
 
+std::string file_replace(const fs::path & path, const std::string & bytes) {
+    fs::path tmp = path;
+    tmp += ".tmp";
+    const std::string why = file_write(tmp, bytes);
+    if (!why.empty()) {
+        return why;
+    }
+    std::error_code ec;
+    fs::rename(tmp, path, ec);
+    return ec ? "Cannot write the file: " + ec.message() : "";
+}
+
 file_found file_find(const std::string & text, const std::string & what) {
     file_found found{ 0, std::string::npos };
     for (size_t at = text.find(what); !what.empty() && at != std::string::npos;
