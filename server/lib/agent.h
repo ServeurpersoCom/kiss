@@ -19,6 +19,13 @@ constexpr const char * AGENT_VERDICTS[] = { "once", "always", "refuse" };
 // once it runs
 std::string agent_answer(const std::string & id, const std::string & user);
 
+// a line the user typed runs on this server as its config tool runs it, as
+// the turn of the conversation, the forms it asks shown to every page
+// following it, its output entering after the thread; the message of what
+// keeps it from starting, AGENT_BUSY while a turn runs there, empty once it
+// runs
+std::string agent_command(const std::string & id, const std::string & input);
+
 // whether a turn runs in a conversation
 bool agent_busy(const std::string & id);
 

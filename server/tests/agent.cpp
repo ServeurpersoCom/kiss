@@ -2,7 +2,10 @@
 // turn against an endpoint and MCP servers of the test: every round tells
 // the model what the turn left out, under the note of prompts.json, as the
 // agent of the page does; a server that fails sits out the rest of the turn,
-// asked once; a tool served twice stays with the first, the server itself
+// asked once; a tool served twice stays with the first, the server itself;
+// a line the user types runs as the config tool runs it, its output after
+// the thread, a url it asks to let shown as a form, the line running again
+// once the user lets it
 
 #include "lib/agent.h"
 
@@ -146,6 +149,37 @@ int main() {
     law(g_tools[0].find("bash") != std::string::npos &&
             g_tools[0].find("bash", g_tools[0].find("bash") + 1) == std::string::npos,
         "a tool served twice goes once: " + g_tools[0]);
+
+    // the entries of the conversation, as the library holds them
+    const auto entries = [&] {
+        std::vector<conversation_entry> out;
+        library_each([&](const conversation & x) {
+            if (x.id == c.id) {
+                out = x.entries;
+            }
+        });
+        return out;
+    };
+    const auto settled = [&] {
+        for (int i = 0; i < 1000 && agent_busy(c.id); i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return !agent_busy(c.id);
+    };
+    law(agent_command(c.id, "show version").empty() && settled() && entries().back().role == ROLE_CLI &&
+            entries().back().input == "show version" && entries().back().ok &&
+            entries().back().output.find("server") != std::string::npos,
+        "a line the user types runs on the server, its output after the thread");
+    law(agent_command(c.id, "set endpoints url t9 https://example.com/v1").empty(), "a line that asks starts");
+    for (int i = 0;
+         i < 1000 && !agent_fill(c.id, "{\"action\":\"accept\",\"content\":{\"endpoints url t9\":true}}").empty();
+         i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    law(settled() && entries().back().input == "set endpoints url t9 https://example.com/v1" &&
+            entries().back().output == "+ set endpoints url t9 https://example.com/v1" &&
+            engine_get("endpoints url t9").value_or("") == "https://example.com/v1",
+        "a url a line asks to let runs once the user lets it: " + entries().back().output);
 
     server.stop();
     listening.join();

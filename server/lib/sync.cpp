@@ -3,6 +3,7 @@
 
 #include "lib/sync.h"
 
+#include "engine/engine.h"
 #include "engine/keychain.h"
 #include "lib/agent.h"
 #include "lib/library.h"
@@ -140,7 +141,7 @@ static bool a_response(yyjson_val * response) {
 // what the action does, what keeps it from it as the body, the conversation
 // and the turn stand, in that order; created names the conversation a line
 // went in, opened by it when the page named none
-static refusal act(const std::string & action, yyjson_val * body, std::string & created) {
+static refusal act(const std::string & action, yyjson_val * body, std::string & created, words_t & words) {
     std::string id, entry, text;
     const bool  named = text_field(body, "id", id);
     if (named && !known(id)) {
@@ -148,16 +149,19 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
     }
     if (action == "send" || action == "command") {
         conversation_entry e;
-        e.role          = action == "send" ? ROLE_USER : ROLE_CLI;
-        yyjson_val * ok = yyjson_obj_get(body, "ok");
-        if (action == "send" ?
-                !text_field(body, "text", e.text) || trim(e.text).empty() :
-                !text_field(body, "input", e.input) || !text_field(body, "output", e.output) || !yyjson_is_bool(ok)) {
-            return { MALFORMED,
-                     action == "send" ? "the body holds no text" : "the body holds no input, output and ok" };
+        e.role           = action == "send" ? ROLE_USER : ROLE_CLI;
+        yyjson_val * ok  = yyjson_obj_get(body, "ok");
+        // a command without its output is one the server runs
+        const bool   run = action == "command" && !yyjson_obj_get(body, "output");
+        if (action == "send" ? !text_field(body, "text", e.text) || trim(e.text).empty() :
+            run              ? !text_field(body, "input", e.input) || trim(e.input).empty() :
+                  !text_field(body, "input", e.input) || !text_field(body, "output", e.output) || !yyjson_is_bool(ok)) {
+            return { MALFORMED, action == "send" ? "the body holds no text" :
+                                run              ? "the body holds no input" :
+                                                   "the body holds no input, output and ok" };
         }
         e.ok = yyjson_get_bool(ok);
-        if (named && action == "send" && agent_busy(id)) {
+        if (named && (action == "send" || run) && agent_busy(id)) {
             return { CONFLICT, AGENT_BUSY };
         }
         if (!named) {
@@ -175,10 +179,22 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
         if (action == "send") {
             return say(id, e.text);
         }
+        if (run) {
+            const std::string why = agent_command(id, e.input);
+            return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
+        }
         return changed(id, [&](conversation & c) {
             conversation_append(c, c.leaf, e);
             return refusal{};
         });
+    }
+    if (action == "complete") {
+        std::string line;
+        if (!text_field(body, "line", line)) {
+            return { MALFORMED, "the body holds no line" };
+        }
+        words = engine_suggest(line);
+        return {};
     }
     if (action == "erase") {
         yyjson_val * ids = yyjson_obj_get(body, "ids");
@@ -302,14 +318,27 @@ void sync_action(const httplib::Request & req, httplib::Response & res, const st
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(req.body.data(), req.body.size(), 0), yyjson_doc_free);
     yyjson_val *                      body = doc ? yyjson_doc_get_root(doc.get()) : nullptr;
     std::string                       created;
+    words_t                           words;
     const refusal                     r =
-        yyjson_is_obj(body) ? act(action, body, created) : refusal{ MALFORMED, "the body is no JSON object" };
+        yyjson_is_obj(body) ? act(action, body, created, words) : refusal{ MALFORMED, "the body is no JSON object" };
     yyjson_val *      id    = yyjson_obj_get(body, "id");
     const std::string named = yyjson_is_str(id) ? yyjson_get_str(id) : created;
     if (r.status) {
         log_error("Sync", "%s %s %.8s: %s", req.remote_addr.c_str(), action.c_str(), named.c_str(), r.why.c_str());
         res.status = r.status;
         res.set_content(r.why + "\n", "text/plain");
+        return;
+    }
+    if (action == "complete") {
+        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+        yyjson_mut_val *                      out  = yyjson_mut_obj(made.get());
+        yyjson_mut_val *                      list = yyjson_mut_obj_add_arr(made.get(), out, "words");
+        yyjson_mut_doc_set_root(made.get(), out);
+        for (const std::string & w : words) {
+            yyjson_mut_arr_add_strncpy(made.get(), list, w.data(), w.size());
+        }
+        const std::shared_ptr<char> json(yyjson_mut_write(made.get(), 0, nullptr), free);
+        res.set_content(json.get(), "application/json");
         return;
     }
     log_info("Sync", "%s %s %.8s", req.remote_addr.c_str(), action.c_str(), named.c_str());

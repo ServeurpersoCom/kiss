@@ -314,6 +314,34 @@ static std::string fill(const std::string & id,
     return ask(id, question.get(), true, stop, p);
 }
 
+// what a tool of this server answers, run again with what the user answers
+// each time it asks them to fill a form, until it asks nothing more; one they
+// cancel answers nothing; throws once stopped
+static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val * args, api_stop & stop, pulse & p) {
+    const tool_tick tick = [&stop] {
+        return !stop.stopped;
+    };
+    engine_typed typed;
+    tool_outcome out = t.run(args, typed, tick);
+    while (!out.asks.empty() && !stop.stopped) {
+        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+        yyjson_mut_val *                      input = yyjson_mut_obj(made.get());
+        yyjson_mut_doc_set_root(made.get(), input);
+        tools_form(made.get(), input, out);
+        const std::shared_ptr<char> form(yyjson_mut_write(made.get(), 0, nullptr), free);
+        const std::string response = fill(id, engine_get("server hostname").value_or(""), form.get(), stop, p);
+        const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
+        if (!tools_typed(yyjson_doc_get_root(answered.get()), typed)) {
+            return { false, "The user answered nothing" };
+        }
+        out = t.run(args, typed, tick);
+    }
+    if (stop.stopped) {
+        throw api_error("Stopped");
+    }
+    return out;
+}
+
 // a call runs and its outcome enters it: a call reaches a tool not off as the
 // configuration stands when it goes, with arguments it reads as an object; a
 // tool in consent asks the user, the turn waiting for a page to answer: once,
@@ -426,30 +454,7 @@ static void call(const std::string &           id,
         settle(called.args, seal_text(out.text, typed), out.ok, out.images);
         return;
     }
-    // a call that asks the user runs again with what they answered, until it
-    // asks nothing more or they cancel
-    const tool_tick tick = [&stop] {
-        return !stop.stopped;
-    };
-    engine_typed typed;
-    tool_outcome out = found->run(args, typed, tick);
-    while (!out.asks.empty() && !stop.stopped) {
-        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-        yyjson_mut_val *                      input = yyjson_mut_obj(made.get());
-        yyjson_mut_doc_set_root(made.get(), input);
-        tools_form(made.get(), input, out);
-        const std::shared_ptr<char> form(yyjson_mut_write(made.get(), 0, nullptr), free);
-        const std::string response = fill(id, engine_get("server hostname").value_or(""), form.get(), stop, p);
-        const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
-        if (!tools_typed(yyjson_doc_get_root(answered.get()), typed)) {
-            settle(called.args, "The user answered nothing", false, {});
-            return;
-        }
-        out = found->run(args, typed, tick);
-    }
-    if (stop.stopped) {
-        throw api_error("Stopped");
-    }
+    const tool_outcome              out = run_own(id, *found, args, stop, p);
     std::vector<conversation_image> images;
     if (!out.image.empty()) {
         images.push_back({ out.mime, out.image });
@@ -631,6 +636,61 @@ static void turn(std::string                     id,
     library_turn(id, "");
     std::lock_guard<std::mutex> lock(g_mutex);
     g_turns.erase(id);
+}
+
+// a line the user typed runs as the config tool of this server runs it, the
+// turn of the conversation while it asks; its output enters after the thread
+static void command(std::string id, std::string input, std::shared_ptr<api_stop> stop, pulse p) {
+    std::optional<tool> config;
+    engine_with([&](const engine_reader & reader) {
+        for (tool & t : tools_list(reader)) {
+            if (t.suffix == "config") {
+                config = std::move(t);
+            }
+        }
+    });
+    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    yyjson_mut_val *                      args = yyjson_mut_obj(made.get());
+    yyjson_mut_doc_set_root(made.get(), args);
+    yyjson_mut_obj_add_strncpy(made.get(), args, "lines", input.data(), input.size());
+    const std::shared_ptr<yyjson_doc> doc(yyjson_mut_doc_imut_copy(made.get(), nullptr), yyjson_doc_free);
+    conversation_entry                e;
+    e.role  = ROLE_CLI;
+    e.input = input;
+    try {
+        const tool_outcome out = run_own(id, *config, yyjson_doc_get_root(doc.get()), *stop, p);
+        e.output               = out.text;
+        e.ok                   = out.ok;
+    } catch (const std::exception & err) {
+        e.output = explain(err, *stop);
+    }
+    library_change(
+        id,
+        [&](conversation & c) {
+            conversation_append(c, c.leaf, e);
+            return std::string();
+        },
+        keychain_running());
+    log_info("Agent", "%.8s ran %s", id.c_str(), e.ok ? "a line" : "a line that failed");
+    library_turn(id, "");
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_turns.erase(id);
+}
+
+std::string agent_command(const std::string & id, const std::string & input) {
+    const auto stop = std::make_shared<api_stop>();
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (g_turns.count(id)) {
+            return AGENT_BUSY;
+        }
+        g_turns[id] = stop;
+    }
+    pulse p = pulse_start(pulse_now());
+    pulse_mark(p, PHASE_RUNNING, "config", pulse_now());
+    beat(id, p);
+    std::thread(command, id, input, stop, p).detach();
+    return "";
 }
 
 std::string agent_answer(const std::string & id, const std::string & user) {

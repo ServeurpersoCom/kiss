@@ -7,7 +7,7 @@
 
 // the actions a page sends, POST /conversations/<action>, beside the stream
 // GET /conversations/events
-constexpr const char * SYNC_ACTIONS = "send|command|edit|retry|stop|answer|pin|browse|drop|erase";
+constexpr const char * SYNC_ACTIONS = "send|command|complete|edit|retry|stop|answer|pin|browse|drop|erase";
 
 // events: every conversation with the protocol, then what changes, until the
 // page leaves or the listener moves, a comment each second it stays quiet
@@ -15,8 +15,10 @@ void sync_events(const httplib::Request & req, httplib::Response & res);
 
 // an action of the user on conversations, a JSON body: send {text, id?}, a
 // message after the thread; command {input, output, ok, id?}, a command the
-// page ran, after the thread; both open a conversation without id and are
-// answered {id}; edit {id, entry, text}; retry {id, entry}; browse {id,
+// page ran, after the thread, or command {input, id?}, a line this server
+// runs as its config tool does, its output after the thread once it ran;
+// both open a conversation without id and are answered {id}; complete
+// {line}, answered {words}, the words that complete a line being typed; edit {id, entry, text}; retry {id, entry}; browse {id,
 // entry}; stop {id}; answer {id, verdict}, once, always or refuse to the call
 // its turn asks about, or {id, response}, the response of the user to the
 // form it asks them to fill; pin {id, pinned}; drop {id, entry}; erase {ids};
