@@ -26,13 +26,13 @@ export const PAGE_COMMANDS = ['attach', 'detach'];
 const EVENTS = 'conversations/events';
 const ACTIONS = 'conversations/';
 // the protocol of the events this page reads
-export const SYNC_PROTOCOL = 1;
+const SYNC_PROTOCOL = 1;
 // the time before a stream that ended opens again
 export const SYNC_RETRY_MS = 2000;
 // the silence after which a stream counts as cut: the server writes at least
 // every SYNC_IDLE_MS, so three times that without a message is a connection
 // gone; a server that refuses closes the stream as a policy violation
-export const SYNC_IDLE_MS = 15000;
+const SYNC_IDLE_MS = 15000;
 export const SYNC_SILENCE_MS = 3 * SYNC_IDLE_MS;
 const POLICY_VIOLATION = 1008;
 

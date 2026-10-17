@@ -10,7 +10,7 @@ export const [MARKDOWN, PLAIN] = RENDERS;
 
 // the blocks of text a turn renders
 export const BLOCKS = ['thinking', 'reply'] as const;
-export type Block = (typeof BLOCKS)[number];
+type Block = (typeof BLOCKS)[number];
 
 // how the thread shows a turn: how the thinking and the tool calls fold, how
 // each block of text renders and the argument every folded call shows, from

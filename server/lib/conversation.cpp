@@ -473,11 +473,6 @@ std::string conversation_json(const conversation & c, const words_t & secrets) {
     return sealed(doc.get(), conversation_val(doc.get(), c), secrets);
 }
 
-std::string conversation_entry_json(const conversation_entry & e, const words_t & secrets) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    return sealed(doc.get(), entry_val(doc.get(), e), secrets);
-}
-
 std::string conversation_round_json(const conversation_round & r, const words_t & secrets) {
     const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
     return sealed(doc.get(), round_val(doc.get(), r), secrets);

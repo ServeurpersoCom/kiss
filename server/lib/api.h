@@ -113,9 +113,6 @@ struct api_stop {
 // stop while it waits; path is the path of its url
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path);
 
-// the models an endpoint serves, by id, each as its list writes it, JSON
-std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop);
-
 // what an endpoint lists of one model, kept for the life of the server, a
 // list that failed asked again; empty when it lists no such model
 std::string api_describe(const endpoint & e, const std::string & model, api_stop & stop);

@@ -116,7 +116,8 @@ static api_error failure(const endpoint & e, int status, const std::string & typ
     return api_error(e.server.url + " answers " + std::to_string(status) + " " + message, fix);
 }
 
-std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop) {
+// the models an endpoint serves, by id, each as its list writes it, JSON
+static std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop) {
     std::string base;
     const auto  client = api_client(e.server, stop, base);
     const auto  res    = client->Get(joined(base, e.speaks->models), sent(e));

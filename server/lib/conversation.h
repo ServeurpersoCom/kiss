@@ -104,7 +104,6 @@ std::vector<conversation> conversation_parse(const std::string & text);
 std::string conversation_json(const conversation & c, const words_t & secrets);
 
 // a part of a conversation as JSON, the same way
-std::string conversation_entry_json(const conversation_entry & e, const words_t & secrets);
 std::string conversation_round_json(const conversation_round & r, const words_t & secrets);
 std::string conversation_call_json(const conversation_call & c, const words_t & secrets);
 
