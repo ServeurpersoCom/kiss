@@ -13,7 +13,7 @@
 #include "lib/log.h"
 #include "lib/prompts.h"
 #include "lib/utf8.h"
-#include "server.conf.hpp"
+#include "server/server.conf.hpp"
 #include "version.h"
 
 #include <csignal>
@@ -46,7 +46,7 @@ int main(int argc, char ** argv) {
     }
 
     const std::string refused =
-        engine_factory(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));
+        engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
     if (!refused.empty()) {
         log_error("Server", "The factory configuration refuses:\n%s", refused.c_str());
         return 1;

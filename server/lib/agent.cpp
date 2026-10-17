@@ -435,10 +435,10 @@ static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val *
 static tool client_tool(const std::string & client) {
     tool t;
     t.suffix      = client + AGENT_CLIENT_TOOL;
-    t.description = prompts_description("client_config", {
-                                                             { "client", client }
+    t.description = prompts_page_description({
+        { "page", "the KiSS page " + client + ", a browser attached to this server" }
     });
-    t.input       = prompts_input("client_config");
+    t.input       = prompts_page_input();
     return t;
 }
 

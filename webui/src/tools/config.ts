@@ -8,7 +8,7 @@ const text = (args: Record<string, unknown>): string =>
 
 export default {
 	name: 'config',
-	description: prompts.tools.config.description,
+	description: prompts.tools.config.description.replace('{page}', 'this chat page'),
 	input: prompts.tools.config.input,
 	stored(ctx, args) {
 		return { ...args, lines: ctx.redact(text(args)) };

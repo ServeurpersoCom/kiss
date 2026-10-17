@@ -143,7 +143,7 @@ server/lib/remote.cpp|h    a server an item names: its url, key and headers, and
 server/protocols/          one file per protocol an endpoint speaks: chat, messages, responses
 server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
 server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
-server/lib/prompts.cpp|h   the texts of prompts.json, read once
+server/lib/prompts.cpp|h   the texts of prompts.json and of the page, read once
 server/lib/utf8.h          the UTF-8 boundary of Windows: argv, fopen
 server/tests/seal.cpp      the laws of the seal, built and run with the server, a broken law failing
                            the build
@@ -515,7 +515,8 @@ text a model reads of the server lives in `server/prompts.json`, as every one of
 `webui/src/prompts.json`: each tool with its description and the JSON Schema of its arguments,
 `{hostname}`, `{platform}`, `{shell}` and `{modules}` standing for what only the running server
 knows, and each module with what it sets. A module that has no text there stops the server as it
-starts.
+starts. The server embeds `webui/src/prompts.json` too: `<hostname>_client_config` reads the config
+tool of the page as the page does, `{page}` naming that page where the page reads this chat page.
 
 Every tool takes `description` first, why the call is made, then what it does: its schema lists it
 first and says so, for a model to write the why before the what. A model still writes its arguments

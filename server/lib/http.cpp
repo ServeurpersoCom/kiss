@@ -4,15 +4,15 @@
 
 #include "lib/http.h"
 
-#include "client.conf.hpp"
 #include "engine/engine.h"
 #include "engine/keychain.h"
-#include "index.html.gz.hpp"
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/proxy.h"
 #include "lib/sync.h"
 #include "mcp/mcp.h"
+#include "server/client.conf.hpp"
+#include "tools/public/index.html.gz.hpp"
 #include "version.h"
 #include "yyjson.h"
 
@@ -141,7 +141,8 @@ void http_routes(httplib::Server & server) {
             return;
         }
         res.set_header("Content-Encoding", "gzip");
-        res.set_content(reinterpret_cast<const char *>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
+        res.set_content(reinterpret_cast<const char *>(tools_public_index_html_gz), tools_public_index_html_gz_len,
+                        "text/html; charset=utf-8");
     });
 
     // the site configuration of the page: client.conf of the directory the
@@ -154,7 +155,8 @@ void http_routes(httplib::Server & server) {
             res.set_content(text.str(), "text/plain; charset=utf-8");
             return;
         }
-        res.set_content(reinterpret_cast<const char *>(client_conf), client_conf_len, "text/plain; charset=utf-8");
+        res.set_content(reinterpret_cast<const char *>(server_client_conf), server_client_conf_len,
+                        "text/plain; charset=utf-8");
     });
 
     server.Options("/mcp", [](const httplib::Request & req, httplib::Response & res) {

@@ -16,7 +16,7 @@
 #include "lib/conversation.h"
 #include "lib/library.h"
 #include "lib/prompts.h"
-#include "server.conf.hpp"
+#include "server/server.conf.hpp"
 #include "yyjson.h"
 
 #include <atomic>
@@ -127,7 +127,7 @@ int main() {
                                         << "set chat system-prompt 'be brief'\n"
                                         << "set mcp url down " << at << "/down\n"
                                         << "set mcp url twin " << at << "/twin\n";
-    engine_factory(std::string(reinterpret_cast<const char *>(server_conf), server_conf_len));
+    engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
     engine_start((root / "server.conf").u8string(), "test");
     library_open((root / "conversations").u8string());
 

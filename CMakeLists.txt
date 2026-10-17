@@ -43,14 +43,16 @@ endif()
 # the files the binary embeds as C arrays, each from its one source: the page,
 # gzipped by the page build and committed so the server builds without npm,
 # the client.conf the server serves to the page, its factory configuration,
-# and what a model reads of it
+# what a model reads of it and of the page; each named by its path,
+# server/prompts.json as embedded/server/prompts.json.hpp holding
+# server_prompts_json
 set(EMBEDDED)
-foreach(input tools/public/index.html.gz server/client.conf server/server.conf server/prompts.json)
-    get_filename_component(name "${input}" NAME)
-    set(output "${CMAKE_CURRENT_BINARY_DIR}/${name}.hpp")
+foreach(input tools/public/index.html.gz server/client.conf server/server.conf server/prompts.json webui/src/prompts.json)
+    string(MAKE_C_IDENTIFIER "${input}" symbol)
+    set(output "${CMAKE_CURRENT_BINARY_DIR}/embedded/${input}.hpp")
     add_custom_command(
         OUTPUT "${output}"
-        COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/${input}" "-DOUTPUT=${output}"
+        COMMAND "${CMAKE_COMMAND}" "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/${input}" "-DOUTPUT=${output}" "-DNAME=${symbol}"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/xxd.cmake"
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${input}"
         COMMENT "Embedding ${input}"
@@ -64,7 +66,8 @@ endforeach()
 file(GLOB SERVER_SOURCES CONFIGURE_DEPENDS server/*.cpp server/*/*.cpp)
 list(FILTER SERVER_SOURCES EXCLUDE REGEX "/server/tests/")
 add_executable(server ${SERVER_SOURCES} ${EMBEDDED})
-target_include_directories(server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
+                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
 if(MSVC)
     target_compile_options(server PRIVATE /W4 /wd4100 /wd4505)
 else()
@@ -116,7 +119,8 @@ set(SERVER_LIBRARY ${SERVER_SOURCES})
 list(FILTER SERVER_LIBRARY EXCLUDE REGEX "/server/main.cpp$")
 add_executable(mcp_test server/tests/mcp.cpp ${SERVER_LIBRARY} ${EMBEDDED})
 add_dependencies(mcp_test version)
-target_include_directories(mcp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(mcp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
+                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
 target_link_libraries(mcp_test PRIVATE httplib yyjson stb Threads::Threads)
 if(WIN32)
     target_link_libraries(mcp_test PRIVATE ws2_32)
@@ -128,7 +132,8 @@ add_custom_command(TARGET mcp_test POST_BUILD COMMAND mcp_test)
 # broken law failing the build
 add_executable(agent_test server/tests/agent.cpp ${SERVER_LIBRARY} ${EMBEDDED})
 add_dependencies(agent_test version)
-target_include_directories(agent_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(agent_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
+                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
 target_link_libraries(agent_test PRIVATE httplib yyjson stb Threads::Threads)
 if(WIN32)
     target_link_libraries(agent_test PRIVATE ws2_32)

@@ -1,8 +1,9 @@
 #pragma once
 // prompts.h: what a model reads of this server, from the prompts.json it
 // embeds: each tool, its description and the JSON schema of its arguments,
-// each module, what it sets, and the notes of the agent; a {mark} of a description stands for what
-// only the running server knows
+// each module, what it sets, and the notes of the agent; and the config tool
+// of the page, from the prompts.json of the page it embeds too; a {mark} of a
+// description stands for what only the running server knows
 
 #include <string>
 #include <utility>
@@ -15,6 +16,13 @@ std::string prompts_description(const std::string & tool, const prompt_marks & m
 
 // the JSON schema of the arguments of a tool
 std::string prompts_input(const std::string & tool);
+
+// the description of the config tool of the page, as the page reads it, each
+// {mark} replaced by its value
+std::string prompts_page_description(const prompt_marks & marks);
+
+// the JSON schema of the arguments of the config tool of the page
+std::string prompts_page_input();
 
 // what a module sets
 std::string prompts_module(const std::string & module);
