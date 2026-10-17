@@ -1139,6 +1139,10 @@ describe('IOS words', () => {
 			'set display thinking open'
 		);
 		expect((await k.run('write disk', 'user')).text).toContain('unknown write "disk"');
+		expect((await k.run('write erase', 'user', shelf([]))).text).toBe(
+			'! erased startup-config, the page starts on its factory configuration'
+		);
+		expect((await k.run('show startup-config', 'user')).text).toBe('! every key is at its default');
 	});
 });
 

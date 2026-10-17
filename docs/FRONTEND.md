@@ -22,6 +22,7 @@ commands
   show version
   copy <config> <config>
   write [memory]
+  write erase                       erase startup-config, as IOS writes it
   erase <id>|conversations|<config>
   export [<id>|conversations|<config>]
   import

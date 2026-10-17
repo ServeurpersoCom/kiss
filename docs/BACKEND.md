@@ -21,6 +21,7 @@ commands
   copy running-config startup-config
   copy startup-config running-config
   write [memory]
+  write erase                       erase startup-config, as IOS writes it
   erase running-config|startup-config
   erase conversations|<id>          every one but the pinned ones, or one by its id
   <command> | begin|count|exclude|include <pattern>
