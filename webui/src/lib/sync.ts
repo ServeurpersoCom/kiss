@@ -1,30 +1,45 @@
-import type { Assistant, Conversation, Form } from './types.js';
+import type { Assistant, Conversation, Form, Turn } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { remotes, type Remote } from './remote.js';
 import type { Grant, Verdict } from '../engine/engine.js';
 import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
 import { fill } from './form.js';
+import { pulse, type Pulse } from './pulse.js';
 
 // the conversations of the KiSS server chat agent names: the page follows
 // them by one stream of events and never writes one, the server alone
 // changes them as the actions of the user ask; the page holds them beside its
 // own, by the server that holds them
 
-// beside the MCP of the server: the stream, and the path of an action
-const EVENTS = 'events';
+// the conversations API of the server: the stream, and the path of an action
+const EVENTS = 'conversations/events';
 const ACTIONS = 'conversations/';
 const DATA = 'data:';
+// the protocol of the events this page reads
+export const SYNC_PROTOCOL = 1;
 // the time before a stream that ended opens again
 export const SYNC_RETRY_MS = 2000;
+// the silence after which a stream counts as cut: the server writes every
+// second, so three seconds without a byte is a connection gone
+export const SYNC_SILENCE_MS = 3000;
 
 // the server each conversation of a server lives on, by conversation id
 const homes = new Map<string, string>();
 // what each conversation of a server asks the user for its turn, while the
 // turn asks it: the number of the question it shows now
 const questions = new Map<string, { shown: number }>();
+// the clock of each turn of a server, by conversation, on the clock of the
+// page, read at every frame of the screen
+const turns = new Map<string, Pulse>();
+// what a moment of the server adds to read on performance.now(), as the
+// first event of the stream sets it
+let shift = 0;
 // the server followed now, by where it goes and with what key, and what ends
 // its stream
 let followed: { server: Remote; key: string; stop: AbortController } | null = null;
+
+// the clock of the turn a conversation of a server answers now, if any
+export const turnOf = (id: string): Pulse | undefined => turns.get(id);
 
 // whether the server chat agent names holds a conversation
 export const homed = (id: string): boolean => homes.has(id);
@@ -41,7 +56,7 @@ type Event =
 // the conversations of a server leave the page
 function forget(server: string): void {
 	app.conversations = app.conversations.filter((c) => homes.get(c.id) !== server);
-	for (const [id, home] of homes) if (home === server) homes.delete(id);
+	for (const [id, home] of homes) if (home === server) (homes.delete(id), turns.delete(id));
 	for (const [id, n] of questions) {
 		if (homes.has(id)) continue;
 		withdraw(n.shown);
@@ -94,8 +109,27 @@ function settle(id: string): void {
 	}
 	if (location.hash.slice(1) === id) app.current = c ?? null;
 	const leaf = c?.entries.find((e) => e.id === c.leaf);
-	if (c?.answering && leaf?.role === 'assistant') app.replies[id] = leaf as Assistant;
+	if (c?.turn && leaf?.role === 'assistant') app.replies[id] = leaf as Assistant;
 	else delete app.replies[id];
+}
+
+// the clock of a turn as the server sets its pulse, one object for the whole
+// turn, gone with it
+function turned(id: string, t: Turn | null): void {
+	if (!t) return void turns.delete(id);
+	const at = (moment: number | null): number => (moment === null ? NaN : moment + shift);
+	const p = turns.get(id) ?? pulse(0);
+	p.round = t.round;
+	p.phase = t.phase;
+	p.name = t.name;
+	p.status = t.status;
+	p.attempt = t.attempt;
+	p.attempts = t.attempts;
+	p.since = at(t.since);
+	p.first = at(t.first);
+	p.last = at(t.last);
+	p.tokens = t.tokens;
+	turns.set(id, p);
 }
 
 function sorted(): void {
@@ -105,8 +139,12 @@ function sorted(): void {
 // one event applied to the conversations of a server
 function apply(server: string, e: Event): void {
 	if ('set' in e && !e.set.length) {
+		const first = e.value as { protocol: number; now: number; conversations: Conversation[] };
+		if (first.protocol !== SYNC_PROTOCOL)
+			throw new ProtocolError(`speaks protocol ${first.protocol}, this page ${SYNC_PROTOCOL}`);
+		shift = performance.now() - first.now;
 		forget(server);
-		const all = (e.value as { conversations: Conversation[] }).conversations;
+		const all = first.conversations;
 		for (const c of all) homes.set(c.id, server);
 		app.conversations.push(...all);
 		sorted();
@@ -120,6 +158,7 @@ function apply(server: string, e: Event): void {
 		if (e.value === null) {
 			if (at >= 0) app.conversations.splice(at, 1);
 			homes.delete(id);
+			turns.delete(id);
 		} else {
 			homes.set(id, server);
 			if (at >= 0) app.conversations[at] = e.value as Conversation;
@@ -139,33 +178,60 @@ function apply(server: string, e: Event): void {
 	if ('set' in e) {
 		if (e.value === null) delete node[last];
 		else node[last] = e.value;
+		if (path.length === 2 && last === 'turn') turned(id, e.value as Turn | null);
 	} else if (e.text !== undefined) node[last] = String(node[last]) + e.text;
 	else (node[last] as unknown[]).push(e.value);
 	settle(id);
 }
 
-// a server that answers the stream with a refusal, a key wrong or missing
+// a server that answers the stream with a refusal, a key wrong or missing,
+// and one that speaks a protocol this page does not read, which the page
+// stops following
 class RefusedError extends Error {}
+class ProtocolError extends Error {}
 
 // what a request to the server carries: its key, then its headers
 function headers(server: Remote): Record<string, string> {
 	return { ...server.headers, ...server.sign() };
 }
 
-// the stream of a server read until it ends, every event applied; data lines
-// of an event joined by LF once the blank line that closes it came
+// the stream of a server read until it ends, or until it stays silent for
+// SYNC_SILENCE_MS, every event applied; data lines of an event joined by LF
+// once the blank line that closes it came
 async function stream(server: Remote, signal: AbortSignal): Promise<void> {
-	const res = await fetch(new URL(EVENTS, new URL(server.url, location.href)), {
-		headers: headers(server),
-		signal
-	});
-	if (!res.ok || !res.body) throw new RefusedError(`${server.url} answers ${res.status}`);
-	const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+	const quiet = new AbortController();
+	const cut = () => quiet.abort();
+	let timer = setTimeout(cut, SYNC_SILENCE_MS);
+	signal.addEventListener('abort', cut);
+	try {
+		const res = await fetch(new URL(EVENTS, new URL(server.url, location.href)), {
+			headers: headers(server),
+			signal: quiet.signal
+		});
+		if (!res.ok || !res.body) throw new RefusedError(`${server.url} answers ${res.status}`);
+		await read(server, res.body, () => {
+			clearTimeout(timer);
+			timer = setTimeout(cut, SYNC_SILENCE_MS);
+		});
+	} finally {
+		clearTimeout(timer);
+		signal.removeEventListener('abort', cut);
+	}
+}
+
+// the events of a body applied as they come, heard told of every chunk
+async function read(
+	server: Remote,
+	body: NonNullable<Response['body']>,
+	heard: () => void
+): Promise<void> {
+	const reader = body.pipeThrough(new TextDecoderStream()).getReader();
 	let buffer = '';
 	let data: string[] = [];
 	for (;;) {
 		const { value, done } = await reader.read();
 		if (done) return;
+		heard();
 		buffer += value;
 		let nl: number;
 		while ((nl = buffer.indexOf('\n')) >= 0) {
@@ -197,12 +263,15 @@ export function follow(config: ConfigReader): void {
 	followed = { server, key, stop };
 	void (async () => {
 		while (!stop.signal.aborted) {
-			// a server that refuses is told; a stream cut, as a page that leaves
-			// cuts it, opens again
-			await stream(server, stop.signal).catch((e: Error) => {
-				if (e instanceof RefusedError) console.error(`${EVENTS} of ${server.name}: ${e.message}`);
-			});
-			if (stop.signal.aborted) return;
+			// a server that refuses is told; one that speaks another protocol is
+			// told and followed no more; a stream cut or silent opens again
+			const failed = await stream(server, stop.signal).then(
+				() => null,
+				(e: Error) => e
+			);
+			if (failed instanceof RefusedError || failed instanceof ProtocolError)
+				console.error(`${EVENTS} of ${server.name}: ${failed.message}`);
+			if (stop.signal.aborted || failed instanceof ProtocolError) return;
 			await new Promise((resolve) => setTimeout(resolve, SYNC_RETRY_MS));
 		}
 	})();

@@ -3,6 +3,7 @@
 
 import type { InputRequest } from '@modelcontextprotocol/client';
 import type { Grant, Verdict } from '../engine/engine.js';
+import type { Phase } from './pulse.js';
 
 // an image a tool hands back, base64 data, shown to the user only
 export interface Image {
@@ -61,6 +62,22 @@ export interface Link {
 
 export type Entry = Message & Link;
 
+// the pulse of a turn of a KiSS server as it writes it, its moments on the
+// clock of the server, first and last null before the first chunk of the
+// round
+export interface Turn {
+	round: number;
+	phase: Phase;
+	name: string;
+	status: number;
+	attempt: number;
+	attempts: number;
+	since: number;
+	first: number | null;
+	last: number | null;
+	tokens: number;
+}
+
 // a form a tool of a KiSS server asks the user to fill in a turn of the
 // server, an MCP input request, under the name of the server that asks
 export interface Form {
@@ -82,9 +99,9 @@ export interface Conversation {
 	// the entry the thread ends on, none while the conversation is empty
 	leaf: string | null;
 	// in the page only, a conversation of a KiSS server while a turn of the
-	// server answers in it, and what that turn asks the user: a call to grant,
-	// or a form of one of its tools to fill
-	answering?: true;
+	// server answers in it, its pulse, and what that turn asks the user: a
+	// call to grant, or a form of one of its tools to fill
+	turn?: Turn;
 	asking?: Grant | Form;
 }
 

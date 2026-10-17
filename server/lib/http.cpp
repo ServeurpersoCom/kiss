@@ -26,7 +26,7 @@ static const char * const SITE_FILE = "client.conf";
 static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+)(/.*)?)";
 
 // the stream of the conversations, and the path of an action, captured
-static const char * const EVENTS_PATH = "/events";
+static const char * const EVENTS_PATH = "/conversations/events";
 static const std::string  ACTION_PATH = std::string("/conversations/(") + SYNC_ACTIONS + ")";
 
 // the name and the port of a Host header: example.com:8089, [::1]:8089

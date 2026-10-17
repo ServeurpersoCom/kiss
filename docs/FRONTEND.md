@@ -103,7 +103,7 @@ webui/src/modules/      one file per module: its keys, rules, checks, how it app
 webui/src/tools/        one file per tool, registered by existing: config, the CLI as the model
                         calls it
 webui/src/protocols/    one file per protocol an endpoint speaks: chat, messages, responses
-webui/src/lib/          the page side: agent, api, mcp, state, conversation, db
+webui/src/lib/          the page side: agent, api, mcp, form, state, sync, conversation, db
 webui/src/components/   thread, message, round, ask, dialog, composer, sidebar
 webui/src/markdown/     the remark and rehype stack and its incremental renderer
 webui/src/tokens.css    the tokens of the page, read as the keys of style
@@ -627,14 +627,18 @@ miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds 
 `set chat agent <server>` names a KiSS server, an item of `mcp`, whose agent answers the
 conversations opened from then on: a message goes to the server, which runs the turn, holds the
 conversation and writes it, the browser closed or not. The page follows the conversations of that
-server by one stream of events, beside those of the browser, and never writes one: retry, edit,
+server by one stream of events, the Conversations API of BACKEND.md, beside those of the browser,
+and never writes one: retry, edit,
 versions, pin, delete and Stop go to the server, and every page following it sees them. A command
 still runs on the page, its output entering the conversation through the server. The page a KiSS
 server serves names that server `backend` and makes it the agent; a page served elsewhere answers
 itself until a line names one. A call the server asks about shows on every page following the
 conversation as the consent card, and a form a tool of the server asks the user to fill as the cards
 of its fields, a secret in the masked field, a yes as a confirmation; the first page to answer sends
-it to the server, which withdraws the question from every page.
+it to the server, which withdraws the question from every page. The line under an answer the
+server writes is its pulse, read on the clock of the page. A stream silent for three seconds opens
+again, and a server that speaks another protocol of the events is followed no more, the console
+telling why.
 
 A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment
 it entered, and the conversation holds its leaf, the entry the thread ends on. The thread is the

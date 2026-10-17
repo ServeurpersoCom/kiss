@@ -22,7 +22,7 @@ import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
 import { redact, run, settings } from '../engine/run.js';
 import { held, pulse, type Pulse } from './pulse.js';
-import { act, agent, homed } from './sync.js';
+import { act, agent, homed, turnOf } from './sync.js';
 
 export { app };
 
@@ -32,8 +32,9 @@ const controllers = new Map<string, AbortController>();
 // and never through the state of the page
 const pulses = new Map<string, Pulse>();
 
-// the clock of the turn a conversation answers now, if any
-export const pulseOf = (id: string): Pulse | undefined => pulses.get(id);
+// the clock of the turn a conversation answers now, on the page or on its
+// server, if any
+export const pulseOf = (id: string): Pulse | undefined => pulses.get(id) ?? turnOf(id);
 
 // the question a conversation shows, the first it asks, if any
 export const askOf = (id: string | undefined): Posed | undefined =>

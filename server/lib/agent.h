@@ -6,23 +6,31 @@
 
 #include <string>
 
+// what keeps a turn from starting in a conversation where one runs
+constexpr const char * AGENT_BUSY = "a turn runs in this conversation";
+
+// the verdicts a user gives a call in consent: once, always, which turns the
+// tool on, or refuse
+constexpr const char * AGENT_VERDICTS[] = { "once", "always", "refuse" };
+
 // the model answers a message of the user in a conversation, from the path up
 // to it, the answer entering as a new entry beside those it had; the message
-// of what keeps it from starting, empty once it runs
+// of what keeps it from starting, AGENT_BUSY while a turn runs there, empty
+// once it runs
 std::string agent_answer(const std::string & id, const std::string & user);
 
 // whether a turn runs in a conversation
 bool agent_busy(const std::string & id);
 
-// what the user answers to what a turn asks in a conversation: once, always,
-// refuse; the message of what keeps it from reaching the turn, empty once it
-// does
+// what the user answers to the call a turn asks about in a conversation, one
+// of the verdicts; the message of what keeps it from reaching the turn, no
+// such question standing, empty once it does
 std::string agent_grant(const std::string & id, const std::string & verdict);
 
 // what the user answers to the form a turn asks them to fill in a
 // conversation: their response as JSON, {"action":"accept","content":{...}}
 // or {"action":"cancel"}; the message of what keeps it from reaching the
-// turn, empty once it does
+// turn, no such question standing, empty once it does
 std::string agent_fill(const std::string & id, const std::string & response);
 
 // the turn of a conversation stops: its request closes, no call runs after

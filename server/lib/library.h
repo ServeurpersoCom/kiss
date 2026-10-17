@@ -31,6 +31,10 @@ std::string library_change(const std::string &                                id
                            const std::function<std::string(conversation &)> & change,
                            const words_t &                                    secrets);
 
+// a conversation written to its file as it stands, its followers holding it
+// already; the message of what keeps it from being written, empty once it is
+std::string library_keep(const std::string & id, const words_t & secrets);
+
 // an entry a turn writes, grown as grow says, in memory only, every follower
 // woken: its strings only lengthen, its rounds and calls only come after
 // those it has, and a call gains its outcome once; false when the
@@ -39,9 +43,9 @@ bool library_grow(const std::string &                               id,
                   const std::string &                               entry,
                   const std::function<void(conversation_entry &)> & grow);
 
-// whether a turn answers in a conversation now, every follower woken; held
-// in memory only
-void library_answering(const std::string & id, bool answering);
+// the turn that answers in a conversation now, its pulse as JSON, none when
+// empty, every follower woken; held in memory only
+void library_turn(const std::string & id, const std::string & pulse);
 
 // what a turn asks the user in a conversation now, JSON, none when empty,
 // every follower woken; held in memory only
@@ -75,7 +79,7 @@ struct library_shape {
 struct library_held {
     uint64_t      version   = 0;
     uint64_t      structure = 0;
-    bool          answering = false;
+    std::string   turn;
     std::string   asking;
     library_shape shape;
 };
@@ -88,10 +92,15 @@ struct library_follower {
     uint64_t                            seen = 0;
 };
 
+// the version of the protocol of the events, which the first one names
+constexpr int LIBRARY_PROTOCOL = 1;
+
 // what a follower is to apply, as events: every conversation at its first
-// call; after it, a conversation changed otherwise than by growth, whole, one
-// gone, as null, whether a turn answers in it, true or null, what it asks
-// the user, the question or null, and what an entry a turn writes grew by: the text a string
-// gained, a round or a call that came, a call whole once its outcome came; it
-// waits up to wait_ms for a change, nothing when none came
+// call, with the protocol and the moment on the clock of conversation_now(),
+// which the moments of a pulse read on; after it, a conversation changed otherwise than by
+// growth, whole, one gone, as null, the turn that answers in it, its pulse or
+// null, what it asks the user, the question or null, and what an entry a turn
+// writes grew by: the text a string gained, a round or a call that came, a
+// call whole once its outcome came; it waits up to wait_ms for a change,
+// nothing when none came
 std::string library_follow(library_follower & f, int wait_ms, const words_t & secrets);

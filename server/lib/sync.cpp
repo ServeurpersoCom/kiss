@@ -11,6 +11,7 @@
 #include "yyjson.h"
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 
 // how long a stream waits for a change before it writes a comment, which
@@ -33,6 +34,18 @@ void sync_events(const httplib::Request & req, httplib::Response & res) {
         return true;
     });
 }
+
+// what keeps an action from being applied: the HTTP status that tells why,
+// none once applied
+struct refusal {
+    int         status = 0;
+    std::string why;
+};
+
+static const int MALFORMED = 400;
+static const int UNKNOWN   = 404;
+static const int CONFLICT  = 409;
+static const int FAILED    = 500;
 
 // a string field of the body, false when it has none
 static bool text_field(yyjson_val * body, const char * key, std::string & out) {
@@ -67,37 +80,72 @@ static std::string cut(const std::string & text, size_t characters) {
     return text.substr(0, i);
 }
 
-// a message of the user entering a conversation after the entry parent
-// names, else after the thread, the model answering it; the conversation
-// takes its title from it while it has none
-static std::string say(const std::string &                               id,
-                       const std::string &                               text,
-                       const std::optional<std::optional<std::string>> & parent = std::nullopt) {
-    std::string       user;
+// whether the library holds a conversation
+static bool known(const std::string & id) {
+    bool found = false;
+    library_each([&](const conversation & c) { found = found || c.id == id; });
+    return found;
+}
+
+// a conversation changed as change says, change refusing with its own status;
+// one gone is unknown, a file not written failed
+static refusal changed(const std::string & id, const std::function<refusal(conversation &)> & change) {
+    refusal           r;
     const std::string why = library_change(
         id,
         [&](conversation & c) {
-            if (c.title.empty()) {
-                c.title = cut(text, TITLE_LENGTH);
-            }
-            conversation_entry e;
-            e.role = ROLE_USER;
-            e.text = text;
-            user   = c.entries[conversation_append(c, parent ? *parent : c.leaf, e)].id;
-            return std::string();
+            r = change(c);
+            return r.why;
         },
         keychain_running());
-    return why.empty() ? agent_answer(id, user) : why;
+    if (why.empty()) {
+        return {};
+    }
+    return r.status ? r : refusal{ known(id) ? FAILED : UNKNOWN, why };
 }
 
-// the message of a busy conversation, which waits for its turn to end
-static const char * const BUSY = "a turn runs in this conversation";
+// the model answers a message of the user
+static refusal answer(const std::string & id, const std::string & user) {
+    const std::string why = agent_answer(id, user);
+    return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
+}
 
-// what the action does, the message of what keeps it from it, empty once
-// done; created names the conversation a line went in, opened by it when
-// the page named none
-static std::string act(const std::string & action, yyjson_val * body, std::string & created) {
+// a message of the user entering a conversation after the entry parent
+// names, else after the thread, the model answering it; the conversation
+// takes its title from it while it has none
+static refusal say(const std::string &                               id,
+                   const std::string &                               text,
+                   const std::optional<std::optional<std::string>> & parent = std::nullopt) {
+    std::string   user;
+    const refusal r = changed(id, [&](conversation & c) {
+        if (c.title.empty()) {
+            c.title = cut(text, TITLE_LENGTH);
+        }
+        conversation_entry e;
+        e.role = ROLE_USER;
+        e.text = text;
+        user   = c.entries[conversation_append(c, parent ? *parent : c.leaf, e)].id;
+        return refusal{};
+    });
+    return r.status ? r : answer(id, user);
+}
+
+// a response to a form: accept with its content, or cancel
+static bool a_response(yyjson_val * response) {
+    yyjson_val *      action = yyjson_obj_get(response, "action");
+    const std::string a      = yyjson_is_str(action) ? yyjson_get_str(action) : "";
+    return (a == "accept" && yyjson_is_obj(yyjson_obj_get(response, "content"))) || a == "cancel";
+}
+
+// what the action does, what keeps it from it as the body, the conversation
+// and the turn stand, in that order; created names the conversation a line
+// went in, opened by it when the page named none
+static refusal act(const std::string & action, yyjson_val * body, std::string & created) {
     std::string id, entry, text;
+    const bool  named = text_field(body, "id", id);
+    if (named && !known(id)) {
+        return { UNKNOWN, "unknown conversation \"" + id + "\"" };
+    }
     if (action == "send" || action == "command") {
         conversation_entry e;
         e.role          = action == "send" ? ROLE_USER : ROLE_CLI;
@@ -105,92 +153,101 @@ static std::string act(const std::string & action, yyjson_val * body, std::strin
         if (action == "send" ?
                 !text_field(body, "text", e.text) || trim(e.text).empty() :
                 !text_field(body, "input", e.input) || !text_field(body, "output", e.output) || !yyjson_is_bool(ok)) {
-            return action == "send" ? "the body holds no text" : "the body holds no input, output and ok";
+            return { MALFORMED,
+                     action == "send" ? "the body holds no text" : "the body holds no input, output and ok" };
         }
         e.ok = yyjson_get_bool(ok);
-        if (!text_field(body, "id", id)) {
+        if (named && action == "send" && agent_busy(id)) {
+            return { CONFLICT, AGENT_BUSY };
+        }
+        if (!named) {
             // a conversation the line opens, without a title until a message names it
             conversation c;
             c.id                  = conversation_uuid();
             c.updated             = conversation_now();
             const std::string why = library_create(c, keychain_running());
             if (!why.empty()) {
-                return why;
+                return { FAILED, why };
             }
             id = c.id;
-        } else if (action == "send" && agent_busy(id)) {
-            return BUSY;
         }
         created = id;
         if (action == "send") {
             return say(id, e.text);
         }
-        return library_change(
-            id,
-            [&](conversation & c) {
-                conversation_append(c, c.leaf, e);
-                return std::string();
-            },
-            keychain_running());
+        return changed(id, [&](conversation & c) {
+            conversation_append(c, c.leaf, e);
+            return refusal{};
+        });
     }
     if (action == "erase") {
         yyjson_val * ids = yyjson_obj_get(body, "ids");
         if (!yyjson_is_arr(ids)) {
-            return "the body names no ids";
+            return { MALFORMED, "the body names no ids" };
         }
-        words_t known, gone;
-        library_each([&](const conversation & c) { known.push_back(c.id); });
+        words_t      gone;
         size_t       i, n;
         yyjson_val * v;
         yyjson_arr_foreach(ids, i, n, v) {
             const std::string one = yyjson_is_str(v) ? yyjson_get_str(v) : "";
-            if (std::find(known.begin(), known.end(), one) == known.end()) {
-                return "unknown conversation \"" + one + "\"";
+            if (!known(one)) {
+                return { UNKNOWN, "unknown conversation \"" + one + "\"" };
             }
             gone.push_back(one);
         }
         for (const std::string & one : gone) {
             agent_stop(one);
         }
-        library_remove(gone);
-        return "";
+        try {
+            library_remove(gone);
+        } catch (const std::runtime_error & e) {
+            return { FAILED, e.what() };
+        }
+        return {};
     }
-    if (!text_field(body, "id", id)) {
-        return "the body names no id";
+    if (!named) {
+        return { MALFORMED, "the body names no id" };
     }
     if (action == "stop") {
         agent_stop(id);
-        return "";
+        return {};
     }
     if (action == "answer") {
         yyjson_val * response = yyjson_obj_get(body, "response");
-        if (yyjson_is_obj(response)) {
+        std::string  verdict;
+        if (response) {
+            if (!a_response(response)) {
+                return { MALFORMED, "the response is not accept with its content, nor cancel" };
+            }
             const std::shared_ptr<char> json(yyjson_val_write(response, 0, nullptr), free);
-            return agent_fill(id, json.get());
+            const std::string           why = agent_fill(id, json.get());
+            return why.empty() ? refusal{} : refusal{ CONFLICT, why };
         }
-        std::string verdict;
-        return text_field(body, "verdict", verdict) ? agent_grant(id, verdict) :
-                                                      "the body names no verdict and no response";
+        if (!text_field(body, "verdict", verdict)) {
+            return { MALFORMED, "the body names no verdict and no response" };
+        }
+        if (std::find_if(std::begin(AGENT_VERDICTS), std::end(AGENT_VERDICTS),
+                         [&](const char * v) { return verdict == v; }) == std::end(AGENT_VERDICTS)) {
+            return { MALFORMED, "\"" + verdict + "\" is not once, always or refuse" };
+        }
+        const std::string why = agent_grant(id, verdict);
+        return why.empty() ? refusal{} : refusal{ CONFLICT, why };
     }
-    const words_t secrets = keychain_running();
     if (action == "pin") {
         yyjson_val * pinned = yyjson_obj_get(body, "pinned");
         if (!yyjson_is_bool(pinned)) {
-            return "the body says no pinned";
+            return { MALFORMED, "the body says no pinned" };
         }
-        return library_change(
-            id,
-            [&](conversation & c) {
-                c.pinned = yyjson_get_bool(pinned);
-                return std::string();
-            },
-            secrets);
+        return changed(id, [&](conversation & c) {
+            c.pinned = yyjson_get_bool(pinned);
+            return refusal{};
+        });
     }
     if (!text_field(body, "entry", entry)) {
-        return "the body names no entry";
+        return { MALFORMED, "the body names no entry" };
     }
-    if (agent_busy(id)) {
-        return BUSY;
+    if (action == "edit" && (!text_field(body, "text", text) || trim(text).empty())) {
+        return { MALFORMED, "the body holds no text" };
     }
     // the entry as the conversation holds it, a copy
     std::optional<conversation_entry> found;
@@ -202,75 +259,61 @@ static std::string act(const std::string & action, yyjson_val * body, std::strin
             }
         }
     });
+    if (!found) {
+        return { UNKNOWN, "unknown entry \"" + entry + "\"" };
+    }
+    if (action == "edit" && found->role != ROLE_USER) {
+        return { MALFORMED, "\"" + entry + "\" is not a message of the user" };
+    }
+    if (action == "retry" && found->role == ROLE_CLI) {
+        return { MALFORMED, "\"" + entry + "\" is not a message of the user nor an answer" };
+    }
+    if (action == "drop" && found->role != ROLE_CLI) {
+        return { MALFORMED, "\"" + entry + "\" is not a command" };
+    }
+    if (agent_busy(id)) {
+        return { CONFLICT, AGENT_BUSY };
+    }
     if (action == "edit") {
-        if (!text_field(body, "text", text) || trim(text).empty()) {
-            return "the body holds no text";
-        }
-        if (!found || found->role != ROLE_USER) {
-            return "\"" + entry + "\" is not a message of the user";
-        }
-        return found->text == text ? "" : say(id, text, found->parent);
+        return found->text == text ? refusal{} : say(id, text, found->parent);
     }
     if (action == "retry") {
-        if (!found || found->role == ROLE_CLI) {
-            return "\"" + entry + "\" is not a message of the user nor an answer";
-        }
-        return agent_answer(id, found->role == ROLE_ASSISTANT ? *found->parent : entry);
+        return answer(id, found->role == ROLE_ASSISTANT ? *found->parent : entry);
     }
     if (action == "browse") {
-        return library_change(
-            id,
-            [&](conversation & c) {
-                if (!entry_of(c, entry)) {
-                    return "unknown entry \"" + entry + "\"";
-                }
-                c.leaf = conversation_latest(c, entry);
-                return std::string();
-            },
-            secrets);
+        return changed(id, [&](conversation & c) {
+            c.leaf = conversation_latest(c, entry);
+            return refusal{};
+        });
     }
-    bool              empty = false;
-    const std::string why   = library_change(
-        id,
-        [&](conversation & c) {
-            const conversation_entry * e = entry_of(c, entry);
-            if (!e) {
-                return "unknown entry \"" + entry + "\"";
-            }
-            if (e->role != ROLE_CLI) {
-                return "\"" + entry + "\" is not a command";
-            }
-            conversation_drop(c, entry);
-            empty = c.entries.empty();
-            return std::string();
-        },
-        secrets);
-    if (why.empty() && empty) {
+    bool          empty = false;
+    const refusal r     = changed(id, [&](conversation & c) {
+        conversation_drop(c, entry);
+        empty = c.entries.empty();
+        return refusal{};
+    });
+    if (!r.status && empty) {
         library_remove({ id });
     }
-    return why;
+    return r;
 }
 
 void sync_action(const httplib::Request & req, httplib::Response & res, const std::string & action) {
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(req.body.data(), req.body.size(), 0), yyjson_doc_free);
     yyjson_val *                      body = doc ? yyjson_doc_get_root(doc.get()) : nullptr;
-    std::string                       why  = yyjson_is_obj(body) ? "" : "the body is no JSON object";
     std::string                       created;
-    try {
-        if (why.empty()) {
-            why = act(action, body, created);
-        }
-    } catch (const std::runtime_error & e) {
-        why = e.what();
-    }
-    if (!why.empty()) {
-        log_error("Sync", "%s %s: %s", req.remote_addr.c_str(), action.c_str(), why.c_str());
-        res.status = 400;
-        res.set_content(why + "\n", "text/plain");
+    const refusal                     r =
+        yyjson_is_obj(body) ? act(action, body, created) : refusal{ MALFORMED, "the body is no JSON object" };
+    yyjson_val *      id    = yyjson_obj_get(body, "id");
+    const std::string named = yyjson_is_str(id) ? yyjson_get_str(id) : created;
+    if (r.status) {
+        log_error("Sync", "%s %s %.8s: %s", req.remote_addr.c_str(), action.c_str(), named.c_str(), r.why.c_str());
+        res.status = r.status;
+        res.set_content(r.why + "\n", "text/plain");
         return;
     }
-    log_info("Sync", "%s %s %s", req.remote_addr.c_str(), action.c_str(), req.body.c_str());
-    if (action == "send" || action == "command") {
+    log_info("Sync", "%s %s %.8s", req.remote_addr.c_str(), action.c_str(), named.c_str());
+    if (!created.empty()) {
         res.set_content("{\"id\":\"" + created + "\"}", "application/json");
         return;
     }

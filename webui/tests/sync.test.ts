@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigReader } from '../src/engine/engine.js';
 import { app } from '../src/lib/app.svelte.js';
-import { act, follow, homed } from '../src/lib/sync.js';
+import { SYNC_RETRY_MS, SYNC_SILENCE_MS, act, follow, homed, turnOf } from '../src/lib/sync.js';
 
 // the browser database stays out: the conversations live in the page alone
 vi.mock('../src/lib/db.js', () => ({
@@ -39,10 +39,12 @@ function server() {
 	let push: (event: object) => void = () => {};
 	vi.stubGlobal('fetch', async (url: URL, init?: RequestInit) => {
 		sent.push({ url: String(url), init });
-		if (String(url).endsWith('/events')) {
+		if (String(url).endsWith('/conversations/events')) {
 			const body = new ReadableStream<Uint8Array>({
 				start(c) {
 					push = (e) => c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));
+					// a request aborted errors its body, as fetch does
+					init?.signal?.addEventListener('abort', () => c.error(init.signal!.reason));
 				}
 			});
 			return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
@@ -54,6 +56,9 @@ function server() {
 	return { sent, push: (e: object) => push(e) };
 }
 
+// the moment of the server as the first event of a stream gives it
+const NOW = 1_760_000_000_000;
+
 afterEach(() => {
 	follow(config(''));
 	vi.unstubAllGlobals();
@@ -62,26 +67,49 @@ afterEach(() => {
 describe('the conversations of a KiSS server', () => {
 	it('follow the stream: every one, each change whole, what a turn grows, the turn, one gone', async () => {
 		const s = server();
+		const turn = {
+			round: 2,
+			phase: 'writing',
+			name: '',
+			status: 0,
+			attempt: 0,
+			attempts: 0,
+			since: NOW - 1500,
+			first: NOW - 1000,
+			last: NOW - 200,
+			tokens: 9
+		};
 		app.conversations = [];
 		follow(config('backend'));
-		await vi.waitFor(() => expect(s.sent[0]?.url).toBe('http://kiss/events'));
+		await vi.waitFor(() => expect(s.sent[0]?.url).toBe('http://kiss/conversations/events'));
 		expect(new Headers(s.sent[0].init?.headers).get('authorization')).toBe('Bearer k');
 		s.push({
 			set: [],
-			value: { conversations: [conversation('a', 'A', 1), conversation('b', 'B', 2)] }
+			value: {
+				protocol: 1,
+				now: NOW,
+				conversations: [conversation('a', 'A', 1), conversation('b', 'B', 2)]
+			}
 		});
 		await vi.waitFor(() => expect(app.conversations.map((c) => c.id)).toEqual(['b', 'a']));
 		expect(homed('a') && homed('b')).toBe(true);
 
-		s.push({ set: ['a', 'answering'], value: true });
+		s.push({ set: ['a', 'turn'], value: turn });
 		s.push({ add: ['a', 'entries', 1, 'rounds'], value: { reasoning: '', text: '', calls: [] } });
 		s.push({ add: ['a', 'entries', 1, 'rounds', 0, 'text'], text: 'Hel' });
 		s.push({ add: ['a', 'entries', 1, 'rounds', 0, 'text'], text: 'lo' });
 		await vi.waitFor(() => expect(app.replies.a?.rounds[0]?.text).toBe('Hello'));
+		// the moments of the server read on the clock of the page, its moment
+		// NOW the time the first event came
+		const p = turnOf('a')!;
+		expect([p.round, p.phase, p.tokens, p.last - p.first]).toEqual([2, 'writing', 9, 800]);
+		expect(performance.now() - p.since).toBeGreaterThanOrEqual(1500);
+		expect(performance.now() - p.since).toBeLessThan(2500);
 		expect(app.replies.a).toBe(app.conversations.find((c) => c.id === 'a')!.entries[1]);
 
-		s.push({ set: ['a', 'answering'], value: null });
+		s.push({ set: ['a', 'turn'], value: null });
 		await vi.waitFor(() => expect('a' in app.replies).toBe(false));
+		expect(turnOf('a')).toBeUndefined();
 		s.push({ set: ['a'], value: { ...conversation('a', 'A2', 3), pinned: true } });
 		await vi.waitFor(() =>
 			expect(app.conversations[0]).toMatchObject({ id: 'a', title: 'A2', pinned: true })
@@ -96,7 +124,7 @@ describe('the conversations of a KiSS server', () => {
 		app.conversations = [];
 		app.asks = [];
 		follow(config('backend'));
-		s.push({ set: [], value: { conversations: [conversation('a', 'A', 1)] } });
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		const request = { kind: 'call', tool: 'web_search_exa', args: '{"q":"x"}' };
 		s.push({ set: ['a', 'asking'], value: request });
 		await vi.waitFor(() => expect(app.asks.map((q) => q.from)).toEqual(['a']));
@@ -120,7 +148,7 @@ describe('the conversations of a KiSS server', () => {
 		app.conversations = [];
 		app.asks = [];
 		follow(config('backend'));
-		s.push({ set: [], value: { conversations: [conversation('a', 'A', 1)] } });
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		const form = (fields: Record<string, string>) => ({
 			kind: 'form',
 			server: 'forge',
@@ -175,7 +203,7 @@ describe('the conversations of a KiSS server', () => {
 		const s = server();
 		app.conversations = [];
 		follow(config('backend'));
-		s.push({ set: [], value: { conversations: [conversation('a', 'A', 1)] } });
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		await vi.waitFor(() => expect(app.conversations.length).toBe(1));
 		expect(await act('send', { text: 'hi' })).toEqual({ id: 'n' });
 		const post = s.sent.find((r) => r.url === 'http://kiss/conversations/send')!;
@@ -185,5 +213,38 @@ describe('the conversations of a KiSS server', () => {
 		follow(config(''));
 		expect(app.conversations).toEqual([]);
 		expect(homed('a')).toBe(false);
+	});
+
+	it('follow no server that speaks another protocol', async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const s = server();
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+		app.conversations = [];
+		follow(config('backend'));
+		s.push({ set: [], value: { protocol: 2, now: 0, conversations: [conversation('a', 'A', 1)] } });
+		await vi.waitFor(() =>
+			expect(errors).toHaveBeenCalledWith(expect.stringContaining('protocol 2'))
+		);
+		await vi.advanceTimersByTimeAsync(SYNC_SILENCE_MS + SYNC_RETRY_MS + 100);
+		expect(app.conversations).toEqual([]);
+		expect(s.sent.length).toBe(1);
+		errors.mockRestore();
+		vi.useRealTimers();
+	});
+
+	it('open the stream again once it stays silent', async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const s = server();
+		app.conversations = [];
+		follow(config('backend'));
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
+		await vi.waitFor(() => expect(app.conversations.length).toBe(1));
+		await vi.advanceTimersByTimeAsync(SYNC_SILENCE_MS - 500);
+		s.push({ set: ['a', 'pinned'], value: true });
+		await vi.advanceTimersByTimeAsync(SYNC_SILENCE_MS - 500);
+		expect(s.sent.length).toBe(1);
+		await vi.advanceTimersByTimeAsync(500 + SYNC_RETRY_MS + 100);
+		expect(s.sent.length).toBe(2);
+		vi.useRealTimers();
 	});
 });

@@ -134,8 +134,9 @@ server/lib/conversation.cpp|h
                            the conversations as a file, read as the page reads it
 server/lib/library.cpp|h   the conversations of the server, a file each in conversations/, and
                            what each follower is to apply
-server/lib/sync.cpp|h      the stream of events of the conversations and the actions of a page
+server/lib/sync.cpp|h      the Conversations API: the stream of events and the actions of a page
 server/lib/agent.cpp|h     the agent: a turn per conversation, on its own thread
+server/lib/pulse.cpp|h     the clock of a turn, the twin of pulse.ts of the page
 server/lib/api.cpp|h       the client of the endpoints: the model list, a reply streamed
 server/lib/mcp.cpp|h       the client of the MCP servers the agent calls
 server/lib/remote.cpp|h    a server an item names: its url, key and headers, and their rules
@@ -313,41 +314,110 @@ conversation with its file.
 
 The pages that show them follow them, as many as are open, and never write one: the server alone
 changes a conversation, its file written whole again through a file beside it renamed over it, then
-tells every page.
+tells every page. A page shows what the server holds and sends what its user does; the turns, the
+tools, the MCP servers, the questions to the user and the files are all the server's. The
+conversations a page keeps in its own browser stay there.
 
-- `GET /events`, beside the MCP, is a stream of events: the first sets every conversation, each
-  next one sets a conversation that changed, whole, or one that went, as null.
+### Conversations API
 
-  ```
-  data: {"set":[],"value":{"conversations":[...]}}
-  data: {"set":["<id>"],"value":{...}}
-  data: {"set":["<id>"],"value":null}
-  ```
+All of it lives under `/conversations`, behind the key of the server as the MCP is: `Authorization:
+Bearer <server key>`, 401 without it, and the same CORS. Nothing else of the server serves a
+conversation.
 
-  The server keeps no log of events: it holds the version of each conversation a page has, and a
-  page that comes back gets every conversation as it stands. A comment each second tells a page that
-  left; the stream ends when the listener moves.
-- `POST /conversations/<action>` applies an action of the user, a JSON body, and answers 204, or 400
-  with why not: `send {text, id?}`, a message after the thread, the agent answering it, and
-  `command {input, output, ok, id?}`, a command the page ran, both opening a conversation without
-  id and answered with `{id}`; `edit {id, entry, text}`, a version beside a message of the
-  user; `retry {id, entry}`, a new answer to a message or beside an answer; `stop {id}`;
-  `answer {id, verdict}` or `answer {id, response}`, the question of the turn settled, `pin {id,
-  pinned}`, `browse {id, entry}`, the thread going to the last entry written under that one, `drop
-  {id, entry}`, a command entry leaving, its conversation going when it was the last one, `erase
-  {ids}`. While a turn runs
-  in a conversation, every action on it but `stop`, `answer`, `pin` and `erase` waits for it to end.
-- While a turn answers in a conversation, `{"set":["<id>","answering"],"value":true}` tells it, and
-  `null` once it ended; `{"set":["<id>","asking"],"value":{...}}` poses its question, and `null`
-  once settled.
-- A turn that grows its answer sends what it gained, never the conversation again: the text a
-  string gained, a round or a call that came, a call whole once its outcome came.
+#### Reading: `GET /conversations/events`
 
-  ```
-  data: {"add":["<id>","entries",3,"rounds",0,"text"],"text":"Hel"}
-  data: {"add":["<id>","entries",3,"rounds"],"value":{...}}
-  data: {"set":["<id>","entries",3,"rounds",0,"calls",0],"value":{...}}
-  ```
+A stream of events, `text/event-stream`, one JSON object per `data:` line. The server keeps no log
+of events: it holds, for each page, what that page has, and sends what it lacks, so a page that
+comes back gets every conversation as it stands. The first event sets every conversation, with the
+protocol of the events and the moment of the server on its clock, in milliseconds since 1970; a
+page that does not read that protocol stops following the server and says so.
+
+```
+data: {"set":[],"value":{"protocol":1,"now":1792220666396,"conversations":[...]}}
+```
+
+Every next event changes what the page holds at its path, conversations by id, then the keys and
+indices of the file format:
+
+| Event | What it does |
+|---|---|
+| `{"set":["<id>"],"value":{...}}` | a conversation that came or changed, whole |
+| `{"set":["<id>"],"value":null}` | a conversation gone |
+| `{"add":[...],"text":"..."}` | the text a string of a turn gained |
+| `{"add":[...],"value":{...}}` | a round or a call that came to a turn |
+| `{"set":[...,"calls",<n>],"value":{...}}` | a call whole, once its outcome came |
+| `{"set":["<id>","turn"],"value":{...}}` | the pulse of the turn that answers, `null` once it ended |
+| `{"set":["<id>","asking"],"value":{...}}` | the question the turn asks the user, `null` once settled |
+
+A turn sends what it gains, never the conversation again; a change of anything else sends the
+conversation whole, with its turn and its question after it.
+
+```
+data: {"add":["<id>","entries",3,"rounds",0,"text"],"text":"Hel"}
+data: {"add":["<id>","entries",3,"rounds"],"value":{"reasoning":"","text":"","calls":[]}}
+data: {"set":["<id>","entries",3,"rounds",0,"calls",0],"value":{...}}
+```
+
+The pulse is the line a page shows under the answer, its moments on the clock of the server:
+`{"round","phase","name","status","attempt","attempts","since","first","last","tokens"}`, the phase
+one of `preparing`, `waiting`, `retrying`, `thinking`, `writing`, `calling` and `running`, since
+when it began, the endpoint or the tool it names, the status, attempt and attempts of an endpoint
+asked again, and the first and last chunk of the round with its tokens, `null` before them. It
+changes as the turn does; a page reads its moments on its own clock from `now`, and runs the line
+itself.
+
+The question is `{"kind":"call","tool":...,"args":...}` for a call in `consent`, or
+`{"kind":"form","server":...,"input":...}` for a form a tool asks the user to fill, `input` the MCP
+input request of an `elicitation/create` form (see The agent).
+
+A comment line comes each second the stream stays quiet; a page that hears nothing for three
+seconds counts the connection as gone and opens the stream again. The stream ends when the
+listener moves.
+
+#### Acting: `POST /conversations/<action>`
+
+A JSON body; the server applies the action and every page, the one that sent it included, sees the
+outcome through its stream. An action answers no state.
+
+| Action | Body | What it does |
+|---|---|---|
+| `send` | `{text, id?}` | a message after the thread, a turn answering it |
+| `command` | `{input, output, ok, id?}` | a command the page ran, after the thread |
+| `edit` | `{id, entry, text}` | a version beside a message of the user, a turn answering it |
+| `retry` | `{id, entry}` | a new answer to a message, or beside an answer |
+| `browse` | `{id, entry}` | the thread goes to the last entry written under that one |
+| `stop` | `{id}` | the turn stops |
+| `answer` | `{id, verdict}` or `{id, response}` | the question of the turn settled, the first answer winning |
+| `pin` | `{id, pinned}` | the conversation pinned or not |
+| `drop` | `{id, entry}` | a command entry leaves, its conversation going when it was the last one |
+| `erase` | `{ids}` | the conversations go, files and all |
+
+`send` and `command` without `id` open a conversation. The verdict is `once`, `always` or `refuse`;
+the response is `{"action":"accept","content":{...}}` or `{"action":"cancel"}`.
+
+| Status | When |
+|---|---|
+| 204 | applied |
+| 200 `{id}` | applied by `send` or `command`, with the conversation it went in |
+| 400 | a body that does not hold: not JSON, a field missing or of the wrong kind, an entry of the wrong role |
+| 404 | a conversation or an entry the server does not hold |
+| 409 | a turn runs, for every action on its conversation but `stop`, `answer`, `pin`, `command` and `erase`; or `answer` while no such question stands |
+| 500 | a file not written |
+
+Every refusal tells why in its body, one line of text. The log names each action and its
+conversation, never its body.
+
+#### Laws
+
+- A page that applies every event it got, in order, holds what a page that just came gets, through
+  any run of changes, read at any pace: the build checks it against thousands of random changes of
+  every kind, read by three pages at three paces.
+- An entry that settled never changes: every edit, retry and version adds entries and moves the
+  leaf.
+- One turn at a time answers in a conversation, and the server alone writes it.
+- No secret leaves the server: the file, the events and what the model reads are sealed.
+- The turn and its question live in memory alone; the file holds what settled, written before
+  every call of a turn.
 
 ## Running
 
@@ -719,8 +789,8 @@ speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL else
 ## HTTP and security
 
 - `GET /` serves the embedded page, `GET /client.conf` the site configuration, `POST /mcp` the MCP,
-  `/proxy/<name>` the servers it proxies, `GET /events` and `POST /conversations/<action>` the
-  conversations, behind the same checks.
+  `/proxy/<name>` the servers it proxies, `/conversations` the conversations (see Conversations
+  API), behind the same checks.
   The site configuration is `client.conf` of the directory the server runs in, else the one it
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.

@@ -11,12 +11,11 @@
 #include "lib/library.h"
 #include "lib/log.h"
 #include "lib/mcp.h"
+#include "lib/pulse.h"
 #include "lib/tools.h"
 #include "yyjson.h"
 
 #include <algorithm>
-#include <chrono>
-#include <cmath>
 #include <condition_variable>
 #include <map>
 #include <memory>
@@ -42,14 +41,8 @@ struct question_t {
     std::string             verdict;
 };
 
-// the verdicts a user gives a call in consent
-static const char * const VERDICTS[] = { "once", "always", "refuse" };
-static const char * const ALWAYS     = "always";
-static const char * const REFUSE     = "refuse";
-
-// the actions of a response to a form
-static const char * const ACCEPT = "accept";
-static const char * const CANCEL = "cancel";
+static const char * const ALWAYS = AGENT_VERDICTS[1];
+static const char * const REFUSE = AGENT_VERDICTS[2];
 
 // the question each turn waits on, by conversation
 static std::map<std::string, std::shared_ptr<question_t>> g_questions;
@@ -91,9 +84,6 @@ static std::string standing(const std::string & id, bool form) {
 }
 
 std::string agent_grant(const std::string & id, const std::string & verdict) {
-    if (std::find(std::begin(VERDICTS), std::end(VERDICTS), verdict) == std::end(VERDICTS)) {
-        return "\"" + verdict + "\" is not once, always or refuse";
-    }
     const std::string why = standing(id, false);
     if (why.empty()) {
         settle_question(id, verdict);
@@ -102,16 +92,6 @@ std::string agent_grant(const std::string & id, const std::string & verdict) {
 }
 
 std::string agent_fill(const std::string & id, const std::string & response) {
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
-    yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
-    yyjson_val *                      action = yyjson_obj_get(root, "action");
-    const std::string                 a      = yyjson_is_str(action) ? yyjson_get_str(action) : "";
-    if (a != ACCEPT && a != CANCEL) {
-        return "the response is not accept or cancel";
-    }
-    if (a == ACCEPT && !yyjson_is_obj(yyjson_obj_get(root, "content"))) {
-        return "the response accepts no content";
-    }
     const std::string why = standing(id, true);
     if (why.empty()) {
         settle_question(id, response);
@@ -213,37 +193,9 @@ static setup_t setup(api_stop & stop) {
     return s;
 }
 
-// what a turn spent: its tokens, and in milliseconds, generating them, the
-// first chunk of the round to its last, and in all
-struct spent_t {
-    double tokens     = 0;
-    double generation = 0;
-    double round      = 0;
-    double first      = -1;
-    double last       = -1;
-
-    void chunk(bool token, double now) {
-        if (first < 0) {
-            first = now;
-        }
-        last = now;
-        round += token ? 1 : 0;
-    }
-
-    void close(std::optional<double> usage) {
-        if (first < 0) {
-            return;
-        }
-        tokens += usage ? *usage : round;
-        generation += last - first;
-        first = last = -1;
-        round        = 0;
-    }
-};
-
-static double now_ms() {
-    using namespace std::chrono;
-    return duration<double, std::milli>(steady_clock::now().time_since_epoch()).count();
+// the pulse of a turn as every page following its conversation shows it
+static void beat(const std::string & id, const pulse & p) {
+    library_turn(id, pulse_json(p));
 }
 
 // the reply as the library holds it
@@ -274,14 +226,16 @@ static void grow(const std::string &                               id,
 
 // the conversation written as it settled, its reply holding its sent calls
 static void keep(const std::string & id) {
-    library_change(id, [](conversation &) { return std::string(); }, keychain_running());
+    library_keep(id, keychain_running());
 }
 
 // what the user answers a question of a turn, the question shown to every
-// page following the conversation while it stands
-static std::string ask(const std::string & id, const std::string & question, bool form, api_stop & stop) {
-    const auto q = std::make_shared<question_t>();
-    q->form      = form;
+// page following the conversation while it stands, the time it stands taken
+// out of the pulse
+static std::string ask(const std::string & id, const std::string & question, bool form, api_stop & stop, pulse & p) {
+    const double asked = pulse_now();
+    const auto   q     = std::make_shared<question_t>();
+    q->form            = form;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_questions[id] = q;
@@ -298,6 +252,8 @@ static std::string ask(const std::string & id, const std::string & question, boo
         g_questions.erase(id);
     }
     library_asking(id, "");
+    pulse_held(p, pulse_now() - asked);
+    beat(id, p);
     if (stop.stopped) {
         throw api_error("Stopped");
     }
@@ -309,7 +265,8 @@ static std::string ask(const std::string & id, const std::string & question, boo
 static std::string fill(const std::string & id,
                         const std::string & server,
                         const std::string & input,
-                        api_stop &          stop) {
+                        api_stop &          stop,
+                        pulse &             p) {
     const std::shared_ptr<yyjson_doc>     in(yyjson_read(input.data(), input.size(), 0), yyjson_doc_free);
     const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
     yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
@@ -319,7 +276,7 @@ static std::string fill(const std::string & id,
     yyjson_mut_obj_add_val(made.get(), q, "input", yyjson_val_mut_copy(made.get(), yyjson_doc_get_root(in.get())));
     const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
     log_info("Agent", "%.8s asks the user to fill a form of %s", id.c_str(), server.c_str());
-    return ask(id, question.get(), true, stop);
+    return ask(id, question.get(), true, stop, p);
 }
 
 // a call runs and its outcome enters it: a call reaches a tool not off as the
@@ -333,6 +290,7 @@ static void call(const std::string &           id,
                  size_t                        r,
                  size_t                        c,
                  api_stop &                    stop,
+                 pulse &                       p,
                  const std::vector<mcp_tool> & served) {
     const conversation_call called = reply_of(id, entry).rounds[r].calls[c];
     std::optional<tool>     found;
@@ -381,7 +339,7 @@ static void call(const std::string &           id,
         yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
         const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
         log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
-        const std::string verdict = ask(id, question.get(), false, stop);
+        const std::string verdict = ask(id, question.get(), false, stop, p);
         log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
         if (verdict == REFUSE) {
             settle(called.args, "The user refused the call", false, {});
@@ -402,7 +360,7 @@ static void call(const std::string &           id,
     if (server) {
         // every text the user types in a form of the server is sealed from then on
         const auto answer = [&](const std::string & input) {
-            const std::string                 response = fill(id, server->name, input, stop);
+            const std::string                 response = fill(id, server->name, input, stop, p);
             const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0),
                                                        yyjson_doc_free);
             size_t                            i, n;
@@ -446,7 +404,7 @@ static void call(const std::string &           id,
         yyjson_mut_doc_set_root(made.get(), input);
         tools_form(made.get(), input, out);
         const std::shared_ptr<char> form(yyjson_mut_write(made.get(), 0, nullptr), free);
-        const std::string           response = fill(id, engine_get("server hostname").value_or(""), form.get(), stop);
+        const std::string response = fill(id, engine_get("server hostname").value_or(""), form.get(), stop, p);
         const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
         if (!tools_typed(yyjson_doc_get_root(answered.get()), typed)) {
             settle(called.args, "The user answered nothing", false, {});
@@ -484,7 +442,10 @@ static bool round(const std::string &                     id,
                   const std::vector<conversation_entry> & before,
                   size_t                                  r,
                   api_stop &                              stop,
-                  spent_t &                               spent) {
+                  pulse &                                 p) {
+    p.round = (int) r + 1;
+    pulse_mark(p, PHASE_PREPARING, "", pulse_now());
+    beat(id, p);
     const setup_t     s     = setup(stop);
     const auto        pick  = api_pick(s.endpoints, s.chosen, stop);
     const endpoint &  e     = pick.first;
@@ -508,64 +469,83 @@ static bool round(const std::string &                     id,
         req.info = api_describe(e, model, stop);
     }
     log_info("Agent", "%.8s round %zu: %s/%s", id.c_str(), r + 1, e.server.name.c_str(), model.c_str());
+    pulse_mark(p, PHASE_WAITING, e.server.name, pulse_now());
+    beat(id, p);
     grow(id, entry, stop, [](conversation_entry & x) { x.rounds.emplace_back(); });
     // the calls of the round by the index the stream gives them
     std::map<int, size_t> calls;
     std::optional<double> usage;
+    // the call the stream writes now
+    std::string           calling;
     api_chat(
         e, req, stop,
         [&](const api_delta & d) {
-            const double now = now_ms();
+            const double now = pulse_now();
             if (d.usage) {
                 usage = d.usage;
             }
-            spent.chunk(!d.content.empty() || !d.reasoning.empty() || !d.calls.empty(), now);
+            pulse_chunk(p, !d.content.empty() || !d.reasoning.empty() || !d.calls.empty(), now);
             if (d.content.empty() && d.reasoning.empty() && d.calls.empty()) {
                 return;
+            }
+            if (!d.reasoning.empty()) {
+                pulse_mark(p, PHASE_THINKING, "", now);
+            }
+            if (!d.content.empty()) {
+                pulse_mark(p, PHASE_WRITING, "", now);
             }
             grow(id, entry, stop, [&](conversation_entry & x) {
                 conversation_round & round = x.rounds[r];
                 round.reasoning += d.reasoning;
                 round.text += d.content;
-                for (const api_call_piece & p : d.calls) {
-                    if (!calls.count(p.index)) {
+                for (const api_call_piece & piece : d.calls) {
+                    if (!calls.count(piece.index)) {
                         conversation_call c;
-                        c.id = "call-" + std::to_string(r) + "-" + std::to_string(p.index);
+                        c.id = "call-" + std::to_string(r) + "-" + std::to_string(piece.index);
                         round.calls.push_back(c);
-                        calls[p.index] = round.calls.size() - 1;
+                        calls[piece.index] = round.calls.size() - 1;
                     }
-                    conversation_call & c = round.calls[calls[p.index]];
-                    if (!p.id.empty()) {
-                        c.id = p.id;
+                    conversation_call & c = round.calls[calls[piece.index]];
+                    if (!piece.id.empty()) {
+                        c.id = piece.id;
                     }
-                    c.name += p.name;
-                    c.args += p.args;
+                    c.name += piece.name;
+                    c.args += piece.args;
+                    calling = c.name;
                 }
             });
+            if (!d.calls.empty()) {
+                pulse_mark(p, PHASE_CALLING, calling, now);
+            }
+            beat(id, p);
         },
         [&](int status, int attempt, int attempts) {
             log_info("Agent", "%.8s %s answers %d, attempt %d/%d", id.c_str(), e.server.name.c_str(), status, attempt,
                      attempts);
+            pulse_retry(p, e.server.name, status, attempt, attempts, pulse_now());
+            beat(id, p);
         });
-    spent.close(usage);
+    pulse_close(p, usage);
     const size_t n = reply_of(id, entry).rounds[r].calls.size();
     for (size_t c = 0; c < n; c++) {
         if (stop.stopped) {
             throw api_error("Stopped");
         }
-        call(id, entry, r, c, stop, s.served);
+        pulse_mark(p, PHASE_RUNNING, reply_of(id, entry).rounds[r].calls[c].name, pulse_now());
+        beat(id, p);
+        call(id, entry, r, c, stop, p, s.served);
     }
     return n > 0;
 }
 
 // one turn, rounds streamed until a round calls nothing; after a stop no call
-// runs, and the reply keeps what settled before it, with what it spent
+// runs, and the reply keeps what settled before it, with what it spent once
+// it streamed anything; the pulse follows the turn chunk by chunk
 static void turn(std::string                     id,
                  std::string                     entry,
                  std::vector<conversation_entry> before,
-                 std::shared_ptr<api_stop>       stop) {
-    const double               start = now_ms();
-    spent_t                    spent;
+                 std::shared_ptr<api_stop>       stop,
+                 pulse                           p) {
     std::optional<std::string> error;
     size_t                     r = 0;
     try {
@@ -574,7 +554,7 @@ static void turn(std::string                     id,
             [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
-            more = round(id, entry, before, r, *stop, spent);
+            more = round(id, entry, before, r, *stop, p);
         }
         if (more) {
             error = "Stopped after " + std::to_string(r) + " tool rounds";
@@ -582,8 +562,7 @@ static void turn(std::string                     id,
     } catch (const std::exception & e) {
         error = explain(e, *stop);
     }
-    spent.close(std::nullopt);
-    const double system = now_ms() - start;
+    const std::optional<conversation_stats> spent = pulse_stats(p, pulse_now());
     library_change(
         id,
         [&](conversation & c) {
@@ -591,16 +570,16 @@ static void turn(std::string                     id,
                 if (e.id == entry) {
                     e.rounds = conversation_settled(e.rounds);
                     e.error  = error;
-                    if (spent.tokens > 0) {
-                        e.stats = conversation_stats{ spent.tokens, std::round(spent.generation), std::round(system) };
+                    if (spent) {
+                        e.stats = *spent;
                     }
                 }
             }
             return std::string();
         },
         keychain_running());
-    log_info("Agent", "%.8s %s in %.0f ms", id.c_str(), error ? error->c_str() : "answered", system);
-    library_answering(id, false);
+    log_info("Agent", "%.8s %s in %.0f ms", id.c_str(), error ? error->c_str() : "answered", pulse_now() - p.start);
+    library_turn(id, "");
     std::lock_guard<std::mutex> lock(g_mutex);
     g_turns.erase(id);
 }
@@ -610,7 +589,7 @@ std::string agent_answer(const std::string & id, const std::string & user) {
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         if (g_turns.count(id)) {
-            return "a turn runs in this conversation";
+            return AGENT_BUSY;
         }
         g_turns[id] = stop;
     }
@@ -641,7 +620,8 @@ std::string agent_answer(const std::string & id, const std::string & user) {
         g_turns.erase(id);
         return why;
     }
-    library_answering(id, true);
-    std::thread(turn, id, entry, before, stop).detach();
+    const pulse p = pulse_start(pulse_now());
+    beat(id, p);
+    std::thread(turn, id, entry, before, stop, p).detach();
     return "";
 }
