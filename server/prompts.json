@@ -151,5 +151,8 @@
 		"server": "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, the directory its tools start in, its log level",
 		"shells": "a tool <hostname>_<shell> per shell whose program this machine has: the command reading a script on stdin, its seconds, its bytes of output",
 		"tools": "the tools the agent of this server calls, each by its own name on this server (bash, view, config): off, the model never sees it, consent, each call asks the user, on; and the rounds of tool calls a turn takes at most"
+	},
+	"notes": {
+		"problems": "These tools were left out during this turn; tell the user:"
 	}
 }

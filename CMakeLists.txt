@@ -122,3 +122,15 @@ if(WIN32)
     target_link_libraries(mcp_test PRIVATE ws2_32)
 endif()
 add_custom_command(TARGET mcp_test POST_BUILD COMMAND mcp_test)
+
+# agent_test: the laws of the agent of the server, a turn against an
+# endpoint and MCP servers of the test, built the same way, run once built, a
+# broken law failing the build
+add_executable(agent_test server/tests/agent.cpp ${SERVER_LIBRARY} ${EMBEDDED})
+add_dependencies(agent_test version)
+target_include_directories(agent_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(agent_test PRIVATE httplib yyjson stb Threads::Threads)
+if(WIN32)
+    target_link_libraries(agent_test PRIVATE ws2_32)
+endif()
+add_custom_command(TARGET agent_test POST_BUILD COMMAND agent_test)

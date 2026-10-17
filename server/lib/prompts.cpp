@@ -51,6 +51,10 @@ std::string prompts_module(const std::string & module) {
     return text(entry("modules", module));
 }
 
+std::string prompts_note(const std::string & note) {
+    return text(entry("notes", note));
+}
+
 std::string prompts_check() {
     words_t missing;
     for (const engine_module & m : schema_modules()) {

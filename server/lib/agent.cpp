@@ -11,6 +11,7 @@
 #include "lib/library.h"
 #include "lib/log.h"
 #include "lib/mcp.h"
+#include "lib/prompts.h"
 #include "lib/pulse.h"
 #include "lib/tools.h"
 #include "yyjson.h"
@@ -20,7 +21,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <thread>
 
 // what a call reads when no tool reads it, and why a call does not run
@@ -123,8 +123,10 @@ void agent_stop(const std::string & id) {
 // round starts: the endpoints, the model chosen, the system prompt, the
 // parameters of every model, numbers as numbers, each tool of the server not
 // off by its own name, then each tool of every MCP server not off, a name
-// served twice staying with the first; a server that does not answer sits
-// out the round
+// served twice staying with the first; a server that fails sits out the rest
+// of the turn, down holding it as it was named, so a new url, key or header
+// tries it again; told gathers what the rounds of the turn left out, and the
+// system prompt tells it all, every round, as the agent of the page does
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
@@ -142,7 +144,15 @@ static std::string json_string(const std::string & s) {
     return text.get();
 }
 
-static setup_t setup(api_stop & stop) {
+// the name every tool of this server is served under, as a problem tells it
+static const char * const OWN = "KiSS";
+
+// a server as it is named: its name, url, headers and key
+static std::string signature(const remote & r) {
+    return r.name + "\n" + r.url + "\n" + r.headers + "\n" + r.value;
+}
+
+static setup_t setup(api_stop & stop, std::map<std::string, std::string> & down, words_t & told) {
     setup_t             s;
     std::vector<remote> servers;
     engine_with([&](const engine_reader & config) {
@@ -167,8 +177,14 @@ static setup_t setup(api_stop & stop) {
             }
         }
     });
+    words_t               problems;
     std::vector<mcp_tool> listed;
     for (const remote & r : servers) {
+        const auto failed = down.find(signature(r));
+        if (failed != down.end()) {
+            problems.push_back("mcp " + r.name + ": " + failed->second);
+            continue;
+        }
         try {
             const std::vector<mcp_tool> tools = mcp_tools(r, stop);
             listed.insert(listed.end(), tools.begin(), tools.end());
@@ -176,20 +192,39 @@ static setup_t setup(api_stop & stop) {
             if (stop.stopped) {
                 throw;
             }
-            log_error("Agent", "MCP server %s sits out: %s", r.name.c_str(), e.what());
+            log_error("Agent", "MCP server %s sits out the turn: %s", r.name.c_str(), e.what());
+            down[signature(r)] = e.what();
+            problems.push_back("mcp " + r.name + ": " + e.what());
         }
     }
-    std::set<std::string> taken;
+    std::map<std::string, std::string> owner;
     for (const tool & t : s.tools) {
-        taken.insert(t.suffix);
+        owner[t.suffix] = OWN;
     }
     engine_with([&](const engine_reader & config) {
         for (const mcp_tool & t : listed) {
-            if (config.get("tools use", t.name).value_or(USE_OFF) != USE_OFF && taken.insert(t.name).second) {
-                s.served.push_back(t);
+            if (config.get("tools use", t.name).value_or(USE_OFF) == USE_OFF) {
+                continue;
             }
+            const auto first = owner.find(t.name);
+            if (first != owner.end()) {
+                problems.push_back("mcp " + t.server + ": tool " + t.name + " left out, " + first->second +
+                                   " serves it");
+                continue;
+            }
+            owner[t.name] = "mcp " + t.server;
+            s.served.push_back(t);
         }
     });
+    for (const std::string & p : problems) {
+        if (std::find(told.begin(), told.end(), p) == told.end()) {
+            told.push_back(p);
+        }
+    }
+    if (!told.empty()) {
+        const std::string note = prompts_note("problems") + "\n" + join(told, "\n");
+        s.system               = s.system.empty() ? note : s.system + "\n\n" + note;
+    }
     return s;
 }
 
@@ -442,11 +477,13 @@ static bool round(const std::string &                     id,
                   const std::vector<conversation_entry> & before,
                   size_t                                  r,
                   api_stop &                              stop,
-                  pulse &                                 p) {
+                  pulse &                                 p,
+                  std::map<std::string, std::string> &    down,
+                  words_t &                               told) {
     p.round = (int) r + 1;
     pulse_mark(p, PHASE_PREPARING, "", pulse_now());
     beat(id, p);
-    const setup_t     s     = setup(stop);
+    const setup_t     s     = setup(stop, down, told);
     const auto        pick  = api_pick(s.endpoints, s.chosen, stop);
     const endpoint &  e     = pick.first;
     const std::string model = pick.second;
@@ -554,15 +591,19 @@ static void turn(std::string                     id,
                  std::vector<conversation_entry> before,
                  std::shared_ptr<api_stop>       stop,
                  pulse                           p) {
-    std::optional<std::string> error;
-    size_t                     r = 0;
+    std::optional<std::string>         error;
+    size_t                             r = 0;
+    // the servers that failed this turn, as they were named, with what they
+    // answered, and every tool the turn left out, as the model was told
+    std::map<std::string, std::string> down;
+    words_t                            told;
     try {
         int rounds = 0;
         engine_with(
             [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
-            more = round(id, entry, before, r, *stop, p);
+            more = round(id, entry, before, r, *stop, p, down, told);
         }
         if (more) {
             error = "Stopped after " + std::to_string(r) + " tool rounds";
