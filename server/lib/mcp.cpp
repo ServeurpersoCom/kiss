@@ -20,14 +20,14 @@
 #include <memory>
 #include <mutex>
 
-static const char * const PROTOCOL_VERSION = "2025-06-18";
-static const char * const MODERN_VERSION   = "2026-07-28";
-static const char * const ELICITATION      = "elicitation/create";
-static const char * const FORM_MODE        = "form";
-static const char * const SESSION_HEADER   = "Mcp-Session-Id";
-static const char * const VERSION_HEADER   = "MCP-Protocol-Version";
-static const char * const DATA             = "data:";
-static const size_t       CHUNK            = 16384;
+static const char * const PROTOCOL_VERSION  = "2025-06-18";
+static const char * const MODERN_VERSION    = "2026-07-28";
+static const char * const ELICITATION       = "elicitation/create";
+static const char * const FORM_MODE         = "form";
+static const char * const SESSION_ID_HEADER = "Mcp-Session-Id";
+static const char * const VERSION_HEADER    = "MCP-Protocol-Version";
+static const char * const DATA              = "data:";
+static const size_t       CHUNK             = 16384;
 
 // a session: what it was opened with, the era the server speaks, its id in
 // the 2025 era, and the tools of the server
@@ -74,7 +74,7 @@ static doc_t post(const remote &           r,
         throw unreached(r.url + " does not answer: " + httplib::to_string(stream.error));
     }
     const int status = stream.response->status;
-    given            = stream.response->get_header_value(SESSION_HEADER);
+    given            = stream.response->get_header_value(SESSION_ID_HEADER);
     if (notification && status < 300) {
         return nullptr;
     }
@@ -137,8 +137,8 @@ static httplib::Headers era_headers(const session & s, const std::string & metho
         return {};
     }
     return {
-        { SESSION_HEADER, s.id             },
-        { VERSION_HEADER, PROTOCOL_VERSION }
+        { SESSION_ID_HEADER, s.id             },
+        { VERSION_HEADER,    PROTOCOL_VERSION }
     };
 }
 
