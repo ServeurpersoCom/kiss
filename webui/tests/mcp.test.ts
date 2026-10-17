@@ -185,7 +185,7 @@ async function page(
 			route(req).then(resolve, reject);
 		});
 	});
-	const engine = await import('../src/config.js');
+	const engine = await import('../src/engine/run.js');
 	engine.start();
 	await engine.run('set endpoints url m http://m/v1\nset chat model m/x', 'user');
 	const { turn } = await import('../src/lib/agent.js');
