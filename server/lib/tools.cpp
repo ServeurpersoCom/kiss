@@ -44,7 +44,7 @@ std::string tools_check(const tool & t, yyjson_val * args) {
     yyjson_val *                      root       = yyjson_doc_get_root(schema.get());
     yyjson_val *                      properties = yyjson_obj_get(root, "properties");
     if (args && !yyjson_is_obj(args)) {
-        return "Arguments are an object";
+        return "Arguments are not an object";
     }
     std::string unknown;
     size_t      i, n;
@@ -69,7 +69,7 @@ std::string tools_check(const tool & t, yyjson_val * args) {
             continue;
         }
         if (!yyjson_is_str(value)) {
-            return capital(yyjson_get_str(key)) + " argument is a string";
+            return capital(yyjson_get_str(key)) + " argument is not a string";
         }
         if (yyjson_get_len(value) < yyjson_get_uint(yyjson_obj_get(property, "minLength"))) {
             return capital(yyjson_get_str(key)) + " argument required";

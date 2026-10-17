@@ -314,5 +314,5 @@ void method_tools_call(const httplib::Request &            req,
         return;
     }
     log_error("MCP", "Call %s: refused, no such tool", called.c_str());
-    jsonrpc_error(res, 200, id, JSONRPC_INVALID_PARAMS, "unknown tool \"" + called + "\"");
+    jsonrpc_error(res, 200, id, JSONRPC_INVALID_PARAMS, "Unknown tool \"" + called + "\"");
 }

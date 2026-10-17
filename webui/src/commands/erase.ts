@@ -18,7 +18,7 @@ function config(ctx: Context, name: string): string {
 	}
 	if (name === STARTUP_CONFIG) {
 		ctx.archive.boot(undefined);
-		return comment(`erased ${STARTUP_CONFIG}, the page starts on client.conf`);
+		return comment(`erased ${STARTUP_CONFIG}, the page starts on its factory configuration`);
 	}
 	ctx.archive.remove(ctx.archive.find(name));
 	return comment(`erased ${name}`);

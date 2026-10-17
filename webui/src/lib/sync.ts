@@ -66,7 +66,7 @@ interface Page {
 }
 let page: Page = {
 	load: async () => undefined,
-	run: async () => ({ ok: false, text: 'the page runs nothing yet' })
+	run: async () => ({ ok: false, text: 'the page is still loading' })
 };
 
 // the clock of the turn a conversation of a server answers now, if any

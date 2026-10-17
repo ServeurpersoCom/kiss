@@ -63,13 +63,14 @@ static void connected(const httplib::Request & req, yyjson_val * info) {
 void mcp_post(const httplib::Request & req, httplib::Response & res, const std::string & version) {
     const std::shared_ptr<yyjson_doc> body(yyjson_read(req.body.c_str(), req.body.size(), 0), yyjson_doc_free);
     if (!body) {
-        jsonrpc_error(res, 400, nullptr, JSONRPC_PARSE_ERROR, "the body is no JSON");
+        jsonrpc_error(res, 400, nullptr, JSONRPC_PARSE_ERROR, "the body is not JSON");
         return;
     }
 
     yyjson_val * root = yyjson_doc_get_root(body.get());
     if (!yyjson_is_obj(root)) {
-        jsonrpc_error(res, 400, nullptr, JSONRPC_INVALID_REQUEST, "the body is one JSON-RPC request or notification");
+        jsonrpc_error(res, 400, nullptr, JSONRPC_INVALID_REQUEST,
+                      "the body is not one JSON-RPC request or notification");
         return;
     }
     yyjson_val * method_val = yyjson_obj_get(root, "method");

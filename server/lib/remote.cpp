@@ -10,7 +10,10 @@ static const char * const OWN_HEADERS[] = { "host", "content-length", "transfer-
 
 // why the headers of an item do not read, Name: value; Name: value, none of
 // them the header of its key, empty when they do
-static std::string header_problem(const std::string & headers, const std::string & keyed, const std::string & module) {
+static std::string header_problem(const std::string & headers,
+                                  const std::string & keyed,
+                                  const std::string & module,
+                                  const std::string & item) {
     for (const std::string & pair : split(headers, ';')) {
         const std::string h     = trim(pair);
         const size_t      colon = h.find(':');
@@ -18,7 +21,7 @@ static std::string header_problem(const std::string & headers, const std::string
             continue;
         }
         if (colon == std::string::npos || trim(h.substr(0, colon)).empty()) {
-            return "\"" + h + "\" is no Name: value";
+            return "\"" + h + "\" is not Name: value";
         }
         const std::string name = lower(trim(h.substr(0, colon)));
         for (const char * own : OWN_HEADERS) {
@@ -27,7 +30,7 @@ static std::string header_problem(const std::string & headers, const std::string
             }
         }
         if (name == lower(keyed)) {
-            return trim(h.substr(0, colon)) + " is the header " + module + " auth-header writes";
+            return trim(h.substr(0, colon)) + " is the header " + module + " auth-header " + item + " writes";
         }
     }
     return "";
@@ -49,7 +52,8 @@ std::string remote_rules(const engine_reader &                                  
         if (!placement(auth, keyed, scheme)) {
             return module + " auth-header " + name + ": \"" + auth + "\" is not Header or Header: Scheme";
         }
-        const std::string problem = header_problem(config.get(module + " headers", name).value_or(""), keyed, module);
+        const std::string problem =
+            header_problem(config.get(module + " headers", name).value_or(""), keyed, module, name);
         if (!problem.empty()) {
             return module + " headers " + name + ": " + problem;
         }

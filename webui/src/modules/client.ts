@@ -4,7 +4,8 @@ import { follow } from '../lib/sync.js';
 
 // a hostname takes a-z, 0-9 and _, as a tool name does, and leaves room for
 // _client_config within the 64 characters of a tool name
-const HOSTNAME = /^[a-z0-9_]{1,50}$/;
+const HOSTNAME_MAX = 50;
+const HOSTNAME = new RegExp(`^[a-z0-9_]{1,${HOSTNAME_MAX}}$`);
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
 // four letters drawn the first time the page opens, kept by the browser
@@ -29,7 +30,7 @@ export default {
 		const name = String(config.get('client hostname') ?? '');
 		return HOSTNAME.test(name)
 			? null
-			: `client hostname "${name}" takes a-z, 0-9 and _ only, 50 at most`;
+			: `client hostname "${name}" takes a-z, 0-9 and _ only, ${HOSTNAME_MAX} at most`;
 	},
 	apply(config) {
 		follow(config);

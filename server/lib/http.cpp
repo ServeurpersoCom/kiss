@@ -77,7 +77,7 @@ static bool authorized(const httplib::Request & req, std::string & why) {
         return true;
     }
     if (!engine_get("server key")) {
-        why = "another origin calls this server with the key, and server key is not set";
+        why = "server key is not set, so another origin is refused";
         return false;
     }
     const std::string bearer = req.get_header_value("Authorization");

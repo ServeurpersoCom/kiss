@@ -266,7 +266,7 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
         }
         if (response) {
             if (!a_response(response)) {
-                return { MALFORMED, "the response is not accept with its content, nor cancel" };
+                return { MALFORMED, "the response is neither accept with its content nor cancel" };
             }
             const std::shared_ptr<char> json(yyjson_val_write(response, 0, nullptr), free);
             const std::string           why = agent_fill(id, json.get());
@@ -285,7 +285,7 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
     if (action == "pin") {
         yyjson_val * pinned = yyjson_obj_get(body, "pinned");
         if (!yyjson_is_bool(pinned)) {
-            return { MALFORMED, "the body says no pinned" };
+            return { MALFORMED, "the body holds no pinned" };
         }
         return changed(id, [&](conversation & c) {
             c.pinned = yyjson_get_bool(pinned);
@@ -353,7 +353,7 @@ void sync_action(const httplib::Request & req, httplib::Response & res, const st
     std::string                       created;
     words_t                           words;
     const refusal                     r =
-        yyjson_is_obj(body) ? act(action, body, created, words) : refusal{ MALFORMED, "the body is no JSON object" };
+        yyjson_is_obj(body) ? act(action, body, created, words) : refusal{ MALFORMED, "the body is not a JSON object" };
     yyjson_val *      id    = yyjson_obj_get(body, "id");
     const std::string named = yyjson_is_str(id) ? yyjson_get_str(id) : created;
     if (r.status) {

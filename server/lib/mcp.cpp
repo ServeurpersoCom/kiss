@@ -320,7 +320,7 @@ mcp_outcome mcp_call(const remote &      r,
                 // the call again, with what the user answered to each input
                 yyjson_val * inputs = yyjson_obj_get(result, "inputRequests");
                 if (!yyjson_obj_size(inputs)) {
-                    throw api_error(r.url + " asks to be called again for nothing");
+                    throw api_error(r.url + " asks for input and names none");
                 }
                 yyjson_mut_obj_remove_key(root, "inputResponses");
                 yyjson_mut_obj_remove_key(root, "requestState");

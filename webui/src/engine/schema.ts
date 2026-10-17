@@ -28,7 +28,7 @@ function check(def: Key, raw: string): Value {
 			if (!raw) throw new Error('a secret is never empty');
 			if (raw === REMOVED)
 				throw new Error(
-					`"${REMOVED}" stands for a secret kept out of view, it is no value -> the line without a value asks the user`
+					`"${REMOVED}" masks a secret, it is not a value -> the line without a value asks the user`
 				);
 			return raw;
 		case 'number': {
@@ -98,7 +98,7 @@ export class KeySchema implements Schema {
 		keys.forEach((k, i) => keys.indexOf(k) !== i && problems.push(`${k}: declared twice`));
 		const names = all.map((m) => m.name);
 		for (const [key, def] of this.entries) {
-			if (def.of && !names.includes(def.of)) problems.push(`${key}: of names no module`);
+			if (def.of && !names.includes(def.of)) problems.push(`${key}: of ${def.of} names no module`);
 		}
 		const found = problems.filter((p) => p !== null);
 		if (found.length) throw new Error(['bad keys', ...found].join('\n'));

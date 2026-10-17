@@ -20,7 +20,7 @@ static step_t compile_copy(const words_t & args) {
     const std::string from    = choose(args[0], configs, "configuration");
     const std::string to      = choose(args[1], configs, "configuration");
     if (from == to) {
-        fail("a copy goes from one configuration to another");
+        fail("copy needs two different configurations");
     }
     return [to](context & ctx) {
         if (to == RUNNING_CONFIG) {

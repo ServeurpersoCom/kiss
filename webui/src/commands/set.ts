@@ -16,7 +16,7 @@ async function asked(ctx: Context, key: string, name?: string): Promise<Value> {
 	if (!ctx.secret) throw new Error(`nobody is here to give ${head}`);
 	const typed = await ctx.secret(head);
 	ctx.signal?.throwIfAborted();
-	if (typed === null) throw new Error(`no value given for ${head}`);
+	if (typed === null) throw new Error(`${head} misses its value`);
 	return ctx.schema.parse(key, typed);
 }
 

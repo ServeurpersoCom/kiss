@@ -67,10 +67,10 @@ static std::string validate(const engine_reader & config) {
     const auto host = config.get("server listen-address");
     const auto port = config.get("server listen-port");
     if (!host || !port) {
-        return "server listen-address and server listen-port are set";
+        return "server listen-address or server listen-port is not set";
     }
     if (!listener_loopback(*host) && !config.get("server key")) {
-        return "listening on " + *host + " requires server key";
+        return "listening on " + *host + " needs a key -> set server key";
     }
     std::string why;
     if (!listener_bindable(*host, std::stoi(*port), why)) {
@@ -79,7 +79,7 @@ static std::string validate(const engine_reader & config) {
     const std::string cwd = config.get("server working-directory").value_or("");
     std::error_code   ec;
     if (!std::filesystem::is_directory(std::filesystem::u8path(cwd), ec)) {
-        return "server working-directory " + cwd + " is no directory";
+        return "server working-directory " + cwd + " is not a directory";
     }
     return "";
 }

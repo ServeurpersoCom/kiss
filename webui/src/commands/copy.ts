@@ -76,7 +76,7 @@ export default {
 	// of a save keeps what was checked when it was made
 	async run(ctx, [word, to]) {
 		const from = choose(word, configs(ctx), 'configuration');
-		if (from === to) throw new Error('a copy goes from one configuration to another');
+		if (from === to) throw new Error('copy needs two different configurations');
 		const copied = values(ctx, from);
 		if (to === RUNNING_CONFIG) {
 			const dropped = ctx.config.load(copied);

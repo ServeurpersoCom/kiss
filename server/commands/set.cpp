@@ -36,7 +36,7 @@ static step_t compile_set(const words_t & args) {
     const std::string value = schema_parse(kw.key, join(kw.rest, " "));
     return [s, value, kind](context & ctx) {
         if (kind == ENGINE_SECRET && ctx.role == ENGINE_MCP) {
-            fail(s + " takes no value here, a model would read it: set " + s + " alone asks the user to type it");
+            fail(s + " is a secret, a typed value would reach the model -> set " + s + " alone asks the user");
         }
         ctx.draft[s] = value;
         return std::string();

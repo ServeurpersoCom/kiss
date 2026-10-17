@@ -91,9 +91,9 @@ static std::string standing(const std::string & id, const std::string & kind) {
     }
     const std::string & k = it->second->kind;
     if (k != kind) {
-        return k == ASK_CALL ? "the question is a call to grant" :
-               k == ASK_FORM ? "the question is a form to fill" :
-                               "the question is a call a page runs";
+        return k == ASK_CALL ? "the question awaits a verdict" :
+               k == ASK_FORM ? "the question awaits a response" :
+                               "the question awaits an output";
     }
     return "";
 }

@@ -16,7 +16,7 @@ static std::string validate(const engine_reader & config) {
             return "";
         }
     }
-    return "chat model " + value + " names no endpoint";
+    return "chat model " + value + " names no endpoint -> set chat model <endpoint/model>";
 }
 
 static engine_module make_chat() {

@@ -524,7 +524,7 @@ in the order it likes, so KiSS shows `description` on a folded call by its name,
 overrides for one tool. The schema of a tool is its law, as JSON Schema reads it: a key outside it,
 a required key missing, a string property given something else, or a string shorter than its
 `minLength` refuses the call before it runs, with `Unknown argument <key>`, `<Key> argument
-required` or `<Key> argument is a string`, so a misnamed argument never runs as if it were absent.
+required` or `<Key> argument is not a string`, so a misnamed argument never runs as if it were absent.
 A string the tool needs is never empty because its schema says `minLength` 1, and a string that may
 be empty says nothing.
 

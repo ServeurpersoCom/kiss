@@ -117,7 +117,7 @@ async function called(
 	let result: CallToolResult | InputRequiredResult = await client.callTool(params, options);
 	while (isInputRequiredResult(result)) {
 		const inputs = Object.entries(result.inputRequests ?? {});
-		if (!inputs.length) throw new Error('asks to be called again for nothing');
+		if (!inputs.length) throw new Error('asks for input and names none');
 		const inputResponses: Record<string, object> = {};
 		for (const [key, input] of inputs) {
 			ctx.signal.throwIfAborted();
@@ -261,7 +261,7 @@ export async function routed(
 		if (!route)
 			return `mcp ${proxy} has no route ${name} -> set proxy url ${name} <url> on mcp ${proxy}`;
 		if (!route.keyed && config.get(`${module} key`, name) !== undefined)
-			return `${module} ${name} holds a key and route ${name} of mcp ${proxy} none -> set proxy key ${name} on mcp ${proxy}`;
+			return `${module} ${name} holds a key, route ${name} of mcp ${proxy} holds none -> set proxy key ${name} on mcp ${proxy}`;
 	}
 	return null;
 }

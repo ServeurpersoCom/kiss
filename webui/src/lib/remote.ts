@@ -28,7 +28,7 @@ const SEPARATOR = ';';
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
 // the pairs of a headers value, each a name and its value, either empty when
-// the pair is no Name: value
+// the pair is not Name: value
 function pairs(text: string): [string, string][] {
 	return text
 		.split(SEPARATOR)
@@ -98,7 +98,7 @@ export function rules(
 	const names = config
 		.names(module)
 		.filter((n) => !config.get(`${module} url`, n) && !config.get(`${module} proxy`, n));
-	if (names.length) return `${module} ${names.join(' ')} has no url`;
+	if (names.length) return `${module} url ${names.join(' ')} is not set`;
 	for (const name of config.names(module)) {
 		const proxy = config.get(`${module} proxy`, name);
 		if (proxy === undefined) continue;
@@ -110,7 +110,7 @@ export function rules(
 				.filter(
 					(s) => config.get(`${SERVERS} url`, s) && config.get(`${SERVERS} proxy`, s) === undefined
 				);
-			return `${module} proxy ${name}: no ${SERVERS} ${proxy}, a proxy names the KiSS server that holds route ${name}, one of ${SERVERS} ${servers.join(' ')}`;
+			return `${module} proxy ${name}: no ${SERVERS} ${proxy} -> a proxy names the KiSS server holding route ${name}, one of ${SERVERS} ${servers.join(' ')}`;
 		}
 		if (config.get(`${SERVERS} proxy`, proxy) !== undefined)
 			return `${module} proxy ${name}: ${SERVERS} ${proxy} has a proxy itself`;

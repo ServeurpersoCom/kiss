@@ -504,14 +504,14 @@ describe('a proxy', () => {
 		expect(sent['http://k/proxy/hf/models']).toEqual({ Authorization: 'Bearer K' });
 		expect(sent['http://h/v1/models']).toBeUndefined();
 		expect((await k.run('set endpoints proxy hf nowhere', 'user')).text).toBe(
-			'% endpoints: endpoints proxy hf: no mcp nowhere, a proxy names the KiSS server that holds route hf, one of mcp kiss'
+			'% endpoints: endpoints proxy hf: no mcp nowhere -> a proxy names the KiSS server holding route hf, one of mcp kiss'
 		);
 		expect((await k.run('set endpoints proxy nope kiss', 'user')).text).toBe(
 			'% endpoints: mcp kiss has no route nope -> set proxy url nope <url> on mcp kiss'
 		);
 		await k.run('set endpoints url bare http://b/v1\nset endpoints key bare B', 'user');
 		expect((await k.run('set endpoints proxy bare kiss', 'user')).text).toBe(
-			'% endpoints: endpoints bare holds a key and route bare of mcp kiss none -> set proxy key bare on mcp kiss'
+			'% endpoints: endpoints bare holds a key, route bare of mcp kiss holds none -> set proxy key bare on mcp kiss'
 		);
 		expect((await k.run('no endpoints proxy hf', 'llm')).ok).toBe(true);
 		await k.run('show models', 'user');
@@ -823,7 +823,7 @@ describe('the firewall', () => {
 		expect(k.settings.get('mcp key', 'a')).toBe('<removed>');
 		expect(k.settings.reveal('mcp key', 'a')).toBe('sk-typed');
 		expect((await k.run('set mcp key a', 'llm', { secret: async () => null })).text).toBe(
-			'% no value given for mcp key a'
+			'% mcp key a misses its value'
 		);
 		expect((await k.run('set mcp key a', 'llm')).text).toBe('% nobody is here to give mcp key a');
 	});
@@ -839,7 +839,7 @@ describe('the firewall', () => {
 		const k = await page();
 		await k.run('set mcp url a http://a/mcp\nset mcp key a sk-a', 'user');
 		const out = (await k.run('set mcp key a <removed>', 'llm')).text;
-		expect(out).toContain('"<removed>" stands for a secret kept out of view, it is no value');
+		expect(out).toContain('"<removed>" masks a secret, it is not a value');
 		expect(out).toContain('-> the line without a value asks the user');
 		expect(k.settings.reveal('mcp key', 'a')).toBe('sk-a');
 	});
@@ -1050,7 +1050,7 @@ describe('client.conf', () => {
 		vi.resetModules();
 		const k = await import('../src/engine/run.js');
 		expect(k.defaults('set chat system-prompt red\nset endpoints key s sk-site')).toEqual([
-			'endpoints s: endpoints: endpoints s has no url'
+			'endpoints s: endpoints: endpoints url s is not set'
 		]);
 		expect(k.settings.get('endpoints key', 's')).toBeUndefined();
 		expect(
@@ -1213,7 +1213,7 @@ describe('a copy', () => {
 		);
 		await k.run('set chat model b/x', 'user');
 		expect((await k.run('copy running-config a', 'user')).text).toBe(
-			'! copied running-config to a\n! b does not serve x, see show models'
+			'! copied running-config to a\n! b does not serve x -> /show models'
 		);
 		await k.run('set chat model b/m', 'user');
 		expect((await k.run('copy running-config a', 'user')).text).toBe(
@@ -1252,7 +1252,7 @@ describe('a copy', () => {
 			'! running-config startup-config <name>'
 		);
 		expect((await k.run('copy running-config running-config', 'user')).text).toContain(
-			'from one configuration to another'
+			'copy needs two different configurations'
 		);
 		expect((await k.run('copy running-config a b', 'user')).text).toBe(
 			'% nothing goes after copy running-config a: b'
@@ -1456,7 +1456,7 @@ describe('a page', () => {
 		await next.run('copy b startup-config', 'user');
 		expect((await page()).settings.get('chat system-prompt')).toBe('green');
 		expect((await (await page()).run('erase startup-config', 'user', shelf([]))).text).toBe(
-			'! erased startup-config, the page starts on client.conf'
+			'! erased startup-config, the page starts on its factory configuration'
 		);
 		const bare = await page('set display tool-calls open');
 		expect(bare.settings.get('chat system-prompt')).toBe('');

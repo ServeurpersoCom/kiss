@@ -246,12 +246,12 @@ static tool_outcome view(const viewer & v, yyjson_val * args, const tool_tick & 
         yyjson_val * a = yyjson_arr_get(range, 0);
         yyjson_val * b = yyjson_arr_get(range, 1);
         if (!yyjson_is_arr(range) || yyjson_arr_size(range) != 2 || !yyjson_is_int(a) || !yyjson_is_int(b)) {
-            return { false, "View_range is two line numbers, [start, end]" };
+            return { false, "The view_range is not two line numbers, [start, end]" };
         }
         first = std::max<long long>(1, yyjson_get_sint(a));
         last  = yyjson_get_sint(b);
         if (last != -1 && last < first) {
-            return { false, "View_range ends before it starts" };
+            return { false, "The view_range ends before it starts" };
         }
     }
 
@@ -266,7 +266,7 @@ static tool_outcome view(const viewer & v, yyjson_val * args, const tool_tick & 
         return listing(path, given, v.output, t);
     }
     if (!fs::is_regular_file(st)) {
-        return { false, "Not a regular file or a directory" };
+        return { false, "Neither a regular file nor a directory: " + path.u8string() };
     }
     const uintmax_t size = fs::file_size(path, ec);
     FILE *          f    = utf8_fopen(path.u8string().c_str(), "rb");

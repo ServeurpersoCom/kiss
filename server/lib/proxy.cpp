@@ -166,13 +166,13 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     const int status = stream->response->status;
     if (status == httplib::StatusCode::Unauthorized_401 || status == httplib::StatusCode::Forbidden_403) {
         refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
-               r->url + " answered " + std::to_string(status) + " -> set proxy key " + route);
+               r->url + " answers " + std::to_string(status) + " -> set proxy key " + route);
         return;
     }
     if (status >= httplib::StatusCode::MultipleChoices_300 && status < httplib::StatusCode::BadRequest_400) {
         refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
-               r->url + " answered " + std::to_string(status) + " to " +
-                   stream->response->get_header_value("Location") + " -> set proxy url " + route);
+               r->url + " answers " + std::to_string(status) + " to " + stream->response->get_header_value("Location") +
+                   " -> set proxy url " + route);
         return;
     }
     log_debug("Proxy", "Route proxy/%s: %s %s %d", route.c_str(), req.method.c_str(),

@@ -29,7 +29,7 @@ export default {
 			const served = await listModels(endpoint);
 			return served.includes(model)
 				? null
-				: `${endpoint.name} does not serve ${model}, see show models`;
+				: `${endpoint.name} does not serve ${model} -> ${SLASH}show models`;
 		} catch (e) {
 			if (e instanceof EndpointError) return null;
 			throw e;
