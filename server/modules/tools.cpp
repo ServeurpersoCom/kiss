@@ -1,7 +1,7 @@
 // tools.cpp: the tools module: every setting of a tool the agent of this
 // server calls, the twin of the tools module of the page; a tool of this
 // server is named here by its own name, bash, view, as an interface of a
-// router is, the name <hostname>_bash being how a client sees it
+// router is, the name <hostname>_server_bash being how a client sees it
 
 #include "engine/engine.h"
 #include "engine/text.h"

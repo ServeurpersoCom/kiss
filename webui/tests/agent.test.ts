@@ -40,7 +40,7 @@ function calls(...lines: [string, string][]): object {
 		tool_calls: lines.map(([id, l], index) => ({
 			index,
 			id,
-			function: { name: 'client_config', arguments: JSON.stringify({ lines: l }) }
+			function: { name: 'config', arguments: JSON.stringify({ lines: l }) }
 		}))
 	};
 }
@@ -162,7 +162,7 @@ describe('a turn', () => {
 	it('reads the configuration as it stands every round', async () => {
 		const p = await page([
 			stream([calls(['a', 'set models temperature m/x 0.3\nset tools max-rounds 2'])]),
-			stream([calls(['b', 'set tools use client_config off'])]),
+			stream([calls(['b', 'set tools use config off'])]),
 			stream([calls(['c', 'show version'])])
 		]);
 		await p.engine.run('set tools max-rounds 3', 'user');
@@ -175,16 +175,16 @@ describe('a turn', () => {
 
 	it('hides a tool turned off from the next round, and refuses its calls', async () => {
 		const p = await page([
-			stream([calls(['a', 'set tools use client_config off'])]),
+			stream([calls(['a', 'set tools use config off'])]),
 			stream([calls(['b', 'show version'])]),
 			stream([{ content: 'done' }])
 		]);
 		await p.go();
 		const names = (i: number) => p.bodies[i].tools.map((t) => t.function.name);
-		expect(names(0)).toContain('client_config');
-		expect(names(1)).not.toContain('client_config');
+		expect(names(0)).toContain('config');
+		expect(names(1)).not.toContain('config');
 		expect(p.reply.rounds[1].calls[0]).toMatchObject({
-			result: 'Unknown tool "client_config"',
+			result: 'Unknown tool "config"',
 			ok: false
 		});
 	});
@@ -248,7 +248,7 @@ describe('a turn', () => {
 
 	it('stores no secret the model writes, from before its call is sent, even in arguments that read as no object', async () => {
 		const config = (id: string, args: string) => ({
-			tool_calls: [{ index: 0, id, function: { name: 'client_config', arguments: args } }]
+			tool_calls: [{ index: 0, id, function: { name: 'config', arguments: args } }]
 		});
 		const p = await page([
 			stream([calls(['a', 'set endpoints key m sk-model'])]),
@@ -338,7 +338,7 @@ describe('the messages protocol', () => {
 				block_binding: { prefix_mismatch_behavior: 'drop_block' }
 			},
 			cache_control: { type: 'ephemeral' },
-			tools: [{ name: 'client_config', eager_input_streaming: true }]
+			tools: [{ name: 'config', eager_input_streaming: true }]
 		});
 		expect(p.reply.rounds[0].text).toBe('ok');
 	});
@@ -355,7 +355,7 @@ describe('the messages protocol', () => {
 					block(1, { type: 'text', text: '' }),
 					delta(1, { type: 'text_delta', text: 'after' }),
 					stop(1),
-					block(2, { type: 'tool_use', id: 'a', name: 'client_config', input: {} }),
+					block(2, { type: 'tool_use', id: 'a', name: 'config', input: {} }),
 					delta(2, { type: 'input_json_delta', partial_json: '{"lines":' }),
 					delta(2, { type: 'input_json_delta', partial_json: '"show version"}' }),
 					stop(2),
@@ -373,7 +373,7 @@ describe('the messages protocol', () => {
 		expect(p.reply.rounds[0]).toMatchObject({
 			reasoning: 'think',
 			text: 'after',
-			calls: [{ id: 'a', name: 'client_config', args: '{"lines":"show version"}', ok: true }],
+			calls: [{ id: 'a', name: 'config', args: '{"lines":"show version"}', ok: true }],
 			opaque: { protocol: 'messages', items: [thinking] }
 		});
 		expect((p.bodies[1] as unknown as { messages: object[] }).messages).toEqual([
@@ -383,7 +383,7 @@ describe('the messages protocol', () => {
 				content: [
 					thinking,
 					{ type: 'text', text: 'after' },
-					{ type: 'tool_use', id: 'a', name: 'client_config', input: { lines: 'show version' } }
+					{ type: 'tool_use', id: 'a', name: 'config', input: { lines: 'show version' } }
 				]
 			},
 			{
@@ -479,7 +479,7 @@ describe('the responses protocol', () => {
 			max_output_tokens: 500,
 			reasoning: { effort: 'high', summary: 'auto' },
 			store: false,
-			tools: [{ type: 'function', name: 'client_config', strict: false }]
+			tools: [{ type: 'function', name: 'config', strict: false }]
 		});
 		expect(p.reply.rounds[0].text).toBe('ok');
 		expect(p.reply.stats).toMatchObject({ tokens: 1 });
@@ -504,7 +504,7 @@ describe('the responses protocol', () => {
 					added(1, { type: 'message', id: 'msg_1', phase: 'commentary' }),
 					text('after'),
 					done(1, { type: 'message', id: 'msg_1', phase: 'commentary', content: [] }),
-					added(2, { type: 'function_call', id: 'fc_1', call_id: 'a', name: 'client_config' }),
+					added(2, { type: 'function_call', id: 'fc_1', call_id: 'a', name: 'config' }),
 					{ type: 'response.function_call_arguments.delta', output_index: 2, delta: '{"lines":' },
 					{
 						type: 'response.function_call_arguments.delta',
@@ -521,7 +521,7 @@ describe('the responses protocol', () => {
 		expect(p.reply.rounds[0]).toMatchObject({
 			reasoning: 'one\n\ntwo',
 			text: 'after',
-			calls: [{ id: 'a', name: 'client_config', args: '{"lines":"show version"}', ok: true }],
+			calls: [{ id: 'a', name: 'config', args: '{"lines":"show version"}', ok: true }],
 			opaque: {
 				protocol: 'responses',
 				items: [reasoning, { type: 'message', phase: 'commentary' }]
@@ -534,7 +534,7 @@ describe('the responses protocol', () => {
 			{
 				type: 'function_call',
 				call_id: 'a',
-				name: 'client_config',
+				name: 'config',
 				arguments: '{"lines":"show version"}'
 			},
 			{ type: 'function_call_output', call_id: 'a', output: expect.any(String) }

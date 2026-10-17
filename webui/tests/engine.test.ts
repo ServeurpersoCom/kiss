@@ -461,12 +461,12 @@ describe('the display', () => {
 		expect(k.settings.get('display preview-argument')).toBe('description');
 		expect(display.argument).toBe('description');
 		await k.run(
-			'set display preview-argument query\nset tools preview-argument client_config lines',
+			'set display preview-argument query\nset tools preview-argument config lines',
 			'user'
 		);
 		expect(display.argument).toBe('query');
-		expect(display.preview).toEqual({ client_config: 'lines' });
-		await k.run('no display preview-argument\nno tools preview-argument client_config', 'user');
+		expect(display.preview).toEqual({ config: 'lines' });
+		await k.run('no display preview-argument\nno tools preview-argument config', 'user');
 		expect(display.argument).toBe('description');
 		expect(display.preview).toEqual({});
 	});
@@ -654,14 +654,14 @@ describe('a tool', () => {
 			'% unknown tools "repo.search"'
 		);
 		const r = await k.run(
-			'set tools preview-argument client_config query\nset tools use client_config off',
+			'set tools preview-argument config query\nset tools use config off',
 			'user'
 		);
 		expect(r.ok).toBe(true);
-		expect((await k.run('show tools client_config', 'user')).text).toBe(
-			'set tools preview-argument client_config query\nset tools use client_config off'
+		expect((await k.run('show tools config', 'user')).text).toBe(
+			'set tools preview-argument config query\nset tools use config off'
 		);
-		expect((await k.run('no tools client_config', 'user')).ok).toBe(true);
+		expect((await k.run('no tools config', 'user')).ok).toBe(true);
 		expect(k.settings.get('tools preview-argument', 'repo.search')).toBeUndefined();
 		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
 	});
@@ -714,7 +714,7 @@ function user(verdict: Verdict) {
 describe('the firewall', () => {
 	it('asks the user every time the model opens a way out, whatever spells it', async () => {
 		const k = await page();
-		await k.run('set tools use client_config off\nset chat system-prompt mine', 'user');
+		await k.run('set tools use config off\nset chat system-prompt mine', 'user');
 		const once = user(ONCE);
 		expect((await k.run('set chat system-prompt theirs', 'llm', once)).ok).toBe(true);
 		expect((await k.run('set endpoints url b http://b/v1', 'llm', once)).ok).toBe(true);
@@ -727,16 +727,16 @@ describe('the firewall', () => {
 			}
 		]);
 		const refuse = user(REFUSE);
-		expect((await k.run('no tools client_config', 'llm', refuse)).text).toBe(
+		expect((await k.run('no tools config', 'llm', refuse)).text).toBe(
 			'% the user refused the change'
 		);
 		expect(refuse.asked).toEqual([
 			{
 				kind: 'change',
-				lines: ['- set tools use client_config off', '+ set tools use client_config on']
+				lines: ['- set tools use config off', '+ set tools use config on']
 			}
 		]);
-		expect(k.settings.get('tools use', 'client_config')).toBe('off');
+		expect(k.settings.get('tools use', 'config')).toBe('off');
 	});
 
 	it('checks an item the model names against the configuration as it applies, reaching no address it writes', async () => {
@@ -782,10 +782,10 @@ describe('the firewall', () => {
 		const k = await page();
 		await k.run('set endpoints url a http://a/v1', 'user');
 		const refuse = user(REFUSE);
-		expect((await k.run('set tools use client_config off', 'llm', refuse)).ok).toBe(true);
+		expect((await k.run('set tools use config off', 'llm', refuse)).ok).toBe(true);
 		expect((await k.run('no endpoints a', 'llm', refuse)).ok).toBe(true);
 		expect(refuse.asked).toEqual([]);
-		expect((await k.run('set tools use client_config consent', 'llm', refuse)).ok).toBe(false);
+		expect((await k.run('set tools use config consent', 'llm', refuse)).ok).toBe(false);
 	});
 
 	it('offers always for a call alone, a change asking every time', () => {
@@ -1121,7 +1121,7 @@ describe('IOS words', () => {
 		expect((await k.run('show running-config', 'user')).text).toContain(
 			'set display tool-calls open'
 		);
-		expect((await k.run('set tools use client_config o', 'user')).text).toContain(
+		expect((await k.run('set tools use config o', 'user')).text).toContain(
 			'ambiguous value "o": off on'
 		);
 	});
@@ -1352,7 +1352,7 @@ describe('a listing by group', () => {
 	it('pastes back as it is, its headers skipped as notes', async () => {
 		const k = await page();
 		const shown = (await k.run('show tools', 'user')).text;
-		expect(shown).toContain('! KiSS\nset tools use client_config on');
+		expect(shown).toContain('! KiSS\nset tools use config on');
 		expect((await k.run(shown, 'user')).ok).toBe(true);
 	});
 });
@@ -1476,7 +1476,7 @@ describe('every key', () => {
 	const ITEMS: Record<string, string> = {
 		endpoints: 'n',
 		models: 'm/x',
-		tools: 'client_config',
+		tools: 'config',
 		mcp: 'b',
 		'endpoints proxy': 'p',
 		'mcp proxy': 'p'

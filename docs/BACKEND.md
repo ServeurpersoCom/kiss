@@ -82,11 +82,11 @@ modules
     use <tool> off|consent|on       consent, the tools of the server on
 
 tools
-  <hostname>_config                 description lines
-  <hostname>_<shell>                description command
-  <hostname>_view                   description path [view_range]
-  <hostname>_str_replace            description path old_str new_str
-  <hostname>_create_file            description path file_text
+  <hostname>_server_config          description lines
+  <hostname>_server_<shell>         description command
+  <hostname>_server_view            description path [view_range]
+  <hostname>_server_str_replace     description path old_str new_str
+  <hostname>_server_create_file     description path file_text
 ```
 
 ## The server
@@ -451,10 +451,10 @@ the machine.
 [MCP] server/discover from 192.168.1.20, 2026-07-28
 [MCP] Client kiss 5633ee7 connects from 192.168.1.20
 [MCP] tools/call from 192.168.1.20, 2026-07-28
-[MCP] Call forge_bash: Builds the server
-[MCP] Call forge_bash: command cd kiss && ./build.sh (2 lines)
-[MCP] Call forge_bash: exit 0 in 5321 ms
-[MCP] Call forge_bash: 1838 bytes back by SSE
+[MCP] Call forge_server_bash: Builds the server
+[MCP] Call forge_server_bash: command cd kiss && ./build.sh (2 lines)
+[MCP] Call forge_server_bash: exit 0 in 5321 ms
+[MCP] Call forge_server_bash: 1838 bytes back by SSE
 [HTTP] Refused 203.0.113.7: the key is missing or wrong
 ```
 
@@ -489,10 +489,11 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
 
 ## Tools
 
-A tool name is `<hostname>_<item>`: `forge_bash`, `studio_powershell`, `nomad_zsh`. The hostname
-is by default the one of the machine, lowercased with every character outside `[a-z0-9]` made `_`,
-which keeps the name valid for every model API. Two machines never collide, and KiSS filters a tool by its name with
-`set tools use <tool> off`.
+A tool name is `<hostname>_server_<item>`: `forge_server_bash`, `studio_server_powershell`,
+`nomad_server_zsh`, the machine, then its role, then the tool, so a model never takes a tool of a
+server for one of a page. The hostname is by default the one of the machine, lowercased with every
+character outside `[a-z0-9]` made `_`, which keeps the name valid for every model API. Two machines
+never collide, and KiSS filters a tool by its name with `set tools use <tool> off`.
 
 A description is short: what the tool does and the machine it acts on, `Run a bash command on
 forge`. A cut output, a timeout or a resized image, the result tells. Only the hostname changes it,
@@ -535,7 +536,7 @@ it. A model holds no parameter its protocol never sends, `models top_k` for `res
 model, else asks for it.
 
 The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
-as a router names its interfaces: `forge_bash` is how a client sees it, and the configuration of the
+as a router names its interfaces: `forge_server_bash` is how a client sees it, and the configuration of the
 machine, which no other machine reads, names it `bash`. So the factory configuration turns them on
 for every machine, `set tools use bash on`, and a tool of another server stays in `consent`.
 
@@ -649,7 +650,7 @@ bytes`.
 ### The config tool
 
 `<name>_config` takes `description` and `lines`, runs the lines as a batch of CLI on the engine and
-answers with its output and its change, as the `client_config` tool of the page does. Its
+answers with its output and its change, as the `config` tool of the page does. Its
 description lists every module with its keys and what it sets, from the modules themselves and
 `prompts.json`, so the model knows the server before it reads a line of it. KiSS configures every
 backend from the page through it, under the consent firewall when the model calls it, and any other

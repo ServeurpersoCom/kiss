@@ -1,5 +1,5 @@
 // config.cpp: the config tool, a batch of CLI lines on the engine, as
-// client_config runs them on the page
+// the config tool of the page runs them there
 
 #include "engine/schema.h"
 #include "engine/text.h"

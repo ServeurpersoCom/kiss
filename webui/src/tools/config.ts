@@ -7,7 +7,7 @@ const text = (args: Record<string, unknown>): string =>
 	typeof args.lines === 'string' ? args.lines : '';
 
 export default {
-	name: 'client_config',
+	name: 'config',
 	description: prompts.tools.config.description,
 	input: prompts.tools.config.input,
 	stored(ctx, args) {

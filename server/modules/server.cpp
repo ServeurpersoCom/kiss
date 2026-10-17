@@ -59,8 +59,8 @@ static std::string validate(const engine_reader & config) {
         return "server hostname \"" + name + "\" takes a-z, 0-9 and _ only, as a tool name does";
     }
     for (const tool & t : tools_list(config)) {
-        if (name.size() + 1 + t.suffix.size() > TOOL_NAME_MAX) {
-            return "server hostname \"" + name + "\" makes " + name + "_" + t.suffix + " longer than " +
+        if (tools_served(name, t).size() > TOOL_NAME_MAX) {
+            return "server hostname \"" + name + "\" makes " + tools_served(name, t) + " longer than " +
                    std::to_string(TOOL_NAME_MAX);
         }
     }

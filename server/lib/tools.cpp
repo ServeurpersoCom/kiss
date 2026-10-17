@@ -11,6 +11,10 @@ static std::vector<tool_source> & sources() {
     return list;
 }
 
+std::string tools_served(const std::string & hostname, const tool & t) {
+    return hostname + "_server_" + t.suffix;
+}
+
 bool tools_register(tool_source source) {
     sources().push_back(source);
     return true;

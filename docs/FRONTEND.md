@@ -83,7 +83,7 @@ modules
                                     display preview-argument, the argument of this tool over it
 
 tools
-  client_config                     lines
+  config                            lines
 ```
 
 ## The page
@@ -541,9 +541,9 @@ One line under the turn says what the system does now, redrawn at every frame of
 - `Retrying hf - Error 429 - Attempt 2/1800 - 3,200 ms` while a busy endpoint is asked again
 - `Thinking - 1,040 ms - 52 tokens - 50.0 t/s` while the model reasons
 - `Writing - 3,518 ms - 177 tokens - 51.3 t/s` while it answers
-- `Calling client_config - 312 ms` while a call streams
-- `Running client_config - 47 ms` while the tool runs
-- `Round 2 - Running client_config - 47 ms` from the second round on
+- `Calling config - 312 ms` while a call streams
+- `Running config - 47 ms` while the tool runs
+- `Round 2 - Running config - 47 ms` from the second round on
 
 It hides while a question of the turn stands, as the time the user takes is none of the system. A
 request asks the endpoint to count its tokens, `stream_options` of OpenAI, one per chunk counting

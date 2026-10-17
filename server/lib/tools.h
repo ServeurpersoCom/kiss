@@ -1,6 +1,6 @@
 #pragma once
-// tools.h: the tools the server serves over MCP, each named after the server,
-// <server hostname>_<suffix>; a file in tools/ registers its source by existing,
+// tools.h: the tools the server serves over MCP, each named after the server
+// and its role, <server hostname>_server_<suffix>; a file in tools/ registers its source by existing,
 // which gives its tools from the configuration it reads
 
 #include "engine/engine.h"
@@ -50,6 +50,11 @@ struct tool {
 
 // a tool name stays within what every model API takes
 constexpr size_t TOOL_NAME_MAX = 64;
+
+// the name a client sees a tool of this server by, its role between the
+// hostname and the tool: forge_server_bash; the agent of this server names it
+// bare, bash, as a router names its own interfaces
+std::string tools_served(const std::string & hostname, const tool & t);
 
 using tool_source = std::vector<tool> (*)(const engine_reader & config);
 

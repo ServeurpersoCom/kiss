@@ -92,7 +92,7 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
     jsonrpc_result(res, id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc, out, "tools");
         for (const tool & t : tools) {
-            const std::string name = server + "_" + t.suffix;
+            const std::string name = tools_served(server, t);
             yyjson_mut_val *  item = yyjson_mut_arr_add_obj(doc, list);
             yyjson_mut_obj_add_strncpy(doc, item, "name", name.c_str(), name.size());
             yyjson_mut_obj_add_strncpy(doc, item, "description", t.description.c_str(), t.description.size());
@@ -257,7 +257,7 @@ void method_tools_call(const httplib::Request &            req,
     yyjson_val *      args   = yyjson_obj_get(params, "arguments");
     std::string       server;
     for (const tool & t : listed(server)) {
-        if (called != server + "_" + t.suffix) {
+        if (called != tools_served(server, t)) {
             continue;
         }
         const std::string refused = tools_check(t, args);

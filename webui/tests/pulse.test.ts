@@ -25,11 +25,11 @@ describe('the line of a turn', () => {
 
 	it('names the call written and the tool run, and the round from the second on', () => {
 		const p = pulse(0);
-		mark(p, 'calling', 'client_config', 5);
-		expect(line(p, 317)).toBe('Calling client_config - 312 ms');
+		mark(p, 'calling', 'config', 5);
+		expect(line(p, 317)).toBe('Calling config - 312 ms');
 		p.round = 2;
-		mark(p, 'running', 'client_config', 400);
-		expect(line(p, 447)).toBe('Round 2 - Running client_config - 47 ms');
+		mark(p, 'running', 'config', 400);
+		expect(line(p, 447)).toBe('Round 2 - Running config - 47 ms');
 	});
 
 	it('asks the endpoint again, its clock running since it first failed', () => {
