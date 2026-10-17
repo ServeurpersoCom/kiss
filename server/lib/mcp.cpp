@@ -335,8 +335,12 @@ mcp_outcome mcp_call(const remote &      r,
                     }
                     const std::string response = answer(json_of(input));
                     const doc_t       answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
-                    yyjson_mut_obj_add_val(doc.get(), responses, yyjson_get_str(key),
-                                           yyjson_val_mut_copy(doc.get(), yyjson_doc_get_root(answered.get())));
+                    // the key copied into the call, as the answer it holds: the
+                    // answer of the server it comes from is gone before the call
+                    // goes again
+                    yyjson_mut_obj_add(responses,
+                                       yyjson_mut_strncpy(doc.get(), yyjson_get_str(key), yyjson_get_len(key)),
+                                       yyjson_val_mut_copy(doc.get(), yyjson_doc_get_root(answered.get())));
                 }
                 yyjson_val * state = yyjson_obj_get(result, "requestState");
                 if (state) {
