@@ -18,6 +18,9 @@ import { pulse, type Pulse } from './pulse.js';
 export const BACKEND = 'backend';
 const ON = 'on';
 const OFF = 'off';
+// the commands an attached page runs itself, every other line running on the
+// server: those that attach and detach the page
+export const PAGE_COMMANDS = ['attach', 'detach'];
 
 // the conversations API of the server: the stream, and the path of an action
 const EVENTS = 'conversations/events';

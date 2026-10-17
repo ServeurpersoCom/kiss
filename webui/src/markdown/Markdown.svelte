@@ -2,7 +2,7 @@
 	import 'katex/dist/katex.min.css';
 	import type { Attachment } from 'svelte/attachments';
 	import { CLASS, Renderer, type View } from './render.js';
-	import { COPIED_MS } from '../../lib/config.js';
+	import { COPIED_MS } from '../lib/config.js';
 
 	let { text }: { text: string } = $props();
 

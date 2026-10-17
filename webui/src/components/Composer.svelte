@@ -1,14 +1,12 @@
 <script lang="ts">
-	import { app, askOf, send, stop } from '../../lib/state.svelte.js';
-	import { NEW_DRAFT, draftOf, keep } from '../../lib/drafts.js';
-	import { known, suggest } from '../../config.js';
-	import { rendering } from '../rendering.js';
-	import { hints as said, word } from '../../lib/words.js';
-	import type { Known } from '../../engine/engine.js';
-	import { extend } from '../../engine/complete.js';
+	import { app, askOf, send, stop } from '../lib/state.svelte.js';
+	import { NEW_DRAFT, draftOf, keep } from '../lib/drafts.js';
+	import { known, suggest } from '../config.js';
+	import type { Known } from '../engine/engine.js';
+	import { extend } from '../engine/complete.js';
 	import Icon from './Icon.svelte';
-	import { SLASH } from '../../lib/config.js';
-	import { act, attached } from '../../lib/sync.js';
+	import { SLASH } from '../lib/config.js';
+	import { PAGE_COMMANDS, act, attached } from '../lib/sync.js';
 
 	// a key typed elsewhere than in a field reaches the composer, unless a modal
 	// stands over the page; a touch screen opens no keyboard by itself
@@ -34,35 +32,27 @@
 		if (!asked && !matchMedia(TOUCH).matches) field.focus();
 	});
 
-	// the items the modules of the page and of its rendering know, listed again
-	// each time a line opens on the CLI
+	// the items the modules know, listed again each time a line opens on the CLI
 	let items: Known = $state({});
-	let rendered: Known = $state({});
 	const cli = $derived(text.startsWith(SLASH));
 	$effect(() => {
-		if (!cli) return;
-		known('user').then((k) => (items = k));
-		rendering.known('user').then((k) => (rendered = k));
+		if (cli) known('user').then((k) => (items = k));
 	});
 
-	// what may follow a slash command, filtered as it is typed: a word of the
-	// page completes on the page, any other line on the page or on its server
-	// once attached, the answer to the latest line alone showing, the first
-	// word beside the words of the page
+	// what may follow a slash command, filtered as it is typed: the page tells
+	// it, or its server once attached, the answer to the latest line alone
+	// showing, beside the first words of the commands the page runs itself
 	let hints: string[] = $state([]);
 	let typed = 0;
 	$effect(() => {
 		const line = cli && !text.includes('\n') ? text.slice(SLASH.length) : null;
 		const n = ++typed;
 		if (line === null) return void (hints = []);
-		const first = !/\s/.test(line.trimStart());
-		if (!first && word(line)) return void (hints = said(line, rendered));
-		const own = first ? said(line, rendered) : [];
 		if (!attached())
-			return void (hints = [
-				...own,
-				...suggest(line, 'user', items, { conversation: app.current ?? undefined })
-			]);
+			return void (hints = suggest(line, 'user', items, {
+				conversation: app.current ?? undefined
+			}));
+		const own = /\s/.test(line) ? [] : PAGE_COMMANDS.filter((w) => w.startsWith(line));
 		act('complete', { line }).then(
 			(a) => {
 				if (n === typed) hints = [...own, ...(a.words ?? [])];
@@ -135,15 +125,6 @@
 
 <svelte:window onkeydown={onwindowkeydown} />
 
-{#if app.said?.text}
-	<div class="said">
-		<pre class:failed={!app.said.ok}>{app.said.text}</pre>
-		<button type="button" onclick={() => (app.said = null)} aria-label="Close">
-			<Icon name="close" />
-		</button>
-	</div>
-{/if}
-
 {#if hints.length}
 	<div class="hints">
 		{#each hints as hint (hint)}
@@ -177,34 +158,6 @@
 </form>
 
 <style>
-	.said {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.5rem;
-		max-width: var(--width);
-		max-height: 40vh;
-		overflow-y: auto;
-		margin: 0 auto 0.5rem;
-		padding: 0.5rem 0.5rem 0.5rem 0.9rem;
-		background: var(--surface);
-		border: 1px solid var(--line);
-		border-radius: var(--radius);
-	}
-	.said pre {
-		flex: 1;
-		margin: 0;
-		white-space: pre-wrap;
-		font-size: var(--text-secondary);
-	}
-	.said pre.failed {
-		color: var(--danger);
-	}
-	.said button {
-		width: 1.6rem;
-		height: 1.6rem;
-		background: none;
-		color: var(--fg-dim);
-	}
 	.hints {
 		display: flex;
 		flex-wrap: wrap;

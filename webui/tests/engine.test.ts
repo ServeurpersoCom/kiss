@@ -7,7 +7,6 @@ import { localTime } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/engine/engine.js';
 
 type Engine = typeof import('../src/config.js');
-type Rendering = (typeof import('../src/rendering/rendering.js'))['rendering'];
 
 // a page load: the engine starts over what the browser keeps, below a site
 // configuration
@@ -17,16 +16,6 @@ async function page(site = ''): Promise<Engine> {
 	engine.defaults(site);
 	engine.start();
 	return engine;
-}
-
-// a page load as the rendering of the page sees it, a configuration of its
-// own, below a site rendering
-async function rendered(site = ''): Promise<Rendering> {
-	vi.resetModules();
-	const { rendering } = await import('../src/rendering/rendering.js');
-	rendering.defaults(site);
-	rendering.start();
-	return rendering;
 }
 
 function models(ids: string[]): Response {
@@ -95,10 +84,10 @@ beforeEach(() => {
 describe('a batch', () => {
 	it('applies whole or not at all', async () => {
 		const k = await page();
-		const r = await k.run('set tools max-rounds 5\nset tools max-rounds wide', 'user');
+		const r = await k.run('set display tool-calls open\nset display tool-calls wide', 'user');
 		expect(r.ok).toBe(false);
 		expect(r.text).toContain('nothing applied');
-		expect(k.settings.get('tools max-rounds')).toBe('1000');
+		expect(k.settings.get('display tool-calls')).toBe('closed');
 	});
 
 	it('compiles every line before the first one runs', async () => {
@@ -115,7 +104,7 @@ describe('a batch', () => {
 
 	it('runs a command that writes the archive alone', async () => {
 		const k = await page();
-		const r = await k.run('set tools max-rounds 5\ncopy running-config a', 'user');
+		const r = await k.run('set display tool-calls open\ncopy running-config a', 'user');
 		expect(r.text).toContain('copy runs alone');
 		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
 	});
@@ -400,50 +389,37 @@ describe('a filter', () => {
 });
 
 describe('show running-config', () => {
-	it('reads back to the same values, the configuration as the rendering', async () => {
+	it('reads back to the same values', async () => {
 		const k = await page();
-		await k.run('set chat system-prompt "a|b \\"c\\"\\nd"', 'user');
+		const lines = [
+			'set style sheet a ":root { --accent: oklch(0.6 0.2 300) }"',
+			'set chat system-prompt "a|b \\"c\\"\\nd"',
+			'set style sheet b \'body { font-family: "Inter", sans-serif }\'',
+			'set display tool-calls open',
+			'set endpoints url a http://a/v1'
+		];
+		expect((await k.run(lines.join('\n'), 'user')).ok).toBe(true);
 		expect(k.settings.get('chat system-prompt')).toBe('a|b "c"\nd');
-		for (const [boot, lines] of [
-			[
-				page,
-				[
-					'set chat system-prompt "a|b \\"c\\"\\nd"',
-					'set tools max-rounds 5',
-					'set endpoints url a http://a/v1'
-				]
-			],
-			[
-				rendered,
-				[
-					'set style sheet a ":root { --accent: oklch(0.6 0.2 300) }"',
-					'set style sheet b \'body { font-family: "Inter", sans-serif }\'',
-					'set display tool-calls open'
-				]
-			]
-		] as const) {
-			const k = await boot();
-			expect((await k.run(lines.join('\n'), 'user')).ok).toBe(true);
-			const shown = (await k.run('show running-config', 'user')).text;
-			const fresh = await boot();
-			const sets = shown
-				.split('\n')
-				.filter((l) => !l.startsWith('!'))
-				.join('\n');
-			expect((await fresh.run(sets, 'user')).ok).toBe(true);
-			expect((await fresh.run('show running-config', 'user')).text).toBe(shown);
-		}
+		expect(k.settings.get('display tool-calls')).toBe('open');
+		const shown = (await k.run('show running-config', 'user')).text;
+		const fresh = await page();
+		const sets = shown
+			.split('\n')
+			.filter((l) => !l.startsWith('!'))
+			.join('\n');
+		expect((await fresh.run(sets, 'user')).ok).toBe(true);
+		expect((await fresh.run('show running-config', 'user')).text).toBe(shown);
 	});
 
 	it('all lists every module as show lists it, defaults included', async () => {
 		const k = await page();
-		await k.run('set tools max-rounds 5', 'user');
+		await k.run('set display tool-calls open', 'user');
 		const all = (await k.run('show run al', 'user')).text;
 		const { modules } = await import('../src/config.js');
 		const each = await Promise.all(modules.map((m) => k.run(`show ${m.name}`, 'user')));
 		expect(all).toBe(each.map((r) => r.text).join('\n'));
-		expect(all).toContain('set tools max-rounds 5\n');
-		expect(all).toContain('set chat system-prompt ""\n');
+		expect(all).toContain('set display tool-calls open\n');
+		expect(all).toContain('set display thinking closed\n');
 		expect((await k.run('show running-config x', 'user')).text).toBe(
 			'% nothing goes after show running-config: x'
 		);
@@ -452,7 +428,7 @@ describe('show running-config', () => {
 
 describe('the display', () => {
 	it('folds by default and opens on demand', async () => {
-		const k = await rendered();
+		const k = await page();
 		expect(k.settings.get('display thinking')).toBe('closed');
 		expect(k.settings.get('display tool-calls')).toBe('closed');
 		expect((await k.run('set display tool-calls ajar', 'user')).text).toContain(
@@ -462,7 +438,7 @@ describe('the display', () => {
 	});
 
 	it('renders the thinking and the reply as markdown by default, each plain on demand', async () => {
-		const k = await rendered();
+		const k = await page();
 		expect(k.settings.get('display render', 'thinking')).toBe('markdown');
 		expect(k.settings.get('display render', 'reply')).toBe('markdown');
 		expect((await k.run('show display render', 'user')).text).toBe(
@@ -475,13 +451,13 @@ describe('the display', () => {
 			'not one of markdown plain'
 		);
 		expect((await k.run('set display render reply plain', 'user')).ok).toBe(true);
-		const { display } = await import('../src/rendering/display.svelte.js');
+		const { display } = await import('../src/lib/display.svelte.js');
 		expect(display.render).toEqual({ thinking: 'markdown', reply: 'plain' });
 	});
 
 	it('previews the description of every folded call, a tool of its own over it', async () => {
-		const k = await rendered();
-		const { display } = await import('../src/rendering/display.svelte.js');
+		const k = await page();
+		const { display } = await import('../src/lib/display.svelte.js');
 		expect(k.settings.get('display preview-argument')).toBe('description');
 		expect(display.argument).toBe('description');
 		await k.run(
@@ -677,10 +653,16 @@ describe('a tool', () => {
 		expect((await k.run('set tools use repo.search off', 'user')).text).toBe(
 			'% unknown tools "repo.search"'
 		);
-		expect((await k.run('set tools use config off', 'user')).ok).toBe(true);
-		expect((await k.run('show tools config', 'user')).text).toBe('set tools use config off');
+		const r = await k.run(
+			'set tools preview-argument config query\nset tools use config off',
+			'user'
+		);
+		expect(r.ok).toBe(true);
+		expect((await k.run('show tools config', 'user')).text).toBe(
+			'set tools preview-argument config query\nset tools use config off'
+		);
 		expect((await k.run('no tools config', 'user')).ok).toBe(true);
-		expect(k.settings.get('tools use', 'config')).toBe('on');
+		expect(k.settings.get('tools preview-argument', 'repo.search')).toBeUndefined();
 		expect(k.settings.get('tools use', 'repo.search')).toBe('consent');
 	});
 });
@@ -714,11 +696,9 @@ describe('a title', () => {
 describe('a word after set, no or show', () => {
 	it('competes with the modules, a prefix of both being ambiguous', async () => {
 		const k = await page();
-		expect((await k.run('show c', 'user')).text).toBe(
-			'% ambiguous word "c": chat client conversations'
-		);
+		expect((await k.run('show d', 'user')).text).toBe('% ambiguous word "d": diff display');
 		expect((await k.run('show t', 'user')).text).toBe('% ambiguous word "t": title tools');
-		expect((await k.run('show ch', 'user')).text).toContain('set chat model ""');
+		expect((await k.run('show dis', 'user')).text).toContain('set display thinking closed');
 		expect((await k.run('show tool', 'user')).ok).toBe(true);
 		expect((await k.run('show ti', 'user')).text).toContain('no conversation here');
 	});
@@ -1044,11 +1024,11 @@ describe('the conversations', () => {
 		);
 		expect(list).toHaveLength(2);
 		expect((await k.run('import', 'llm', shelf(list))).text).toBe('% the user picked no file');
-		const conf = 'set chat system-prompt "from a file"\n! a note\n set tools max-rounds 5\n';
+		const conf = 'set chat system-prompt "from a file"\n! a note\n set display tool-calls open\n';
 		expect((await k.run('import', 'user', shelf(list, conf))).text).toContain(
 			'+ set chat system-prompt "from a file"'
 		);
-		expect(k.settings.get('tools max-rounds')).toBe('5');
+		expect(k.settings.get('display tool-calls')).toBe('open');
 		expect((await k.run('import', 'user', shelf(list, conf))).text).toBe(
 			'! ran 2 lines of the file'
 		);
@@ -1058,7 +1038,7 @@ describe('the conversations', () => {
 		expect((await k.run('import', 'user', shelf(list, serialize([])))).text).toBe(
 			'% the file holds no conversation'
 		);
-		expect((await k.run('set tools max-rounds 5', 'user')).text).toBe('! no change');
+		expect((await k.run('set display tool-calls open', 'user')).text).toBe('! no change');
 		const broken = 'set chat system-prompt other\nbogus';
 		expect((await k.run('import', 'user', shelf(list, broken))).text).toContain('file line 2:');
 		expect(k.settings.get('chat system-prompt')).toBe('from a file');
@@ -1135,13 +1115,12 @@ describe('a model', () => {
 
 describe('IOS words', () => {
 	it('take a value by any prefix that names one only, the config keeping it whole', async () => {
-		const r = await rendered();
-		expect((await r.run('set display tool-calls op', 'user')).ok).toBe(true);
-		expect(r.settings.get('display tool-calls')).toBe('open');
-		expect((await r.run('show running-config', 'user')).text).toContain(
+		const k = await page();
+		expect((await k.run('set display tool-calls op', 'user')).ok).toBe(true);
+		expect(k.settings.get('display tool-calls')).toBe('open');
+		expect((await k.run('show running-config', 'user')).text).toContain(
 			'set display tool-calls open'
 		);
-		const k = await page();
 		expect((await k.run('set tools use config o', 'user')).text).toContain(
 			'ambiguous value "o": off on'
 		);
@@ -1149,13 +1128,15 @@ describe('IOS words', () => {
 
 	it('write memory, or write alone, as copy running-config startup-config', async () => {
 		const k = await page();
-		await k.run('set tools max-rounds 5', 'user');
+		await k.run('set display tool-calls open', 'user');
 		expect((await k.run('wr mem', 'user')).text).toBe('! copied running-config to startup-config');
-		expect((await k.run('show startup-config', 'user')).text).toContain('set tools max-rounds 5');
-		await k.run('set chat system-prompt blue', 'user');
+		expect((await k.run('show startup-config', 'user')).text).toContain(
+			'set display tool-calls open'
+		);
+		await k.run('set display thinking open', 'user');
 		expect((await k.run('write', 'user')).ok).toBe(true);
 		expect((await k.run('show startup-config', 'user')).text).toContain(
-			'set chat system-prompt blue'
+			'set display thinking open'
 		);
 		expect((await k.run('write disk', 'user')).text).toContain('unknown write "disk"');
 	});
@@ -1211,11 +1192,11 @@ describe('completion and abbreviation', () => {
 
 	it('names a configuration by a prefix, a new save only by its whole name', async () => {
 		const k = await page();
-		await k.run('set tools max-rounds 5', 'user');
+		await k.run('set display tool-calls open', 'user');
 		await k.run('copy run backup', 'user');
 		expect((await k.run('show diff back run', 'user')).text).toBe('! no difference');
 		expect((await k.run('copy ba start', 'user')).text).toBe('! copied backup to startup-config');
-		expect((await k.run('show saves ba', 'user')).text).toContain('set tools max-rounds 5');
+		expect((await k.run('show saves ba', 'user')).text).toContain('set display tool-calls open');
 	});
 });
 
@@ -1378,7 +1359,7 @@ describe('a listing by group', () => {
 
 describe('style', () => {
 	it('is the last style sheet of the page, its sheets by name, gone with the running-config', async () => {
-		const k = await rendered();
+		const k = await page();
 		await k.run(
 			`set style sheet b 'b { color: red }'\nset style sheet a 'a { color: blue }'`,
 			'user'
@@ -1389,25 +1370,27 @@ describe('style', () => {
 		expect(last()).toBe('');
 	});
 
-	it('keys the tokens of the page of a value of their own, the configuration knowing none', async () => {
-		const k = await rendered();
+	it('keys the tokens of the page of a value of their own, the model free on them and on sheets', async () => {
+		const k = await page();
 		const shown = (await k.run('show style', 'user')).text;
 		expect(shown).toContain('set style bg "oklch(0.17 0.005 260)"');
 		expect(shown).toContain('set style size-secondary 0.8rem');
 		expect(shown).not.toMatch(/style (ok|surface|text-secondary|icon) /);
-		expect((await k.run('set style accent red', 'user')).ok).toBe(true);
+		const refuse = user(REFUSE);
+		expect((await k.run('set style accent red', 'llm', refuse)).ok).toBe(true);
+		expect(refuse.asked).toEqual([]);
 		const tokens = document.head.querySelector('style:nth-last-of-type(2)')!;
 		expect((tokens as HTMLStyleElement).sheet!.cssRules[0].cssText).toContain('--accent: red');
-		expect((await k.run(`set style sheet x '.tool { display: none }'`, 'user')).ok).toBe(true);
-		const config = await page();
-		expect((await config.run('set style accent red', 'user')).text).toContain('unknown');
-		expect((await config.run('set display thinking open', 'user')).text).toContain('unknown');
+		expect((await k.run(`set style sheet x '.tool { display: none }'`, 'llm', refuse)).ok).toBe(
+			true
+		);
+		expect(refuse.asked).toEqual([]);
 	});
 });
 
 describe('erase and copy', () => {
 	it('erase running-config drops what the session sets, a copy to it puts back the save it names', async () => {
-		const k = await page('set tools max-rounds 5');
+		const k = await page('set display tool-calls open');
 		expect((await k.run('copy first running-config', 'user')).text).toContain(
 			'unknown configuration "first"'
 		);
@@ -1415,10 +1398,10 @@ describe('erase and copy', () => {
 		await k.run('copy running-config first', 'user');
 		await k.run('set chat system-prompt green', 'user');
 		await k.run('copy running-config second', 'user');
-		await k.run('set chat system-prompt pink\nset tools max-rounds 7', 'user');
+		await k.run('set chat system-prompt pink\nset display tool-calls closed', 'user');
 		await k.run('erase running-config', 'user', shelf([]));
 		expect(k.settings.get('chat system-prompt')).toBe('');
-		expect(k.settings.get('tools max-rounds')).toBe('5');
+		expect(k.settings.get('display tool-calls')).toBe('open');
 		await k.run('copy second running-config', 'user');
 		expect(k.settings.get('chat system-prompt')).toBe('green');
 		await k.run('copy first running-config', 'user');
@@ -1463,11 +1446,11 @@ describe('a page', () => {
 		await k.run('set chat system-prompt green', 'user');
 		await k.run('copy running-config b', 'user');
 		await k.run('copy b running-config', 'user');
-		const next = await page('set tools max-rounds 5');
+		const next = await page('set display tool-calls open');
 		expect(next.settings.get('chat system-prompt')).toBe('blue');
-		expect(next.settings.get('tools max-rounds')).toBe('5');
+		expect(next.settings.get('display tool-calls')).toBe('open');
 		expect((await next.run('show startup-config', 'user')).text).toBe(
-			'set chat system-prompt blue\nset tools max-rounds 5'
+			'set chat system-prompt blue\nset display tool-calls open'
 		);
 		expect((await next.run('show diff start run', 'user')).text).toBe('! no difference');
 		await next.run('copy b startup-config', 'user');
@@ -1475,9 +1458,11 @@ describe('a page', () => {
 		expect((await (await page()).run('erase startup-config', 'user', shelf([]))).text).toBe(
 			'! erased startup-config, the page starts on client.conf'
 		);
-		const bare = await page('set tools max-rounds 5');
+		const bare = await page('set display tool-calls open');
 		expect(bare.settings.get('chat system-prompt')).toBe('');
-		expect((await bare.run('show startup-config', 'user')).text).toBe('set tools max-rounds 5');
+		expect((await bare.run('show startup-config', 'user')).text).toBe(
+			'set display tool-calls open'
+		);
 		expect((await (await page()).run('show startup-config', 'user')).text).toBe(
 			'! every key is at its default'
 		);
@@ -1506,12 +1491,11 @@ describe('every key', () => {
 
 	// a page with an endpoint m serving x, and one line set for every key that
 	// takes a value written out, each the first value it takes
-	async function full(rendering = false) {
-		const k: Engine | Rendering = rendering ? await rendered() : await page();
+	async function full() {
+		const k = await page();
 		vi.stubGlobal('fetch', kiss({ p: false }, {}, ['x']));
-		if (!rendering)
-			await k.run('set endpoints url m http://m/v1\nset mcp url c http://c/mcp', 'user');
-		const { modules } = k;
+		await k.run('set endpoints url m http://m/v1\nset mcp url c http://c/mcp', 'user');
+		const { modules } = await import('../src/config.js');
 		const untaken: string[] = [];
 		for (const m of modules) {
 			for (const [name, def] of Object.entries(m.keys)) {
@@ -1536,11 +1520,8 @@ describe('every key', () => {
 		return k;
 	}
 
-	it('pastes back after no as show running-config writes it, and goes alone, or a rule of its module says why, the configuration as the rendering', async () => {
-		for (const rendering of [false, true]) await pasted(await full(rendering));
-	});
-
-	async function pasted(k: Engine | Rendering) {
+	it('pastes back after no as show running-config writes it, and goes alone, or a rule of its module says why', async () => {
+		const k = await full();
 		const running = (await k.run('show running-config', 'user')).text;
 		const lines = running.split('\n').filter((l) => l.startsWith('set '));
 		for (const line of lines) {
@@ -1554,17 +1535,18 @@ describe('every key', () => {
 				expect(r.text).toMatch(/^% [a-z]+: /);
 			}
 		}
-	}
+	});
 
 	it('names only an item its source serves, one already held whatever the source says', async () => {
 		const k = await full();
 		const { modules } = await import('../src/config.js');
 		const known = modules.filter((m) => m.items).map((m) => m.name);
-		expect(known.sort()).toEqual(['models', 'tools']);
+		expect(known.sort()).toEqual(['display', 'models', 'tools']);
 		for (const line of [
 			'set models max_tokens m/nope 5',
 			'set models max_tokens nowhere/x 5',
-			'set tools use nope on'
+			'set tools use nope on',
+			'set display render nope plain'
 		]) {
 			expect((await k.run(line, 'user')).text).toMatch(/^% unknown [a-z ]+"[a-z/]+"/);
 		}

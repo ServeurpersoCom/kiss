@@ -1,5 +1,6 @@
 import type { Module } from '../engine/engine.js';
 import { NAME } from '../lib/config.js';
+import { display } from '../lib/display.svelte.js';
 import { served } from '../lib/mcp.js';
 import { CONSENT, USES, tools } from '../lib/tools.js';
 
@@ -13,7 +14,18 @@ export default {
 		// off, the model never sees the tool; consent, each call asks the user,
 		// always turning it on; the factory configuration turns the tools of
 		// KiSS on, and their changes ask
-		use: { kind: 'enum', values: USES, default: CONSENT, named: true, guard: true }
+		use: { kind: 'enum', values: USES, default: CONSENT, named: true, guard: true },
+		// the argument a call of the tool shows folded, by its name, over the
+		// one display preview-argument names for every tool
+		'preview-argument': { kind: 'string', named: true }
+	},
+	apply(config) {
+		display.preview = Object.fromEntries(
+			config
+				.names('tools')
+				.map((tool) => [tool, String(config.get('tools preview-argument', tool) ?? '')])
+				.filter(([, argument]) => argument)
+		);
 	},
 	// the tools of KiSS, then those of every MCP server
 	async items(ctx) {

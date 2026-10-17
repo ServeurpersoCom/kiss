@@ -1,10 +1,10 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import type { Call, Round } from '../../lib/types.js';
+	import type { Call, Round } from '../lib/types.js';
 	import Markdown from '../markdown/Markdown.svelte';
-	import { partial } from '../../lib/partial.js';
+	import { partial } from '../lib/partial.js';
 	import Icon from './Icon.svelte';
-	import { INFERENCE, MARKDOWN, OPEN, display, type Fold } from '../display.svelte.js';
+	import { INFERENCE, MARKDOWN, OPEN, display, type Fold } from '../lib/display.svelte.js';
 
 	// live: the round the model writes now
 	let { round, live = false }: { round: Round; live?: boolean } = $props();

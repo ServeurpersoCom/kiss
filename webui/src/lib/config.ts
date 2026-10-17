@@ -33,12 +33,6 @@ export const titled = (title: string, quote: (value: string) => string): string 
 // the page that a site writes over it: set lines both
 export const FACTORY_FILE = 'factory client.conf';
 export const SITE_CONFIG_URL = 'client.conf';
-// the rendering of the page, a configuration of its own: its archive in the
-// browser, its factory configuration and its site file
-export const RENDERING_ARCHIVE_STORAGE_KEY = 'kiss.rendering.saves';
-export const RENDERING_STARTUP_STORAGE_KEY = 'kiss.rendering.startup';
-export const RENDERING_FACTORY_FILE = 'factory rendering.conf';
-export const RENDERING_SITE_URL = 'rendering.conf';
 // a word this many edits away from a candidate per three letters is a typo
 export const TYPO_LETTERS_PER_EDIT = 3;
 

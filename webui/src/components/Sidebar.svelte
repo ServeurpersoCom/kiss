@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { app, askOf, newChat, open, pin, remove } from '../../lib/state.svelte.js';
-	import type { Conversation } from '../../lib/types.js';
-	import { CLI, NAME, dayName } from '../../lib/config.js';
-	import { clock } from '../clock.svelte.js';
+	import { app, askOf, newChat, open, pin, remove } from '../lib/state.svelte.js';
+	import type { Conversation } from '../lib/types.js';
+	import { CLI, NAME, dayName } from '../lib/config.js';
+	import { clock } from '../lib/clock.svelte.js';
 	import Icon from './Icon.svelte';
 	import Dialog from './Dialog.svelte';
 

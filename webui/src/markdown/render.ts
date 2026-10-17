@@ -9,7 +9,7 @@ import remarkRehype from 'remark-rehype';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
-import { PATHS, stroke, type IconName } from '../icons.js';
+import { PATHS, stroke, type IconName } from '../lib/icons.js';
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const LINK_PROTOCOLS = ['http:', 'https:', 'mailto:'];

@@ -779,7 +779,7 @@ describe('an MCP server', () => {
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
 		const p = await page({ a: legacy(SHELL), b: legacy([{ name: 'old', run: text('old') }]) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await p.engine.run('set tools use snap off\nset tools use old on', 'user');
+		await p.engine.run('set tools use snap off\nset tools preview-argument old x', 'user');
 		await p.engine.run('no mcp b', 'user');
 		expect((await p.engine.run('show tools use', 'user')).text).toBe(
 			[
@@ -791,7 +791,7 @@ describe('an MCP server', () => {
 				'set tools use fail consent',
 				'set tools use wait consent',
 				'! unavailable',
-				'set tools use old on'
+				'set tools use old consent'
 			].join('\n')
 		);
 	});

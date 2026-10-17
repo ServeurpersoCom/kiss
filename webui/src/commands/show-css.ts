@@ -1,5 +1,5 @@
-import type { Command } from '../../engine/engine.js';
-import { comment } from '../../engine/text.js';
+import type { Command } from '../engine/engine.js';
+import { comment } from '../engine/text.js';
 
 // the rules of the page style, one per line, those of the libraries left out
 // as their own layer holds them

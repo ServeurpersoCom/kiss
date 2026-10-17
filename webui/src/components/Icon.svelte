@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { PATHS, stroke, type IconName } from '../icons.js';
+	import { PATHS, stroke, type IconName } from '../lib/icons.js';
 
 	let { name }: { name: IconName } = $props();
 </script>

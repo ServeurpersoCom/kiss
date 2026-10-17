@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SIDEBAR_STORAGE_KEY } from '../../lib/config.js';
+	import { SIDEBAR_STORAGE_KEY } from '../lib/config.js';
 
 	// the edge of the sidebar: the sidebar follows the pointer for the whole
 	// drag, within the bounds of the page style; it closes once the pointer
