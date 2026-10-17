@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import { line, type Pulse } from '../lib/pulse.js';
+	import { line, type Pulse } from '../../lib/pulse.js';
 
 	// the clock of the turn the model writes now
 	let { pulse }: { pulse: Pulse } = $props();

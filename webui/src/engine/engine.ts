@@ -158,7 +158,7 @@ export interface Archive {
 	// a save of the same name gives way to the new one
 	save(name: string, values: Record<string, Value>): void;
 	remove(save: Save): void;
-	// what the page starts with over client.conf, nothing once erased
+	// what the page starts with over the site file, nothing once erased
 	startup(): Record<string, Value>;
 	boot(values: Record<string, Value> | undefined): void;
 }
@@ -266,6 +266,8 @@ export interface Context extends Scope {
 	// the network
 	running: ConfigReader;
 	archive: Archive;
+	// the site file of the configuration, client.conf or rendering.conf
+	site: string;
 	schema: Schema;
 	modules: readonly Module[];
 	// the commands open to the role

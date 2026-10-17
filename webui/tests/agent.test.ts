@@ -200,7 +200,7 @@ describe('a turn', () => {
 	it('sends every round as one assistant message and its results', async () => {
 		const p = await page([
 			stream([calls(['a', 'show version'])]),
-			stream([calls(['b', 'show display thinking'])]),
+			stream([calls(['b', 'show chat system-prompt'])]),
 			stream([{ content: 'done' }])
 		]);
 		await p.go();
@@ -227,8 +227,8 @@ describe('a turn', () => {
 			stream([
 				calls(
 					['a', 'show version'],
-					['b', 'show display thinking'],
-					['c', 'set display thinking open']
+					['b', 'show chat system-prompt'],
+					['c', 'set chat system-prompt open']
 				)
 			])
 		]);
@@ -241,9 +241,9 @@ describe('a turn', () => {
 		expect(cli).toHaveBeenCalledTimes(2);
 		expect(p.reply.rounds[0].calls).toMatchObject([
 			{ id: 'a', ok: true },
-			{ id: 'b', args: '{"lines":"show display thinking"}', ok: false, result: STOPPED }
+			{ id: 'b', args: '{"lines":"show chat system-prompt"}', ok: false, result: STOPPED }
 		]);
-		expect(p.engine.settings.get('display thinking')).toBe('closed');
+		expect(p.engine.settings.get('chat system-prompt')).toBe('');
 	});
 
 	it('stores no secret the model writes, from before its call is sent, even in arguments that read as no object', async () => {
@@ -266,7 +266,7 @@ describe('a turn', () => {
 	});
 
 	it('settles, even mid stream, to what streamed and the calls that ran', async () => {
-		const p = await page([stream([{ content: 'hi' }, calls(['a', 'set display thi'])], 'open')]);
+		const p = await page([stream([{ content: 'hi' }, calls(['a', 'set chat sys'])], 'open')]);
 		const turn = p.go();
 		await vi.waitFor(() => expect(p.reply.rounds[0]?.calls.length).toBe(1));
 		expect(p.settled(p.reply.rounds)).toEqual([{ reasoning: '', text: 'hi', calls: [] }]);
@@ -275,10 +275,10 @@ describe('a turn', () => {
 	});
 
 	it('runs nothing from a stream closed before [DONE]', async () => {
-		const p = await page([stream([calls(['a', 'set display thinking open'])], 'cut')]);
+		const p = await page([stream([calls(['a', 'set chat system-prompt open'])], 'cut')]);
 		await expect(p.go()).rejects.toThrow('ended before [DONE]');
 		expect(p.reply.rounds).toEqual([]);
-		expect(p.engine.settings.get('display thinking')).toBe('closed');
+		expect(p.engine.settings.get('chat system-prompt')).toBe('');
 	});
 
 	it('names the endpoint and the event of a stream that does not read', async () => {

@@ -188,7 +188,7 @@ export function engine(spec: Spec) {
 		];
 	}
 
-	// the startup-config enters the running configuration over client.conf the
+	// the startup-config enters the running configuration over the site file the
 	// same way, a key no module declares anymore or a value its key no longer
 	// takes left out; returns each key and block that stays out and why
 	function start(): string[] {
@@ -292,6 +292,7 @@ export function engine(spec: Spec) {
 			config: draft,
 			running,
 			archive,
+			site: spec.siteFile,
 			schema,
 			modules,
 			commands: commands.filter((c) => c.roles.includes(role)),
@@ -509,6 +510,7 @@ export function engine(spec: Spec) {
 			config: running,
 			running,
 			archive,
+			site: spec.siteFile,
 			schema,
 			modules,
 			known,

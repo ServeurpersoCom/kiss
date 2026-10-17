@@ -5,7 +5,7 @@ import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.
 import { choose, pick } from '../engine/near.js';
 import { unstore } from '../engine/schema.js';
 
-// the values a name holds over client.conf: the running configuration, the
+// the values a name holds over the site file: the running configuration, the
 // startup-config, or a save
 export function values(ctx: Context, name: string): Record<string, Value> {
 	if (name === RUNNING_CONFIG) return ctx.config.values();
@@ -13,7 +13,7 @@ export function values(ctx: Context, name: string): Record<string, Value> {
 	return ctx.archive.find(name).values;
 }
 
-// a configuration as it runs: its values over client.conf, sorted, a key no
+// a configuration as it runs: its values over the site file, sorted, a key no
 // module declares anymore or a value its key no longer takes left out
 export function effective(ctx: Context, name: string): Record<string, Value> {
 	const config = ctx.config.reader(values(ctx, name));

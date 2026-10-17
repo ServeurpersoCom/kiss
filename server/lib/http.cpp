@@ -19,7 +19,8 @@
 #include <sstream>
 
 // the site configuration a directory gives the page it serves
-static const char * const SITE_FILE = "client.conf";
+static const char * const SITE_FILE      = "client.conf";
+static const char * const RENDERING_FILE = "rendering.conf";
 
 // the path of a proxied server, its route name then the rest of the path
 // captured
@@ -151,6 +152,17 @@ void http_routes(httplib::Server & server) {
             return;
         }
         res.set_content(reinterpret_cast<const char *>(client_conf), client_conf_len, "text/plain; charset=utf-8");
+    });
+
+    // the site rendering of the page: rendering.conf of the directory the
+    // server runs in, no line without it, the page keeping its own
+    server.Get("/rendering.conf", [](const httplib::Request &, httplib::Response & res) {
+        std::ifstream      site(RENDERING_FILE, std::ios::binary);
+        std::ostringstream text;
+        if (site) {
+            text << site.rdbuf();
+        }
+        res.set_content(text.str(), "text/plain; charset=utf-8");
     });
 
     server.Options("/mcp", [](const httplib::Request & req, httplib::Response & res) {

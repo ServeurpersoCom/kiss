@@ -5,7 +5,17 @@ hold.
 
 ## Commands
 
+The page runs two IOS configurations apart, each with its running-config, startup-config and saves:
+the configuration, twin of the configuration of a KiSS server, and the rendering, how the page shows
+what it holds, which no other machine has. Its own words, run on the page whatever terminal it talks
+to, lead to the rendering, and move the page between its server and its own world.
+
 ```
+words of the page
+  rendering <line>                  a line of the rendering
+  attach
+  detach
+
 commands
   set <module> <key> [name] <value>
   no <module> <key> [name]
@@ -16,7 +26,6 @@ commands
   show startup-config
   show saves
   show diff <config> <config>
-  show css
   show title
   show conversations
   show version
@@ -26,8 +35,6 @@ commands
   export [<id>|conversations|<config>]
   import
   title <title>
-  attach
-  detach
   <command> | begin|count|exclude|include <pattern>
 
   <config>                running-config, startup-config or a save by its name
@@ -39,13 +46,6 @@ modules
     system-prompt <text>            none
   client
     hostname <name>                 four letters drawn once
-  display
-    thinking closed|open|inference  closed
-    tool-calls closed|open|inference
-                                    closed
-    render thinking|reply markdown|plain
-                                    markdown
-    preview-argument <argument>     description, the argument every folded call shows
   endpoints
     url <name> <url>                guarded
     protocol <name> chat|messages|responses
@@ -76,17 +76,32 @@ modules
     frequency_penalty <model> <-2..2>
     seed <model> <integer>
     reasoning_effort <model> <word>
-  style
-    <token> <value>                 show style lists them; bg, fg, accent set a theme
-    sheet <name> <css>
   tools                             show tools lists them, by who serves them
     max-rounds <count>              1000
     use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
-    preview-argument <tool> <argument>
-                                    display preview-argument, the argument of this tool over it
 
 tools
   config                            lines
+
+rendering commands
+  set, no, show, show running-config [all], show startup-config, show saves,
+  show diff, copy, write, erase, as the configuration has them
+  show css
+
+rendering modules
+  display
+    thinking closed|open|inference  closed
+    tool-calls closed|open|inference
+                                    closed
+    render thinking|reply markdown|plain
+                                    markdown
+    preview-argument <argument>     description, the argument every folded call shows
+  style
+    <token> <value>                 show style lists them; bg, fg, accent set a theme
+    sheet <name> <css>
+  tools
+    preview-argument <tool> <argument>
+                                    display preview-argument, the argument of this tool over it
 ```
 
 ## The page
@@ -97,7 +112,9 @@ KiSS server of `server/`, described in `BACKEND.md`, is one MCP server among oth
 
 ```
 webui/client.conf       the factory configuration the page bundles
-webui/src/main.ts       the start: site configuration, startup-config, conversations, page
+webui/rendering.conf    the factory rendering the page bundles
+webui/src/main.ts       the start: each configuration over its site file, conversations, page
+webui/src/config.ts     the configuration of the page, twin of the configuration of the server
 webui/src/prompts.json  what a model reads of the page: its tools, its notes
 webui/src/engine/       the CLI: text, parse, filter, near, schema, values, registry, archive, run,
                         complete, and the keychain with its seal
@@ -106,14 +123,20 @@ webui/src/modules/      one file per module: its keys, rules, checks, how it app
 webui/src/tools/        one file per tool, registered by existing: config, the CLI as the model
                         calls it
 webui/src/protocols/    one file per protocol an endpoint speaks: chat, messages, responses
-webui/src/lib/          the page side: agent, api, mcp, form, state, sync, conversation, db
-webui/src/components/   thread, message, round, ask, dialog, composer, sidebar
-webui/src/markdown/     the remark and rehype stack and its incremental renderer
-webui/src/tokens.css    the tokens of the page, read as the keys of style
+webui/src/lib/          the page side: agent, api, mcp, form, state, sync, conversation, db,
+                        and words, the words of the page
+webui/src/rendering/    the rendering, which no other machine has: rendering.ts, its
+                        configuration, its modules/ and commands/, App.svelte and components/,
+                        thread, message, round, ask, dialog, composer, sidebar, markdown/, the
+                        remark and rehype stack and its incremental renderer, tokens.css, the
+                        tokens of the page, read as the keys of style
 webui/tests/            the laws, under vitest and happy-dom
 ```
 
-A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing. A command
+Everything outside `rendering/` and `lib/words.ts` has its twin on the server. A file in
+`commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing, as one in
+`rendering/commands/` or `rendering/modules/` does for the rendering, which takes `set`, `no`, `show`,
+`copy`, `write` and `erase` of the configuration beside its own. A command
 imports the engine, `lib/types.ts` and `lib/config.ts` only and reaches everything else through its
 `Context`; a module or a tool is where the configuration meets the page, it imports what it drives in
 `lib/`. A plugin declared wrong or twice stops the page at load, never later.
@@ -153,13 +176,13 @@ line, nor replaces anything.
 
 A word that names something already there may be any prefix that names it alone, the way Cisco IOS
 reads a line; an exact word always wins, and the configuration keeps the whole word. That holds for
-a command, a module, a key, a filter, the value of an enum (`set display tool-calls op` sets
-`open`), `all` and `memory`, the item of `no` and `show`, a configuration (`copy run start`), and
+a command, a module, a key, a filter, the value of an enum (`set tools use config cons` sets
+`consent`), `all` and `memory`, the item of `no` and `show`, a configuration (`copy run start`), and
 what `erase` and `export` name. A word that may be new is written whole: the item of a `set`, which
 may create it, a save a copy creates, and every value but the one of an enum, `chat model` included.
 
 Right after `set`, `no` or `show`, the words of longer commands and the names of the modules
-compete, so `show d` is ambiguous between `diff` and `display`. A module named as a word of a longer
+compete, so `show c` is ambiguous between `chat`, `client` and `conversations`. A module named as a word of a longer
 command could never be told from it, so the registry refuses it.
 
 Every word completes, on Tab or by a click on the words under the composer: the words above, the
@@ -263,27 +286,33 @@ opens on a URL, written as it is; what a server answers goes as it came.
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `chat`      | `model`, `system-prompt`                                                                                                                                                                   |
 | `client`    | `hostname`                                                                                                                                                                                 |
-| `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                                                                                                       |
-| `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                                                                                              |
-| `tools`     | `max-rounds`, `use <tool>` guarded when opening, `preview-argument <tool>`                                                                                                                 |
+| `tools`     | `max-rounds`, `use <tool>` guarded when opening                                                                                                                                            |
+
+The rendering holds its own modules:
+
+| Module    | Keys                                                                       |
+| --------- | -------------------------------------------------------------------------- |
+| `display` | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument` |
+| `style`   | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`              |
+| `tools`   | `preview-argument <tool>`                                                  |
 
 ### Laws
 
 Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 
 - A line takes one filter, after its first pipe outside quotes, as IOS does: the pattern is the rest
-  of the line as written, so `| include ^set (tools|style)` reads whole; an output comes whole, as
+  of the line as written, so `| include ^set (tools|mcp)` reads whole; an output comes whole, as
   long as it is, the filter narrowing it.
 - A word naming something already there, a command, module, key, filter, enum value, item of `no` or
   `show`, configuration or conversation, may be any prefix that names one only; a word that may be
   new, the item of a `set`, a save a copy creates, a value, is written whole; right after `set`,
-  `no` or `show`, command and module words compete, `show d` being ambiguous between `diff` and
-  `display`; an exact word always wins. A collection is named in the plural, `endpoints`, `tools`,
+  `no` or `show`, command and module words compete, `show c` being ambiguous between `chat`,
+  `client` and `conversations`; an exact word always wins. A collection is named in the plural, `endpoints`, `tools`,
   `saves`, `models`, its singular, a prefix of it, naming it too; an acronym, `mcp`, or a whole,
-  `display`, `style`, keeps its one name.
+  `chat`, `client`, keeps its one name.
 - Every word completes: a value with its current one, never the one of a secret, and with the items
   of the module it names, the models of every endpoint for `chat model`.
 - A batch compiles all its lines, then runs them on a copy of the running configuration that
@@ -368,20 +397,20 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuses the line with its error. `chat model` names an endpoint of the configuration, the model
   left to the endpoint. A model names an endpoint, and holds no parameter its protocol never sends.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
-  known items only, `display render`, `tools use`, or a value its key no longer takes, at boot, in a
+  known items only, `tools use`, `display render` in the rendering, or a value its key no longer takes, at boot, in a
   copy and wherever it shows, and a copy says so; a line naming one fails.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue; every
   endpoint lists at once, one that fails beside the others.
 - A copy from `running-config` warns when no model answers the chat: `chat model` empty with more
   than one endpoint, or naming a model its endpoint does not serve; an endpoint that fails warns
   once, by its name.
-- The keys of `style` are the tokens of the page of a value of their own, the model free on them; a
-  token derived from others is no key. The sheets of `style` apply by name over every style and
+- The keys of `style` are the tokens of the page of a value of their own; a token derived from
+  others is no key. The sheets of `style` apply by name over every style and
   every token of the page, whatever their selectors.
 - The page reads every size of text floored, so no size hides what the thread shows.
 - A listing from many sources goes by group, `! <group>` over its lines, `! <group> <error>` alone
   when the source fails: `show models` by endpoint, `show tools` by who serves it, `show css` by
-  component; a listing from one source, `show display`, reads at the margin. A setting no source
+  component; a listing from one source, `show chat`, reads at the margin. A setting no source
   serves now goes last, under `! unavailable`, whatever keeps it away, a source down or a name gone,
   and stays until a `no` drops it.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
@@ -593,10 +622,10 @@ show tools
 show tools | include bash
 ! the model never sees it
 set tools use str_replace off
-! the argument every folded call shows, the default
-set display preview-argument description
+! the argument every folded call shows, the default, a line of the rendering
+rendering set display preview-argument description
 ! the one of a tool over it; a call without it shows its first argument
-set tools preview-argument bash_tool command
+rendering set tools preview-argument bash_tool command
 ! every setting of that tool, gone
 no tools bash_tool
 ! the tool rounds a turn takes at most, 1000 by default
@@ -634,7 +663,8 @@ the conversations of that server alone, follows them by one stream of events, th
 of BACKEND.md, and never writes one. A message goes to the server, which runs the turn, holds the
 conversation and writes it, the browser closed or not; retry, edit, versions, pin, delete and Stop
 go to the server, and every page following it sees them. Every CLI line runs on the server, its
-completion coming from it as it is typed, except `attach` and `detach`, which the page runs itself.
+completion coming from it as it is typed, except the words of the page, `rendering`, `attach` and
+`detach`, which the page runs itself.
 Detached, the default, the page holds the conversations of the browser, answers them itself and
 runs every line. `attach` and `detach` swap the two, and the browser keeps which one they left,
 apart from the configuration: `write` writes the configuration of where it runs. Until either runs,
@@ -724,13 +754,21 @@ an ellipsis. A conversation dates from its last answer: a command, a version sho
 dates nothing.
 
 The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
-under `kiss.saves`, the startup-config under `kiss.startup`, and the width of the sidebar under
+under `kiss.saves`, the startup-config under `kiss.startup`, those of the rendering under
+`kiss.rendering.saves` and `kiss.rendering.startup`, whether the page is attached under
+`kiss.attached`, the hostname it drew under `kiss.hostname`, and the width of the sidebar under
 `kiss.sidebar`.
 
 ## Rendering
 
-The thinking and the reply render as Markdown, each plain on demand, `set display render reply
-plain`: a plain block reads as written, in monospace. The thinking keeps its small size and the font
+How the page shows what it holds is the rendering, a configuration of its own, which no other
+machine has and no model reaches: `/rendering <line>` runs a line on it, attached or not, what it
+says showing over the composer, in no conversation, until the next line. It saves, copies and boots
+as the configuration does, by its own startup-config and saves, so a rendering written is the one
+the page opens with, and a save of it is a profile.
+
+The thinking and the reply render as Markdown, each plain on demand, `rendering set display render
+reply plain`: a plain block reads as written, in monospace. The thinking keeps its small size and the font
 of the page, its headings at its size. Markdown renders with remark and rehype: GitHub flavored
 Markdown, LaTeX through KaTeX, code highlighted in every language lowlight knows, under a head
 naming it with a copy button. Raw HTML shows as the text it is, a link to anything but a web page or
@@ -747,7 +785,7 @@ set a whole theme, dark or light alike; `radius`, `font`, `mono`, `size-primary`
 `size-secondary` for everything around it, the only two sizes of text but `size-title`, the title of
 the page, each read floored, every icon at the primary size, `width`, `bubble-width`,
 `sidebar-width` within `sidebar-min` and `sidebar-max`; every scrollbar thin, its thumb a line. The
-module `style` sets it: a token of a value of its own is a key, typed by its default, a color, a
+module `style` of the rendering sets it: a token of a value of its own is a key, typed by its default, a color, a
 length or a font, and `show style` lists them with their defaults, as set lines; a derived one
 follows the tokens it reads, and only a sheet sets it alone. `show css` lists the CSS of the page by
 component, the rules of a component under its name, each with its scoping class, `svelte-composer`
@@ -759,18 +797,21 @@ and whether it is closed.
 
 ```
 ! the tokens and their defaults
-show style
-set style accent 'oklch(0.6 0.2 250)'
-set style bg #faf9f5
+rendering show style
+rendering set style accent 'oklch(0.6 0.2 250)'
+rendering set style bg #faf9f5
 ! with bg, a light theme
-set style fg #141413
-set style width 64rem
+rendering set style fg #141413
+rendering set style width 64rem
 ! back to the background of the page
-no style bg
+rendering no style bg
 ! the rules of the composer
-show css | include composer
+rendering show css | include composer
 ! the composer alone
-set style sheet input 'form.svelte-composer { max-width: 64rem }'
+rendering set style sheet input 'form.svelte-composer { max-width: 64rem }'
+! kept as what the page opens with, and as a profile
+rendering write
+rendering copy running-config light
 ```
 
 ## Site defaults
@@ -783,6 +824,14 @@ load the page can read it, so a key set there is public.
 
 ```
 set endpoints url prod https://example.com/v1
+```
+
+An optional `rendering.conf` beside it gives the site its rendering the same way, over the factory
+rendering of `webui/rendering.conf` and below every save of the user; the KiSS server serves the one
+of the directory it runs in, no line without it.
+
+```
+set display thinking inference
 ```
 
 ## Build

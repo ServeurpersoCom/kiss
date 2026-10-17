@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type { Entry } from '../lib/types.js';
+	import type { Entry } from '../../lib/types.js';
 	import Round from './Round.svelte';
 	import Status from './Status.svelte';
 	import Icon from './Icon.svelte';
-	import { CLI, COPIED_MS, SLASH, ago, stamp } from '../lib/config.js';
-	import { clock } from '../lib/clock.svelte.js';
-	import { source } from '../lib/conversation.js';
-	import { app, browse, dismiss, edit, pulseOf, retry } from '../lib/state.svelte.js';
-	import { summary } from '../lib/pulse.js';
+	import { CLI, COPIED_MS, SLASH, ago, stamp } from '../../lib/config.js';
+	import { clock } from '../clock.svelte.js';
+	import { source } from '../../lib/conversation.js';
+	import { app, browse, dismiss, edit, pulseOf, retry } from '../../lib/state.svelte.js';
+	import { summary } from '../../lib/pulse.js';
 
 	// versions: the entries beside this one, itself among them, oldest first;
 	// live: the turn the model writes now; last: the message the thread ends on

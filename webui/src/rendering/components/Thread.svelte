@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { NAME, SLASH } from '../lib/config.js';
+	import { NAME, SLASH } from '../../lib/config.js';
 	import Message from './Message.svelte';
 	import Ask from './Ask.svelte';
-	import { app } from '../lib/state.svelte.js';
-	import { forks, path } from '../lib/conversation.js';
-	import type { Entry } from '../lib/types.js';
+	import { app } from '../../lib/state.svelte.js';
+	import { forks, path } from '../../lib/conversation.js';
+	import type { Entry } from '../../lib/types.js';
 
 	// distance from the bottom under which the thread follows new content, and
 	// stays at the bottom when its box shrinks, under the hints of the CLI

@@ -1,9 +1,10 @@
-import type { Assistant, Conversation } from './types.js';
+import type { Assistant, Conversation, Outcome } from './types.js';
 import type { Grant, Verdict } from '../engine/engine.js';
-import { hold } from '../modules/style.js';
+import { hold } from '../rendering/modules/style.js';
 
 // the state of the page that every view reads: the conversations, the open
-// one, the turns written now, the questions to the user, the sidebar
+// one, the turns written now, the questions to the user, the sidebar, what
+// a word of the page said
 
 // what the page asks the user, and how the answer settles it: a change or a
 // call the model asks for, the value of a secret key, a file to save, a file
@@ -27,7 +28,10 @@ export const app = $state({
 	// showing its first one, as each is answered in turn
 	asks: [] as Posed[],
 	// the conversation list, open over the thread on a narrow screen
-	sidebar: false
+	sidebar: false,
+	// what the last line of a word of the page said, in no conversation, until
+	// the next line
+	said: null as Outcome | null
 });
 
 // the number of the last question posed

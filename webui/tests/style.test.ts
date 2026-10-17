@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { compile } from 'svelte/compiler';
 import { scope } from '../src/lib/config.js';
-import style from '../src/modules/style.js';
+import style from '../src/rendering/modules/style.js';
 import { app, send, stop } from '../src/lib/state.svelte.js';
 import type { Config } from '../src/engine/engine.js';
 
@@ -22,7 +22,7 @@ const name = (file: string): string => file.replace(/^.*\/|\.svelte$/g, '');
 
 describe('style', () => {
 	it('scopes the rules of a component by its name, which a style sheet aims at', () => {
-		const file = '../src/components/Composer.svelte';
+		const file = '../src/rendering/components/Composer.svelte';
 		const { css } = compile(sources[file], { filename: file, cssHash: scope });
 		expect(css!.code).toMatch(/form\.svelte-composer\s*\{/);
 		expect(css!.code).not.toMatch(/svelte-(?!composer\b)[a-z0-9]+/);

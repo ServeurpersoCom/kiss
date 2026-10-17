@@ -11,7 +11,7 @@ export default {
 		if (args.length > 1) throw beyond(['show', 'saves', args[0]], args.slice(1));
 		return args[0];
 	},
-	// every save, oldest first; one save by its name as it runs, client.conf
+	// every save, oldest first; one save by its name as it runs, the site file
 	// included
 	run(ctx, word) {
 		if (word !== undefined) {

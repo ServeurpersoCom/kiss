@@ -20,9 +20,10 @@ import {
 } from './conversation.js';
 import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
-import { redact, resolve, run, settings } from '../config.js';
+import { redact, run, settings } from '../config.js';
 import { held, pulse, type Pulse } from './pulse.js';
-import { PAGE_COMMANDS, act, attached, serve, turnOf } from './sync.js';
+import { act, attached, serve, turnOf } from './sync.js';
+import { say, word } from './words.js';
 
 export { app };
 
@@ -37,7 +38,7 @@ const pulses = new Map<string, Pulse>();
 export const pulseOf = (id: string): Pulse | undefined => pulses.get(id) ?? turnOf(id);
 
 // what asks the user from the page itself, in no conversation: the key of a
-// server the page reaches, a command the page runs while attached
+// server the page reaches, a line of a word of the page
 const PAGE = '';
 
 // the question a conversation shows, the first it or the page asks, if any
@@ -196,21 +197,18 @@ function explain(error: Error): string {
 	return capital(error.message);
 }
 
-// a line typed in the open conversation, after the entry the thread ends on;
+// a line typed in the open conversation, after the entry the thread ends on,
+// or a line of a word of the page, which the page runs in no conversation;
 // whether it went through
 export async function send(text: string): Promise<boolean> {
+	app.said = null;
+	if (text.startsWith(SLASH) && word(text.slice(SLASH.length))) {
+		app.said = await say(text.slice(SLASH.length), reach(PAGE));
+		return app.said.ok;
+	}
 	if (attached()) return remote(text);
 	const conversation = current(text.startsWith(SLASH) ? '' : text);
 	return enter(conversation, conversation.leaf, text);
-}
-
-// whether a CLI line is one an attached page runs itself
-function own(input: string): boolean {
-	try {
-		return PAGE_COMMANDS.includes(resolve(input.trim().split(/\s+/)).command.path.join(' '));
-	} catch {
-		return false;
-	}
 }
 
 // a line the page runs itself, in no conversation, what it says going to the
@@ -222,13 +220,12 @@ async function page(input: string): Promise<boolean> {
 }
 
 // a line of an attached page, in the open conversation of the server or
-// opening one: a message goes to its agent, a command runs on the server,
-// except one the page runs itself; whether it went through
+// opening one: a message goes to its agent, a command runs on the server;
+// whether it went through
 async function remote(text: string): Promise<boolean> {
 	const id = app.current?.id;
 	const cli = text.startsWith(SLASH);
 	const input = text.slice(SLASH.length);
-	if (cli && own(input)) return page(input);
 	try {
 		const body = cli ? { input } : { text };
 		const sent = await act(cli ? 'command' : 'send', id ? { id, ...body } : body);

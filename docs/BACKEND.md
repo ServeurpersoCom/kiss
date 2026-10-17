@@ -824,7 +824,8 @@ speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL else
 
 ## HTTP and security
 
-- `GET /` serves the embedded page, `GET /client.conf` the site configuration, `POST /mcp` the MCP,
+- `GET /` serves the embedded page, `GET /client.conf` the site configuration, `GET /rendering.conf`
+  the site rendering, `rendering.conf` of the directory the server runs in, no line without it, `POST /mcp` the MCP,
   `/proxy/<name>` the servers it proxies, `/conversations` the conversations (see Conversations
   API), behind the same checks.
   The site configuration is `client.conf` of the directory the server runs in, else the one it
