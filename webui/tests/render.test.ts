@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Renderer } from '../src/markdown/render.js';
+import { Renderer } from '../src/rendering/markdown/render.js';
 
 // the page a text renders to, streamed or whole
 function page(text: string): HTMLElement {

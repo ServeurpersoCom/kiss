@@ -1,6 +1,6 @@
 import { mount } from 'svelte';
-import './tokens.css';
-import App from './App.svelte';
+import './rendering/tokens.css';
+import App from './rendering/App.svelte';
 import { defaults, run, start } from './engine/run.js';
 import { restore, unlock } from './lib/state.svelte.js';
 import { SITE_CONFIG_URL } from './lib/config.js';

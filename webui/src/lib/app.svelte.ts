@@ -1,6 +1,6 @@
 import type { Assistant, Conversation } from './types.js';
 import type { Grant, Verdict } from '../engine/engine.js';
-import { hold } from '../modules/style.js';
+import { hold } from '../rendering/modules/style.js';
 
 // the state of the page that every view reads: the conversations, the open
 // one, the turns written now, the questions to the user, the sidebar

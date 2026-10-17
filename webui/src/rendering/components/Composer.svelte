@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { app, askOf, send, stop } from '../lib/state.svelte.js';
-	import { NEW_DRAFT, draftOf, keep } from '../lib/drafts.js';
-	import { known, suggest } from '../engine/run.js';
-	import type { Known } from '../engine/engine.js';
-	import { extend } from '../engine/complete.js';
+	import { app, askOf, send, stop } from '../../lib/state.svelte.js';
+	import { NEW_DRAFT, draftOf, keep } from '../../lib/drafts.js';
+	import { known, suggest } from '../../engine/run.js';
+	import type { Known } from '../../engine/engine.js';
+	import { extend } from '../../engine/complete.js';
 	import Icon from './Icon.svelte';
-	import { SLASH } from '../lib/config.js';
-	import { PAGE_COMMANDS, act, attached } from '../lib/sync.js';
+	import { SLASH } from '../../lib/config.js';
+	import { PAGE_COMMANDS, act, attached } from '../../lib/sync.js';
 
 	// a key typed elsewhere than in a field reaches the composer, unless a modal
 	// stands over the page; a touch screen opens no keyboard by itself

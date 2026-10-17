@@ -107,13 +107,16 @@ webui/src/tools/        one file per tool, registered by existing: config, the C
                         calls it
 webui/src/protocols/    one file per protocol an endpoint speaks: chat, messages, responses
 webui/src/lib/          the page side: agent, api, mcp, form, state, sync, conversation, db
-webui/src/components/   thread, message, round, ask, dialog, composer, sidebar
-webui/src/markdown/     the remark and rehype stack and its incremental renderer
-webui/src/tokens.css    the tokens of the page, read as the keys of style
+webui/src/rendering/    how the page shows what it holds: App.svelte, components/, thread,
+                        message, round, ask, dialog, composer, sidebar, markdown/, the remark
+                        and rehype stack and its incremental renderer, tokens.css, the tokens
+                        of the page, read as the keys of style, and modules/ and commands/ of
+                        the configuration that drive it: display, style, show css
 webui/tests/            the laws, under vitest and happy-dom
 ```
 
-A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing. A command
+A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing, as one in
+`rendering/commands/` or `rendering/modules/` does, in the same configuration. A command
 imports the engine, `lib/types.ts` and `lib/config.ts` only and reaches everything else through its
 `Context`; a module or a tool is where the configuration meets the page, it imports what it drives in
 `lib/`. A plugin declared wrong or twice stops the page at load, never later.

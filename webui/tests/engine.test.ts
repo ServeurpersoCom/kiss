@@ -451,13 +451,13 @@ describe('the display', () => {
 			'not one of markdown plain'
 		);
 		expect((await k.run('set display render reply plain', 'user')).ok).toBe(true);
-		const { display } = await import('../src/lib/display.svelte.js');
+		const { display } = await import('../src/rendering/display.svelte.js');
 		expect(display.render).toEqual({ thinking: 'markdown', reply: 'plain' });
 	});
 
 	it('previews the description of every folded call, a tool of its own over it', async () => {
 		const k = await page();
-		const { display } = await import('../src/lib/display.svelte.js');
+		const { display } = await import('../src/rendering/display.svelte.js');
 		expect(k.settings.get('display preview-argument')).toBe('description');
 		expect(display.argument).toBe('description');
 		await k.run(

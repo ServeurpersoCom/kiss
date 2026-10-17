@@ -4,11 +4,17 @@ import { didYouMean } from './near.js';
 
 const PATH_WORD = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
-// a file in commands/ or modules/ registers itself by existing
-const commandFiles = import.meta.glob<{ default: Command<unknown> }>('../commands/*.ts', {
-	eager: true
-});
-const moduleFiles = import.meta.glob<{ default: Module }>('../modules/*.ts', { eager: true });
+// a file in commands/ or modules/ registers itself by existing, as one in
+// rendering/commands/ or rendering/modules/ does for how the page shows what
+// it holds
+const commandFiles = import.meta.glob<{ default: Command<unknown> }>(
+	['../commands/*.ts', '../rendering/commands/*.ts'],
+	{ eager: true }
+);
+const moduleFiles = import.meta.glob<{ default: Module }>(
+	['../modules/*.ts', '../rendering/modules/*.ts'],
+	{ eager: true }
+);
 
 export const commands: readonly Command<unknown>[] = Object.values(commandFiles)
 	.map((f) => f.default)

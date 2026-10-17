@@ -1,4 +1,4 @@
-import type { Module } from '../engine/engine.js';
+import type { Module } from '../../engine/engine.js';
 import {
 	BLOCKS,
 	CLOSED,
@@ -8,7 +8,7 @@ import {
 	display,
 	type Fold,
 	type Render
-} from '../lib/display.svelte.js';
+} from '../display.svelte.js';
 
 // how the thread shows a turn: how its thinking and its tool calls fold, how
 // its thinking and its reply render, and the argument a folded call shows by

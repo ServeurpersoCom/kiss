@@ -1,6 +1,6 @@
 import type { Module } from '../engine/engine.js';
 import { NAME } from '../lib/config.js';
-import { display } from '../lib/display.svelte.js';
+import { display } from '../rendering/display.svelte.js';
 import { served } from '../lib/mcp.js';
 import { CONSENT, USES, tools } from '../lib/tools.js';
 
