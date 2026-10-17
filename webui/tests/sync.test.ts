@@ -7,7 +7,7 @@ import {
 	act,
 	attach,
 	attached,
-	detaching,
+	serve,
 	follow,
 	turnOf
 } from '../src/lib/sync.js';
@@ -23,7 +23,7 @@ vi.mock('../src/lib/db.js', () => ({
 // neither attached nor detached attaches to, or one without it
 function config(backend: boolean): ConfigReader {
 	const values: Record<string, string> = backend
-		? { 'mcp url backend': 'http://kiss/mcp', 'mcp key backend': 'k' }
+		? { 'mcp url backend': 'http://kiss/mcp', 'mcp key backend': 'k', 'client hostname': 'abcd' }
 		: {};
 	const get = (key: string, name?: string) => values[name ? `${key} ${name}` : key];
 	return { get, reveal: get, names: (m) => (m === 'mcp' && backend ? ['backend'] : []) };
@@ -47,7 +47,7 @@ function server() {
 	let push: (event: object) => void = () => {};
 	vi.stubGlobal('fetch', async (url: URL, init?: RequestInit) => {
 		sent.push({ url: String(url), init });
-		if (String(url).endsWith('/conversations/events')) {
+		if (new URL(url).pathname.endsWith('/conversations/events')) {
 			const body = new ReadableStream<Uint8Array>({
 				start(c) {
 					push = (e) => c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));
@@ -90,7 +90,9 @@ describe('the conversations of a KiSS server', () => {
 		};
 		app.conversations = [];
 		follow(config(true));
-		await vi.waitFor(() => expect(s.sent[0]?.url).toBe('http://kiss/conversations/events'));
+		await vi.waitFor(() =>
+			expect(s.sent[0]?.url).toBe('http://kiss/conversations/events?client=abcd')
+		);
 		expect(new Headers(s.sent[0].init?.headers).get('authorization')).toBe('Bearer k');
 		s.push({
 			set: [],
@@ -211,7 +213,10 @@ describe('the conversations of a KiSS server', () => {
 		const s = server();
 		const mine = conversation('m', 'M', 1);
 		app.conversations = [mine];
-		detaching(async () => void (app.conversations = [mine]));
+		serve({
+			load: async () => void (app.conversations = [mine]),
+			run: async () => ({ ok: true, text: '' })
+		});
 		follow(config(true));
 		expect(app.conversations).toEqual([]);
 		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
@@ -223,7 +228,47 @@ describe('the conversations of a KiSS server', () => {
 		follow(config(false));
 		expect(attached()).toBe(false);
 		await vi.waitFor(() => expect(app.conversations).toEqual([mine]));
-		detaching(async () => undefined);
+	});
+
+	it('run the lines the server asks of this page alone, while it holds its name, what they answer going to the server', async () => {
+		const s = server();
+		const ran: string[] = [];
+		serve({
+			load: async () => undefined,
+			run: async (id, lines) => (ran.push(`${id} ${lines}`), { ok: true, text: '+ ran' })
+		});
+		app.conversations = [];
+		follow(config(true));
+		const run = (client: string) => ({ kind: 'run', client, lines: 'show version' });
+		s.push({
+			set: [],
+			value: { protocol: 1, client: 'abcd', now: 0, conversations: [conversation('a', 'A', 1)] }
+		});
+		s.push({ set: ['a', 'asking'], value: run('efgh') });
+		s.push({ set: ['a', 'asking'], value: null });
+		s.push({ set: ['a', 'asking'], value: run('abcd') });
+		await vi.waitFor(() =>
+			expect(s.sent.some((r) => r.url.endsWith('/conversations/answer'))).toBe(true)
+		);
+		expect(ran).toEqual(['a show version']);
+		const post = s.sent.find((r) => r.url.endsWith('/conversations/answer'))!;
+		expect(JSON.parse(String(post.init?.body))).toEqual({ id: 'a', output: '+ ran', ok: true });
+		expect(app.asks).toEqual([]);
+	});
+
+	it('run nothing it is asked under a name another page holds', async () => {
+		const s = server();
+		const ran: string[] = [];
+		serve({
+			load: async () => undefined,
+			run: async (id) => (ran.push(id), { ok: true, text: '' })
+		});
+		app.conversations = [];
+		follow(config(true));
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
+		s.push({ set: ['a', 'asking'], value: { kind: 'run', client: 'abcd', lines: 'show version' } });
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(ran).toEqual([]);
 	});
 
 	it('stay detached once detach ran, the backend there or not, until attach runs', async () => {

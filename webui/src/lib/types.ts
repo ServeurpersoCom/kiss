@@ -86,6 +86,14 @@ export interface Form {
 	input: InputRequest;
 }
 
+// the lines a call of the model of a KiSS server runs on the config tool of
+// the attached page the client names, that page alone running them
+export interface Run {
+	kind: 'run';
+	client: string;
+	lines: string;
+}
+
 // a tree of entries, an edit opening a branch beside the entry it edits; the
 // path up from the leaf is the thread, and the history the model reads
 export interface Conversation {
@@ -99,10 +107,10 @@ export interface Conversation {
 	// the entry the thread ends on, none while the conversation is empty
 	leaf: string | null;
 	// in the page only, a conversation of a KiSS server while a turn of the
-	// server answers in it, its pulse, and what that turn asks the user: a
-	// call to grant, or a form of one of its tools to fill
+	// server answers in it, its pulse, and what that turn asks: a call to
+	// grant, a form of one of its tools to fill, or lines an attached page runs
 	turn?: Turn;
-	asking?: Grant | Form;
+	asking?: Grant | Form | Run;
 }
 
 export interface Outcome {

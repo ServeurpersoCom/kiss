@@ -23,6 +23,29 @@
 				"additionalProperties": false
 			}
 		},
+		"client_config": {
+			"description": "Runs lines of the CLI of the KiSS page {client}, a browser attached to this server, on its own configuration: its endpoints, model, system prompt, tools, display, style and every other setting of the page, none of this server. One command per line, as one batch that applies whole or not at all, the way Cisco IOS reads them: set <module> <key> [item] <value>, no <module> <key> [item], show <module>, show running-config [all], show startup-config, write memory; show running-config all lists every module and key the page has. The page runs the lines itself and answers with what changed; a secret, a url to let or a yes it asks the user on the page.",
+			"input": {
+				"type": "object",
+				"properties": {
+					"description": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Why I'm configuring the page, written first"
+					},
+					"lines": {
+						"type": "string",
+						"minLength": 1,
+						"description": "CLI lines, one per line"
+					}
+				},
+				"required": [
+					"description",
+					"lines"
+				],
+				"additionalProperties": false
+			}
+		},
 		"create_file": {
 			"description": "Create a new file with content on {hostname}, its directories made, a file already there written over.",
 			"input": {

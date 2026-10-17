@@ -26,6 +26,8 @@ commands
   export [<id>|conversations|<config>]
   import
   title <title>
+  attach
+  detach
   <command> | begin|count|exclude|include <pattern>
 
   <config>                running-config, startup-config or a save by its name
@@ -35,7 +37,8 @@ modules
   chat
     model <model>                   the one model of the one endpoint
     system-prompt <text>            none
-    agent <server>                  none, the page answers itself
+  client
+    hostname <name>                 four letters drawn once
   display
     thinking closed|open|inference  closed
     tool-calls closed|open|inference
@@ -258,7 +261,8 @@ opens on a URL, written as it is; what a server answers goes as it came.
 
 | Module      | Keys                                                                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `chat`      | `model`, `system-prompt`, `agent`                                                                                                                                                          |
+| `chat`      | `model`, `system-prompt`                                                                                                                                                                   |
+| `client`    | `hostname`                                                                                                                                                                                 |
 | `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
@@ -638,7 +642,10 @@ a page with a `backend` attaches to it, as the page a KiSS server serves, which 
 `backend`. Every conversation leaves the page as it attaches or detaches, those of the browser
 coming back once it detaches. The key
 of a server the page reaches is asked on the page, in the open conversation of a detached page, in
-none on an attached one. A call the server asks about shows on every page following the
+none on an attached one. An attached page is a machine of KiSS beside its server: `client hostname`,
+four letters the page draws the first time it opens and the browser keeps, is the name the agent of
+the server calls its config tool by, `<hostname>_client_config`, the page running the lines of
+such a call itself, with the rights of a model, the questions they ask shown on that page alone. A call the server asks about shows on every page following the
 conversation as the consent card, and a form a tool of the server asks the user to fill as the cards
 of its fields, a secret in the masked field, a yes as a confirmation; the first page to answer sends
 it to the server, which withdraws the question from every page. The line under an answer the

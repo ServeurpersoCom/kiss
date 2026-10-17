@@ -26,6 +26,22 @@ std::string agent_answer(const std::string & id, const std::string & user);
 // runs
 std::string agent_command(const std::string & id, const std::string & input);
 
+// what the agent of this server names the config tool of an attached page
+// after the hostname of the page: abcd_client_config
+constexpr const char * AGENT_CLIENT_TOOL = "_client_config";
+
+// a page attaches under its hostname, the agent calling its config tool from
+// then on, unless another page holds that name: whether it holds it
+bool agent_attach(const std::string & client);
+
+// a page that held its name leaves, a call it runs answering that it is gone
+void agent_detach(const std::string & client);
+
+// what an attached page answers the call a turn asks it to run in a
+// conversation: its output and whether it went; the message of what keeps it
+// from reaching the turn, no such question standing, empty once it does
+std::string agent_ran(const std::string & id, const std::string & output, bool ok);
+
 // whether a turn runs in a conversation
 bool agent_busy(const std::string & id);
 

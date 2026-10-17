@@ -334,9 +334,12 @@ of events: it holds, for each page, what that page has, and sends what it lacks,
 comes back gets every conversation as it stands. The first event sets every conversation, with the
 protocol of the events and the moment of the server on its clock, in milliseconds since 1970; a
 page that does not read that protocol stops following the server and says so.
+`?client=<hostname>` names an attached page, a-z, 0-9 and `_`, 400 otherwise: while its stream lasts,
+the agent calls the config tool of the page as `<hostname>_client_config`, and the first event names
+the client, unless another page holds that name, which the first event then leaves out.
 
 ```
-data: {"set":[],"value":{"protocol":1,"now":1792220666396,"conversations":[...]}}
+data: {"set":[],"value":{"protocol":1,"client":"abcd","now":1792220666396,"conversations":[...]}}
 ```
 
 Every next event changes what the page holds at its path, conversations by id, then the keys and
@@ -392,7 +395,7 @@ outcome through its stream. An action answers no state.
 | `retry` | `{id, entry}` | a new answer to a message, or beside an answer |
 | `browse` | `{id, entry}` | the thread goes to the last entry written under that one |
 | `stop` | `{id}` | the turn stops |
-| `answer` | `{id, verdict}` or `{id, response}` | the question of the turn settled, the first answer winning |
+| `answer` | `{id, verdict}`, `{id, response}` or `{id, output, ok}` | the question of the turn settled, the first answer winning |
 | `pin` | `{id, pinned}` | the conversation pinned or not |
 | `drop` | `{id, entry}` | a command entry leaves, its conversation going when it was the last one |
 | `erase` | `{ids}` | the conversations go, files and all |
@@ -572,6 +575,15 @@ era whose call answers `input_required`, under the name of that server. `POST /c
 the response, or `{"action":"cancel"}`, which answers `The user answered nothing`. A form whose
 fields are other than text or yes fails the call unasked. Every text the user types in a form of an
 MCP server is sealed out of every outcome from then on, as the keychain seals its secrets.
+
+The agent calls the config tool of every attached page as well, `<hostname>_client_config`, in
+`consent` until `set tools use <hostname>_client_config on`: a page is a machine of its own, whose
+configuration this server never reads. Granted, the call poses
+`{"set":["<id>","asking"],"value":{"kind":"run","client":...,"lines":...}}`, which every page
+following the conversation sees and the page of that hostname alone runs, on its own engine with
+the rights of a model, asking its user what its lines ask on that page; `POST /conversations/answer
+{"id":...,"output":...,"ok":...}` settles it with what the lines answered. A page whose stream ends
+answers its call `The page <hostname> is gone`, and its tool leaves the next round.
 
 The turn writes its answer in the conversation as it streams, the pages that follow it getting each
 piece; the conversation is written to its file before a turn, before each call reaches its tool and

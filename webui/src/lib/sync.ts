@@ -1,4 +1,4 @@
-import type { Assistant, Conversation, Form, Turn } from './types.js';
+import type { Assistant, Conversation, Form, Outcome, Run, Turn } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { ATTACHED_STORAGE_KEY } from './config.js';
 import { remotes, type Remote } from './remote.js';
@@ -34,20 +34,38 @@ export const SYNC_RETRY_MS = 2000;
 // second, so three seconds without a byte is a connection gone
 export const SYNC_SILENCE_MS = 3000;
 
-// what each conversation of a server asks the user for its turn, while the
-// turn asks it: the number of the question it shows now
-const questions = new Map<string, { shown: number }>();
+// what each conversation of a server asks for its turn, while the turn asks
+// it: the number of the question it shows now, and what stops the lines it
+// asks this page to run
+const questions = new Map<string, { shown: number; stop?: AbortController }>();
 // the clock of each turn of a server, by conversation, on the clock of the
 // page, read at every frame of the screen
 const turns = new Map<string, Pulse>();
 // what a moment of the server adds to read on performance.now(), as the
 // first event of the stream sets it
 let shift = 0;
-// the server followed now, by where it goes and with what key, and what ends
-// its stream
-let followed: { server: Remote; key: string; stop: AbortController } | null = null;
-// what brings the conversations of the page back once it detaches
-let local: () => Promise<void> = async () => undefined;
+// the server followed now, by where it goes, with what key and under which
+// hostname, whether the page holds its config tool for the server, as the
+// first event says, and what ends its stream
+let followed: {
+	server: Remote;
+	key: string;
+	client: string;
+	holds: boolean;
+	stop: AbortController;
+} | null = null;
+
+// what the page does for its server: brings its own conversations back once
+// it detaches, and runs the lines the model of the server calls its config
+// tool with in a conversation
+interface Page {
+	load(): Promise<void>;
+	run(id: string, lines: string, signal: AbortSignal): Promise<Outcome>;
+}
+let page: Page = {
+	load: async () => undefined,
+	run: async () => ({ ok: false, text: 'the page runs nothing yet' })
+};
 
 // the clock of the turn a conversation of a server answers now, if any
 export const turnOf = (id: string): Pulse | undefined => turns.get(id);
@@ -55,9 +73,8 @@ export const turnOf = (id: string): Pulse | undefined => turns.get(id);
 // whether the page is attached to its server
 export const attached = (): boolean => followed !== null;
 
-// the conversations of the page, loaded as it detaches
-export function detaching(load: () => Promise<void>): void {
-	local = load;
+export function serve(p: Page): void {
+	page = p;
 }
 
 // what an event writes: set replaces what its path names, null removing it;
@@ -72,14 +89,30 @@ function forget(): void {
 	app.current = null;
 	app.replies = {};
 	turns.clear();
-	for (const n of questions.values()) withdraw(n.shown);
+	for (const n of questions.values()) (withdraw(n.shown), n.stop?.abort());
 	questions.clear();
+}
+
+// lines the model of the server asks this page to run, as the config tool of
+// the page runs them for a model, what they answer going to the server; the
+// run stops once the turn withdraws it; another page runs those it is asked
+function run(id: string, request: Run): void {
+	const stop = new AbortController();
+	questions.set(id, { shown: 0, stop });
+	if (!followed?.holds || request.client !== followed.client) return;
+	void page
+		.run(id, request.lines, stop.signal)
+		.then((out) =>
+			stop.signal.aborted ? undefined : act('answer', { id, output: out.text, ok: out.ok })
+		)
+		.catch((e: Error) => console.error(e.message));
 }
 
 // what a turn of a server asks the user, a call to grant or a form to fill
 // field by field, the answer going to the server; once the turn withdraws
 // it, the field it shows leaves and no other comes
-function ask(id: string, request: Grant | Form): void {
+function ask(id: string, request: Grant | Form | Run): void {
+	if (request.kind === 'run') return run(id, request);
 	const asked = { shown: 0 };
 	questions.set(id, asked);
 	const posing = <T>(question: (settle: (answer: T) => void) => Asking): Promise<T> => {
@@ -113,7 +146,9 @@ function settle(id: string): void {
 	const request = c?.asking;
 	if (request && !questions.has(id)) ask(id, request);
 	else if (!request && questions.has(id)) {
-		withdraw(questions.get(id)!.shown);
+		const n = questions.get(id)!;
+		withdraw(n.shown);
+		n.stop?.abort();
 		questions.delete(id);
 	}
 	if (location.hash.slice(1) === id) app.current = c ?? null;
@@ -148,10 +183,16 @@ function sorted(): void {
 // one event applied to the conversations of the server
 function apply(e: Event): void {
 	if ('set' in e && !e.set.length) {
-		const first = e.value as { protocol: number; now: number; conversations: Conversation[] };
+		const first = e.value as {
+			protocol: number;
+			client?: string;
+			now: number;
+			conversations: Conversation[];
+		};
 		if (first.protocol !== SYNC_PROTOCOL)
 			throw new ProtocolError(`speaks protocol ${first.protocol}, this page ${SYNC_PROTOCOL}`);
 		shift = performance.now() - first.now;
+		if (followed) followed.holds = first.client === followed.client;
 		forget();
 		const all = first.conversations;
 		app.conversations.push(...all);
@@ -204,13 +245,15 @@ function headers(server: Remote): Record<string, string> {
 // the stream of a server read until it ends, or until it stays silent for
 // SYNC_SILENCE_MS, every event applied; data lines of an event joined by LF
 // once the blank line that closes it came
-async function stream(server: Remote, signal: AbortSignal): Promise<void> {
+async function stream(server: Remote, client: string, signal: AbortSignal): Promise<void> {
 	const quiet = new AbortController();
 	const cut = () => quiet.abort();
 	let timer = setTimeout(cut, SYNC_SILENCE_MS);
 	signal.addEventListener('abort', cut);
 	try {
-		const res = await fetch(new URL(EVENTS, new URL(server.url, location.href)), {
+		const url = new URL(EVENTS, new URL(server.url, location.href));
+		url.searchParams.set('client', client);
+		const res = await fetch(url, {
 			headers: headers(server),
 			signal: quiet.signal
 		});
@@ -262,20 +305,21 @@ export function follow(config: ConfigReader): void {
 	const backend = remotes(config, 'mcp').find((r) => r.name === BACKEND);
 	const kept = localStorage.getItem(ATTACHED_STORAGE_KEY);
 	const server = kept === null || kept === ON ? backend : undefined;
-	const key = server ? `${server.url} ${JSON.stringify(server.sign())}` : '';
+	const client = String(config.get('client hostname') ?? '');
+	const key = server ? `${server.url} ${JSON.stringify(server.sign())} ${client}` : '';
 	if ((followed?.key ?? '') === key) return;
 	const was = followed;
 	was?.stop.abort();
 	followed = null;
 	forget();
-	if (!server) return void (was && local().catch((e: Error) => console.error(e.message)));
+	if (!server) return void (was && page.load().catch((e: Error) => console.error(e.message)));
 	const stop = new AbortController();
-	followed = { server, key, stop };
+	followed = { server, key, client, holds: false, stop };
 	void (async () => {
 		while (!stop.signal.aborted) {
 			// a server that refuses is told; one that speaks another protocol is
 			// told and followed no more; a stream cut or silent opens again
-			const failed = await stream(server, stop.signal).then(
+			const failed = await stream(server, client, stop.signal).then(
 				() => null,
 				(e: Error) => e
 			);

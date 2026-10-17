@@ -9,6 +9,7 @@
 #include "lib/library.h"
 #include "lib/listener.h"
 #include "lib/log.h"
+#include "lib/tools.h"
 #include "yyjson.h"
 
 #include <algorithm>
@@ -19,21 +20,51 @@
 // tells a page that left
 static const int TICK_MS = 1000;
 
+// the longest hostname of a page, which its tool name keeps within what every
+// model API takes
+static const size_t CLIENT_MAX = TOOL_NAME_MAX - std::char_traits<char>::length(AGENT_CLIENT_TOOL);
+
+// a hostname of a page: a-z, 0-9 and _, as a tool name takes them
+static bool a_client(const std::string & name) {
+    return !name.empty() && name.size() <= CLIENT_MAX && std::all_of(name.begin(), name.end(), [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    });
+}
+
 void sync_events(const httplib::Request & req, httplib::Response & res) {
+    const std::string client = req.get_param_value("client");
+    if (req.has_param("client") && !a_client(client)) {
+        res.status = 400;
+        res.set_content(
+            "client \"" + client + "\" takes a-z, 0-9 and _ only, " + std::to_string(CLIENT_MAX) + " at most\n",
+            "text/plain");
+        return;
+    }
     const unsigned    epoch = listener_epoch();
     const std::string from  = req.remote_addr;
     const auto        f     = std::make_shared<library_follower>();
+    if (!client.empty() && agent_attach(client)) {
+        f->client = client;
+    }
     log_info("Sync", "%s follows the conversations", from.c_str());
     res.set_header("Cache-Control", "no-cache");
-    res.set_chunked_content_provider("text/event-stream", [f, epoch, from](size_t, httplib::DataSink & sink) {
-        const std::string events = library_follow(*f, TICK_MS, keychain_running());
-        const std::string bytes  = events.empty() ? ":\n\n" : events;
-        if (listener_epoch() != epoch || !sink.write(bytes.data(), bytes.size())) {
-            log_info("Sync", "%s leaves", from.c_str());
-            return false;
-        }
-        return true;
-    });
+    res.set_chunked_content_provider(
+        "text/event-stream",
+        [f, epoch, from](size_t, httplib::DataSink & sink) {
+            const std::string events = library_follow(*f, TICK_MS, keychain_running());
+            const std::string bytes  = events.empty() ? ":\n\n" : events;
+            if (listener_epoch() != epoch || !sink.write(bytes.data(), bytes.size())) {
+                log_info("Sync", "%s leaves", from.c_str());
+                return false;
+            }
+            return true;
+        },
+        // the stream ends however it ends, and the page lets go of its name
+        [f](bool) {
+            if (!f->client.empty()) {
+                agent_detach(f->client);
+            }
+        });
 }
 
 // what keeps an action from being applied: the HTTP status that tells why,
@@ -217,7 +248,15 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
     }
     if (action == "answer") {
         yyjson_val * response = yyjson_obj_get(body, "response");
-        std::string  verdict;
+        yyjson_val * ok       = yyjson_obj_get(body, "ok");
+        std::string  verdict, output;
+        if (text_field(body, "output", output)) {
+            if (!yyjson_is_bool(ok)) {
+                return { MALFORMED, "the body holds an output without ok" };
+            }
+            const std::string why = agent_ran(id, output, yyjson_get_bool(ok));
+            return why.empty() ? refusal{} : refusal{ CONFLICT, why };
+        }
         if (response) {
             if (!a_response(response)) {
                 return { MALFORMED, "the response is not accept with its content, nor cancel" };
@@ -227,7 +266,7 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
             return why.empty() ? refusal{} : refusal{ CONFLICT, why };
         }
         if (!text_field(body, "verdict", verdict)) {
-            return { MALFORMED, "the body names no verdict and no response" };
+            return { MALFORMED, "the body names no verdict, no response and no output" };
         }
         if (std::find_if(std::begin(AGENT_VERDICTS), std::end(AGENT_VERDICTS),
                          [&](const char * v) { return verdict == v; }) == std::end(AGENT_VERDICTS)) {

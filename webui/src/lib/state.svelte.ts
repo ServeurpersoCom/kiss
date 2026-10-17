@@ -22,7 +22,7 @@ import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
 import { redact, run, settings } from '../engine/run.js';
 import { held, pulse, type Pulse } from './pulse.js';
-import { PAGE_COMMANDS, act, attached, detaching, turnOf } from './sync.js';
+import { PAGE_COMMANDS, act, attached, serve, turnOf } from './sync.js';
 import { resolve } from '../engine/registry.js';
 
 export { app };
@@ -73,10 +73,19 @@ async function load(): Promise<void> {
 	follow();
 }
 
+// the lines the model of the server runs on the page, with the rights of a
+// model, its questions asked in the conversation of its turn
+function serving(id: string, lines: string, signal: AbortSignal) {
+	const grant = (request: Grant): Promise<Verdict> =>
+		pose(id, (settle) => ({ kind: 'grant', request, settle }));
+	return run(lines, 'llm', { ...reach(id), signal, grant });
+}
+
 // a detached page shows the conversations of the browser, now and each time
-// it detaches; an attached one shows those of its server as they come
+// it detaches; an attached one shows those of its server as they come, and
+// runs the lines its server asks
 export async function restore(): Promise<void> {
-	detaching(load);
+	serve({ load, run: serving });
 	if (!attached()) await load();
 	addEventListener('hashchange', follow);
 }

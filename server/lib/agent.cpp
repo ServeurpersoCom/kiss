@@ -32,14 +32,26 @@ static const char * const USE_OFF = "off";
 static std::mutex                                       g_mutex;
 static std::map<std::string, std::shared_ptr<api_stop>> g_turns;
 
-// a question a turn waits on: a call to grant or a form to fill, and the
-// answer that settles it, a verdict or the response to the form as JSON
+// the kinds of question a turn waits on: a call to grant, a form to fill, the
+// lines of a call an attached page runs
+static const char * const ASK_CALL = "call";
+static const char * const ASK_FORM = "form";
+static const char * const ASK_RUN  = "run";
+
+// a question a turn waits on, the page that runs it for a run, and the answer
+// that settles it: a verdict, the response to the form as JSON, or what the
+// page answers as JSON, {"output":...,"ok":...}
 struct question_t {
     std::mutex              mutex;
     std::condition_variable settled;
-    bool                    form = false;
+    std::string             kind;
+    std::string             client;
     std::string             verdict;
 };
+
+// the pages attached to this server that run their config tool for its
+// agent, by hostname, in the order they came
+static words_t g_clients;
 
 static const char * const ALWAYS = AGENT_VERDICTS[1];
 static const char * const REFUSE = AGENT_VERDICTS[2];
@@ -71,32 +83,90 @@ static void settle_question(const std::string & id, const std::string & verdict)
 
 // why a question of the kind does not stand in a conversation, empty when it
 // does
-static std::string standing(const std::string & id, bool form) {
+static std::string standing(const std::string & id, const std::string & kind) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const auto                  it = g_questions.find(id);
     if (it == g_questions.end()) {
         return "nothing is asked in this conversation";
     }
-    if (it->second->form != form) {
-        return form ? "the question is a call to grant" : "the question is a form to fill";
+    const std::string & k = it->second->kind;
+    if (k != kind) {
+        return k == ASK_CALL ? "the question is a call to grant" :
+               k == ASK_FORM ? "the question is a form to fill" :
+                               "the question is a call a page runs";
     }
     return "";
 }
 
-std::string agent_grant(const std::string & id, const std::string & verdict) {
-    const std::string why = standing(id, false);
+// the question of the kind settled, when it stands
+static std::string settle_standing(const std::string & id, const std::string & kind, const std::string & answer) {
+    const std::string why = standing(id, kind);
     if (why.empty()) {
-        settle_question(id, verdict);
+        settle_question(id, answer);
     }
     return why;
 }
 
+// what a page answers a run, as JSON
+static std::string ran(const std::string & output, bool ok) {
+    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    yyjson_mut_val *                      out = yyjson_mut_obj(made.get());
+    yyjson_mut_doc_set_root(made.get(), out);
+    yyjson_mut_obj_add_strncpy(made.get(), out, "output", output.data(), output.size());
+    yyjson_mut_obj_add_bool(made.get(), out, "ok", ok);
+    const std::shared_ptr<char> json(yyjson_mut_write(made.get(), 0, nullptr), free);
+    return json.get();
+}
+
+// what a page that left answers the run it was asked
+static std::string gone(const std::string & client) {
+    return ran("The page " + client + " is gone", false);
+}
+
+std::string agent_grant(const std::string & id, const std::string & verdict) {
+    return settle_standing(id, ASK_CALL, verdict);
+}
+
 std::string agent_fill(const std::string & id, const std::string & response) {
-    const std::string why = standing(id, true);
-    if (why.empty()) {
-        settle_question(id, response);
+    return settle_standing(id, ASK_FORM, response);
+}
+
+std::string agent_ran(const std::string & id, const std::string & output, bool ok) {
+    return settle_standing(id, ASK_RUN, ran(output, ok));
+}
+
+bool agent_attach(const std::string & client) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (std::find(g_clients.begin(), g_clients.end(), client) != g_clients.end()) {
+        log_info("Agent", "Page %s attaches without its tool, another page holds that name", client.c_str());
+        return false;
     }
-    return why;
+    g_clients.push_back(client);
+    log_info("Agent", "Page %s attaches, %s%s", client.c_str(), client.c_str(), AGENT_CLIENT_TOOL);
+    return true;
+}
+
+void agent_detach(const std::string & client) {
+    words_t left;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_clients.erase(std::remove(g_clients.begin(), g_clients.end(), client), g_clients.end());
+        for (const auto & q : g_questions) {
+            if (q.second->kind == ASK_RUN && q.second->client == client) {
+                left.push_back(q.first);
+            }
+        }
+    }
+    log_info("Agent", "Page %s detaches", client.c_str());
+    for (const std::string & id : left) {
+        settle_question(id, gone(client));
+    }
+}
+
+// the attached pages, as they came
+static words_t clients() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_clients;
 }
 
 bool agent_busy(const std::string & id) {
@@ -133,6 +203,7 @@ struct setup_t {
     std::string                                                             system;
     std::map<std::string, std::vector<std::pair<std::string, std::string>>> parameters;
     std::vector<tool>                                                       tools;
+    words_t                                                                 clients;
     std::vector<mcp_tool>                                                   served;
 };
 
@@ -176,6 +247,11 @@ static setup_t setup(api_stop & stop, std::map<std::string, std::string> & down,
                 s.tools.push_back(std::move(t));
             }
         }
+        for (const std::string & c : clients()) {
+            if (config.get("tools use", c + AGENT_CLIENT_TOOL).value_or(USE_OFF) != USE_OFF) {
+                s.clients.push_back(c);
+            }
+        }
     });
     words_t               problems;
     std::vector<mcp_tool> listed;
@@ -200,6 +276,9 @@ static setup_t setup(api_stop & stop, std::map<std::string, std::string> & down,
     std::map<std::string, std::string> owner;
     for (const tool & t : s.tools) {
         owner[t.suffix] = OWN;
+    }
+    for (const std::string & c : s.clients) {
+        owner[c + AGENT_CLIENT_TOOL] = "page " + c;
     }
     engine_with([&](const engine_reader & config) {
         for (const mcp_tool & t : listed) {
@@ -267,13 +346,23 @@ static void keep(const std::string & id) {
 // what the user answers a question of a turn, the question shown to every
 // page following the conversation while it stands, the time it stands taken
 // out of the pulse
-static std::string ask(const std::string & id, const std::string & question, bool form, api_stop & stop, pulse & p) {
+static std::string ask(const std::string & id,
+                       const std::string & question,
+                       const std::string & kind,
+                       api_stop &          stop,
+                       pulse &             p,
+                       const std::string & client = "") {
     const double asked = pulse_now();
     const auto   q     = std::make_shared<question_t>();
-    q->form            = form;
+    q->kind            = kind;
+    q->client          = client;
     {
+        // a page gone before its run is asked answers at once
         std::lock_guard<std::mutex> lock(g_mutex);
         g_questions[id] = q;
+        if (!client.empty() && std::find(g_clients.begin(), g_clients.end(), client) == g_clients.end()) {
+            q->verdict = gone(client);
+        }
     }
     library_asking(id, question);
     std::string verdict;
@@ -311,7 +400,7 @@ static std::string fill(const std::string & id,
     yyjson_mut_obj_add_val(made.get(), q, "input", yyjson_val_mut_copy(made.get(), yyjson_doc_get_root(in.get())));
     const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
     log_info("Agent", "%.8s asks the user to fill a form of %s", id.c_str(), server.c_str());
-    return ask(id, question.get(), true, stop, p);
+    return ask(id, question.get(), ASK_FORM, stop, p);
 }
 
 // what a tool of this server answers, run again with what the user answers
@@ -342,6 +431,41 @@ static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val *
     return out;
 }
 
+// the config tool of an attached page, as the agent of this server sees it
+static tool client_tool(const std::string & client) {
+    tool t;
+    t.suffix      = client + AGENT_CLIENT_TOOL;
+    t.description = prompts_description("client_config", {
+                                                             { "client", client }
+    });
+    t.input       = prompts_input("client_config");
+    return t;
+}
+
+// what an attached page answers the lines of a call it runs on its own
+// configuration, the call shown to every page following the conversation and
+// run by that page alone; one gone answers so; throws once stopped
+static tool_outcome run_client(const std::string & id,
+                               const std::string & client,
+                               yyjson_val *        args,
+                               api_stop &          stop,
+                               pulse &             p) {
+    yyjson_val *                          lines = yyjson_obj_get(args, "lines");
+    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
+    yyjson_mut_doc_set_root(made.get(), q);
+    yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_RUN);
+    yyjson_mut_obj_add_strncpy(made.get(), q, "client", client.data(), client.size());
+    yyjson_mut_obj_add_strncpy(made.get(), q, "lines", yyjson_get_str(lines), yyjson_get_len(lines));
+    const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
+    log_info("Agent", "%.8s asks page %s to run a call", id.c_str(), client.c_str());
+    const std::string                 answer = ask(id, question.get(), ASK_RUN, stop, p, client);
+    const std::shared_ptr<yyjson_doc> doc(yyjson_read(answer.data(), answer.size(), 0), yyjson_doc_free);
+    yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
+    yyjson_val *                      output = yyjson_obj_get(root, "output");
+    return { yyjson_get_bool(yyjson_obj_get(root, "ok")), std::string(yyjson_get_str(output), yyjson_get_len(output)) };
+}
+
 // a call runs and its outcome enters it: a call reaches a tool not off as the
 // configuration stands when it goes, with arguments it reads as an object; a
 // tool in consent asks the user, the turn waiting for a page to answer: once,
@@ -357,8 +481,10 @@ static void call(const std::string &           id,
                  const std::vector<mcp_tool> & served) {
     const conversation_call called = reply_of(id, entry).rounds[r].calls[c];
     std::optional<tool>     found;
+    std::string             client;
     std::optional<remote>   server;
     std::string             use;
+    const words_t           attached = clients();
     engine_with([&](const engine_reader & config) {
         for (tool & t : tools_list(config)) {
             const std::string u = config.get("tools use", t.suffix).value_or(USE_OFF);
@@ -367,9 +493,17 @@ static void call(const std::string &           id,
                 use   = u;
             }
         }
+        for (const std::string & a : attached) {
+            const std::string u = config.get("tools use", a + AGENT_CLIENT_TOOL).value_or(USE_OFF);
+            if (!found && client.empty() && a + AGENT_CLIENT_TOOL == called.name && u != USE_OFF) {
+                client = a;
+                use    = u;
+            }
+        }
         for (const mcp_tool & t : served) {
             const std::string u = config.get("tools use", t.name).value_or(USE_OFF);
-            if (!found && !server && t.name == called.name && u != USE_OFF && config.get("mcp url", t.server)) {
+            if (!found && client.empty() && !server && t.name == called.name && u != USE_OFF &&
+                config.get("mcp url", t.server)) {
                 server = remote_of(config, "mcp", t.server, BEARER);
                 use    = u;
             }
@@ -386,10 +520,10 @@ static void call(const std::string &           id,
         });
     };
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(called.args.data(), called.args.size(), 0), yyjson_doc_free);
-    yyjson_val * args = called.args.empty() ? nullptr : doc ? yyjson_doc_get_root(doc.get()) : nullptr;
-    if ((!found && !server) || (!called.args.empty() && !yyjson_is_obj(args))) {
-        settle(NO_ARGS,
-               found || server ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"", false,
+    yyjson_val * args  = called.args.empty() ? nullptr : doc ? yyjson_doc_get_root(doc.get()) : nullptr;
+    const bool   known = found || !client.empty() || server;
+    if (!known || (!called.args.empty() && !yyjson_is_obj(args))) {
+        settle(NO_ARGS, known ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"", false,
                {});
         return;
     }
@@ -402,7 +536,7 @@ static void call(const std::string &           id,
         yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
         const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
         log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
-        const std::string verdict = ask(id, question.get(), false, stop, p);
+        const std::string verdict = ask(id, question.get(), ASK_CALL, stop, p);
         log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
         if (verdict == REFUSE) {
             settle(called.args, "The user refused the call", false, {});
@@ -412,7 +546,9 @@ static void call(const std::string &           id,
             engine_run("set tools use " + quote(called.name) + " " + USE_ON, ENGINE_ADMIN);
         }
     }
-    const std::string refused = found ? tools_check(*found, args) : "";
+    const std::string refused = found           ? tools_check(*found, args) :
+                                !client.empty() ? tools_check(client_tool(client), args) :
+                                                  "";
     if (!refused.empty()) {
         settle(called.args, refused, false, {});
         return;
@@ -452,6 +588,11 @@ static void call(const std::string &           id,
             typed = g_typed;
         }
         settle(called.args, seal_text(out.text, typed), out.ok, out.images);
+        return;
+    }
+    if (!client.empty()) {
+        const tool_outcome out = run_client(id, client, args, stop, p);
+        settle(called.args, out.text, out.ok, {});
         return;
     }
     const tool_outcome              out = run_own(id, *found, args, stop, p);
@@ -502,6 +643,10 @@ static bool round(const std::string &                     id,
         req.parameters = params->second;
     }
     for (const tool & t : s.tools) {
+        req.tools.push_back({ t.suffix, t.description, t.input });
+    }
+    for (const std::string & c : s.clients) {
+        const tool t = client_tool(c);
         req.tools.push_back({ t.suffix, t.description, t.input });
     }
     for (const mcp_tool & t : s.served) {
