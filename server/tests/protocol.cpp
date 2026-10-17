@@ -3,16 +3,22 @@
 // every round as one assistant message, its calls, their results, then one
 // user message of their images for a model that sees, none for one whose
 // list says it does not; it reads a delta, pieces of calls by their index,
-// the count of the endpoint, an error, and the end
+// the count of the endpoint, an error, and the end; messages and responses
+// write, from one history, the very bytes their twins of the page write,
+// and read their streams into text, thinking, calls, the items they need
+// back, the count and the end
 
 #include "lib/api.h"
 #include "yyjson.h"
 
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <memory>
 
 const protocol & protocol_chat();
+const protocol & protocol_messages();
+const protocol & protocol_responses();
 
 static size_t g_laws  = 0;
 static size_t g_fails = 0;
@@ -95,6 +101,133 @@ int main() {
     const auto e = read("{\"error\":{\"message\":\"boom\"}}");
     law(e && e->error && *e->error == "boom", "an error is read with its message");
     law(read("[DONE]")->end, "[DONE] ends the stream");
+
+    {
+        // one history with every kind of round, written as tests/agent.test.ts
+        // of the page writes it; webui/tests/bodies.jsonl holds what both
+        // write, a line per body
+        conversation_entry look;
+        look.role = ROLE_USER;
+        look.text = "look";
+        conversation_entry again;
+        again.role = ROLE_USER;
+        again.text = "again";
+        conversation_entry turn;
+        turn.role = ROLE_ASSISTANT;
+        conversation_round first;
+        first.reasoning = "think";
+        first.text      = "here";
+        first.calls.push_back(
+            { "c1", "view", "{\"path\":\"a.png\"}", "seen", true, { { "image/png", "AAAA" } }, false });
+        conversation_round second;
+        second.calls.push_back({ "c2", "bash", "not json", "boom", false, {}, false });
+        conversation_round third;
+        third.text      = "done";
+        const auto with = [&](const std::string & protocol, const std::string & items) {
+            api_request q;
+            q.model      = "m";
+            q.system     = "be brief";
+            q.parameters = {
+                { "temperature",      "0.2"     },
+                { "top_k",            "40"      },
+                { "max_tokens",       "1024"    },
+                { "reasoning_effort", "\"low\"" }
+            };
+            q.tools = {
+                { "view", "views", "{\"type\":\"object\"}" }
+            };
+            conversation_round kept = first;
+            kept.opaque             = conversation_opaque{ protocol, items };
+            conversation_entry t    = turn;
+            t.rounds                = { kept, second, third };
+            q.messages              = { look, command, t, again };
+            return q;
+        };
+        api_request m = with("messages", "[{\"type\":\"thinking\",\"thinking\":\"think\",\"signature\":\"s\"}]");
+        m.info =
+            "{\"id\":\"m\",\"max_tokens\":64000,\"capabilities\":{\"image_input\":{\"supported\":true},"
+            "\"thinking\":{\"types\":{\"adaptive\":{\"supported\":true}}}}}";
+        std::ifstream            in(BODIES);
+        std::vector<std::string> bodies;
+        for (std::string line; std::getline(in, line);) {
+            bodies.push_back(line);
+        }
+        law(bodies.size() == 4, "bodies.jsonl holds four bodies");
+        bodies.resize(4);
+        law(protocol_chat().body(m) == bodies[3], "chat writes what the page writes of the same history");
+        law(protocol_messages().body(m) == bodies[0],
+            "messages writes what the page writes: thinking first, merged turns, results with images, an error");
+        api_request o = with("responses",
+                             "[{\"type\":\"reasoning\",\"id\":\"r1\",\"encrypted_content\":\"x\","
+                             "\"summary\":[]},{\"type\":\"message\",\"phase\":\"final_answer\"}]");
+        o.parameters  = {
+            { "temperature",      "0.2"     },
+            { "max_tokens",       "1024"    },
+            { "reasoning_effort", "\"low\"" }
+        };
+        law(protocol_responses().body(o) == bodies[1],
+            "responses writes what the page writes: reasoning kept, the phase of the text, calls and outputs");
+        api_request blind = with("responses", "[]");
+        blind.parameters  = {};
+        blind.info =
+            "{\"id\":\"m\",\"max_tokens\":64000,\"capabilities\":{\"image_input\":{\"supported\":false},"
+            "\"thinking\":{\"types\":{\"adaptive\":{\"supported\":false}}}}}";
+        law(protocol_messages().body(blind) == bodies[2],
+            "messages sends no image and no thinking to a model whose list says it takes none, its tokens from it");
+        blind.info = "{}";
+        bool needs = false;
+        try {
+            protocol_messages().body(blind);
+        } catch (const api_error & e) {
+            needs = !e.fix.empty();
+        }
+        law(needs, "messages without max_tokens set or listed asks for it");
+
+        httplib::Headers h{
+            { "Anthropic-Beta", "mine" }
+        };
+        protocol_messages().headers(h);
+        law(h.count("anthropic-version") == 1 &&
+                h.find("anthropic-beta")->second == "thinking-binding-controls-2026-08-01,mine",
+            "messages adds its version and joins its beta to those of the endpoint");
+
+        const auto mr = protocol_messages().reader();
+        mr("{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\"}}");
+        const auto t =
+            mr("{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\","
+               "\"thinking\":\"hm\"}}");
+        mr("{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":"
+           "\"sig\"}}");
+        const auto kept = mr("{\"type\":\"content_block_stop\",\"index\":0}");
+        const auto call =
+            mr("{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"u\","
+               "\"name\":\"bash\"}}");
+        const auto args =
+            mr("{\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":"
+               "\"input_json_delta\",\"partial_json\":\"{\\\"c\"}}");
+        const auto count = mr("{\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}");
+        law(t && t->reasoning == "hm" && kept &&
+                kept->opaque == "{\"type\":\"thinking\",\"thinking\":\"hm\",\"signature\":\"sig\"}" && call &&
+                call->calls[0].index == 1 && call->calls[0].id == "u" && call->calls[0].name == "bash" && args &&
+                args->calls[0].args == "{\"c" && count && *count->usage == 7 &&
+                mr("{\"type\":\"message_stop\"}")->end && !mr("{\"type\":\"ping\"}"),
+            "messages reads thinking kept whole with its signature, a call by its index, the count and the end");
+
+        const auto rr = protocol_responses().reader();
+        const auto add =
+            rr("{\"type\":\"response.output_item.added\",\"output_index\":2,\"item\":{\"type\":"
+               "\"function_call\",\"call_id\":\"f\",\"name\":\"view\"}}");
+        const auto part = rr("{\"type\":\"response.reasoning_summary_part.added\",\"summary_index\":1}");
+        const auto item = rr("{\"type\":\"response.output_item.done\",\"item\":{\"type\":\"reasoning\",\"id\":\"r\"}}");
+        const auto phase =
+            rr("{\"type\":\"response.output_item.done\",\"item\":{\"type\":\"message\",\"phase\":\"commentary\"}}");
+        const auto done = rr("{\"type\":\"response.completed\",\"response\":{\"usage\":{\"output_tokens\":5}}}");
+        law(add && add->calls[0].index == 2 && add->calls[0].id == "f" && part && part->reasoning == "\n\n" && item &&
+                item->opaque == "{\"type\":\"reasoning\",\"id\":\"r\"}" && phase &&
+                phase->opaque == "{\"type\":\"message\",\"phase\":\"commentary\"}" && done && done->end &&
+                *done->usage == 5 && *rr("{\"type\":\"error\",\"message\":\"no\"}")->error == "no",
+            "responses reads a call by its item, the parts of a summary, the items it needs back, the end");
+    }
 
     printf("protocol_test: %zu laws, %zu broken\n", g_laws, g_fails);
     return g_fails ? 1 : 0;

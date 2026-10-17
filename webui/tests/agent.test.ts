@@ -7,6 +7,7 @@ import { STOPPED } from '../src/lib/conversation.js';
 import chat from '../src/protocols/chat.js';
 import messages from '../src/protocols/messages.js';
 import responses from '../src/protocols/responses.js';
+import served from './bodies.jsonl?raw';
 
 interface Body {
 	tools: { function: { name: string } }[];
@@ -644,6 +645,96 @@ describe('the images of a call', () => {
 		expect(input.find((i) => i.type === 'function_call_output')?.output).toEqual([
 			{ type: 'input_text', text: 'Image image/png, 3 bytes' },
 			{ type: 'input_image', image_url: URL }
+		]);
+	});
+});
+
+describe('the twins of the server', () => {
+	// one history with every kind of round, as tests/protocol.cpp of the server
+	// writes it; bodies.jsonl holds what both write, a line per body
+	const png = { mime: 'image/png', data: 'AAAA' };
+	const history = (protocol: string, items: object[]): Message[] => [
+		{ role: 'user', text: 'look' },
+		{ role: 'cli', input: 'show version', output: 'v', ok: true },
+		{
+			role: 'assistant',
+			rounds: [
+				{
+					reasoning: 'think',
+					text: 'here',
+					calls: [
+						{
+							id: 'c1',
+							name: 'view',
+							args: '{"path":"a.png"}',
+							result: 'seen',
+							ok: true,
+							images: [png]
+						}
+					],
+					opaque: { protocol, items }
+				},
+				{
+					reasoning: '',
+					text: '',
+					calls: [{ id: 'c2', name: 'bash', args: 'not json', result: 'boom', ok: false }]
+				},
+				{ reasoning: '', text: 'done', calls: [] }
+			]
+		},
+		{ role: 'user', text: 'again' }
+	];
+	const request = (over: Partial<Request>): Request => ({
+		model: 'm',
+		system: 'be brief',
+		parameters: { temperature: 0.2, top_k: 40, max_tokens: 1024, reasoning_effort: 'low' },
+		tools: [
+			{
+				name: 'view',
+				description: 'views',
+				input: { type: 'object' },
+				run: async () => ({ ok: true, text: '' })
+			}
+		],
+		messages: [],
+		...over
+	});
+	const bodies = served.trim().split('\n');
+
+	it('write the very bodies the protocols of the server write', () => {
+		const sees = (yes: boolean) => ({
+			id: 'm',
+			max_tokens: 64000,
+			capabilities: {
+				image_input: { supported: yes },
+				thinking: { types: { adaptive: { supported: yes } } }
+			}
+		});
+		const thought = [{ type: 'thinking', thinking: 'think', signature: 's' }];
+		const reasoned = [
+			{ type: 'reasoning', id: 'r1', encrypted_content: 'x', summary: [] },
+			{ type: 'message', phase: 'final_answer' }
+		];
+		expect(bodies).toEqual([
+			JSON.stringify(
+				messages.body(request({ info: sees(true), messages: history('messages', thought) }))
+			),
+			JSON.stringify(
+				responses.body(
+					request({
+						parameters: { temperature: 0.2, max_tokens: 1024, reasoning_effort: 'low' },
+						messages: history('responses', reasoned)
+					})
+				)
+			),
+			JSON.stringify(
+				messages.body(
+					request({ parameters: {}, info: sees(false), messages: history('responses', []) })
+				)
+			),
+			JSON.stringify(
+				chat.body(request({ info: sees(true), messages: history('messages', thought) }))
+			)
 		]);
 	});
 });

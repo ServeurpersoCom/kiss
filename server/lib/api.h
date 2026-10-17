@@ -52,12 +52,14 @@ struct api_call_piece {
     std::string args;
 };
 
-// what one event of a stream tells: text, thinking, pieces of calls, the
-// tokens the endpoint counted, the end, or an error
+// what one event of a stream tells: text, thinking, pieces of calls, an item
+// the protocol needs back as it came, JSON, the tokens the endpoint counted,
+// the end, or an error
 struct api_delta {
     std::string                 content;
     std::string                 reasoning;
     std::vector<api_call_piece> calls;
+    std::string                 opaque;
     std::optional<double>       usage;
     bool                        end = false;
     std::optional<std::string>  error;
@@ -65,14 +67,18 @@ struct api_delta {
 
 // a protocol: its name, the paths of a reply and of the model list, whether
 // it reads what the list says of a model, the header of the key unless
-// auth-header says, the body of a request, and a reader of the data of each
-// event, which tells nothing of an event it skips; last ends the stream
+// auth-header says, the headers it adds to those of the endpoint, the
+// parameters of models it never sends, the body of a request, which throws
+// what keeps it from being written, and a reader of the data of each event,
+// which tells nothing of an event it skips; last ends the stream
 struct protocol {
     const char * name;
     const char * path;
     const char * models;
     bool         described;
     const char * key;
+    void (*headers)(httplib::Headers & h);
+    std::vector<std::string> drops;
     std::string (*body)(const api_request & r);
     std::function<std::optional<api_delta>(const std::string & data)> (*reader)();
     const char * last;

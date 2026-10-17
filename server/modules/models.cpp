@@ -1,20 +1,31 @@
 // models.cpp: the models module: every setting of a model, the model named as
-// the item endpoint/model as chat model takes it, the parameters of an
-// OpenAI compatible request under their own names, each sent only when set;
-// the twin of the models module of the page
+// the item endpoint/model as chat model takes it, the parameters of a request
+// under their own names, each sent only when set and only by a protocol that
+// sends it; the twin of the models module of the page
 
 #include "engine/engine.h"
 #include "engine/text.h"
+#include "lib/api.h"
 
-// every model is one of an endpoint
+// every model is one of an endpoint, and none holds a parameter the protocol
+// of its endpoint never sends
 static std::string validate(const engine_reader & config) {
     for (const std::string & item : config.names("models")) {
-        bool named = false;
+        std::optional<std::string> endpoint;
         for (const std::string & name : config.names("endpoints")) {
-            named = named || starts_with(item, name + "/");
+            endpoint = starts_with(item, name + "/") ? name : endpoint;
         }
-        if (!named) {
+        if (!endpoint) {
             return "models " + item + " names no endpoint -> no models " + item;
+        }
+        const std::string speaks = config.get("endpoints protocol", *endpoint).value_or("");
+        for (const protocol * p : api_protocols()) {
+            for (const std::string & key : speaks == p->name ? p->drops : std::vector<std::string>{}) {
+                if (config.get("models " + key, item)) {
+                    return "models " + key + " " + item + ": " + p->name + " never sends it -> no models " + key + " " +
+                           item;
+                }
+            }
         }
     }
     return "";

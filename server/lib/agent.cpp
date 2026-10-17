@@ -485,7 +485,7 @@ static bool round(const std::string &                     id,
                 usage = d.usage;
             }
             pulse_chunk(p, !d.content.empty() || !d.reasoning.empty() || !d.calls.empty(), now);
-            if (d.content.empty() && d.reasoning.empty() && d.calls.empty()) {
+            if (d.content.empty() && d.reasoning.empty() && d.calls.empty() && d.opaque.empty()) {
                 return;
             }
             if (!d.reasoning.empty()) {
@@ -498,6 +498,14 @@ static bool round(const std::string &                     id,
                 conversation_round & round = x.rounds[r];
                 round.reasoning += d.reasoning;
                 round.text += d.content;
+                if (!d.opaque.empty()) {
+                    // an item the protocol needs back, after those of the round
+                    if (!round.opaque) {
+                        round.opaque = conversation_opaque{ e.speaks->name, "[]" };
+                    }
+                    std::string & items = round.opaque->items;
+                    items.insert(items.size() - 1, (items == "[]" ? "" : ",") + d.opaque);
+                }
                 for (const api_call_piece & piece : d.calls) {
                     if (!calls.count(piece.index)) {
                         conversation_call c;

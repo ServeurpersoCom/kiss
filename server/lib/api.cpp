@@ -14,9 +14,11 @@
 #include <map>
 
 const protocol & protocol_chat();
+const protocol & protocol_messages();
+const protocol & protocol_responses();
 
 const std::vector<const protocol *> & api_protocols() {
-    static const std::vector<const protocol *> all = { &protocol_chat() };
+    static const std::vector<const protocol *> all = { &protocol_chat(), &protocol_messages(), &protocol_responses() };
     return all;
 }
 
@@ -84,6 +86,14 @@ std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, s
     return client;
 }
 
+// what a request carries: the key and the headers of the endpoint, with those
+// of its protocol
+static httplib::Headers sent(const endpoint & e) {
+    httplib::Headers h = remote_headers(e.server);
+    e.speaks->headers(h);
+    return h;
+}
+
 // the path of a request: the url of the endpoint, its last slash dropped,
 // then the path of the protocol
 static std::string joined(const std::string & base, const char * path) {
@@ -109,7 +119,7 @@ static api_error failure(const endpoint & e, int status, const std::string & typ
 std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop) {
     std::string base;
     const auto  client = api_client(e.server, stop, base);
-    const auto  res    = client->Get(joined(base, e.speaks->models), remote_headers(e.server));
+    const auto  res    = client->Get(joined(base, e.speaks->models), sent(e));
     if (!res) {
         throw api_error(e.server.url + " does not answer", URL_FIX);
     }
@@ -191,8 +201,8 @@ static std::shared_ptr<httplib::ClientImpl::StreamHandle> opened(const endpoint 
     for (int attempt = 1;; attempt++) {
         std::string base;
         keep              = api_client(e.server, stop, base);
-        const auto stream = std::make_shared<httplib::ClientImpl::StreamHandle>(keep->open_stream(
-            "POST", joined(base, e.speaks->path), {}, remote_headers(e.server), body, "application/json"));
+        const auto stream = std::make_shared<httplib::ClientImpl::StreamHandle>(
+            keep->open_stream("POST", joined(base, e.speaks->path), {}, sent(e), body, "application/json"));
         if (stop.stopped) {
             throw api_error("Stopped");
         }

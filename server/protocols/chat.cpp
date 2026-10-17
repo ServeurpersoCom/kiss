@@ -171,7 +171,9 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
     return read_event;
 }
 
+static void headers(httplib::Headers &) {}
+
 const protocol & protocol_chat() {
-    static const protocol p{ "chat", "/chat/completions", "/models", true, BEARER, body, reader, DONE };
+    static const protocol p{ "chat", "/chat/completions", "/models", true, BEARER, headers, {}, body, reader, DONE };
     return p;
 }

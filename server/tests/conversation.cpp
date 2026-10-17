@@ -467,9 +467,19 @@ int main() {
                                 return;
                             }
                             conversation_round & r = e.rounds.back();
-                            switch (rng() % 4) {
+                            switch (rng() % 5) {
                                 case 0:
                                     r.reasoning += word();
+                                    break;
+                                case 4:
+                                    // an item the protocol keeps, after those of the round
+                                    if (!r.opaque) {
+                                        r.opaque = conversation_opaque{ "messages", "[]" };
+                                    }
+                                    r.opaque->items.insert(r.opaque->items.size() - 1,
+                                                           (r.opaque->items == "[]" ? "" : ",") +
+                                                               std::string("{\"type\":\"thinking\",\"n\":") +
+                                                               std::to_string(step) + "}");
                                     break;
                                 case 1:
                                     r.text += word();

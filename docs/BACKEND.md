@@ -140,7 +140,7 @@ server/lib/pulse.cpp|h     the clock of a turn, the twin of pulse.ts of the page
 server/lib/api.cpp|h       the client of the endpoints: the model list, a reply streamed
 server/lib/mcp.cpp|h       the client of the MCP servers the agent calls
 server/lib/remote.cpp|h    a server an item names: its url, key and headers, and their rules
-server/protocols/          one file per protocol an endpoint speaks: chat
+server/protocols/          one file per protocol an endpoint speaks: chat, messages, responses
 server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resized, made a JPEG
 server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
 server/lib/prompts.cpp|h   the texts of prompts.json, read once
@@ -151,7 +151,8 @@ server/tests/files.cpp     the laws of lib/file.cpp, built and run the same way
 server/tests/conversation.cpp
                            the laws of lib/conversation.cpp and lib/library.cpp, built and run the
                            same way
-server/tests/protocol.cpp  the laws of the protocols, built and run the same way
+server/tests/protocol.cpp  the laws of the protocols, built and run the same way, each body the very
+                           bytes the page writes, as webui/tests/bodies.jsonl holds them for both
 server/tests/mcp.cpp       the laws of lib/mcp.cpp against a server of the test, built and run the
                            same way
 server/server.conf         the factory configuration the binary embeds
@@ -346,6 +347,7 @@ indices of the file format:
 | `{"add":[...],"text":"..."}` | the text a string of a turn gained |
 | `{"add":[...],"value":{...}}` | a round or a call that came to a turn |
 | `{"set":[...,"calls",<n>],"value":{...}}` | a call whole, once its outcome came |
+| `{"set":[...,"rounds",<n>,"opaque"],"value":{...}}` | the items the protocol of a round keeps, whole, as one more came |
 | `{"set":["<id>","turn"],"value":{...}}` | the pulse of the turn that answers, `null` once it ended |
 | `{"set":["<id>","asking"],"value":{...}}` | the question the turn asks the user, `null` once settled |
 
@@ -520,6 +522,15 @@ message a page sends, `POST /conversations/send`, starts a turn on its own threa
 round by round, each round reading the running configuration as it stands, until a round calls
 nothing or `tools max-rounds` is reached. The modules it reads are those of the page: `endpoints`,
 `chat`, `models` and `tools`, with the same keys.
+
+It speaks the three protocols of the page, each the twin of its file there, writing the very bytes
+it writes: `chat`, OpenAI chat completions, the open standard of llama.cpp, vLLM and Hugging Face;
+`messages`, the Messages API of Anthropic, its thinking blocks signed and sent back as they came,
+and `responses`, the Responses API of OpenAI, stateless, its encrypted reasoning sent back the same
+way. What a protocol needs back enters the round as the turn streams and reaches every page with
+it. A model holds no parameter its protocol never sends, `models top_k` for `responses` say; and
+`messages` takes its tokens from `models max_tokens`, else from what the endpoint lists of the
+model, else asks for it.
 
 The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
 as a router names its interfaces: `forge_bash` is how a client sees it, and the configuration of the

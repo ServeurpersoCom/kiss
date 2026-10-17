@@ -236,9 +236,22 @@ static std::string add_text(const std::string & path, const std::string & text, 
     return "data: {\"add\":[" + path + "],\"text\":" + sealed + "}\n\n";
 }
 
+// the items the protocol of a round keeps, as the round writes them
+static std::string opaque_json(const conversation_round & r, const words_t & secrets) {
+    const std::string                 json = conversation_round_json(r, secrets);
+    const std::shared_ptr<yyjson_doc> doc(yyjson_read(json.data(), json.size(), 0), yyjson_doc_free);
+    const std::shared_ptr<char>       text(
+        yyjson_val_write(yyjson_obj_get(yyjson_doc_get_root(doc.get()), "opaque"), 0, nullptr), free);
+    return text.get();
+}
+
 // the shape of a round, and of an entry, as they stand
+static size_t opaque_of(const conversation_round & r) {
+    return r.opaque ? r.opaque->items.size() : 0;
+}
+
 static library_shape::round round_shape(const conversation_round & r) {
-    library_shape::round s{ r.reasoning.size(), r.text.size(), {} };
+    library_shape::round s{ r.reasoning.size(), r.text.size(), opaque_of(r), {} };
     for (const conversation_call & c : r.calls) {
         s.calls.push_back({ c.name.size(), c.args.size(), c.ok.has_value() });
     }
@@ -277,6 +290,10 @@ static std::string grown(const conversation_entry & e,
         if (round.text.size() > sr.text) {
             out += add_text(rp + ",\"text\"", round.text.substr(sr.text), secrets);
             sr.text = round.text.size();
+        }
+        if (opaque_of(round) != sr.opaque) {
+            out += set_event(rp + ",\"opaque\"", opaque_json(round, secrets));
+            sr.opaque = opaque_of(round);
         }
         for (size_t c = 0; c < round.calls.size(); c++) {
             const conversation_call & call = round.calls[c];

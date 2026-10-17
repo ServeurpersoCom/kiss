@@ -55,8 +55,9 @@ void library_asking(const std::string & id, const std::string & question);
 // keeps one from going, those before it gone
 void library_remove(const words_t & ids);
 
-// what a follower holds of an entry a turn writes: the length of every string
-// and the calls whose outcome came
+// what a follower holds of an entry a turn writes: the length of every string,
+// the items the protocol of a round keeps, by their length, and the calls
+// whose outcome came
 struct library_shape {
     struct call {
         size_t name = 0;
@@ -67,6 +68,7 @@ struct library_shape {
     struct round {
         size_t            reasoning = 0;
         size_t            text      = 0;
+        size_t            opaque    = 0;
         std::vector<call> calls;
     };
 
@@ -100,7 +102,7 @@ constexpr int LIBRARY_PROTOCOL = 1;
 // which the moments of a pulse read on; after it, a conversation changed otherwise than by
 // growth, whole, one gone, as null, the turn that answers in it, its pulse or
 // null, what it asks the user, the question or null, and what an entry a turn
-// writes grew by: the text a string gained, a round or a call that came, a
-// call whole once its outcome came; it waits up to wait_ms for a change,
+// writes grew by: the text a string gained, a round or a call that came, the
+// items its protocol keeps, whole, a call whole once its outcome came; it waits up to wait_ms for a change,
 // nothing when none came
 std::string library_follow(library_follower & f, int wait_ms, const words_t & secrets);
