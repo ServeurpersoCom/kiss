@@ -115,6 +115,62 @@ describe('the conversations of a KiSS server', () => {
 		await vi.waitFor(() => expect(app.asks).toEqual([]));
 	});
 
+	it('fill a form a turn of the server asks field by field, the response going to the server, a form taken back asking no more', async () => {
+		const s = server();
+		app.conversations = [];
+		app.asks = [];
+		follow(config('backend'));
+		s.push({ set: [], value: { conversations: [conversation('a', 'A', 1)] } });
+		const form = (fields: Record<string, string>) => ({
+			kind: 'form',
+			server: 'forge',
+			input: {
+				method: 'elicitation/create',
+				params: {
+					mode: 'form',
+					message: 'Type it',
+					requestedSchema: {
+						type: 'object',
+						properties: Object.fromEntries(Object.entries(fields).map(([k, type]) => [k, { type }]))
+					}
+				}
+			}
+		});
+		s.push({
+			set: ['a', 'asking'],
+			value: form({ 'endpoints key hf': 'string', 'mcp url x': 'boolean' })
+		});
+		await vi.waitFor(() => expect(app.asks.map((q) => q.kind)).toEqual(['secret']));
+		const typed = app.asks[0];
+		expect(typed.kind === 'secret' && [typed.key, typed.note]).toEqual([
+			'endpoints key hf of forge',
+			'Type it'
+		]);
+		if (typed.kind === 'secret') typed.settle('hf_x');
+		await vi.waitFor(() => expect(app.asks.map((q) => q.kind)).toEqual(['confirm']));
+		const yes = app.asks[0];
+		if (yes.kind === 'confirm') yes.settle(true);
+		await vi.waitFor(() =>
+			expect(s.sent.some((r) => r.url.endsWith('/conversations/answer'))).toBe(true)
+		);
+		const post = s.sent.find((r) => r.url.endsWith('/conversations/answer'))!;
+		expect(JSON.parse(String(post.init?.body))).toEqual({
+			id: 'a',
+			response: { action: 'accept', content: { 'endpoints key hf': 'hf_x', 'mcp url x': true } }
+		});
+
+		s.push({ set: ['a', 'asking'], value: null });
+		s.push({ set: ['a', 'asking'], value: form({ one: 'string', two: 'string' }) });
+		await vi.waitFor(() => expect(app.asks.length).toBe(1));
+		const first = app.asks[0];
+		s.push({ set: ['a', 'asking'], value: null });
+		await vi.waitFor(() => expect(app.asks).toEqual([]));
+		if (first.kind === 'secret') first.settle('late');
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(app.asks).toEqual([]);
+		expect(s.sent.filter((r) => r.url.endsWith('/conversations/answer')).length).toBe(1);
+	});
+
 	it('send the actions of the user to the server, and leave the page with it', async () => {
 		const s = server();
 		app.conversations = [];

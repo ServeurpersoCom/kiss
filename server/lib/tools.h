@@ -12,6 +12,8 @@
 #include <vector>
 
 struct yyjson_val;
+struct yyjson_mut_doc;
+struct yyjson_mut_val;
 
 // what a call answers: whether it went, its text, and an image as base64 with
 // its MIME type
@@ -63,3 +65,13 @@ std::vector<tool> tools_list(const engine_reader & config);
 // string property, never shorter than its minLength; the message of the first
 // failure, empty when they hold
 std::string tools_check(const tool & t, yyjson_val * args);
+
+// the form a call that asks the user shows them, as an MCP input request
+// fills input: elicitation/create in form mode, its message the text of the
+// call, a text field per secret to type and a yes field per url to let, by
+// stored key
+void tools_form(yyjson_mut_doc * doc, yyjson_mut_val * input, const tool_outcome & asked);
+
+// what the user typed and let in their response to that form, by stored key,
+// a yes as true; false unless they accepted it
+bool tools_typed(yyjson_val * response, engine_typed & typed);

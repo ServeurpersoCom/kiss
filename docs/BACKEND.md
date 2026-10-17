@@ -332,9 +332,10 @@ tells every page.
   `command {input, output, ok, id?}`, a command the page ran, both opening a conversation without
   id and answered with `{id}`; `edit {id, entry, text}`, a version beside a message of the
   user; `retry {id, entry}`, a new answer to a message or beside an answer; `stop {id}`;
-  `answer {id, verdict}`, the question of the turn settled, `pin {id, pinned}`, `browse {id,
-  entry}`, the thread going to the last entry written under that one, `drop {id, entry}`, a command
-  entry leaving, its conversation going when it was the last one, `erase {ids}`. While a turn runs
+  `answer {id, verdict}` or `answer {id, response}`, the question of the turn settled, `pin {id,
+  pinned}`, `browse {id, entry}`, the thread going to the last entry written under that one, `drop
+  {id, entry}`, a command entry leaving, its conversation going when it was the last one, `erase
+  {ids}`. While a turn runs
   in a conversation, every action on it but `stop`, `answer`, `pin` and `erase` waits for it to end.
 - While a turn answers in a conversation, `{"set":["<id>","answering"],"value":true}` tells it, and
   `null` once it ended; `{"set":["<id>","asking"],"value":{...}}` poses its question, and `null`
@@ -457,16 +458,26 @@ for every machine, `set tools use bash on`, and a tool of another server stays i
 
 It calls the tools of the MCP servers the `mcp` module names as well, each by the name its server
 gives it, after the tools of the server, a name served twice staying with the first. A server is
-reached over Streamable HTTP, its session opened and its tools listed once, kept while its url, key
-and headers stay; a server that does not answer sits out the round, logged, and is asked again the
-next one.
+reached over Streamable HTTP in the era it speaks: one that answers `server/discover` with
+2026-07-28 gets the envelope and the headers of that era on every request, any other the
+`initialize` handshake of 2025-06-18 and its session. Its tools are listed once, kept while its url,
+key and headers stay; a server that does not answer sits out the round, logged, and is asked again
+the next one.
 
-A call in `consent` asks every page following the conversation and waits: the event
-`{"set":["<id>","asking"],"value":{"kind":"call","tool":...,"args":...}}` poses the question, the
-first `POST /conversations/answer {"id":...,"verdict":"once"|"always"|"refuse"}` settles it, and
-`{"set":["<id>","asking"],"value":null}` withdraws it from every page. `always` runs `set tools use
-<tool> on`, `refuse` answers `The user refused the call`, and Stop settles it as refused. A tool
-that asks a secret answers `Nobody is here to answer`.
+A turn that needs the user asks every page following the conversation and waits, the first answer
+settling it and `{"set":["<id>","asking"],"value":null}` withdrawing it from every page; Stop
+withdraws it and ends the turn. A call in `consent` poses
+`{"set":["<id>","asking"],"value":{"kind":"call","tool":...,"args":...}}`, which
+`POST /conversations/answer {"id":...,"verdict":"once"|"always"|"refuse"}` settles: `always` runs
+`set tools use <tool> on`, `refuse` answers `The user refused the call`. A tool that asks the user
+to fill a form poses `{"set":["<id>","asking"],"value":{"kind":"form","server":...,"input":...}}`,
+the MCP input request of an `elicitation/create` form: the `config` tool of the server, a secret to
+type or a url to let, under the hostname of the server, or a tool of an MCP server of the 2026-07-28
+era whose call answers `input_required`, under the name of that server. `POST /conversations/answer
+{"id":...,"response":{"action":"accept","content":{...}}}` settles it, the call running again with
+the response, or `{"action":"cancel"}`, which answers `The user answered nothing`. A form whose
+fields are other than text or yes fails the call unasked. Every text the user types in a form of an
+MCP server is sealed out of every outcome from then on, as the keychain seals its secrets.
 
 The turn writes its answer in the conversation as it streams, the pages that follow it getting each
 piece; the conversation is written to its file before a turn, before each call reaches its tool and

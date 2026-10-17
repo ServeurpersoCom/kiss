@@ -1,8 +1,9 @@
-import type { Assistant, Conversation } from './types.js';
+import type { Assistant, Conversation, Form } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { remotes, type Remote } from './remote.js';
-import type { Verdict } from '../engine/engine.js';
-import { app, last, pose, withdraw } from './app.svelte.js';
+import type { Grant, Verdict } from '../engine/engine.js';
+import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
+import { fill } from './form.js';
 
 // the conversations of the KiSS server chat agent names: the page follows
 // them by one stream of events and never writes one, the server alone
@@ -18,9 +19,9 @@ export const SYNC_RETRY_MS = 2000;
 
 // the server each conversation of a server lives on, by conversation id
 const homes = new Map<string, string>();
-// the question each conversation of a server shows for its turn, by its
-// number, while the turn asks it
-const questions = new Map<string, number>();
+// what each conversation of a server asks the user for its turn, while the
+// turn asks it: the number of the question it shows now
+const questions = new Map<string, { shown: number }>();
 // the server followed now, by where it goes and with what key, and what ends
 // its stream
 let followed: { server: Remote; key: string; stop: AbortController } | null = null;
@@ -43,12 +44,41 @@ function forget(server: string): void {
 	for (const [id, home] of homes) if (home === server) homes.delete(id);
 	for (const [id, n] of questions) {
 		if (homes.has(id)) continue;
-		withdraw(n);
+		withdraw(n.shown);
 		questions.delete(id);
 	}
 	if (app.current && !app.conversations.includes(app.current)) app.current = null;
 	for (const id of Object.keys(app.replies))
 		if (!app.conversations.some((c) => c.id === id)) delete app.replies[id];
+}
+
+// what a turn of a server asks the user, a call to grant or a form to fill
+// field by field, the answer going to the server; once the turn withdraws
+// it, the field it shows leaves and no other comes
+function ask(id: string, request: Grant | Form): void {
+	const asked = { shown: 0 };
+	questions.set(id, asked);
+	const posing = <T>(question: (settle: (answer: T) => void) => Asking): Promise<T> => {
+		if (questions.get(id) !== asked) return new Promise<T>(() => undefined);
+		const answer = pose<T>(id, question);
+		asked.shown = last();
+		return answer;
+	};
+	const answered: Promise<object> =
+		request.kind === 'form'
+			? fill(
+					{
+						secret: (key, note) => posing((settle) => ({ kind: 'secret', key, note, settle })),
+						confirm: (question) => posing((settle) => ({ kind: 'confirm', question, settle }))
+					},
+					request.server,
+					request.input
+				).then((response) => ({ id, response }))
+			: posing<Verdict>((settle) => ({ kind: 'grant', request, settle })).then((verdict) => ({
+					id,
+					verdict
+				}));
+	void answered.then((body) => act('answer', body)).catch((e: Error) => console.error(e.message));
 }
 
 // the conversation the page shows, the one the URL names, the answer each
@@ -57,13 +87,9 @@ function forget(server: string): void {
 function settle(id: string): void {
 	const c = app.conversations.find((x) => x.id === id);
 	const request = c?.asking;
-	if (request && !questions.has(id)) {
-		void pose<Verdict>(id, (answer) => ({ kind: 'grant', request, settle: answer })).then(
-			(verdict) => act('answer', { id, verdict }).catch((e: Error) => console.error(e.message))
-		);
-		questions.set(id, last());
-	} else if (!request && questions.has(id)) {
-		withdraw(questions.get(id)!);
+	if (request && !questions.has(id)) ask(id, request);
+	else if (!request && questions.has(id)) {
+		withdraw(questions.get(id)!.shown);
 		questions.delete(id);
 	}
 	if (location.hash.slice(1) === id) app.current = c ?? null;

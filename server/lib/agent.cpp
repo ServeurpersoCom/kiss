@@ -6,6 +6,7 @@
 #include "engine/keychain.h"
 #include "engine/parse.h"
 #include "engine/schema.h"
+#include "engine/seal.h"
 #include "lib/api.h"
 #include "lib/library.h"
 #include "lib/log.h"
@@ -32,10 +33,12 @@ static const char * const USE_OFF = "off";
 static std::mutex                                       g_mutex;
 static std::map<std::string, std::shared_ptr<api_stop>> g_turns;
 
-// a question a turn waits on, and the verdict that settles it
+// a question a turn waits on: a call to grant or a form to fill, and the
+// answer that settles it, a verdict or the response to the form as JSON
 struct question_t {
     std::mutex              mutex;
     std::condition_variable settled;
+    bool                    form = false;
     std::string             verdict;
 };
 
@@ -44,10 +47,18 @@ static const char * const VERDICTS[] = { "once", "always", "refuse" };
 static const char * const ALWAYS     = "always";
 static const char * const REFUSE     = "refuse";
 
+// the actions of a response to a form
+static const char * const ACCEPT = "accept";
+static const char * const CANCEL = "cancel";
+
 // the question each turn waits on, by conversation
 static std::map<std::string, std::shared_ptr<question_t>> g_questions;
 
-// a question settled, the first verdict winning, empty when a stop wakes it
+// the text the user typed in a form of an MCP server, sealed out of every
+// outcome as the keychain seals its secrets
+static words_t g_typed;
+
+// a question settled, the first answer winning, empty when a stop wakes it
 static void settle_question(const std::string & id, const std::string & verdict) {
     std::shared_ptr<question_t> q;
     {
@@ -65,18 +76,47 @@ static void settle_question(const std::string & id, const std::string & verdict)
     q->settled.notify_all();
 }
 
+// why a question of the kind does not stand in a conversation, empty when it
+// does
+static std::string standing(const std::string & id, bool form) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const auto                  it = g_questions.find(id);
+    if (it == g_questions.end()) {
+        return "nothing is asked in this conversation";
+    }
+    if (it->second->form != form) {
+        return form ? "the question is a call to grant" : "the question is a form to fill";
+    }
+    return "";
+}
+
 std::string agent_grant(const std::string & id, const std::string & verdict) {
     if (std::find(std::begin(VERDICTS), std::end(VERDICTS), verdict) == std::end(VERDICTS)) {
         return "\"" + verdict + "\" is not once, always or refuse";
     }
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        if (!g_questions.count(id)) {
-            return "nothing is asked in this conversation";
-        }
+    const std::string why = standing(id, false);
+    if (why.empty()) {
+        settle_question(id, verdict);
     }
-    settle_question(id, verdict);
-    return "";
+    return why;
+}
+
+std::string agent_fill(const std::string & id, const std::string & response) {
+    const std::shared_ptr<yyjson_doc> doc(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
+    yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
+    yyjson_val *                      action = yyjson_obj_get(root, "action");
+    const std::string                 a      = yyjson_is_str(action) ? yyjson_get_str(action) : "";
+    if (a != ACCEPT && a != CANCEL) {
+        return "the response is not accept or cancel";
+    }
+    if (a == ACCEPT && !yyjson_is_obj(yyjson_obj_get(root, "content"))) {
+        return "the response accepts no content";
+    }
+    const std::string why = standing(id, true);
+    if (why.empty()) {
+        settle_question(id, response);
+    }
+    return why;
 }
 
 bool agent_busy(const std::string & id) {
@@ -239,8 +279,9 @@ static void keep(const std::string & id) {
 
 // what the user answers a question of a turn, the question shown to every
 // page following the conversation while it stands
-static std::string ask(const std::string & id, const std::string & question, api_stop & stop) {
+static std::string ask(const std::string & id, const std::string & question, bool form, api_stop & stop) {
     const auto q = std::make_shared<question_t>();
+    q->form      = form;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_questions[id] = q;
@@ -263,10 +304,30 @@ static std::string ask(const std::string & id, const std::string & question, api
     return verdict;
 }
 
+// the response of the user to a form a tool asks them to fill, an MCP input
+// request, shown under the name of the server that asks
+static std::string fill(const std::string & id,
+                        const std::string & server,
+                        const std::string & input,
+                        api_stop &          stop) {
+    const std::shared_ptr<yyjson_doc>     in(yyjson_read(input.data(), input.size(), 0), yyjson_doc_free);
+    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
+    yyjson_mut_doc_set_root(made.get(), q);
+    yyjson_mut_obj_add_str(made.get(), q, "kind", "form");
+    yyjson_mut_obj_add_strncpy(made.get(), q, "server", server.data(), server.size());
+    yyjson_mut_obj_add_val(made.get(), q, "input", yyjson_val_mut_copy(made.get(), yyjson_doc_get_root(in.get())));
+    const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
+    log_info("Agent", "%.8s asks the user to fill a form of %s", id.c_str(), server.c_str());
+    return ask(id, question.get(), true, stop);
+}
+
 // a call runs and its outcome enters it: a call reaches a tool not off as the
 // configuration stands when it goes, with arguments it reads as an object; a
 // tool in consent asks the user, the turn waiting for a page to answer: once,
-// always, which turns the tool on, or refuse
+// always, which turns the tool on, or refuse; a tool that asks the user to
+// fill a form, a secret to type or a url to let, gets their response the
+// same way
 static void call(const std::string &           id,
                  const std::string &           entry,
                  size_t                        r,
@@ -320,7 +381,7 @@ static void call(const std::string &           id,
         yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
         const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
         log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
-        const std::string verdict = ask(id, question.get(), stop);
+        const std::string verdict = ask(id, question.get(), false, stop);
         log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
         if (verdict == REFUSE) {
             settle(called.args, "The user refused the call", false, {});
@@ -339,25 +400,62 @@ static void call(const std::string &           id,
     keep(id);
     log_info("Agent", "%.8s calls %s", id.c_str(), called.name.c_str());
     if (server) {
+        // every text the user types in a form of the server is sealed from then on
+        const auto answer = [&](const std::string & input) {
+            const std::string                 response = fill(id, server->name, input, stop);
+            const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0),
+                                                       yyjson_doc_free);
+            size_t                            i, n;
+            yyjson_val *                      key;
+            yyjson_val *                      value;
+            std::lock_guard<std::mutex>       lock(g_mutex);
+            yyjson_obj_foreach(yyjson_obj_get(yyjson_doc_get_root(answered.get()), "content"), i, n, key, value) {
+                if (yyjson_is_str(value) && yyjson_get_len(value)) {
+                    g_typed.push_back(yyjson_get_str(value));
+                }
+            }
+            return response;
+        };
         mcp_outcome out;
         try {
-            out = mcp_call(*server, called.name, called.args.empty() ? NO_ARGS : called.args, stop);
+            out = mcp_call(*server, called.name, called.args.empty() ? NO_ARGS : called.args, stop, answer);
         } catch (const std::exception & e) {
             if (stop.stopped) {
                 throw;
             }
             out.text = e.what();
         }
-        settle(called.args, out.text, out.ok, out.images);
+        words_t typed;
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            typed = g_typed;
+        }
+        settle(called.args, seal_text(out.text, typed), out.ok, out.images);
         return;
     }
-    const tool_outcome out = found->run(args, {}, [&stop] { return !stop.stopped; });
+    // a call that asks the user runs again with what they answered, until it
+    // asks nothing more or they cancel
+    const tool_tick tick = [&stop] {
+        return !stop.stopped;
+    };
+    engine_typed typed;
+    tool_outcome out = found->run(args, typed, tick);
+    while (!out.asks.empty() && !stop.stopped) {
+        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+        yyjson_mut_val *                      input = yyjson_mut_obj(made.get());
+        yyjson_mut_doc_set_root(made.get(), input);
+        tools_form(made.get(), input, out);
+        const std::shared_ptr<char> form(yyjson_mut_write(made.get(), 0, nullptr), free);
+        const std::string           response = fill(id, engine_get("server hostname").value_or(""), form.get(), stop);
+        const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
+        if (!tools_typed(yyjson_doc_get_root(answered.get()), typed)) {
+            settle(called.args, "The user answered nothing", false, {});
+            return;
+        }
+        out = found->run(args, typed, tick);
+    }
     if (stop.stopped) {
         throw api_error("Stopped");
-    }
-    if (!out.asks.empty()) {
-        settle(called.args, "Nobody is here to answer: " + out.text, false, {});
-        return;
     }
     std::vector<conversation_image> images;
     if (!out.image.empty()) {

@@ -163,8 +163,14 @@ static std::string act(const std::string & action, yyjson_val * body, std::strin
         return "";
     }
     if (action == "answer") {
+        yyjson_val * response = yyjson_obj_get(body, "response");
+        if (yyjson_is_obj(response)) {
+            const std::shared_ptr<char> json(yyjson_val_write(response, 0, nullptr), free);
+            return agent_fill(id, json.get());
+        }
         std::string verdict;
-        return text_field(body, "verdict", verdict) ? agent_grant(id, verdict) : "the body names no verdict";
+        return text_field(body, "verdict", verdict) ? agent_grant(id, verdict) :
+                                                      "the body names no verdict and no response";
     }
     const words_t secrets = keychain_running();
     if (action == "pin") {

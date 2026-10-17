@@ -73,3 +73,37 @@ std::string tools_check(const tool & t, yyjson_val * args) {
     }
     return "";
 }
+
+void tools_form(yyjson_mut_doc * doc, yyjson_mut_val * input, const tool_outcome & asked) {
+    yyjson_mut_obj_add_str(doc, input, "method", "elicitation/create");
+    yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc, input, "params");
+    yyjson_mut_obj_add_str(doc, params, "mode", "form");
+    yyjson_mut_obj_add_strncpy(doc, params, "message", asked.text.c_str(), asked.text.size());
+    yyjson_mut_val * schema = yyjson_mut_obj_add_obj(doc, params, "requestedSchema");
+    yyjson_mut_obj_add_str(doc, schema, "type", "object");
+    yyjson_mut_val * properties = yyjson_mut_obj_add_obj(doc, schema, "properties");
+    yyjson_mut_val * required   = yyjson_mut_obj_add_arr(doc, schema, "required");
+    for (const engine_ask & a : asked.asks) {
+        yyjson_mut_val * field = yyjson_mut_obj_add_obj(doc, properties, a.key.c_str());
+        yyjson_mut_obj_add_str(doc, field, "type", a.yes ? "boolean" : "string");
+        yyjson_mut_arr_add_strcpy(doc, required, a.key.c_str());
+    }
+}
+
+bool tools_typed(yyjson_val * response, engine_typed & typed) {
+    yyjson_val * action = yyjson_obj_get(response, "action");
+    if (!yyjson_is_str(action) || std::string(yyjson_get_str(action)) != "accept") {
+        return false;
+    }
+    size_t       i, n;
+    yyjson_val * key;
+    yyjson_val * value;
+    yyjson_obj_foreach(yyjson_obj_get(response, "content"), i, n, key, value) {
+        if (yyjson_is_str(value)) {
+            typed[yyjson_get_str(key)] = yyjson_get_str(value);
+        } else if (yyjson_is_true(value)) {
+            typed[yyjson_get_str(key)] = "true";
+        }
+    }
+    return true;
+}

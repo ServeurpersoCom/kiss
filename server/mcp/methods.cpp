@@ -138,21 +138,7 @@ void method_resources_list(httplib::Response & res, yyjson_val * id, bool modern
 // coming again with the answers
 static std::string asked_json(yyjson_val * id, const tool_outcome & r) {
     return jsonrpc_input_required_json(id, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
-        yyjson_mut_val * form =
-            yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "inputRequests"), USER_FORM);
-        yyjson_mut_obj_add_str(doc, form, "method", "elicitation/create");
-        yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc, form, "params");
-        yyjson_mut_obj_add_str(doc, params, "mode", "form");
-        yyjson_mut_obj_add_strncpy(doc, params, "message", r.text.c_str(), r.text.size());
-        yyjson_mut_val * schema = yyjson_mut_obj_add_obj(doc, params, "requestedSchema");
-        yyjson_mut_obj_add_str(doc, schema, "type", "object");
-        yyjson_mut_val * properties = yyjson_mut_obj_add_obj(doc, schema, "properties");
-        yyjson_mut_val * required   = yyjson_mut_obj_add_arr(doc, schema, "required");
-        for (const engine_ask & a : r.asks) {
-            yyjson_mut_val * field = yyjson_mut_obj_add_obj(doc, properties, a.key.c_str());
-            yyjson_mut_obj_add_str(doc, field, "type", a.yes ? "boolean" : "string");
-            yyjson_mut_arr_add_strcpy(doc, required, a.key.c_str());
-        }
+        tools_form(doc, yyjson_mut_obj_add_obj(doc, yyjson_mut_obj_add_obj(doc, out, "inputRequests"), USER_FORM), r);
     });
 }
 
@@ -252,24 +238,7 @@ static bool takes_forms(yyjson_val * params) {
 // nothing
 static bool answered(yyjson_val * params, engine_typed & typed) {
     yyjson_val * form = yyjson_obj_get(yyjson_obj_get(params, "inputResponses"), USER_FORM);
-    if (!form) {
-        return true;
-    }
-    yyjson_val * action = yyjson_obj_get(form, "action");
-    if (!yyjson_is_str(action) || std::string(yyjson_get_str(action)) != "accept") {
-        return false;
-    }
-    size_t       i, n;
-    yyjson_val * key;
-    yyjson_val * value;
-    yyjson_obj_foreach(yyjson_obj_get(form, "content"), i, n, key, value) {
-        if (yyjson_is_str(value)) {
-            typed[yyjson_get_str(key)] = yyjson_get_str(value);
-        } else if (yyjson_is_true(value)) {
-            typed[yyjson_get_str(key)] = "true";
-        }
-    }
-    return true;
+    return !form || tools_typed(form, typed);
 }
 
 // a client that takes SSE gets a comment every tick while the tool runs, then

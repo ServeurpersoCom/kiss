@@ -16,7 +16,9 @@ void sync_events(const httplib::Request & req, httplib::Response & res);
 // message after the thread; command {input, output, ok, id?}, a command the
 // page ran, after the thread; both open a conversation without id, answered
 // {id}; edit {id, entry, text}; retry {id, entry}; stop {id}; answer {id,
-// verdict}, once, always or refuse to what its turn asks; pin {id, pinned};
+// verdict}, once, always or refuse to the call its turn asks about, or answer
+// {id, response}, the response of the user to the form it asks them to fill;
+// pin {id, pinned};
 // browse {id, entry}; drop {id, entry}; erase {ids}; 204 once applied, else
 // why not
 void sync_action(const httplib::Request & req, httplib::Response & res, const std::string & action);

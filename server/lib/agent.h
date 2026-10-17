@@ -19,6 +19,12 @@ bool agent_busy(const std::string & id);
 // does
 std::string agent_grant(const std::string & id, const std::string & verdict);
 
+// what the user answers to the form a turn asks them to fill in a
+// conversation: their response as JSON, {"action":"accept","content":{...}}
+// or {"action":"cancel"}; the message of what keeps it from reaching the
+// turn, empty once it does
+std::string agent_fill(const std::string & id, const std::string & response);
+
 // the turn of a conversation stops: its request closes, no call runs after
 // it, and the answer keeps what settled before
 void agent_stop(const std::string & id);

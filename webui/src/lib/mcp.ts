@@ -7,7 +7,6 @@ import {
 import type {
 	CallToolRequest,
 	CallToolResult,
-	InputRequest,
 	InputRequiredResult
 } from '@modelcontextprotocol/client';
 import type { Image, Outcome, Tool, ToolContext } from './types.js';
@@ -15,7 +14,7 @@ import type { ConfigReader } from '../engine/engine.js';
 import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
 import { headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
-import { learn } from '../engine/keychain.js';
+import { fill } from './form.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
 // server, kept while its url and key stay, with the tool list it serves, asked
@@ -42,17 +41,6 @@ const UNAUTHORIZED = 401;
 // telling whether the route holds a key
 const ROUTE_URI = 'kiss:proxy/';
 const ROUTE_KEYED_META = 'kiss/keyed';
-
-// the one input a server may ask of KiSS: a form whose fields are secrets,
-// text each typed in the masked field of the page, or yes or no, the user
-// confirming what the server says; the user answers them all, or leaving one
-// cancels the form
-const ELICITATION = 'elicitation/create';
-const FORM_MODE = 'form';
-const TEXT_FIELD = 'string';
-const YES_FIELD = 'boolean';
-const ACTIONS = ['accept', 'cancel'] as const;
-const [ACCEPT, CANCEL] = ACTIONS;
 
 // what the server answered, or did not; a KiSS server also gives the line it
 // writes of itself, server forge 5633ee7 (2026-10-11) on linux; locked, it
@@ -116,41 +104,6 @@ function outcome(result: CallToolResult): Outcome {
 	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
 }
 
-// what the user answers to a form of a server under its message: a text field
-// typed out of the sight of the model, a yes or no field confirmed; an input
-// other than a form of such fields is none KiSS answers
-async function answer(ctx: ToolContext, server: string, input: InputRequest): Promise<object> {
-	const params = (input.params ?? {}) as {
-		mode?: string;
-		message?: string;
-		requestedSchema?: { properties?: Record<string, { type?: string }> };
-	};
-	if (input.method !== ELICITATION || (params.mode ?? FORM_MODE) !== FORM_MODE) {
-		throw new Error(`asks for ${input.method} ${params.mode ?? ''}, which KiSS does not answer`);
-	}
-	const fields = Object.entries(params.requestedSchema?.properties ?? {});
-	if (!fields.length) throw new Error('asks for a form with no field');
-	const other = fields.find(
-		([, schema]) => schema.type !== TEXT_FIELD && schema.type !== YES_FIELD
-	);
-	if (other)
-		throw new Error(`asks for ${other[0]}, a field KiSS does not answer: only text or yes`);
-	const content: Record<string, string | boolean> = {};
-	for (const [field, schema] of fields) {
-		const note = params.message ?? '';
-		if (schema.type === YES_FIELD) {
-			if (!(await ctx.confirm(note || `${field} of ${server}?`))) return { action: CANCEL };
-			content[field] = true;
-			continue;
-		}
-		const value = await ctx.secret(`${field} of ${server}`, note);
-		if (value === null) return { action: CANCEL };
-		learn(value);
-		content[field] = value;
-	}
-	return { action: ACCEPT, content };
-}
-
 // a call to a tool of a server, asked again with the answers of the user each
 // time the server asks them for secrets; every round asks the user, so one
 // that asks nothing is an error, and a stopped turn asks nothing more
@@ -168,7 +121,7 @@ async function called(
 		const inputResponses: Record<string, object> = {};
 		for (const [key, input] of inputs) {
 			ctx.signal.throwIfAborted();
-			inputResponses[key] = await answer(ctx, remote.name, input);
+			inputResponses[key] = await fill(ctx, remote.name, input);
 		}
 		const again = { ...params, inputResponses, requestState: result.requestState };
 		result = await client.callTool(again as CallToolRequest['params'], options);

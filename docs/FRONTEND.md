@@ -632,8 +632,9 @@ versions, pin, delete and Stop go to the server, and every page following it see
 still runs on the page, its output entering the conversation through the server. The page a KiSS
 server serves names that server `backend` and makes it the agent; a page served elsewhere answers
 itself until a line names one. A call the server asks about shows on every page following the
-conversation as the consent card, the first answer going back to the server and withdrawing the card
-everywhere.
+conversation as the consent card, and a form a tool of the server asks the user to fill as the cards
+of its fields, a secret in the masked field, a yes as a confirmation; the first page to answer sends
+it to the server, which withdraws the question from every page.
 
 A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment
 it entered, and the conversation holds its leaf, the entry the thread ends on. The thread is the

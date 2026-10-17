@@ -1,6 +1,7 @@
 // the contracts of the conversations, the tools and the protocols the agent
 // drives
 
+import type { InputRequest } from '@modelcontextprotocol/client';
 import type { Grant, Verdict } from '../engine/engine.js';
 
 // an image a tool hands back, base64 data, shown to the user only
@@ -60,6 +61,14 @@ export interface Link {
 
 export type Entry = Message & Link;
 
+// a form a tool of a KiSS server asks the user to fill in a turn of the
+// server, an MCP input request, under the name of the server that asks
+export interface Form {
+	kind: 'form';
+	server: string;
+	input: InputRequest;
+}
+
 // a tree of entries, an edit opening a branch beside the entry it edits; the
 // path up from the leaf is the thread, and the history the model reads
 export interface Conversation {
@@ -73,9 +82,10 @@ export interface Conversation {
 	// the entry the thread ends on, none while the conversation is empty
 	leaf: string | null;
 	// in the page only, a conversation of a KiSS server while a turn of the
-	// server answers in it, and what that turn asks the user
+	// server answers in it, and what that turn asks the user: a call to grant,
+	// or a form of one of its tools to fill
 	answering?: true;
-	asking?: Grant;
+	asking?: Grant | Form;
 }
 
 export interface Outcome {
