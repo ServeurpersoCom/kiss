@@ -31,7 +31,7 @@ std::string agent_command(const std::string & id, const std::string & input);
 constexpr const char * AGENT_CLIENT_TOOL = "_client_config";
 
 // a page attaches under its hostname, the agent calling its config tool from
-// then on, unless another page holds that name: whether it holds it
+// then on, unless another page holds that name: whether it holds it now
 bool agent_attach(const std::string & client);
 
 // a page that held its name leaves, a call it runs answering that it is gone

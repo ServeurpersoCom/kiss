@@ -138,7 +138,6 @@ std::string agent_ran(const std::string & id, const std::string & output, bool o
 bool agent_attach(const std::string & client) {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (std::find(g_clients.begin(), g_clients.end(), client) != g_clients.end()) {
-        log_info("Agent", "Page %s attaches without its tool, another page holds that name", client.c_str());
         return false;
     }
     g_clients.push_back(client);

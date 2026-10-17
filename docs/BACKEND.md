@@ -344,7 +344,9 @@ protocol of the events and the moment of the server on its clock, in millisecond
 page that does not read that protocol stops following the server and says so.
 `?client=<hostname>` names an attached page, a-z, 0-9 and `_`, a policy violation otherwise: while its stream lasts,
 the agent calls the config tool of the page as `<hostname>_client_config`, and the first event names
-the client, unless another page holds that name, which the first event then leaves out.
+the client, unless another page holds that name, which the first event then leaves out. Once the
+page that holds the name leaves, a stream of that name takes the tool within a second, its next
+event setting every conversation again, the client named.
 
 ```
 {"set":[],"value":{"protocol":1,"client":"abcd","now":1792220666396,"conversations":[...]}}

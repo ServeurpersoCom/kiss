@@ -253,6 +253,8 @@ int main() {
         law(g_tools.back().find("abcd_client_config") == std::string::npos,
             "the tool leaves with the page: " + g_tools.back());
     }
+    law(agent_attach("abcd"), "another page of that name takes the tool once the page that held it leaves");
+    agent_detach("abcd");
 
     server.stop();
     listening.join();
