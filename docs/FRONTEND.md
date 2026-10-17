@@ -624,15 +624,19 @@ miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds 
 
 ## Conversations
 
-`set chat agent <server>` names a KiSS server, an item of `mcp`, whose agent answers the
-conversations opened from then on: a message goes to the server, which runs the turn, holds the
-conversation and writes it, the browser closed or not. The page follows the conversations of that
-server by one stream of events, the Conversations API of BACKEND.md, beside those of the browser,
-and never writes one: retry, edit,
-versions, pin, delete and Stop go to the server, and every page following it sees them. A command
-still runs on the page, its output entering the conversation through the server. The page a KiSS
-server serves names that server `backend` and makes it the agent; a page served elsewhere answers
-itself until a line names one. A call the server asks about shows on every page following the
+The page is attached to a KiSS server or detached from it, two worlds that never mix.
+`set client attached on` attaches it to the server the item `backend` of `mcp` names: the page shows
+the conversations of that server alone, follows them by one stream of events, the Conversations API
+of BACKEND.md, and never writes one. A message goes to the server, which runs the turn, holds the
+conversation and writes it, the browser closed or not; retry, edit, versions, pin, delete and Stop
+go to the server, and every page following it sees them. Every CLI line runs on the server, its
+completion coming from it as it is typed, except `attach` and `detach`, which the page runs itself.
+Detached, the default, the page holds the conversations of the browser, answers them itself and
+runs every line. `attach` and `detach` set `client attached`, kept as any key by `write`; every
+conversation leaves the page as it attaches or detaches, those of the browser coming back once it
+detaches. The page a KiSS server serves names that server `backend` and attaches to it. The key
+of a server the page reaches is asked on the page, in the open conversation of a detached page, in
+none on an attached one. A call the server asks about shows on every page following the
 conversation as the consent card, and a form a tool of the server asks the user to fill as the cards
 of its fields, a secret in the masked field, a yes as a confirmation; the first page to answer sends
 it to the server, which withdraws the question from every page. The line under an answer the

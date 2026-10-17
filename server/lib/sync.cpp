@@ -148,20 +148,12 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
         return { UNKNOWN, "unknown conversation \"" + id + "\"" };
     }
     if (action == "send" || action == "command") {
-        conversation_entry e;
-        e.role           = action == "send" ? ROLE_USER : ROLE_CLI;
-        yyjson_val * ok  = yyjson_obj_get(body, "ok");
-        // a command without its output is one the server runs
-        const bool   run = action == "command" && !yyjson_obj_get(body, "output");
-        if (action == "send" ? !text_field(body, "text", e.text) || trim(e.text).empty() :
-            run              ? !text_field(body, "input", e.input) || trim(e.input).empty() :
-                  !text_field(body, "input", e.input) || !text_field(body, "output", e.output) || !yyjson_is_bool(ok)) {
-            return { MALFORMED, action == "send" ? "the body holds no text" :
-                                run              ? "the body holds no input" :
-                                                   "the body holds no input, output and ok" };
+        const bool  send = action == "send";
+        std::string line;
+        if (!text_field(body, send ? "text" : "input", line) || trim(line).empty()) {
+            return { MALFORMED, send ? "the body holds no text" : "the body holds no input" };
         }
-        e.ok = yyjson_get_bool(ok);
-        if (named && (action == "send" || run) && agent_busy(id)) {
+        if (named && agent_busy(id)) {
             return { CONFLICT, AGENT_BUSY };
         }
         if (!named) {
@@ -176,17 +168,12 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
             id = c.id;
         }
         created = id;
-        if (action == "send") {
-            return say(id, e.text);
+        if (send) {
+            return say(id, line);
         }
-        if (run) {
-            const std::string why = agent_command(id, e.input);
-            return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
-        }
-        return changed(id, [&](conversation & c) {
-            conversation_append(c, c.leaf, e);
-            return refusal{};
-        });
+        // a line this server runs as its config tool does
+        const std::string why = agent_command(id, line);
+        return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
     }
     if (action == "complete") {
         std::string line;

@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigReader } from '../src/engine/engine.js';
 import { app } from '../src/lib/app.svelte.js';
-import { SYNC_RETRY_MS, SYNC_SILENCE_MS, act, follow, homed, turnOf } from '../src/lib/sync.js';
+import {
+	SYNC_RETRY_MS,
+	SYNC_SILENCE_MS,
+	act,
+	attached,
+	detaching,
+	follow,
+	turnOf
+} from '../src/lib/sync.js';
 
 // the browser database stays out: the conversations live in the page alone
 vi.mock('../src/lib/db.js', () => ({
@@ -10,10 +18,11 @@ vi.mock('../src/lib/db.js', () => ({
 	deleteConversations: async () => {}
 }));
 
-// a configuration naming the KiSS server backend as chat agent, with its key
-function config(agent: string): ConfigReader {
+// a configuration with the KiSS server backend and its key, the page attached
+// to it or not
+function config(on: boolean): ConfigReader {
 	const values: Record<string, string> = {
-		'chat agent': agent,
+		'client attached': on ? 'on' : 'off',
 		'mcp url backend': 'http://kiss/mcp',
 		'mcp key backend': 'k'
 	};
@@ -27,8 +36,8 @@ const conversation = (id: string, title: string, updated: number) => ({
 	updated,
 	leaf: `${id}-a`,
 	entries: [
-		{ role: 'user', text: 'hi', id: `${id}-u`, parent: null, time: updated },
-		{ role: 'assistant', rounds: [], id: `${id}-a`, parent: `${id}-u`, time: updated }
+		{ role: 'user' as const, text: 'hi', id: `${id}-u`, parent: null, time: updated },
+		{ role: 'assistant' as const, rounds: [], id: `${id}-a`, parent: `${id}-u`, time: updated }
 	]
 });
 
@@ -60,7 +69,7 @@ function server() {
 const NOW = 1_760_000_000_000;
 
 afterEach(() => {
-	follow(config(''));
+	follow(config(false));
 	vi.unstubAllGlobals();
 });
 
@@ -80,7 +89,7 @@ describe('the conversations of a KiSS server', () => {
 			tokens: 9
 		};
 		app.conversations = [];
-		follow(config('backend'));
+		follow(config(true));
 		await vi.waitFor(() => expect(s.sent[0]?.url).toBe('http://kiss/conversations/events'));
 		expect(new Headers(s.sent[0].init?.headers).get('authorization')).toBe('Bearer k');
 		s.push({
@@ -92,7 +101,7 @@ describe('the conversations of a KiSS server', () => {
 			}
 		});
 		await vi.waitFor(() => expect(app.conversations.map((c) => c.id)).toEqual(['b', 'a']));
-		expect(homed('a') && homed('b')).toBe(true);
+		expect(attached()).toBe(true);
 
 		s.push({ set: ['a', 'turn'], value: turn });
 		s.push({ add: ['a', 'entries', 1, 'rounds'], value: { reasoning: '', text: '', calls: [] } });
@@ -116,14 +125,13 @@ describe('the conversations of a KiSS server', () => {
 		);
 		s.push({ set: ['b'], value: null });
 		await vi.waitFor(() => expect(app.conversations.map((c) => c.id)).toEqual(['a']));
-		expect(homed('b')).toBe(false);
 	});
 
 	it('ask what a turn of the server asks, the answer going to the server, the question leaving with it', async () => {
 		const s = server();
 		app.conversations = [];
 		app.asks = [];
-		follow(config('backend'));
+		follow(config(true));
 		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		const request = { kind: 'call', tool: 'web_search_exa', args: '{"q":"x"}' };
 		s.push({ set: ['a', 'asking'], value: request });
@@ -147,7 +155,7 @@ describe('the conversations of a KiSS server', () => {
 		const s = server();
 		app.conversations = [];
 		app.asks = [];
-		follow(config('backend'));
+		follow(config(true));
 		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		const form = (fields: Record<string, string>) => ({
 			kind: 'form',
@@ -199,20 +207,23 @@ describe('the conversations of a KiSS server', () => {
 		expect(s.sent.filter((r) => r.url.endsWith('/conversations/answer')).length).toBe(1);
 	});
 
-	it('send the actions of the user to the server, and leave the page with it', async () => {
+	it('send the actions of the user to the server, the conversations of the page leaving as it attaches and coming back as it detaches', async () => {
 		const s = server();
-		app.conversations = [];
-		follow(config('backend'));
+		const mine = conversation('m', 'M', 1);
+		app.conversations = [mine];
+		detaching(async () => void (app.conversations = [mine]));
+		follow(config(true));
+		expect(app.conversations).toEqual([]);
 		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		await vi.waitFor(() => expect(app.conversations.length).toBe(1));
 		expect(await act('send', { text: 'hi' })).toEqual({ id: 'n' });
 		const post = s.sent.find((r) => r.url === 'http://kiss/conversations/send')!;
 		expect(post.init?.method).toBe('POST');
 		expect(JSON.parse(String(post.init?.body))).toEqual({ text: 'hi' });
-		expect(homed('n')).toBe(true);
-		follow(config(''));
-		expect(app.conversations).toEqual([]);
-		expect(homed('a')).toBe(false);
+		follow(config(false));
+		expect(attached()).toBe(false);
+		await vi.waitFor(() => expect(app.conversations).toEqual([mine]));
+		detaching(async () => undefined);
 	});
 
 	it('follow no server that speaks another protocol', async () => {
@@ -220,7 +231,7 @@ describe('the conversations of a KiSS server', () => {
 		const s = server();
 		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
 		app.conversations = [];
-		follow(config('backend'));
+		follow(config(true));
 		s.push({ set: [], value: { protocol: 2, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		await vi.waitFor(() =>
 			expect(errors).toHaveBeenCalledWith(expect.stringContaining('protocol 2'))
@@ -236,7 +247,7 @@ describe('the conversations of a KiSS server', () => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
 		const s = server();
 		app.conversations = [];
-		follow(config('backend'));
+		follow(config(true));
 		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
 		await vi.waitFor(() => expect(app.conversations.length).toBe(1));
 		await vi.advanceTimersByTimeAsync(SYNC_SILENCE_MS - 500);

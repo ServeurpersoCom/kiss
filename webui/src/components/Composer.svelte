@@ -6,6 +6,7 @@
 	import { extend } from '../engine/complete.js';
 	import Icon from './Icon.svelte';
 	import { SLASH } from '../lib/config.js';
+	import { PAGE_COMMANDS, act, attached } from '../lib/sync.js';
 
 	// a key typed elsewhere than in a field reaches the composer, unless a modal
 	// stands over the page; a touch screen opens no keyboard by itself
@@ -38,12 +39,27 @@
 		if (cli) known('user').then((k) => (items = k));
 	});
 
-	// what may follow a slash command, filtered as it is typed
-	let hints = $derived(
-		cli && !text.includes('\n')
-			? suggest(text.slice(SLASH.length), 'user', items, { conversation: app.current ?? undefined })
-			: []
-	);
+	// what may follow a slash command, filtered as it is typed: the page tells
+	// it, or its server once attached, the answer to the latest line alone
+	// showing, beside the first words of the commands the page runs itself
+	let hints: string[] = $state([]);
+	let typed = 0;
+	$effect(() => {
+		const line = cli && !text.includes('\n') ? text.slice(SLASH.length) : null;
+		const n = ++typed;
+		if (line === null) return void (hints = []);
+		if (!attached())
+			return void (hints = suggest(line, 'user', items, {
+				conversation: app.current ?? undefined
+			}));
+		const own = /\s/.test(line) ? [] : PAGE_COMMANDS.filter((w) => w.startsWith(line));
+		act('complete', { line }).then(
+			(a) => {
+				if (n === typed) hints = [...own, ...(a.words ?? [])];
+			},
+			(e: Error) => console.error(e.message)
+		);
+	});
 	// the slash command completed as far as the candidates agree; a candidate
 	// in <> names what to type, it only shows
 	function take(found: readonly string[]) {

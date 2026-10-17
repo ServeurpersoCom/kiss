@@ -387,7 +387,6 @@ outcome through its stream. An action answers no state.
 |---|---|---|
 | `send` | `{text, id?}` | a message after the thread, a turn answering it |
 | `command` | `{input, id?}` | a line this server runs as its config tool does, its forms asked as the turn of the conversation, its output after the thread |
-| `command` | `{input, output, ok, id?}` | a command the page ran, after the thread |
 | `complete` | `{line}` | answered `{words}`: the words that complete a line being typed, as Tab and `?` of the console |
 | `edit` | `{id, entry, text}` | a version beside a message of the user, a turn answering it |
 | `retry` | `{id, entry}` | a new answer to a message, or beside an answer |
@@ -408,7 +407,7 @@ the response is `{"action":"accept","content":{...}}` or `{"action":"cancel"}`.
 | 200 `{words}` | `complete` |
 | 400 | a body that does not hold: not JSON, a field missing or of the wrong kind, an entry of the wrong role |
 | 404 | a conversation or an entry the server does not hold |
-| 409 | a turn runs, for every action on its conversation but `stop`, `answer`, `pin`, a command the page ran and `erase`; or `answer` while no such question stands |
+| 409 | a turn runs, for every action on its conversation but `stop`, `answer`, `pin` and `erase`; or `answer` while no such question stands |
 | 500 | a file not written |
 
 Every refusal tells why in its body, one line of text. The log names each action and its

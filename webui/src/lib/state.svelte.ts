@@ -22,7 +22,8 @@ import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
 import { redact, run, settings } from '../engine/run.js';
 import { held, pulse, type Pulse } from './pulse.js';
-import { act, agent, homed, turnOf } from './sync.js';
+import { PAGE_COMMANDS, act, attached, detaching, turnOf } from './sync.js';
+import { resolve } from '../engine/registry.js';
 
 export { app };
 
@@ -36,16 +37,20 @@ const pulses = new Map<string, Pulse>();
 // server, if any
 export const pulseOf = (id: string): Pulse | undefined => pulses.get(id) ?? turnOf(id);
 
-// the question a conversation shows, the first it asks, if any
+// what asks the user from the page itself, in no conversation: the key of a
+// server the page reaches, a command the page runs while attached
+const PAGE = '';
+
+// the question a conversation shows, the first it or the page asks, if any
 export const askOf = (id: string | undefined): Posed | undefined =>
-	app.asks.find((q) => q.from === id);
+	app.asks.find((q) => q.from === id || q.from === PAGE);
 
 // the conversation as it settled, even while the model answers: a call not
 // sent yet never reaches the database, one running reaches it as stopped; a
-// conversation deleted meanwhile stays deleted, and one of a KiSS server is
-// the server's to write
+// conversation deleted meanwhile stays deleted, and an attached page writes
+// none: the server writes its own
 async function save(conversation: Conversation): Promise<void> {
-	if (!app.conversations.some((c) => c.id === conversation.id) || homed(conversation.id)) return;
+	if (attached() || !app.conversations.some((c) => c.id === conversation.id)) return;
 	const snapshot = $state.snapshot(conversation) as Conversation;
 	await putConversations([{ ...snapshot, entries: stored(snapshot.entries) }]);
 }
@@ -56,15 +61,23 @@ function follow(): void {
 	app.current = app.conversations.find((c) => c.id === id) ?? null;
 }
 
-// the conversations of the browser beside those of a KiSS server, the one
-// the URL names open
-export async function restore(): Promise<void> {
-	const local = await listConversations();
-	app.conversations = [...local, ...app.conversations.filter((c) => homed(c.id))].sort(
+// the conversations of the browser beside those opened while they load, the
+// one the URL names open
+async function load(): Promise<void> {
+	const stored = await listConversations();
+	const opened = app.conversations;
+	app.conversations = [...opened, ...stored.filter((c) => !opened.some((o) => o.id === c.id))].sort(
 		(a, b) => b.updated - a.updated
 	);
 	prune(app.conversations.map((c) => c.id));
 	follow();
+}
+
+// a detached page shows the conversations of the browser, now and each time
+// it detaches; an attached one shows those of its server as they come
+export async function restore(): Promise<void> {
+	detaching(load);
+	if (!attached()) await load();
 	addEventListener('hashchange', follow);
 }
 
@@ -83,7 +96,7 @@ export function newChat(): void {
 export async function pin(id: string): Promise<void> {
 	const conversation = app.conversations.find((c) => c.id === id);
 	if (!conversation) return;
-	if (homed(id)) return void (await act('pin', { id, pinned: !conversation.pinned }));
+	if (attached()) return void (await act('pin', { id, pinned: !conversation.pinned }));
 	if (conversation.pinned) delete conversation.pinned;
 	else conversation.pinned = true;
 	await save(conversation);
@@ -93,9 +106,7 @@ export async function pin(id: string): Promise<void> {
 // turns of the conversations deleted stop, their questions are answered no, and
 // their drafts go
 export async function remove(ids: readonly string[]): Promise<void> {
-	const remote = ids.filter(homed);
-	if (remote.length) await act('erase', { ids: remote });
-	ids = ids.filter((id) => !homed(id));
+	if (attached()) return void (await act('erase', { ids }));
 	for (const id of ids) stop(id);
 	app.conversations = app.conversations.filter((c) => !ids.includes(c.id));
 	prune(app.conversations.map((c) => c.id));
@@ -180,27 +191,41 @@ function explain(error: Error): string {
 // a line typed in the open conversation, after the entry the thread ends on;
 // whether it went through
 export async function send(text: string): Promise<boolean> {
-	const cli = text.startsWith(SLASH);
-	const id = app.current?.id;
-	if (id ? homed(id) : agent() && !cli) return remote(id, text);
-	const conversation = current(cli ? '' : text);
+	if (attached()) return remote(text);
+	const conversation = current(text.startsWith(SLASH) ? '' : text);
 	return enter(conversation, conversation.leaf, text);
 }
 
-// a line in a conversation of a KiSS server, or a message opening one: a
-// message goes to its agent, a command runs on the page and its output enters
-// the conversation through the server; whether it went through
-async function remote(id: string | undefined, text: string): Promise<boolean> {
+// whether a CLI line is one an attached page runs itself
+function own(input: string): boolean {
 	try {
-		if (!text.startsWith(SLASH)) {
-			const sent = await act('send', id ? { id, text } : { text });
-			if (!id && sent.id) open(sent.id);
-			return true;
-		}
-		const input = text.slice(SLASH.length);
-		const result = await run(input, 'user', reach(id!));
-		await act('command', { id, input: redact(input), output: result.text, ok: result.ok });
-		return result.ok;
+		return PAGE_COMMANDS.includes(resolve(input.trim().split(/\s+/)).command.path.join(' '));
+	} catch {
+		return false;
+	}
+}
+
+// a line the page runs itself, in no conversation, what it says going to the
+// console; whether it went through
+async function page(input: string): Promise<boolean> {
+	const result = await run(input, 'user', reach(PAGE));
+	if (!result.ok) console.error(result.text);
+	return result.ok;
+}
+
+// a line of an attached page, in the open conversation of the server or
+// opening one: a message goes to its agent, a command runs on the server,
+// except one the page runs itself; whether it went through
+async function remote(text: string): Promise<boolean> {
+	const id = app.current?.id;
+	const cli = text.startsWith(SLASH);
+	const input = text.slice(SLASH.length);
+	if (cli && own(input)) return page(input);
+	try {
+		const body = cli ? { input } : { text };
+		const sent = await act(cli ? 'command' : 'send', id ? { id, ...body } : body);
+		if (!id && sent.id) open(sent.id);
+		return true;
 	} catch (e) {
 		console.error((e as Error).message);
 		return false;
@@ -209,13 +234,15 @@ async function remote(id: string | undefined, text: string): Promise<boolean> {
 
 // every MCP server that takes no request without the right key asks the user
 // for it, as the line set mcp key <name> does, again while the key is wrong,
-// until the user gives none
+// until the user gives none; the line runs on the page, in the open
+// conversation of a detached page, in none on an attached one
 export async function unlock(): Promise<void> {
 	const given = new Set<string>();
 	for (;;) {
 		const name = (await locked(settings)).find((n) => !given.has(n));
 		if (name === undefined) return;
-		if (!(await send(`${SLASH}set mcp key ${name}`))) given.add(name);
+		const line = `set mcp key ${name}`;
+		if (!(await (attached() ? page(line) : send(SLASH + line)))) given.add(name);
 	}
 }
 
@@ -226,8 +253,7 @@ export async function edit(id: string, text: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || entry?.role !== 'user' || entry.text === text) return;
 	if (app.current.id in app.replies) return;
-	if (homed(app.current.id))
-		return void (await act('edit', { id: app.current.id, entry: id, text }));
+	if (attached()) return void (await act('edit', { id: app.current.id, entry: id, text }));
 	await enter(app.current, entry.parent, text);
 }
 
@@ -236,7 +262,7 @@ export async function edit(id: string, text: string): Promise<void> {
 export async function retry(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || !entry || app.current.id in app.replies) return;
-	if (homed(app.current.id)) return void (await act('retry', { id: app.current.id, entry: id }));
+	if (attached()) return void (await act('retry', { id: app.current.id, entry: id }));
 	const user = entry.role === 'assistant' ? entry.parent : entry.role === 'user' ? id : null;
 	if (user) await answer(app.current, user);
 }
@@ -247,7 +273,7 @@ export async function retry(id: string): Promise<void> {
 export async function dismiss(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || entry?.role !== 'cli') return;
-	if (homed(app.current.id)) return void (await act('drop', { id: app.current.id, entry: id }));
+	if (attached()) return void (await act('drop', { id: app.current.id, entry: id }));
 	drop(app.current, id);
 	if (app.current.entries.length) await save(app.current);
 	else await remove([app.current.id]);
@@ -256,7 +282,7 @@ export async function dismiss(id: string): Promise<void> {
 // another version shows, as it was last written in
 export async function browse(id: string): Promise<void> {
 	if (!app.current || app.current.id in app.replies) return;
-	if (homed(app.current.id)) return void (await act('browse', { id: app.current.id, entry: id }));
+	if (attached()) return void (await act('browse', { id: app.current.id, entry: id }));
 	app.current.leaf = latest(app.current, id);
 	await save(app.current);
 }
@@ -358,7 +384,7 @@ function reach(from: string) {
 
 // the turn of a conversation aborts, and every question it asks is answered no
 export function stop(id: string): void {
-	if (homed(id)) void act('stop', { id });
+	if (attached()) void act('stop', { id });
 	controllers.get(id)?.abort();
 	for (const ask of app.asks.filter((q) => q.from === id)) {
 		if (ask.kind === 'grant') ask.settle(REFUSE);

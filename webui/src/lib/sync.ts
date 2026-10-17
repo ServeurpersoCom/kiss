@@ -6,10 +6,18 @@ import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
 import { fill } from './form.js';
 import { pulse, type Pulse } from './pulse.js';
 
-// the conversations of the KiSS server chat agent names: the page follows
-// them by one stream of events and never writes one, the server alone
-// changes them as the actions of the user ask; the page holds them beside its
-// own, by the server that holds them
+// the page attached to a KiSS server, the mcp item backend: it shows the
+// conversations of the server alone, follows them by one stream of events and
+// never writes one, the server changing them as the actions of the user ask;
+// detached, the page holds its own conversations and no server's
+
+// client attached, on or off, and the mcp item it attaches to
+export const ATTACHED = ['off', 'on'] as const;
+export const [OFF, ON] = ATTACHED;
+export const BACKEND = 'backend';
+// the commands an attached page runs itself, every other line running on the
+// server: those that attach and detach the page
+export const PAGE_COMMANDS = ['attach', 'detach'];
 
 // the conversations API of the server: the stream, and the path of an action
 const EVENTS = 'conversations/events';
@@ -23,8 +31,6 @@ export const SYNC_RETRY_MS = 2000;
 // second, so three seconds without a byte is a connection gone
 export const SYNC_SILENCE_MS = 3000;
 
-// the server each conversation of a server lives on, by conversation id
-const homes = new Map<string, string>();
 // what each conversation of a server asks the user for its turn, while the
 // turn asks it: the number of the question it shows now
 const questions = new Map<string, { shown: number }>();
@@ -37,15 +43,19 @@ let shift = 0;
 // the server followed now, by where it goes and with what key, and what ends
 // its stream
 let followed: { server: Remote; key: string; stop: AbortController } | null = null;
+// what brings the conversations of the page back once it detaches
+let local: () => Promise<void> = async () => undefined;
 
 // the clock of the turn a conversation of a server answers now, if any
 export const turnOf = (id: string): Pulse | undefined => turns.get(id);
 
-// whether the server chat agent names holds a conversation
-export const homed = (id: string): boolean => homes.has(id);
+// whether the page is attached to its server
+export const attached = (): boolean => followed !== null;
 
-// the server chat agent names, none when the page answers itself
-export const agent = (): Remote | null => followed?.server ?? null;
+// the conversations of the page, loaded as it detaches
+export function detaching(load: () => Promise<void>): void {
+	local = load;
+}
 
 // what an event writes: set replaces what its path names, null removing it;
 // add appends text to a string or a value to a list
@@ -53,18 +63,14 @@ type Event =
 	| { set: (string | number)[]; value: unknown }
 	| { add: (string | number)[]; text?: string; value?: unknown };
 
-// the conversations of a server leave the page
-function forget(server: string): void {
-	app.conversations = app.conversations.filter((c) => homes.get(c.id) !== server);
-	for (const [id, home] of homes) if (home === server) (homes.delete(id), turns.delete(id));
-	for (const [id, n] of questions) {
-		if (homes.has(id)) continue;
-		withdraw(n.shown);
-		questions.delete(id);
-	}
-	if (app.current && !app.conversations.includes(app.current)) app.current = null;
-	for (const id of Object.keys(app.replies))
-		if (!app.conversations.some((c) => c.id === id)) delete app.replies[id];
+// every conversation leaves the page, with its turn and its question
+function forget(): void {
+	app.conversations = [];
+	app.current = null;
+	app.replies = {};
+	turns.clear();
+	for (const n of questions.values()) withdraw(n.shown);
+	questions.clear();
 }
 
 // what a turn of a server asks the user, a call to grant or a form to fill
@@ -136,16 +142,15 @@ function sorted(): void {
 	app.conversations.sort((a, b) => b.updated - a.updated);
 }
 
-// one event applied to the conversations of a server
-function apply(server: string, e: Event): void {
+// one event applied to the conversations of the server
+function apply(e: Event): void {
 	if ('set' in e && !e.set.length) {
 		const first = e.value as { protocol: number; now: number; conversations: Conversation[] };
 		if (first.protocol !== SYNC_PROTOCOL)
 			throw new ProtocolError(`speaks protocol ${first.protocol}, this page ${SYNC_PROTOCOL}`);
 		shift = performance.now() - first.now;
-		forget(server);
+		forget();
 		const all = first.conversations;
-		for (const c of all) homes.set(c.id, server);
 		app.conversations.push(...all);
 		sorted();
 		for (const c of all) settle(c.id);
@@ -157,10 +162,8 @@ function apply(server: string, e: Event): void {
 		const at = app.conversations.findIndex((c) => c.id === id);
 		if (e.value === null) {
 			if (at >= 0) app.conversations.splice(at, 1);
-			homes.delete(id);
 			turns.delete(id);
 		} else {
-			homes.set(id, server);
 			if (at >= 0) app.conversations[at] = e.value as Conversation;
 			else app.conversations.push(e.value as Conversation);
 			sorted();
@@ -209,7 +212,7 @@ async function stream(server: Remote, signal: AbortSignal): Promise<void> {
 			signal: quiet.signal
 		});
 		if (!res.ok || !res.body) throw new RefusedError(`${server.url} answers ${res.status}`);
-		await read(server, res.body, () => {
+		await read(res.body, () => {
 			clearTimeout(timer);
 			timer = setTimeout(cut, SYNC_SILENCE_MS);
 		});
@@ -220,11 +223,7 @@ async function stream(server: Remote, signal: AbortSignal): Promise<void> {
 }
 
 // the events of a body applied as they come, heard told of every chunk
-async function read(
-	server: Remote,
-	body: NonNullable<Response['body']>,
-	heard: () => void
-): Promise<void> {
+async function read(body: NonNullable<Response['body']>, heard: () => void): Promise<void> {
 	const reader = body.pipeThrough(new TextDecoderStream()).getReader();
 	let buffer = '';
 	let data: string[] = [];
@@ -239,26 +238,26 @@ async function read(
 			buffer = buffer.slice(nl + 1);
 			if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
 			if (line || !data.length) continue;
-			apply(server.name, JSON.parse(data.join('\n')) as Event);
+			apply(JSON.parse(data.join('\n')) as Event);
 			data = [];
 		}
 	}
 }
 
-// the server chat agent names followed, its stream opened again whenever it
-// ends, until the configuration names another one or none; the conversations
-// of the one followed before leave the page
+// the server the page attaches to followed, its stream opened again whenever
+// it ends, until the page detaches or the server moves; every conversation
+// leaves the page as it attaches or detaches, those of the page coming back
+// once it detaches
 export function follow(config: ConfigReader): void {
-	const name = String(config.get('chat agent') ?? '');
-	const server = name ? remotes(config, 'mcp').find((r) => r.name === name) : undefined;
+	const on = config.get('client attached') === ON;
+	const server = on ? remotes(config, 'mcp').find((r) => r.name === BACKEND) : undefined;
 	const key = server ? `${server.url} ${JSON.stringify(server.sign())}` : '';
-	if (followed?.key === key) return;
-	if (followed) {
-		followed.stop.abort();
-		forget(followed.server.name);
-	}
+	if ((followed?.key ?? '') === key) return;
+	const was = followed;
+	was?.stop.abort();
 	followed = null;
-	if (!server) return;
+	forget();
+	if (!server) return void (was && local().catch((e: Error) => console.error(e.message)));
 	const stop = new AbortController();
 	followed = { server, key, stop };
 	void (async () => {
@@ -278,10 +277,14 @@ export function follow(config: ConfigReader): void {
 }
 
 // an action of the user, which the server applies and every page following it
-// sees; what the server answers, the id of the conversation a line went in
-export async function act(action: string, body: object): Promise<{ id?: string }> {
+// sees; what the server answers: the id of the conversation a line went in, the
+// words that may follow a line
+export async function act(
+	action: string,
+	body: object
+): Promise<{ id?: string; words?: string[] }> {
 	const server = followed?.server;
-	if (!server) throw new Error('chat agent names no server');
+	if (!server) throw new Error('the page is attached to no server');
 	const res = await fetch(new URL(ACTIONS + action, new URL(server.url, location.href)), {
 		method: 'POST',
 		headers: { ...headers(server), 'Content-Type': 'application/json' },
@@ -289,7 +292,5 @@ export async function act(action: string, body: object): Promise<{ id?: string }
 	});
 	if (!res.ok) throw new Error((await res.text()).trim() || `${server.url} answers ${res.status}`);
 	if (res.status === 204) return {};
-	const answer = (await res.json()) as { id?: string };
-	if (answer.id) homes.set(answer.id, server.name);
-	return answer;
+	return (await res.json()) as { id?: string; words?: string[] };
 }
