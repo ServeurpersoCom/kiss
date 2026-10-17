@@ -28,7 +28,7 @@ static size_t g_fails = 0;
 static void law(bool kept, const std::string & what) {
     g_laws++;
     if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "seal_test: %s\n", what.c_str());
+        fprintf(stderr, "[Laws] seal_test broken: %s\n", what.c_str());
     }
 }
 
@@ -155,6 +155,6 @@ int main() {
             }
         }
     }
-    printf("seal_test: %zu laws, %zu broken\n", g_laws, g_fails);
+    printf("[Laws] seal_test: %zu laws, %zu broken\n", g_laws, g_fails);
     return g_fails ? 1 : 0;
 }

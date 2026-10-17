@@ -26,7 +26,7 @@ static size_t g_fails = 0;
 static void law(bool kept, const std::string & what) {
     g_laws++;
     if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "protocol_test: %s\n", what.c_str());
+        fprintf(stderr, "[Laws] protocol_test broken: %s\n", what.c_str());
     }
 }
 
@@ -229,6 +229,6 @@ int main() {
             "responses reads a call by its item, the parts of a summary, the items it needs back, the end");
     }
 
-    printf("protocol_test: %zu laws, %zu broken\n", g_laws, g_fails);
+    printf("[Laws] protocol_test: %zu laws, %zu broken\n", g_laws, g_fails);
     return g_fails ? 1 : 0;
 }

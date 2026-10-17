@@ -32,7 +32,7 @@ static size_t g_fails = 0;
 static void law(bool kept, const std::string & what) {
     g_laws++;
     if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "conversation_test: %s\n", what.c_str());
+        fprintf(stderr, "[Laws] conversation_test broken: %s\n", what.c_str());
     }
 }
 
@@ -539,6 +539,6 @@ int main() {
     }
 
     fs::remove_all(root);
-    printf("conversation_test: %zu laws, %zu broken\n", g_laws, g_fails);
+    printf("[Laws] conversation_test: %zu laws, %zu broken\n", g_laws, g_fails);
     return g_fails ? 1 : 0;
 }

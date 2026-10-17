@@ -22,7 +22,7 @@ static size_t g_fails = 0;
 static void law(bool kept, const std::string & what) {
     g_laws++;
     if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "mcp_test: %s\n", what.c_str());
+        fprintf(stderr, "[Laws] mcp_test broken: %s\n", what.c_str());
     }
 }
 
@@ -194,6 +194,6 @@ int main() {
 
     server.stop();
     listening.join();
-    printf("mcp_test: %zu laws, %zu broken\n", g_laws, g_fails);
+    printf("[Laws] mcp_test: %zu laws, %zu broken\n", g_laws, g_fails);
     return g_fails ? 1 : 0;
 }
