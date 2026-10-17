@@ -1,7 +1,7 @@
 {
 	"tools": {
 		"config": {
-			"description": "Runs lines of the CLI of the KiSS server {hostname} on {platform}, one command per line, as one batch that applies whole or not at all, the way Cisco IOS reads them: set <module> <key> [item] <value>, no <module> <key> [item], show <module>, show running-config [all], show startup-config, show diff <config> <config>, show version, show logging, copy running-config startup-config or write memory, erase running-config or erase startup-config, show conversations, erase <id> of a conversation or erase conversations for every one not pinned, a copy, a write or an erase asking the user's yes with a card of the page. Its modules, with their keys: {modules}. Every default fits as it is, so set only what differs. A secret never shows: show writes ! <module> <key> [item] is set for one that is set, and no line for one that is not. To set a secret, write its line without the value, set proxy key <name>: the user types it in a field you never see, so never ask for it in the chat. A url no configuration holds yet asks the user to let it with a card of the page as the line runs: run the line, never ask in the chat first.",
+			"description": "Configures the KiSS server {hostname} on {platform} with lines of its CLI, read the way Cisco IOS reads them. All lines of one call apply together or not at all, so batch related changes in one call; a call answers with what changed: the old line after -, the new one after +. Every default fits as it is, so set only what differs.\nCommands: set <module> <key> [item] <value> | no <module> <key> [item] | no <module> <item> | show <module> [key] [item] | show running-config [all] | show startup-config | show diff <config> <config> | show version | show logging | show conversations | copy running-config startup-config | write [memory] | erase running-config | erase startup-config | erase conversations | erase <id>; erase conversations erases every conversation not pinned, erase <id> one conversation.\nA key is two fixed words, a module then a key; a key of a collection such as endpoints takes the item name next; the value always comes last: set endpoints url openrouter https://openrouter.ai/api/v1.\nModules, with their keys: {modules}.\nA line that stops short lists what may follow it; show running-config all lists every key with its default; words abbreviate while only one word starts so (sh run); | include, exclude, begin or count <regexp> filters any output.\nA secret never shows: show writes ! <module> <key> [item] is set for one that is set. To set one, write its line without the value, set endpoints key <name>: the user types it where you never see it, so never ask for it in the chat.\nA new url, a copy, a write or an erase asks the user to confirm as the line runs: run the line, never ask in the chat first; a refused change stays refused, never reach it another way.\nA route lets a page reach a url through this server, under the name of the item of the page: set proxy url <name> <url> here, and set proxy key <name> when the url needs a key, held here and never on the page; then set endpoints proxy <name> <backend> or set mcp proxy <name> <backend> on the page, <backend> the name of its mcp item for this server, the item keeping its own url and key unused; no endpoints proxy <name> or no mcp proxy <name> there sends it direct again.\nExample call:\nset proxy url openrouter https://openrouter.ai/api/v1\nset proxy key openrouter\nshow proxy",
 			"input": {
 				"type": "object",
 				"properties": {
@@ -165,15 +165,15 @@
 		}
 	},
 	"modules": {
-		"chat": "the model the agent of this server answers with, endpoint/model, empty for the one model of the one endpoint, and its system prompt",
-		"endpoints": "the LLM endpoints the agent of this server talks to: the url, the protocol it speaks, the key and the header that carries it, Header or Header: Scheme, more headers, the seconds it may stay silent, the times a reply is asked again on a status that passes and the seconds between two",
-		"files": "the tools on files, view, str_replace and create_file: the bytes of text view returns, the bytes of a file a tool loads whole, the megapixels an image decodes to, the longest side and the JPEG quality of an image made again",
-		"mcp": "the MCP servers whose tools the agent of this server calls, over Streamable HTTP: the url, the key and the header that carries it, Header or Header: Scheme, more headers, the seconds a call may take; each tool of theirs takes tools use by its name, consent unless set",
-		"models": "the parameters of a model, the item endpoint/model, each sent only when set",
-		"proxy": "the servers this server proxies, MCP servers and LLM endpoints alike, each at proxy/<name> with the key of this server, the page by set mcp proxy or set endpoints proxy <name> <its name for this server>; the key of a route goes to its url alone, in the header its auth-header names, Header or Header: Scheme, and a route without a key reaches its url without one",
-		"server": "this server: where it listens, its hostname, which names its tools, the key its clients send off loopback, the directory its tools start in, its log level",
-		"shells": "a tool per shell whose program this machine has, named after the shell: the command reading a script on stdin, its seconds, its bytes of output",
-		"tools": "the tools the agent of this server calls, each by its own name on this server (bash, view, config): off, the model never sees it, consent, each call asks the user, on; and the rounds of tool calls a turn takes at most"
+		"chat": "the model this server answers with, endpoint/model, and its system prompt",
+		"endpoints": "the LLM APIs this server talks to",
+		"files": "the limits of view, str_replace and create_file",
+		"mcp": "the MCP servers whose tools this server calls, each tool taking tools use by its name, consent unless set",
+		"models": "the request parameters of an endpoint/model, each sent only when set",
+		"proxy": "the routes of this server, each relaying proxy/<name> to its url",
+		"server": "where it listens, its hostname, its key, its working directory, its logs",
+		"shells": "one tool per shell this machine has, named after it",
+		"tools": "each tool by its name here (bash, view, config): off hides it, consent asks the user at each call, on lets it run; max-rounds caps the tool rounds of a turn"
 	},
 	"notes": {
 		"problems": "These tools were left out during this turn; tell the user:"

@@ -7,14 +7,17 @@
 				"properties": {
 					"description": {
 						"type": "string",
-						"description": "Why I'm configuring the page, written first"
+						"description": "Why I'm configuring the page, written first",
+						"minLength": 1
 					},
 					"lines": {
 						"type": "string",
-						"description": "one or more CLI lines, one command per line"
+						"minLength": 1,
+						"description": "CLI lines, one per line"
 					}
 				},
-				"required": ["description", "lines"]
+				"required": ["description", "lines"],
+				"additionalProperties": false
 			}
 		}
 	},
