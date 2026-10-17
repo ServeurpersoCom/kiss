@@ -25,14 +25,16 @@ export const PAGE_COMMANDS = ['attach', 'detach'];
 // the conversations API of the server: the stream, and the path of an action
 const EVENTS = 'conversations/events';
 const ACTIONS = 'conversations/';
-const DATA = 'data:';
 // the protocol of the events this page reads
 export const SYNC_PROTOCOL = 1;
 // the time before a stream that ended opens again
 export const SYNC_RETRY_MS = 2000;
-// the silence after which a stream counts as cut: the server writes every
-// second, so three seconds without a byte is a connection gone
-export const SYNC_SILENCE_MS = 3000;
+// the silence after which a stream counts as cut: the server writes at least
+// every SYNC_IDLE_MS, so three times that without a message is a connection
+// gone; a server that refuses closes the stream as a policy violation
+export const SYNC_IDLE_MS = 15000;
+export const SYNC_SILENCE_MS = 3 * SYNC_IDLE_MS;
+const POLICY_VIOLATION = 1008;
 
 // what each conversation of a server asks for its turn, while the turn asks
 // it: the number of the question it shows now, and what stops the lines it
@@ -242,52 +244,39 @@ function headers(server: Remote): Record<string, string> {
 	return { ...server.headers, ...server.sign() };
 }
 
-// the stream of a server read until it ends, or until it stays silent for
-// SYNC_SILENCE_MS, every event applied; data lines of an event joined by LF
-// once the blank line that closes it came
-async function stream(server: Remote, client: string, signal: AbortSignal): Promise<void> {
-	const quiet = new AbortController();
-	const cut = () => quiet.abort();
+// the stream of a server, a WebSocket: the headers a request carries go as
+// its first message, the key among them, then every message holds events,
+// one per line, applied as they come; it ends once the server closes it, a
+// policy violation being a refusal, or once it stays silent for
+// SYNC_SILENCE_MS, the server writing at least every SYNC_IDLE_MS
+function stream(server: Remote, client: string, signal: AbortSignal): Promise<void> {
+	const url = new URL(EVENTS, new URL(server.url, location.href));
+	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+	url.searchParams.set('client', client);
+	const ws = new WebSocket(url);
+	const cut = () => ws.close();
 	let timer = setTimeout(cut, SYNC_SILENCE_MS);
 	signal.addEventListener('abort', cut);
-	try {
-		const url = new URL(EVENTS, new URL(server.url, location.href));
-		url.searchParams.set('client', client);
-		const res = await fetch(url, {
-			headers: headers(server),
-			signal: quiet.signal
-		});
-		if (!res.ok || !res.body) throw new RefusedError(`${server.url} answers ${res.status}`);
-		await read(res.body, () => {
+	return new Promise((resolve, reject) => {
+		ws.onopen = () => ws.send(JSON.stringify(headers(server)));
+		ws.onmessage = (m: MessageEvent<string>) => {
 			clearTimeout(timer);
 			timer = setTimeout(cut, SYNC_SILENCE_MS);
-		});
-	} finally {
-		clearTimeout(timer);
-		signal.removeEventListener('abort', cut);
-	}
-}
-
-// the events of a body applied as they come, heard told of every chunk
-async function read(body: NonNullable<Response['body']>, heard: () => void): Promise<void> {
-	const reader = body.pipeThrough(new TextDecoderStream()).getReader();
-	let buffer = '';
-	let data: string[] = [];
-	for (;;) {
-		const { value, done } = await reader.read();
-		if (done) return;
-		heard();
-		buffer += value;
-		let nl: number;
-		while ((nl = buffer.indexOf('\n')) >= 0) {
-			const line = buffer.slice(0, nl).replace(/\r$/, '');
-			buffer = buffer.slice(nl + 1);
-			if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
-			if (line || !data.length) continue;
-			apply(JSON.parse(data.join('\n')) as Event);
-			data = [];
-		}
-	}
+			try {
+				for (const line of m.data.split('\n')) if (line) apply(JSON.parse(line) as Event);
+			} catch (e) {
+				reject(e);
+				cut();
+			}
+		};
+		ws.onclose = (e: CloseEvent) => {
+			clearTimeout(timer);
+			signal.removeEventListener('abort', cut);
+			if (e.code === POLICY_VIOLATION)
+				reject(new RefusedError(`${server.url} refuses: ${e.reason}`));
+			else resolve();
+		};
+	});
 }
 
 // the page attached to its server or detached from it, as the browser keeps

@@ -14,8 +14,10 @@
 #include "lib/sync.h"
 #include "mcp/mcp.h"
 #include "version.h"
+#include "yyjson.h"
 
 #include <fstream>
+#include <memory>
 #include <sstream>
 
 // the site configuration a directory gives the page it serves
@@ -25,9 +27,11 @@ static const char * const SITE_FILE = "client.conf";
 // captured
 static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+)(/.*)?)";
 
-// the stream of the conversations, and the path of an action, captured
-static const char * const EVENTS_PATH = "/conversations/events";
-static const std::string  ACTION_PATH = std::string("/conversations/(") + SYNC_ACTIONS + ")";
+// the stream of the conversations, a WebSocket pinged every PING_SECONDS, and
+// the path of an action, captured
+static const char * const EVENTS_PATH  = "/conversations/events";
+static const time_t       PING_SECONDS = 15;
+static const std::string  ACTION_PATH  = std::string("/conversations/(") + SYNC_ACTIONS + ")";
 
 // the name and the port of a Host header: example.com:8089, [::1]:8089
 static void host_header(const std::string & value, std::string & name, std::string & port) {
@@ -204,13 +208,25 @@ void http_routes(httplib::Server & server) {
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Authorization, Content-Type");
     };
-    server.Options(EVENTS_PATH, preflight);
     server.Options(ACTION_PATH, preflight);
-    server.Get(EVENTS_PATH, [](const httplib::Request & req, httplib::Response & res) {
-        cors(req, res);
-        if (admitted(req, res)) {
-            sync_events(req, res);
+    // a browser sets no header on a WebSocket: its first message holds the
+    // headers a request would carry, the key among them, as JSON
+    server.set_websocket_ping_interval(PING_SECONDS);
+    server.WebSocket(EVENTS_PATH, [](const httplib::Request & req, httplib::ws::WebSocket & ws) {
+        std::string headers;
+        ws.read(headers);
+        const std::shared_ptr<yyjson_doc> doc(yyjson_read(headers.data(), headers.size(), 0), yyjson_doc_free);
+        yyjson_val *                      key   = yyjson_obj_get(yyjson_doc_get_root(doc.get()), "Authorization");
+        httplib::Request                  keyed = req;
+        keyed.headers.erase("Authorization");
+        keyed.set_header("Authorization", yyjson_is_str(key) ? yyjson_get_str(key) : "");
+        std::string why;
+        if (!authorized(keyed, why)) {
+            log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
+            ws.close(httplib::ws::CloseStatus::PolicyViolation, why);
+            return;
         }
+        sync_events(req, ws);
     });
     server.Post(ACTION_PATH, [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);

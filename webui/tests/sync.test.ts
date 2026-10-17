@@ -40,28 +40,45 @@ const conversation = (id: string, title: string, updated: number) => ({
 	]
 });
 
-// a server whose stream gives the events the test pushes, and the requests
-// the page sent it
+// a server whose stream, a WebSocket, gives the events the test pushes, and
+// what the page sent it: each stream it opened, with the headers of its first
+// message, and each action
 function server() {
-	const sent: { url: string; init?: RequestInit }[] = [];
-	let push: (event: object) => void = () => {};
+	const sent: { url: string; init?: RequestInit; first?: Record<string, string> }[] = [];
+	let say: (data: string) => void = () => {};
+	let refuse: (reason: string) => void = () => {};
+	class Socket {
+		onopen?: () => void;
+		onmessage?: (m: { data: string }) => void;
+		onclose?: (e: { code: number; reason: string }) => void;
+		private opened: (typeof sent)[number];
+		constructor(url: URL) {
+			this.opened = { url: String(url) };
+			sent.push(this.opened);
+			say = (data) => this.onmessage?.({ data });
+			refuse = (reason) => this.onclose?.({ code: 1008, reason });
+			queueMicrotask(() => this.onopen?.());
+		}
+		send(data: string) {
+			this.opened.first ??= JSON.parse(data);
+		}
+		close() {
+			queueMicrotask(() => this.onclose?.({ code: 1000, reason: '' }));
+		}
+	}
+	vi.stubGlobal('WebSocket', Socket);
 	vi.stubGlobal('fetch', async (url: URL, init?: RequestInit) => {
 		sent.push({ url: String(url), init });
-		if (new URL(url).pathname.endsWith('/conversations/events')) {
-			const body = new ReadableStream<Uint8Array>({
-				start(c) {
-					push = (e) => c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));
-					// a request aborted errors its body, as fetch does
-					init?.signal?.addEventListener('abort', () => c.error(init.signal!.reason));
-				}
-			});
-			return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
-		}
 		return new Response(JSON.stringify({ id: 'n' }), {
 			headers: { 'content-type': 'application/json' }
 		});
 	});
-	return { sent, push: (e: object) => push(e) };
+	return {
+		sent,
+		push: (e: object) => say(JSON.stringify(e)),
+		say: (data: string) => say(data),
+		refuse: (reason: string) => refuse(reason)
+	};
 }
 
 // the moment of the server as the first event of a stream gives it
@@ -91,9 +108,9 @@ describe('the conversations of a KiSS server', () => {
 		app.conversations = [];
 		follow(config(true));
 		await vi.waitFor(() =>
-			expect(s.sent[0]?.url).toBe('http://kiss/conversations/events?client=abcd')
+			expect(s.sent[0]?.url).toBe('ws://kiss/conversations/events?client=abcd')
 		);
-		expect(new Headers(s.sent[0].init?.headers).get('authorization')).toBe('Bearer k');
+		await vi.waitFor(() => expect(s.sent[0].first?.Authorization).toBe('Bearer k'));
 		s.push({
 			set: [],
 			value: {
@@ -283,6 +300,44 @@ describe('the conversations of a KiSS server', () => {
 		attach(config(true), true);
 		expect(attached()).toBe(true);
 		await vi.waitFor(() => expect(s.sent.length).toBe(2));
+	});
+
+	it('read every event a message holds, one per line, an empty one telling the server is there', async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const s = server();
+		app.conversations = [];
+		follow(config(true));
+		const first = {
+			set: [],
+			value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] }
+		};
+		s.say(
+			JSON.stringify(first) + '\n' + JSON.stringify({ set: ['a', 'pinned'], value: true }) + '\n'
+		);
+		await vi.waitFor(() => expect(app.conversations[0]?.pinned).toBe(true));
+		for (let i = 0; i < 4; i++) {
+			await vi.advanceTimersByTimeAsync(SYNC_SILENCE_MS - 1000);
+			s.say('');
+		}
+		expect(s.sent.length).toBe(1);
+		vi.useRealTimers();
+	});
+
+	it('tell a server that refuses the stream, and ask it again', async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const s = server();
+		const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+		app.conversations = [];
+		follow(config(true));
+		await vi.waitFor(() => expect(s.sent.length).toBe(1));
+		s.refuse('the key is missing or wrong');
+		await vi.waitFor(() =>
+			expect(errors).toHaveBeenCalledWith(expect.stringContaining('the key is missing or wrong'))
+		);
+		await vi.advanceTimersByTimeAsync(SYNC_RETRY_MS + 100);
+		expect(s.sent.length).toBe(2);
+		errors.mockRestore();
+		vi.useRealTimers();
 	});
 
 	it('follow no server that speaks another protocol', async () => {

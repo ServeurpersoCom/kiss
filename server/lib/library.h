@@ -100,7 +100,7 @@ struct library_follower {
 // the version of the protocol of the events, which the first one names
 constexpr int LIBRARY_PROTOCOL = 1;
 
-// what a follower is to apply, as events: every conversation at its first
+// what a follower is to apply, as events, one JSON object per line: every conversation at its first
 // call, with the protocol, the client it is, if any, and the moment on the clock of conversation_now(),
 // which the moments of a pulse read on; after it, a conversation changed otherwise than by
 // growth, whole, one gone, as null, the turn that answers in it, its pulse or

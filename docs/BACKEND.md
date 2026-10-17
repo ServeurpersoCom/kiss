@@ -324,22 +324,30 @@ conversations a page keeps in its own browser stay there.
 ### Conversations API
 
 All of it lives under `/conversations`, behind the key of the server as the MCP is: `Authorization:
-Bearer <server key>`, 401 without it, and the same CORS. Nothing else of the server serves a
+Bearer <server key>`, 401 without it, and the same CORS, the stream carrying the key in its first
+message. Nothing else of the server serves a
 conversation.
 
-#### Reading: `GET /conversations/events`
+#### Reading: `/conversations/events`
 
-A stream of events, `text/event-stream`, one JSON object per `data:` line. The server keeps no log
+A WebSocket. A browser sets no header on one, so its first message holds, as JSON, the headers a
+request would carry, the key among them, `{"Authorization":"Bearer <server key>"}`; the server
+closes a stream it refuses with 1008, policy violation, and why. Every next message is the server's:
+events, one JSON object per line, an empty message after 15 seconds without one, so a page that
+hears nothing for 45 seconds knows its stream gone and opens another; the server pings every 15
+seconds and lets go of a page silent for 45. A WebSocket counts in none of the six connections a
+browser opens to a site in HTTP/1.1, which all its tabs share, so no number of pages blocks
+another. The server keeps no log
 of events: it holds, for each page, what that page has, and sends what it lacks, so a page that
 comes back gets every conversation as it stands. The first event sets every conversation, with the
 protocol of the events and the moment of the server on its clock, in milliseconds since 1970; a
 page that does not read that protocol stops following the server and says so.
-`?client=<hostname>` names an attached page, a-z, 0-9 and `_`, 400 otherwise: while its stream lasts,
+`?client=<hostname>` names an attached page, a-z, 0-9 and `_`, a policy violation otherwise: while its stream lasts,
 the agent calls the config tool of the page as `<hostname>_client_config`, and the first event names
 the client, unless another page holds that name, which the first event then leaves out.
 
 ```
-data: {"set":[],"value":{"protocol":1,"client":"abcd","now":1792220666396,"conversations":[...]}}
+{"set":[],"value":{"protocol":1,"client":"abcd","now":1792220666396,"conversations":[...]}}
 ```
 
 Every next event changes what the page holds at its path, conversations by id, then the keys and
@@ -360,9 +368,9 @@ A turn sends what it gains, never the conversation again; a change of anything e
 conversation whole, with its turn and its question after it.
 
 ```
-data: {"add":["<id>","entries",3,"rounds",0,"text"],"text":"Hel"}
-data: {"add":["<id>","entries",3,"rounds"],"value":{"reasoning":"","text":"","calls":[]}}
-data: {"set":["<id>","entries",3,"rounds",0,"calls",0],"value":{...}}
+{"add":["<id>","entries",3,"rounds",0,"text"],"text":"Hel"}
+{"add":["<id>","entries",3,"rounds"],"value":{"reasoning":"","text":"","calls":[]}}
+{"set":["<id>","entries",3,"rounds",0,"calls",0],"value":{...}}
 ```
 
 The pulse is the line a page shows under the answer, its moments on the clock of the server:

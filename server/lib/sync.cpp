@@ -13,12 +13,16 @@
 #include "yyjson.h"
 
 #include <algorithm>
+#include <atomic>
 #include <functional>
 #include <memory>
+#include <thread>
 
-// how long a stream waits for a change before it writes a comment, which
-// tells a page that left
+// how long a stream waits for a change before it looks whether the page is
+// still there, and how long it stays silent at most, an empty message telling
+// a page that waits it is still there
 static const int TICK_MS = 1000;
+static const int IDLE_MS = 15000;
 
 // the longest hostname of a page, which its tool name keeps within what every
 // model API takes
@@ -31,40 +35,43 @@ static bool a_client(const std::string & name) {
     });
 }
 
-void sync_events(const httplib::Request & req, httplib::Response & res) {
+void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
     const std::string client = req.get_param_value("client");
     if (req.has_param("client") && !a_client(client)) {
-        res.status = 400;
-        res.set_content(
-            "client \"" + client + "\" takes a-z, 0-9 and _ only, " + std::to_string(CLIENT_MAX) + " at most\n",
-            "text/plain");
+        ws.close(httplib::ws::CloseStatus::PolicyViolation,
+                 "client \"" + client + "\" takes a-z, 0-9 and _ only, " + std::to_string(CLIENT_MAX) + " at most");
         return;
     }
     const unsigned    epoch = listener_epoch();
     const std::string from  = req.remote_addr;
-    const auto        f     = std::make_shared<library_follower>();
+    library_follower  f;
     if (!client.empty() && agent_attach(client)) {
-        f->client = client;
+        f.client = client;
     }
     log_info("Sync", "%s follows the conversations", from.c_str());
-    res.set_header("Cache-Control", "no-cache");
-    res.set_chunked_content_provider(
-        "text/event-stream",
-        [f, epoch, from](size_t, httplib::DataSink & sink) {
-            const std::string events = library_follow(*f, TICK_MS, keychain_running());
-            const std::string bytes  = events.empty() ? ":\n\n" : events;
-            if (listener_epoch() != epoch || !sink.write(bytes.data(), bytes.size())) {
-                log_info("Sync", "%s leaves", from.c_str());
-                return false;
-            }
-            return true;
-        },
-        // the stream ends however it ends, and the page lets go of its name
-        [f](bool) {
-            if (!f->client.empty()) {
-                agent_detach(f->client);
-            }
-        });
+    // the page sends nothing more: what it reads only answers the pings, and
+    // ends once the page closes
+    std::atomic<bool> gone{ false };
+    std::thread       reader([&] {
+        std::string message;
+        while (ws.read(message) != httplib::ws::Fail) {
+        }
+        gone = true;
+    });
+    for (int idle = 0; !gone && listener_epoch() == epoch;) {
+        const std::string events = library_follow(f, TICK_MS, keychain_running());
+        idle                     = events.empty() ? idle + TICK_MS : 0;
+        if ((!events.empty() || idle >= IDLE_MS) && !ws.send(events)) {
+            break;
+        }
+        idle = idle >= IDLE_MS ? 0 : idle;
+    }
+    if (!f.client.empty()) {
+        agent_detach(f.client);
+    }
+    ws.close();
+    reader.join();
+    log_info("Sync", "%s leaves", from.c_str());
 }
 
 // what keeps an action from being applied: the HTTP status that tells why,

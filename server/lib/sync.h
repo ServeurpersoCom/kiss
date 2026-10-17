@@ -6,15 +6,16 @@
 #include "httplib.h"
 
 // the actions a page sends, POST /conversations/<action>, beside the stream
-// GET /conversations/events
+// /conversations/events
 constexpr const char * SYNC_ACTIONS = "send|command|complete|edit|retry|stop|answer|pin|browse|drop|erase";
 
-// events: every conversation with the protocol, then what changes, until the
-// page leaves or the listener moves, a comment each second it stays quiet;
+// events, over a WebSocket: every conversation with the protocol, then what
+// changes, each message one event per line, an empty message after 15
+// seconds of silence, until the page leaves or the listener moves;
 // ?client=<hostname> names an attached page, whose config tool the agent
-// calls while its stream lasts, unless another page holds that name, 400 a
-// name a tool name does not take
-void sync_events(const httplib::Request & req, httplib::Response & res);
+// calls while its stream lasts, unless another page holds that name, a name a
+// tool name does not take closing it as a policy violation
+void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws);
 
 // an action of the user on conversations, a JSON body: send {text, id?}, a
 // message after the thread; command {input, id?}, a line this server runs as

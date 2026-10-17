@@ -633,7 +633,7 @@ miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds 
 
 The page is attached to a KiSS server or detached from it, two worlds that never mix.
 Attached, to the server the item `backend` of `mcp` names, the page shows
-the conversations of that server alone, follows them by one stream of events, the Conversations API
+the conversations of that server alone, follows them by one stream of events, a WebSocket, the Conversations API
 of BACKEND.md, and never writes one. A message goes to the server, which runs the turn, holds the
 conversation and writes it, the browser closed or not; retry, edit, versions, pin, delete and Stop
 go to the server, and every page following it sees them. Every CLI line runs on the server, its
@@ -652,8 +652,9 @@ such a call itself, with the rights of a model, the questions they ask shown on 
 conversation as the consent card, and a form a tool of the server asks the user to fill as the cards
 of its fields, a secret in the masked field, a yes as a confirmation; the first page to answer sends
 it to the server, which withdraws the question from every page. The line under an answer the
-server writes is its pulse, read on the clock of the page. A stream silent for three seconds opens
-again, and a server that speaks another protocol of the events is followed no more, the console
+server writes is its pulse, read on the clock of the page. The stream is a WebSocket, which takes none of
+the six connections a browser opens to a site for the requests of its tabs; one silent for 45 seconds
+opens again, and a server that speaks another protocol of the events is followed no more, the console
 telling why.
 
 A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment

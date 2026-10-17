@@ -93,12 +93,9 @@ static void put(yyjson_mut_doc * doc, yyjson_mut_val * node, yyjson_val * key, y
 // a string or a value to a list
 static void take(page_t & p, const std::string & events) {
     yyjson_mut_doc * doc = p.doc.get();
-    for (size_t at = 0, end; (end = events.find("\n\n", at)) != std::string::npos; at = end + 2) {
-        const std::string line = events.substr(at, end - at);
-        if (line.rfind("data: ", 0) != 0) {
-            continue;
-        }
-        const std::shared_ptr<yyjson_doc> e(yyjson_read(line.data() + 6, line.size() - 6, 0), yyjson_doc_free);
+    for (size_t at = 0, end; (end = events.find('\n', at)) != std::string::npos; at = end + 1) {
+        const std::string                 line = events.substr(at, end - at);
+        const std::shared_ptr<yyjson_doc> e(yyjson_read(line.data(), line.size(), 0), yyjson_doc_free);
         yyjson_val *                      root  = yyjson_doc_get_root(e.get());
         yyjson_val *                      set   = yyjson_obj_get(root, "set");
         yyjson_val *                      path  = set ? set : yyjson_obj_get(root, "add");
@@ -291,7 +288,7 @@ int main() {
     library_follower  f;
     const words_t     secrets = { "sk-secret-0001" };
     const std::string first   = library_follow(f, 0, secrets);
-    law(first.find("{\"set\":[],\"value\":{\"protocol\":1,\"now\":") == 6 &&
+    law(first.find("{\"set\":[],\"value\":{\"protocol\":1,\"now\":") == 0 &&
             first.find(",\"conversations\":[{\"id\":\"one\"") != std::string::npos,
         "a follower first gets every conversation, with the protocol and the moment of the server");
     law(library_follow(f, 10, secrets).empty(), "a follower gets nothing while nothing changes");
@@ -305,7 +302,7 @@ int main() {
         secrets);
     const std::string changed = library_follow(f, 10, secrets);
     law(pinned.empty() &&
-            changed.rfind("data: {\"set\":[\"one\"],\"value\":{\"id\":\"one\",\"title\":\"key <removed>\"", 0) == 0 &&
+            changed.rfind("{\"set\":[\"one\"],\"value\":{\"id\":\"one\",\"title\":\"key <removed>\"", 0) == 0 &&
             changed.find("pinned") == std::string::npos,
         "a follower gets a changed conversation whole, its secrets sealed");
     std::string kept;
@@ -333,12 +330,11 @@ int main() {
         library_follow(f, 10, secrets);
         const std::string at = "[\"one\",\"entries\",3,";
         law(library_grow("one", live, [](conversation_entry &) {}) &&
-                library_follow(f, 10, secrets).rfind("data: {\"set\":[\"one\"],", 0) == 0,
+                library_follow(f, 10, secrets).rfind("{\"set\":[\"one\"],", 0) == 0,
             "an entry a turn starts to grow comes whole with its conversation");
         law(library_grow("one", live, [](conversation_entry & e) { e.rounds.emplace_back(); }) &&
                 library_follow(f, 10, secrets) ==
-                    "data: {\"add\":" + at +
-                        "\"rounds\"],\"value\":{\"reasoning\":\"\",\"text\":\"\",\"calls\":[]}}\n\n",
+                    "{\"add\":" + at + "\"rounds\"],\"value\":{\"reasoning\":\"\",\"text\":\"\",\"calls\":[]}}\n",
             "a round that comes is pushed");
         library_grow("one", live, [](conversation_entry & e) {
             e.rounds[0].text += "Hel";
@@ -349,9 +345,8 @@ int main() {
             e.rounds[0].calls[0].name += "sh";
         });
         law(library_follow(f, 10, secrets) ==
-                "data: {\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"Hello <removed>\"}\n\n" +
-                    "data: {\"add\":" + at +
-                    "\"rounds\",0,\"calls\"],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":\"{\\\"c\"}}\n\n",
+                "{\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"Hello <removed>\"}\n" + "{\"add\":" + at +
+                    "\"rounds\",0,\"calls\"],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":\"{\\\"c\"}}\n",
             "what a string gained comes as text, sealed, a call that comes is pushed whole");
         library_grow("one", live, [](conversation_entry & e) {
             e.rounds[0].calls[0].args += "\":1}";
@@ -359,38 +354,36 @@ int main() {
             e.rounds[0].calls[0].ok     = true;
         });
         law(library_follow(f, 10, secrets) ==
-                "data: {\"set\":" + at +
-                    "\"rounds\",0,\"calls\",0],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":" +
-                    "\"{\\\"c\\\":1}\",\"result\":\"done\",\"ok\":true}}\n\n",
+                "{\"set\":" + at + "\"rounds\",0,\"calls\",0],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":" +
+                    "\"{\\\"c\\\":1}\",\"result\":\"done\",\"ok\":true}}\n",
             "a call whose outcome came is set whole");
         library_follower late;
         library_follow(late, 0, secrets);
         library_grow("one", live, [](conversation_entry & e) { e.rounds[0].text += "!"; });
-        law(library_follow(late, 10, secrets) == "data: {\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"!\"}\n\n",
+        law(library_follow(late, 10, secrets) == "{\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"!\"}\n",
             "a follower that came during a turn gets what grew since it came");
         law(!library_grow("one", "gone", [](conversation_entry &) {}), "an entry gone grows no more");
         library_turn("one", "{\"round\":1,\"phase\":\"writing\"}");
         law(library_follow(late, 10, secrets) ==
-                "data: {\"set\":[\"one\",\"turn\"],\"value\":{\"round\":1,\"phase\":\"writing\"}}\n\n",
+                "{\"set\":[\"one\",\"turn\"],\"value\":{\"round\":1,\"phase\":\"writing\"}}\n",
             "a follower is told the pulse of a turn");
         library_turn("one", "");
-        law(library_follow(late, 10, secrets) == "data: {\"set\":[\"one\",\"turn\"],\"value\":null}\n\n",
-            "and that it ended");
+        law(library_follow(late, 10, secrets) == "{\"set\":[\"one\",\"turn\"],\"value\":null}\n", "and that it ended");
         law(library_keep("one", secrets).empty() && library_follow(late, 10, secrets).empty(),
             "a conversation kept is written, and tells no follower anything");
         library_asking("one", "{\"kind\":\"call\",\"tool\":\"x\",\"args\":\"{}\"}");
         law(library_follow(late, 10, secrets) ==
-                "data: {\"set\":[\"one\",\"asking\"],\"value\":{\"kind\":\"call\",\"tool\":\"x\",\"args\":\"{}\"}}\n\n",
+                "{\"set\":[\"one\",\"asking\"],\"value\":{\"kind\":\"call\",\"tool\":\"x\",\"args\":\"{}\"}}\n",
             "a follower is told what a turn asks the user");
         library_asking("one", "");
-        law(library_follow(late, 10, secrets) == "data: {\"set\":[\"one\",\"asking\"],\"value\":null}\n\n",
+        law(library_follow(late, 10, secrets) == "{\"set\":[\"one\",\"asking\"],\"value\":null}\n",
             "and that it asks no more");
         library_follow(f, 10, secrets);
     }
     library_remove({ "one" });
     law(listed().empty() && !fs::exists(root / "one.json") && fs::exists(root / "two.json"),
         "an erased conversation goes with its file alone");
-    law(library_follow(f, 10, secrets) == "data: {\"set\":[\"one\"],\"value\":null}\n\n",
+    law(library_follow(f, 10, secrets) == "{\"set\":[\"one\"],\"value\":null}\n",
         "a follower gets an erased conversation as null");
 
     {

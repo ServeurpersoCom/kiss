@@ -223,17 +223,17 @@ static std::string quoted(const std::string & s) {
 }
 
 static std::string set_event(const std::string & path, const std::string & value) {
-    return "data: {\"set\":[" + path + "],\"value\":" + value + "}\n\n";
+    return "{\"set\":[" + path + "],\"value\":" + value + "}\n";
 }
 
 static std::string add_value(const std::string & path, const std::string & value) {
-    return "data: {\"add\":[" + path + "],\"value\":" + value + "}\n\n";
+    return "{\"add\":[" + path + "],\"value\":" + value + "}\n";
 }
 
 static std::string add_text(const std::string & path, const std::string & text, const words_t & secrets) {
     std::string sealed;
     seal_json(quoted(text), secrets, sealed);
-    return "data: {\"add\":[" + path + "],\"text\":" + sealed + "}\n\n";
+    return "{\"add\":[" + path + "],\"text\":" + sealed + "}\n";
 }
 
 // the items the protocol of a round keeps, as the round writes them
