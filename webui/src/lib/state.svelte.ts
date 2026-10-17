@@ -20,10 +20,9 @@ import {
 } from './conversation.js';
 import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
-import { redact, run, settings } from '../engine/run.js';
+import { redact, resolve, run, settings } from '../config.js';
 import { held, pulse, type Pulse } from './pulse.js';
 import { PAGE_COMMANDS, act, attached, serve, turnOf } from './sync.js';
-import { resolve } from '../engine/registry.js';
 
 export { app };
 

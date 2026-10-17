@@ -71,7 +71,7 @@ async function page(replies: Reply[], lines = '', listed: object[] = [{ id: 'x' 
 			return replies.shift()!(init.signal!);
 		})
 	);
-	const engine = await import('../src/engine/run.js');
+	const engine = await import('../src/config.js');
 	engine.start();
 	const set = await engine.run(
 		`set endpoints url m http://m/v1\nset chat model m/x\n${lines}`,

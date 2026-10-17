@@ -5,7 +5,11 @@ import { walk } from './registry.js';
 // words while the path goes on, then the arguments the command proposes; a
 // candidate in <> names what to type and shows only before a word is started
 export function complete(ctx: Context, words: string[], partial: string): string[] {
-	const w = walk(words, ctx.commands);
+	const w = walk(
+		words,
+		ctx.commands,
+		ctx.modules.map((m) => m.name)
+	);
 	if (w.ambiguous) return [];
 	const found = new Set<string>();
 	if (w.consumed === words.length) {

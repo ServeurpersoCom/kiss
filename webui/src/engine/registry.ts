@@ -4,21 +4,20 @@ import { didYouMean } from './near.js';
 
 const PATH_WORD = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
-// a file in commands/ or modules/ registers itself by existing
-const commandFiles = import.meta.glob<{ default: Command<unknown> }>('../commands/*.ts', {
-	eager: true
-});
-const moduleFiles = import.meta.glob<{ default: Module }>('../modules/*.ts', { eager: true });
+// the files of a directory of commands or of modules, each registering its
+// plugin by existing, as import.meta.glob gives them
+export type Files<T> = Record<string, { default: T }>;
 
-export const commands: readonly Command<unknown>[] = Object.values(commandFiles)
-	.map((f) => f.default)
-	.sort((a, b) => a.path.join(' ').localeCompare(b.path.join(' ')));
-
-export const modules: readonly Module[] = Object.values(moduleFiles).map((f) => f.default);
-const moduleNames = modules.map((m) => m.name);
+// the commands and the modules of one configuration, and how a line resolves
+// among them
+export interface Registry {
+	commands: readonly Command<unknown>[];
+	modules: readonly Module[];
+	resolve(words: readonly string[]): { command: Command<unknown>; args: string[] };
+}
 
 // a plugin declared wrong or twice stops the page at once, never later
-function audit(): string[] {
+function audit(commands: readonly Command<unknown>[], moduleNames: readonly string[]): string[] {
 	const problems: string[] = [];
 	const paths = commands.map((c) => c.path.join(' '));
 	for (const [i, c] of commands.entries()) {
@@ -39,9 +38,6 @@ function audit(): string[] {
 	return problems;
 }
 
-const problems = audit();
-if (problems.length) throw new Error(['bad plugins', ...problems].join('\n'));
-
 interface Walk {
 	// the deepest command whose whole path the words spell
 	command?: Command<unknown>;
@@ -59,7 +55,11 @@ interface Walk {
 // word always wins, and the walk stops at the first word no path continues
 // with; right after a command whose first argument names a module, the names
 // of the modules compete with the path words, a prefix of both being ambiguous
-export function walk(words: readonly string[], all: readonly Command<unknown>[]): Walk {
+export function walk(
+	words: readonly string[],
+	all: readonly Command<unknown>[],
+	moduleNames: readonly string[]
+): Walk {
 	let pool = all;
 	let command: Command<unknown> | undefined;
 	let depth = 0;
@@ -88,8 +88,13 @@ export function walk(words: readonly string[], all: readonly Command<unknown>[])
 	return { command, depth, pool, consumed: i };
 }
 
-export function resolve(words: readonly string[]): { command: Command<unknown>; args: string[] } {
-	const w = walk(words, commands);
+// a line among commands and modules: the command it names, with its arguments
+function resolving(
+	words: readonly string[],
+	commands: readonly Command<unknown>[],
+	moduleNames: readonly string[]
+): { command: Command<unknown>; args: string[] } {
+	const w = walk(words, commands, moduleNames);
 	if (w.ambiguous) {
 		throw new Error(`ambiguous word "${w.ambiguous.word}": ${w.ambiguous.names.join(' ')}`);
 	}
@@ -109,4 +114,19 @@ export function resolve(words: readonly string[]): { command: Command<unknown>; 
 	if (word === undefined) throw new Incomplete();
 	const what = w.consumed ? `word "${word}" after ${head}` : `command "${word}"`;
 	throw new Error(`unknown ${what}${didYouMean(word, names)}`);
+}
+
+// the commands and the modules of the files given, audited
+export function registry(
+	commandFiles: Files<Command<unknown>>,
+	moduleFiles: Files<Module>
+): Registry {
+	const commands = Object.values(commandFiles)
+		.map((f) => f.default)
+		.sort((a, b) => a.path.join(' ').localeCompare(b.path.join(' ')));
+	const modules = Object.values(moduleFiles).map((f) => f.default);
+	const moduleNames = modules.map((m) => m.name);
+	const problems = audit(commands, moduleNames);
+	if (problems.length) throw new Error(['bad plugins', ...problems].join('\n'));
+	return { commands, modules, resolve: (words) => resolving(words, commands, moduleNames) };
 }

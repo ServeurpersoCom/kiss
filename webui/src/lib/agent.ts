@@ -8,7 +8,7 @@ import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, tools as own } from './tools.js';
 import models from '../modules/models.js';
-import { run, settings } from '../engine/run.js';
+import { run, settings } from '../config.js';
 
 // whether the user lets the model make this call: a tool in consent asks, and
 // always turns it on, as the user

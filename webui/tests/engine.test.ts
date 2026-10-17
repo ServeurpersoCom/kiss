@@ -6,13 +6,13 @@ import { append, fresh, named, parse, serialize } from '../src/lib/conversation.
 import { localTime } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/engine/engine.js';
 
-type Engine = typeof import('../src/engine/run.js');
+type Engine = typeof import('../src/config.js');
 
 // a page load: the engine starts over what the browser keeps, below a site
 // configuration
 async function page(site = ''): Promise<Engine> {
 	vi.resetModules();
-	const engine = await import('../src/engine/run.js');
+	const engine = await import('../src/config.js');
 	engine.defaults(site);
 	engine.start();
 	return engine;
@@ -415,7 +415,7 @@ describe('show running-config', () => {
 		const k = await page();
 		await k.run('set display tool-calls open', 'user');
 		const all = (await k.run('show run al', 'user')).text;
-		const { modules } = await import('../src/engine/registry.js');
+		const { modules } = await import('../src/config.js');
 		const each = await Promise.all(modules.map((m) => k.run(`show ${m.name}`, 'user')));
 		expect(all).toBe(each.map((r) => r.text).join('\n'));
 		expect(all).toContain('set display tool-calls open\n');
@@ -1048,7 +1048,7 @@ describe('the conversations', () => {
 describe('client.conf', () => {
 	it('leaves out a line or a block the rules refuse, the rest entering', async () => {
 		vi.resetModules();
-		const k = await import('../src/engine/run.js');
+		const k = await import('../src/config.js');
 		expect(k.defaults('set chat system-prompt red\nset endpoints key s sk-site')).toEqual([
 			'endpoints s: endpoints: endpoints s has no url'
 		]);
@@ -1071,7 +1071,7 @@ describe('the startup-config', () => {
 		await before.run('set endpoints url u http://x/v1\nset chat system-prompt kept', 'user');
 		await before.run('copy running-config startup-config', 'user');
 		vi.resetModules();
-		const k = await import('../src/engine/run.js');
+		const k = await import('../src/config.js');
 		k.defaults('set endpoints url s http://x/v1');
 		expect(k.start()).toEqual(['endpoints u: endpoints: endpoints u has the url of endpoints s']);
 		expect(k.settings.get('chat system-prompt')).toBe('kept');
@@ -1495,7 +1495,7 @@ describe('every key', () => {
 		const k = await page();
 		vi.stubGlobal('fetch', kiss({ p: false }, {}, ['x']));
 		await k.run('set endpoints url m http://m/v1\nset mcp url c http://c/mcp', 'user');
-		const { modules } = await import('../src/engine/registry.js');
+		const { modules } = await import('../src/config.js');
 		const untaken: string[] = [];
 		for (const m of modules) {
 			for (const [name, def] of Object.entries(m.keys)) {
@@ -1539,7 +1539,7 @@ describe('every key', () => {
 
 	it('names only an item its source serves, one already held whatever the source says', async () => {
 		const k = await full();
-		const { modules } = await import('../src/engine/registry.js');
+		const { modules } = await import('../src/config.js');
 		const known = modules.filter((m) => m.items).map((m) => m.name);
 		expect(known.sort()).toEqual(['display', 'models', 'tools']);
 		for (const line of [
