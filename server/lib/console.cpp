@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <csignal>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>

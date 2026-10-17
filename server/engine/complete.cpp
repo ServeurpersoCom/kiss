@@ -5,6 +5,7 @@
 #include "engine/registry.h"
 
 #include <algorithm>
+#include <iterator>
 #include <set>
 
 static bool hint(const std::string & word) {
