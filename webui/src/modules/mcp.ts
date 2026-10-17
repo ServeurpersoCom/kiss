@@ -2,6 +2,7 @@ import type { Module } from '../engine/engine.js';
 import { rules } from '../lib/remote.js';
 import { aggregate, routed, served } from '../lib/mcp.js';
 import { tools } from '../lib/tools.js';
+import { follow } from '../lib/sync.js';
 
 export default {
 	name: 'mcp',
@@ -28,9 +29,11 @@ export default {
 		return routed('mcp', config, before, source);
 	},
 	// every server connects as soon as the configuration names it, so the first
-	// round that needs its tools finds them listed
+	// round that needs its tools finds them listed; the page follows its
+	// backend wherever it goes
 	apply(config) {
 		void served(config, new Map());
+		follow(config);
 	},
 	// every server answers with its tools, and no name is served twice
 	async check(config) {

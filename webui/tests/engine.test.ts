@@ -1494,10 +1494,7 @@ describe('every key', () => {
 	async function full() {
 		const k = await page();
 		vi.stubGlobal('fetch', kiss({ p: false }, {}, ['x']));
-		await k.run(
-			'set endpoints url m http://m/v1\nset mcp url c http://c/mcp\nset mcp url backend http://c/b/mcp',
-			'user'
-		);
+		await k.run('set endpoints url m http://m/v1\nset mcp url c http://c/mcp', 'user');
 		const { modules } = await import('../src/engine/registry.js');
 		const untaken: string[] = [];
 		for (const m of modules) {

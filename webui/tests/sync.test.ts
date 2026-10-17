@@ -5,6 +5,7 @@ import {
 	SYNC_RETRY_MS,
 	SYNC_SILENCE_MS,
 	act,
+	attach,
 	attached,
 	detaching,
 	follow,
@@ -18,16 +19,14 @@ vi.mock('../src/lib/db.js', () => ({
 	deleteConversations: async () => {}
 }));
 
-// a configuration with the KiSS server backend and its key, the page attached
-// to it or not
-function config(on: boolean): ConfigReader {
-	const values: Record<string, string> = {
-		'client attached': on ? 'on' : 'off',
-		'mcp url backend': 'http://kiss/mcp',
-		'mcp key backend': 'k'
-	};
+// a configuration with the KiSS server backend and its key, which a page
+// neither attached nor detached attaches to, or one without it
+function config(backend: boolean): ConfigReader {
+	const values: Record<string, string> = backend
+		? { 'mcp url backend': 'http://kiss/mcp', 'mcp key backend': 'k' }
+		: {};
 	const get = (key: string, name?: string) => values[name ? `${key} ${name}` : key];
-	return { get, reveal: get, names: (m) => (m === 'mcp' ? ['backend'] : []) };
+	return { get, reveal: get, names: (m) => (m === 'mcp' && backend ? ['backend'] : []) };
 }
 
 const conversation = (id: string, title: string, updated: number) => ({
@@ -69,6 +68,7 @@ function server() {
 const NOW = 1_760_000_000_000;
 
 afterEach(() => {
+	localStorage.clear();
 	follow(config(false));
 	vi.unstubAllGlobals();
 });
@@ -224,6 +224,20 @@ describe('the conversations of a KiSS server', () => {
 		expect(attached()).toBe(false);
 		await vi.waitFor(() => expect(app.conversations).toEqual([mine]));
 		detaching(async () => undefined);
+	});
+
+	it('stay detached once detach ran, the backend there or not, until attach runs', async () => {
+		const s = server();
+		app.conversations = [];
+		follow(config(true));
+		expect(attached()).toBe(true);
+		attach(config(true), false);
+		expect(attached()).toBe(false);
+		follow(config(true));
+		expect(attached()).toBe(false);
+		attach(config(true), true);
+		expect(attached()).toBe(true);
+		await vi.waitFor(() => expect(s.sent.length).toBe(2));
 	});
 
 	it('follow no server that speaks another protocol', async () => {

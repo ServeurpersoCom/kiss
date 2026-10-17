@@ -1,5 +1,6 @@
 import type { Assistant, Conversation, Form, Turn } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
+import { ATTACHED_STORAGE_KEY } from './config.js';
 import { remotes, type Remote } from './remote.js';
 import type { Grant, Verdict } from '../engine/engine.js';
 import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
@@ -9,12 +10,14 @@ import { pulse, type Pulse } from './pulse.js';
 // the page attached to a KiSS server, the mcp item backend: it shows the
 // conversations of the server alone, follows them by one stream of events and
 // never writes one, the server changing them as the actions of the user ask;
-// detached, the page holds its own conversations and no server's
+// detached, the page holds its own conversations and no server's. The browser
+// keeps which of the two attach or detach left; until either runs, a page with
+// a backend, the one a KiSS server serves, is attached
 
-// client attached, on or off, and the mcp item it attaches to
-export const ATTACHED = ['off', 'on'] as const;
-export const [OFF, ON] = ATTACHED;
+// the mcp item the page attaches to
 export const BACKEND = 'backend';
+const ON = 'on';
+const OFF = 'off';
 // the commands an attached page runs itself, every other line running on the
 // server: those that attach and detach the page
 export const PAGE_COMMANDS = ['attach', 'detach'];
@@ -244,13 +247,21 @@ async function read(body: NonNullable<Response['body']>, heard: () => void): Pro
 	}
 }
 
+// the page attached to its server or detached from it, as the browser keeps
+// it, the configuration it follows by
+export function attach(config: ConfigReader, on: boolean): void {
+	localStorage.setItem(ATTACHED_STORAGE_KEY, on ? ON : OFF);
+	follow(config);
+}
+
 // the server the page attaches to followed, its stream opened again whenever
 // it ends, until the page detaches or the server moves; every conversation
 // leaves the page as it attaches or detaches, those of the page coming back
 // once it detaches
 export function follow(config: ConfigReader): void {
-	const on = config.get('client attached') === ON;
-	const server = on ? remotes(config, 'mcp').find((r) => r.name === BACKEND) : undefined;
+	const backend = remotes(config, 'mcp').find((r) => r.name === BACKEND);
+	const kept = localStorage.getItem(ATTACHED_STORAGE_KEY);
+	const server = kept === null || kept === ON ? backend : undefined;
 	const key = server ? `${server.url} ${JSON.stringify(server.sign())}` : '';
 	if ((followed?.key ?? '') === key) return;
 	const was = followed;
