@@ -38,16 +38,21 @@ static const char * const ASK_CALL = "call";
 static const char * const ASK_FORM = "form";
 static const char * const ASK_RUN  = "run";
 
-// a question a turn waits on, the page that runs it for a run, and the answer
-// that settles it: a verdict, the response to the form as JSON, or what the
-// page answers as JSON, {"output":...,"ok":...}
+// a question a turn waits on, its number, the page that runs it for a run, and
+// the answer that settles it: a verdict, the response to the form as JSON, or
+// what the page answers as JSON, {"output":...,"ok":...}
 struct question_t {
     std::mutex              mutex;
     std::condition_variable settled;
     std::string             kind;
+    uint64_t                number = 0;
     std::string             client;
     std::string             verdict;
 };
+
+// the number of the last question asked, so every question of this server
+// has its own and an answer names the one it settles
+static uint64_t g_asked = 0;
 
 // the pages attached to this server that run their config tool for its
 // agent, by hostname, in the order they came
@@ -64,6 +69,15 @@ static std::map<std::string, std::shared_ptr<question_t>> g_questions;
 static words_t g_typed;
 
 // a question settled, the first answer winning, empty when a stop wakes it
+static void answered(const std::shared_ptr<question_t> & q, const std::string & verdict) {
+    std::lock_guard<std::mutex> lock(q->mutex);
+    if (q->verdict.empty()) {
+        q->verdict = verdict;
+    }
+    q->settled.notify_all();
+}
+
+// the question a conversation asks settled, if one stands
 static void settle_question(const std::string & id, const std::string & verdict) {
     std::shared_ptr<question_t> q;
     {
@@ -74,20 +88,22 @@ static void settle_question(const std::string & id, const std::string & verdict)
         }
         q = it->second;
     }
-    std::lock_guard<std::mutex> lock(q->mutex);
-    if (q->verdict.empty()) {
-        q->verdict = verdict;
-    }
-    q->settled.notify_all();
+    answered(q, verdict);
 }
 
-// why a question of the kind does not stand in a conversation, empty when it
-// does
-static std::string standing(const std::string & id, const std::string & kind) {
+// why the question of that kind and number does not stand in a conversation,
+// empty when it does, q then the question itself
+static std::string standing(const std::string &           id,
+                            const std::string &           kind,
+                            uint64_t                      number,
+                            std::shared_ptr<question_t> & q) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const auto                  it = g_questions.find(id);
     if (it == g_questions.end()) {
         return "nothing is asked in this conversation";
+    }
+    if (it->second->number != number) {
+        return "question " + std::to_string(number) + " is not the one asked";
     }
     const std::string & k = it->second->kind;
     if (k != kind) {
@@ -95,14 +111,20 @@ static std::string standing(const std::string & id, const std::string & kind) {
                k == ASK_FORM ? "the question awaits a response" :
                                "the question awaits an output";
     }
+    q = it->second;
     return "";
 }
 
-// the question of the kind settled, when it stands
-static std::string settle_standing(const std::string & id, const std::string & kind, const std::string & answer) {
-    const std::string why = standing(id, kind);
+// the question of the kind and number settled, when it stands: the very
+// question found standing, so an answer never settles one asked after it
+static std::string settle_standing(const std::string & id,
+                                   const std::string & kind,
+                                   uint64_t            number,
+                                   const std::string & answer) {
+    std::shared_ptr<question_t> q;
+    const std::string           why = standing(id, kind, number, q);
     if (why.empty()) {
-        settle_question(id, answer);
+        answered(q, answer);
     }
     return why;
 }
@@ -123,16 +145,16 @@ static std::string gone(const std::string & client) {
     return ran("The page " + client + " is gone", false);
 }
 
-std::string agent_grant(const std::string & id, const std::string & verdict) {
-    return settle_standing(id, ASK_CALL, verdict);
+std::string agent_grant(const std::string & id, uint64_t question, const std::string & verdict) {
+    return settle_standing(id, ASK_CALL, question, verdict);
 }
 
-std::string agent_fill(const std::string & id, const std::string & response) {
-    return settle_standing(id, ASK_FORM, response);
+std::string agent_fill(const std::string & id, uint64_t question, const std::string & response) {
+    return settle_standing(id, ASK_FORM, question, response);
 }
 
-std::string agent_ran(const std::string & id, const std::string & output, bool ok) {
-    return settle_standing(id, ASK_RUN, ran(output, ok));
+std::string agent_ran(const std::string & id, uint64_t question, const std::string & output, bool ok) {
+    return settle_standing(id, ASK_RUN, question, ran(output, ok));
 }
 
 bool agent_attach(const std::string & client) {
@@ -337,16 +359,24 @@ static void grow(const std::string &                               id,
     }
 }
 
-// the conversation written as it settled, its reply holding its sent calls
-static void keep(const std::string & id) {
-    library_keep(id, keychain_running());
+// a write of a conversation that failed, told in the log, the turn going on
+// with the conversation as the library holds it
+static void logged(const std::string & id, const std::string & why) {
+    if (!why.empty()) {
+        log_error("Agent", "%.8s is not written: %s", id.c_str(), why.c_str());
+    }
 }
 
-// what the user answers a question of a turn, the question shown to every
-// page following the conversation while it stands, the time it stands taken
-// out of the pulse
+// the conversation written as it settled, its reply holding its sent calls
+static void keep(const std::string & id) {
+    logged(id, library_keep(id, keychain_known()));
+}
+
+// what the user answers a question of a turn, the question made its number
+// and shown to every page following the conversation while it stands, the
+// time it stands taken out of the pulse
 static std::string ask(const std::string & id,
-                       const std::string & question,
+                       yyjson_mut_doc *    made,
                        const std::string & kind,
                        api_stop &          stop,
                        pulse &             p,
@@ -358,12 +388,15 @@ static std::string ask(const std::string & id,
     {
         // a page gone before its run is asked answers at once
         std::lock_guard<std::mutex> lock(g_mutex);
+        q->number       = ++g_asked;
         g_questions[id] = q;
         if (!client.empty() && std::find(g_clients.begin(), g_clients.end(), client) == g_clients.end()) {
             q->verdict = gone(client);
         }
     }
-    library_asking(id, question);
+    yyjson_mut_obj_add_uint(made, yyjson_mut_doc_get_root(made), "question", q->number);
+    const std::shared_ptr<char> question(yyjson_mut_write(made, 0, nullptr), free);
+    library_asking(id, question.get());
     std::string verdict;
     {
         std::unique_lock<std::mutex> lock(q->mutex);
@@ -397,9 +430,8 @@ static std::string fill(const std::string & id,
     yyjson_mut_obj_add_str(made.get(), q, "kind", "form");
     yyjson_mut_obj_add_strncpy(made.get(), q, "server", server.data(), server.size());
     yyjson_mut_obj_add_val(made.get(), q, "input", yyjson_val_mut_copy(made.get(), yyjson_doc_get_root(in.get())));
-    const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
     log_info("Agent", "%.8s asks the user to fill a form of %s", id.c_str(), server.c_str());
-    return ask(id, question.get(), ASK_FORM, stop, p);
+    return ask(id, made.get(), ASK_FORM, stop, p);
 }
 
 // what a tool of this server answers, run again with what the user answers
@@ -456,9 +488,8 @@ static tool_outcome run_client(const std::string & id,
     yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_RUN);
     yyjson_mut_obj_add_strncpy(made.get(), q, "client", client.data(), client.size());
     yyjson_mut_obj_add_strncpy(made.get(), q, "lines", yyjson_get_str(lines), yyjson_get_len(lines));
-    const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
     log_info("Agent", "%.8s asks page %s to run a call", id.c_str(), client.c_str());
-    const std::string                 answer = ask(id, question.get(), ASK_RUN, stop, p, client);
+    const std::string                 answer = ask(id, made.get(), ASK_RUN, stop, p, client);
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(answer.data(), answer.size(), 0), yyjson_doc_free);
     yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
     yyjson_val *                      output = yyjson_obj_get(root, "output");
@@ -533,9 +564,8 @@ static void call(const std::string &           id,
         yyjson_mut_obj_add_str(made.get(), q, "kind", "call");
         yyjson_mut_obj_add_strncpy(made.get(), q, "tool", called.name.data(), called.name.size());
         yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
-        const std::shared_ptr<char> question(yyjson_mut_write(made.get(), 0, nullptr), free);
         log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
-        const std::string verdict = ask(id, question.get(), ASK_CALL, stop, p);
+        const std::string verdict = ask(id, made.get(), ASK_CALL, stop, p);
         log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
         if (verdict == REFUSE) {
             settle(called.args, "The user refused the call", false, {});
@@ -761,21 +791,21 @@ static void turn(std::string                     id,
         error = explain(e, *stop);
     }
     const std::optional<conversation_stats> spent = pulse_stats(p, pulse_now());
-    library_change(
-        id,
-        [&](conversation & c) {
-            for (conversation_entry & e : c.entries) {
-                if (e.id == entry) {
-                    e.rounds = conversation_settled(e.rounds);
-                    e.error  = error;
-                    if (spent) {
-                        e.stats = *spent;
-                    }
-                }
-            }
-            return std::string();
-        },
-        keychain_running());
+    logged(id, library_change(
+                   id,
+                   [&](conversation & c) {
+                       for (conversation_entry & e : c.entries) {
+                           if (e.id == entry) {
+                               e.rounds = conversation_settled(e.rounds);
+                               e.error  = error;
+                               if (spent) {
+                                   e.stats = *spent;
+                               }
+                           }
+                       }
+                       return std::string();
+                   },
+                   keychain_known()));
     log_info("Agent", "%.8s %s in %.0f ms", id.c_str(), error ? error->c_str() : "answered", pulse_now() - p.start);
     library_turn(id, "");
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -808,13 +838,13 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
     } catch (const std::exception & err) {
         e.output = explain(err, *stop);
     }
-    library_change(
-        id,
-        [&](conversation & c) {
-            conversation_append(c, c.leaf, e);
-            return std::string();
-        },
-        keychain_running());
+    logged(id, library_change(
+                   id,
+                   [&](conversation & c) {
+                       conversation_append(c, c.leaf, e);
+                       return std::string();
+                   },
+                   keychain_known()));
     log_info("Agent", "%.8s ran %s", id.c_str(), e.ok ? "a line" : "a line that failed");
     library_turn(id, "");
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -837,7 +867,7 @@ std::string agent_command(const std::string & id, const std::string & input) {
     return "";
 }
 
-std::string agent_answer(const std::string & id, const std::string & user) {
+std::string agent_answer(const std::string & id, const std::function<std::string(conversation &)> & user) {
     const auto stop = std::make_shared<api_stop>();
     {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -851,23 +881,24 @@ std::string agent_answer(const std::string & id, const std::string & user) {
     const std::string               why = library_change(
         id,
         [&](conversation & c) {
-            bool is_user = false;
+            const std::string asked   = user(c);
+            bool              is_user = false;
             for (const conversation_entry & e : c.entries) {
-                is_user = is_user || (e.id == user && e.role == ROLE_USER);
+                is_user = is_user || (e.id == asked && e.role == ROLE_USER);
             }
             if (!is_user) {
-                return "\"" + user + "\" is not a message of the user";
+                return "\"" + asked + "\" is not a message of the user";
             }
-            c.leaf = user;
+            c.leaf = asked;
             before = conversation_path(c);
             conversation_entry reply;
             reply.role         = ROLE_ASSISTANT;
-            const size_t index = conversation_append(c, user, reply);
+            const size_t index = conversation_append(c, asked, reply);
             entry              = c.entries[index].id;
             c.updated          = c.entries[index].time;
             return std::string();
         },
-        keychain_running());
+        keychain_known());
     if (!why.empty()) {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_turns.erase(id);

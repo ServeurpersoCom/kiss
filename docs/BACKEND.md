@@ -386,7 +386,8 @@ itself.
 
 The question is `{"kind":"call","tool":...,"args":...}` for a call in `consent`, or
 `{"kind":"form","server":...,"input":...}` for a form a tool asks the user to fill, `input` the MCP
-input request of an `elicitation/create` form (see The agent).
+input request of an `elicitation/create` form (see The agent), each with `question`, its number,
+which no other question of the server has.
 
 A comment line comes each second the stream stays quiet; a page that hears nothing for three
 seconds counts the connection as gone and opens the stream again. The stream ends when the
@@ -406,7 +407,7 @@ outcome through its stream. An action answers no state.
 | `retry` | `{id, entry}` | a new answer to a message, or beside an answer |
 | `browse` | `{id, entry}` | the thread goes to the last entry written under that one |
 | `stop` | `{id}` | the turn stops |
-| `answer` | `{id, verdict}`, `{id, response}` or `{id, output, ok}` | the question of the turn settled, the first answer winning |
+| `answer` | `{id, question, verdict}`, `{id, question, response}` or `{id, question, output, ok}` | the question of that number settled, the first answer winning |
 | `pin` | `{id, pinned}` | the conversation pinned or not |
 | `drop` | `{id, entry}` | a command entry leaves, its conversation going when it was the last one |
 | `erase` | `{ids}` | the conversations go, files and all |
@@ -575,15 +576,17 @@ mcp twin: tool config left out, KiSS serves it
 
 A turn that needs the user asks every page following the conversation and waits, the first answer
 settling it and `{"set":["<id>","asking"],"value":null}` withdrawing it from every page; Stop
-withdraws it and ends the turn. A call in `consent` poses
+withdraws it and ends the turn. Every question carries its number, `question`, and every answer
+names it, so a page that sees one question follow another sets the first aside, and an answer to a
+question that stands no more settles nothing. A call in `consent` poses
 `{"set":["<id>","asking"],"value":{"kind":"call","tool":...,"args":...}}`, which
-`POST /conversations/answer {"id":...,"verdict":"once"|"always"|"refuse"}` settles: `always` runs
+`POST /conversations/answer {"id":...,"question":...,"verdict":"once"|"always"|"refuse"}` settles: `always` runs
 `set tools use <tool> on`, `refuse` answers `The user refused the call`. A tool that asks the user
 to fill a form poses `{"set":["<id>","asking"],"value":{"kind":"form","server":...,"input":...}}`,
 the MCP input request of an `elicitation/create` form: the `config` tool of the server, a secret to
 type or a url to let, under the hostname of the server, or a tool of an MCP server of the 2026-07-28
 era whose call answers `input_required`, under the name of that server. `POST /conversations/answer
-{"id":...,"response":{"action":"accept","content":{...}}}` settles it, the call running again with
+{"id":...,"question":...,"response":{"action":"accept","content":{...}}}` settles it, the call running again with
 the response, or `{"action":"cancel"}`, which answers `The user answered nothing`. A form whose
 fields are other than text or yes fails the call unasked. Every text the user types in a form of an
 MCP server is sealed out of every outcome from then on, as the keychain seals its secrets.
@@ -594,7 +597,7 @@ configuration this server never reads. Granted, the call poses
 `{"set":["<id>","asking"],"value":{"kind":"run","client":...,"lines":...}}`, which every page
 following the conversation sees and the page of that hostname alone runs, on its own engine with
 the rights of a model, asking its user what its lines ask on that page; `POST /conversations/answer
-{"id":...,"output":...,"ok":...}` settles it with what the lines answered. A page whose stream ends
+{"id":...,"question":...,"output":...,"ok":...}` settles it with what the lines answered. A page whose stream ends
 answers its call `The page <hostname> is gone`, and its tool leaves the next round.
 
 The turn writes its answer in the conversation as it streams, the pages that follow it getting each

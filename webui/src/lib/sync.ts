@@ -6,6 +6,8 @@ import type { Grant, Verdict } from '../engine/engine.js';
 import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
 import { fill } from './form.js';
 import { pulse, type Pulse } from './pulse.js';
+import { secrets } from '../engine/keychain.js';
+import { sealText } from '../engine/seal.js';
 
 // the page attached to a KiSS server, the mcp item backend: it shows the
 // conversations of the server alone, follows them by one stream of events and
@@ -37,9 +39,9 @@ export const SYNC_SILENCE_MS = 3 * SYNC_IDLE_MS;
 const POLICY_VIOLATION = 1008;
 
 // what each conversation of a server asks for its turn, while the turn asks
-// it: the number of the question it shows now, and what stops the lines it
-// asks this page to run
-const questions = new Map<string, { shown: number; stop?: AbortController }>();
+// it: the number of the question of the server, the number of the question
+// the page shows now, and what stops the lines it asks this page to run
+const questions = new Map<string, { question: number; shown: number; stop?: AbortController }>();
 // the clock of each turn of a server, by conversation, on the clock of the
 // page, read at every frame of the screen
 const turns = new Map<string, Pulse>();
@@ -96,16 +98,24 @@ function forget(): void {
 }
 
 // lines the model of the server asks this page to run, as the config tool of
-// the page runs them for a model, what they answer going to the server; the
-// run stops once the turn withdraws it; another page runs those it is asked
-function run(id: string, request: Run): void {
+// the page runs them for a model, what they answer going to the server with
+// every secret of the page sealed, as the server knows none of them; the run
+// stops once the turn withdraws it; another page runs those it is asked
+function run(id: string, request: Run & { question: number }): void {
 	const stop = new AbortController();
-	questions.set(id, { shown: 0, stop });
+	questions.set(id, { question: request.question, shown: 0, stop });
 	if (!followed?.holds || request.client !== followed.client) return;
 	void page
 		.run(id, request.lines, stop.signal)
 		.then((out) =>
-			stop.signal.aborted ? undefined : act('answer', { id, output: out.text, ok: out.ok })
+			stop.signal.aborted
+				? undefined
+				: act('answer', {
+						id,
+						question: request.question,
+						output: sealText(out.text, secrets()),
+						ok: out.ok
+					})
 		)
 		.catch((e: Error) => console.error(e.message));
 }
@@ -113,9 +123,10 @@ function run(id: string, request: Run): void {
 // what a turn of a server asks the user, a call to grant or a form to fill
 // field by field, the answer going to the server; once the turn withdraws
 // it, the field it shows leaves and no other comes
-function ask(id: string, request: Grant | Form | Run): void {
+function ask(id: string, request: NonNullable<Conversation['asking']>): void {
 	if (request.kind === 'run') return run(id, request);
-	const asked = { shown: 0 };
+	const { question } = request;
+	const asked = { question, shown: 0 };
 	questions.set(id, asked);
 	const posing = <T>(question: (settle: (answer: T) => void) => Asking): Promise<T> => {
 		if (questions.get(id) !== asked) return new Promise<T>(() => undefined);
@@ -132,9 +143,10 @@ function ask(id: string, request: Grant | Form | Run): void {
 					},
 					request.server,
 					request.input
-				).then((response) => ({ id, response }))
+				).then((response) => ({ id, question, response }))
 			: posing<Verdict>((settle) => ({ kind: 'grant', request, settle })).then((verdict) => ({
 					id,
+					question,
 					verdict
 				}));
 	void answered.then((body) => act('answer', body)).catch((e: Error) => console.error(e.message));
@@ -146,13 +158,13 @@ function ask(id: string, request: Grant | Form | Run): void {
 function settle(id: string): void {
 	const c = app.conversations.find((x) => x.id === id);
 	const request = c?.asking;
-	if (request && !questions.has(id)) ask(id, request);
-	else if (!request && questions.has(id)) {
-		const n = questions.get(id)!;
+	const n = questions.get(id);
+	if (n && n.question !== request?.question) {
 		withdraw(n.shown);
 		n.stop?.abort();
 		questions.delete(id);
 	}
+	if (request && !questions.has(id)) ask(id, request);
 	if (location.hash.slice(1) === id) app.current = c ?? null;
 	const leaf = c?.entries.find((e) => e.id === c.leaf);
 	if (c?.turn && leaf?.role === 'assistant') app.replies[id] = leaf as Assistant;
@@ -279,9 +291,14 @@ function stream(server: Remote, client: string, signal: AbortSignal): Promise<vo
 	});
 }
 
+// whether the page answers a turn of its own: detached, a turn answering in
+// one of its conversations
+const answering = (): boolean => !attached() && Object.keys(app.replies).length > 0;
+
 // the page attached to its server or detached from it, as the browser keeps
 // it, the configuration it follows by
 export function attach(config: ConfigReader, on: boolean): void {
+	if (on && answering()) throw new Error('a turn answers on the page -> stop it first');
 	localStorage.setItem(ATTACHED_STORAGE_KEY, on ? ON : OFF);
 	follow(config);
 }
@@ -289,14 +306,15 @@ export function attach(config: ConfigReader, on: boolean): void {
 // the server the page attaches to followed, its stream opened again whenever
 // it ends, until the page detaches or the server moves; every conversation
 // leaves the page as it attaches or detaches, those of the page coming back
-// once it detaches
+// once it detaches; a page answering a turn of its own attaches once its
+// turns end, so nothing they write goes unseen
 export function follow(config: ConfigReader): void {
 	const backend = remotes(config, 'mcp').find((r) => r.name === BACKEND);
 	const kept = localStorage.getItem(ATTACHED_STORAGE_KEY);
 	const server = kept === null || kept === ON ? backend : undefined;
 	const client = String(config.get('client hostname') ?? '');
 	const key = server ? `${server.url} ${JSON.stringify(server.sign())} ${client}` : '';
-	if ((followed?.key ?? '') === key) return;
+	if ((followed?.key ?? '') === key || (server && answering())) return;
 	const was = followed;
 	was?.stop.abort();
 	followed = null;

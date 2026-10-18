@@ -151,7 +151,7 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_outcome & 
     return jsonrpc_result_json(id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
         yyjson_mut_val * content = yyjson_mut_obj_add_arr(doc, out, "content");
         if (!r.text.empty() || r.image.empty()) {
-            const std::string text  = seal_text(r.text, keychain_running());
+            const std::string text  = seal_text(r.text, keychain_known());
             yyjson_mut_val *  block = yyjson_mut_arr_add_obj(doc, content);
             yyjson_mut_obj_add_str(doc, block, "type", "text");
             yyjson_mut_obj_add_strncpy(doc, block, "text", text.c_str(), text.size());

@@ -5,7 +5,7 @@ import { REMOVED } from './text.js';
 // included
 
 // a text with every secret replaced by <removed>, written as it is
-function sealText(text: string, all: readonly string[]): string {
+export function sealText(text: string, all: readonly string[]): string {
 	return all.reduce((t, s) => t.split(s).join(REMOVED), text);
 }
 

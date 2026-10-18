@@ -76,7 +76,7 @@ void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
         if (!client.empty() && f.client.empty()) {
             take(f, client);
         }
-        const std::string events = library_follow(f, TICK_MS, keychain_running());
+        const std::string events = library_follow(f, TICK_MS, keychain_known());
         idle                     = events.empty() ? idle + TICK_MS : 0;
         if ((!events.empty() || idle >= IDLE_MS) && !ws.send(events)) {
             break;
@@ -153,15 +153,16 @@ static refusal changed(const std::string & id, const std::function<refusal(conve
             r = change(c);
             return r.why;
         },
-        keychain_running());
+        keychain_known());
     if (why.empty()) {
         return {};
     }
     return r.status ? r : refusal{ known(id) ? FAILED : UNKNOWN, why };
 }
 
-// the model answers a message of the user
-static refusal answer(const std::string & id, const std::string & user) {
+// the model answers the message of the user that user names, writing it
+// first when it enters with the turn
+static refusal answer(const std::string & id, const std::function<std::string(conversation &)> & user) {
     const std::string why = agent_answer(id, user);
     return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
 }
@@ -172,18 +173,15 @@ static refusal answer(const std::string & id, const std::string & user) {
 static refusal say(const std::string &                               id,
                    const std::string &                               text,
                    const std::optional<std::optional<std::string>> & parent = std::nullopt) {
-    std::string   user;
-    const refusal r = changed(id, [&](conversation & c) {
+    return answer(id, [&](conversation & c) {
         if (c.title.empty()) {
             c.title = cut(text, TITLE_LENGTH);
         }
         conversation_entry e;
         e.role = ROLE_USER;
         e.text = text;
-        user   = c.entries[conversation_append(c, parent ? *parent : c.leaf, e)].id;
-        return refusal{};
+        return c.entries[conversation_append(c, parent ? *parent : c.leaf, e)].id;
     });
-    return r.status ? r : answer(id, user);
 }
 
 // a response to a form: accept with its content, or cancel
@@ -216,7 +214,7 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
             conversation c;
             c.id                  = conversation_uuid();
             c.updated             = conversation_now();
-            const std::string why = library_create(c, keychain_running());
+            const std::string why = library_create(c, keychain_known());
             if (!why.empty()) {
                 return { FAILED, why };
             }
@@ -271,14 +269,19 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
         return {};
     }
     if (action == "answer") {
-        yyjson_val * response = yyjson_obj_get(body, "response");
-        yyjson_val * ok       = yyjson_obj_get(body, "ok");
-        std::string  verdict, output;
+        yyjson_val * number = yyjson_obj_get(body, "question");
+        if (!yyjson_is_uint(number)) {
+            return { MALFORMED, "the body names no question" };
+        }
+        const uint64_t question = yyjson_get_uint(number);
+        yyjson_val *   response = yyjson_obj_get(body, "response");
+        yyjson_val *   ok       = yyjson_obj_get(body, "ok");
+        std::string    verdict, output;
         if (text_field(body, "output", output)) {
             if (!yyjson_is_bool(ok)) {
                 return { MALFORMED, "the body holds an output without ok" };
             }
-            const std::string why = agent_ran(id, output, yyjson_get_bool(ok));
+            const std::string why = agent_ran(id, question, output, yyjson_get_bool(ok));
             return why.empty() ? refusal{} : refusal{ CONFLICT, why };
         }
         if (response) {
@@ -286,7 +289,7 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
                 return { MALFORMED, "the response is neither accept with its content nor cancel" };
             }
             const std::shared_ptr<char> json(yyjson_val_write(response, 0, nullptr), free);
-            const std::string           why = agent_fill(id, json.get());
+            const std::string           why = agent_fill(id, question, json.get());
             return why.empty() ? refusal{} : refusal{ CONFLICT, why };
         }
         if (!text_field(body, "verdict", verdict)) {
@@ -296,7 +299,7 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
                          [&](const char * v) { return verdict == v; }) == std::end(AGENT_VERDICTS)) {
             return { MALFORMED, "\"" + verdict + "\" is not once, always or refuse" };
         }
-        const std::string why = agent_grant(id, verdict);
+        const std::string why = agent_grant(id, question, verdict);
         return why.empty() ? refusal{} : refusal{ CONFLICT, why };
     }
     if (action == "pin") {
@@ -337,23 +340,30 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
     if (action == "drop" && found->role != ROLE_CLI) {
         return { MALFORMED, "\"" + entry + "\" is not a command" };
     }
-    if (agent_busy(id)) {
-        return { CONFLICT, AGENT_BUSY };
-    }
     if (action == "edit") {
         return found->text == text ? refusal{} : say(id, text, found->parent);
     }
     if (action == "retry") {
-        return answer(id, found->role == ROLE_ASSISTANT ? *found->parent : entry);
+        const std::string user = found->role == ROLE_ASSISTANT ? *found->parent : entry;
+        return answer(id, [&](conversation &) { return user; });
     }
+    // a turn taken before the change refuses it, one taken after it starts
+    // from it: a turn is taken before it writes its entry, under the lock of
+    // the change
     if (action == "browse") {
         return changed(id, [&](conversation & c) {
+            if (agent_busy(id)) {
+                return refusal{ CONFLICT, AGENT_BUSY };
+            }
             c.leaf = conversation_latest(c, entry);
             return refusal{};
         });
     }
     bool          empty = false;
     const refusal r     = changed(id, [&](conversation & c) {
+        if (agent_busy(id)) {
+            return refusal{ CONFLICT, AGENT_BUSY };
+        }
         conversation_drop(c, entry);
         empty = c.entries.empty();
         return refusal{};

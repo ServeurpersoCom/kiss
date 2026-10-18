@@ -242,7 +242,7 @@ void api_chat(const endpoint &                               e,
               const std::function<void(const api_delta &)> & delta,
               const std::function<void(int, int, int)> &     retrying) {
     std::string body;
-    seal_json(e.speaks->body(r), keychain_running(), body);
+    seal_json(e.speaks->body(r), keychain_known(), body);
     std::shared_ptr<httplib::Client> client;
     const auto                       stream = opened(e, body, stop, client, retrying);
     const auto                       read   = e.speaks->reader();

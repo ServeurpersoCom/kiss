@@ -102,11 +102,15 @@ describe('a batch', () => {
 		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
 	});
 
-	it('runs a command that writes the archive alone', async () => {
+	it('runs a command that writes the archive or turns the mode of the page alone', async () => {
 		const k = await page();
 		const r = await k.run('set display tool-calls open\ncopy running-config a', 'user');
 		expect(r.text).toContain('copy runs alone');
 		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
+		expect((await k.run('attach\nset client hostname BAD', 'user')).text).toContain(
+			'attach runs alone'
+		);
+		expect((await k.run('detach\nshow version', 'user')).text).toContain('detach runs alone');
 	});
 
 	it('takes no word its command does not read', async () => {

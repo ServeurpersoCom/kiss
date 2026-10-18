@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <mutex>
 #include <optional>
 
 // a character of a header name or of a scheme, a token of HTTP
@@ -59,6 +60,14 @@ bool keychain_admits(const std::string & presented) {
     return diff == 0;
 }
 
+// the longest first, so a secret that holds another goes whole
+static void longest_first(words_t & secrets) {
+    std::sort(secrets.begin(), secrets.end(), [](const std::string & a, const std::string & b) {
+        return a.size() != b.size() ? a.size() > b.size() : a < b;
+    });
+    secrets.erase(std::unique(secrets.begin(), secrets.end()), secrets.end());
+}
+
 words_t keychain_secrets(const engine_reader & config) {
     words_t secrets;
     for (const engine_module & m : schema_modules()) {
@@ -74,15 +83,21 @@ words_t keychain_secrets(const engine_reader & config) {
             }
         }
     }
-    std::sort(secrets.begin(), secrets.end(), [](const std::string & a, const std::string & b) {
-        return a.size() != b.size() ? a.size() > b.size() : a < b;
-    });
-    secrets.erase(std::unique(secrets.begin(), secrets.end()), secrets.end());
+    longest_first(secrets);
     return secrets;
 }
 
-words_t keychain_running() {
-    words_t secrets;
-    engine_with([&](const engine_reader & config) { secrets = keychain_secrets(config); });
-    return secrets;
+// every secret this server has known: it only grows, so a secret the
+// configuration drops stays sealed in a conversation or an output that still
+// holds it
+static std::mutex g_known_mutex;
+static words_t    g_known;
+
+words_t keychain_known() {
+    words_t now;
+    engine_with([&](const engine_reader & config) { now = keychain_secrets(config); });
+    std::lock_guard<std::mutex> lock(g_known_mutex);
+    g_known.insert(g_known.end(), now.begin(), now.end());
+    longest_first(g_known);
+    return g_known;
 }

@@ -12,6 +12,7 @@
 #include "lib/agent.h"
 
 #include "engine/engine.h"
+#include "engine/keychain.h"
 #include "httplib.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
@@ -19,6 +20,7 @@
 #include "server/server.conf.hpp"
 #include "yyjson.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -137,7 +139,8 @@ int main() {
     user.text = "go";
     conversation_append(c, std::nullopt, user);
     library_create(c, {});
-    law(agent_answer(c.id, c.entries[0].id).empty(), "a turn starts");
+    const std::string first = c.entries[0].id;
+    law(agent_answer(c.id, [&](conversation &) { return first; }).empty(), "a turn starts");
     for (int i = 0; i < 1000 && agent_busy(c.id); i++) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -180,9 +183,19 @@ int main() {
             entries().back().input == "show version" && entries().back().ok &&
             entries().back().output.find("server") != std::string::npos,
         "a line the user types runs on the server, its output after the thread");
+    // the number of the question a conversation asks, as its pages read it,
+    // the last one seen once none stands
+    library_follower watcher;
+    std::string      seen;
+    const auto       number = [&]() -> uint64_t {
+        seen += library_follow(watcher, 0, {});
+        const size_t at = seen.rfind("\"question\":");
+        return at == std::string::npos ? 0 : std::stoull(seen.substr(at + 11));
+    };
     law(agent_command(c.id, "set endpoints url t9 https://example.com/v1").empty(), "a line that asks starts");
     for (int i = 0;
-         i < 1000 && !agent_fill(c.id, "{\"action\":\"accept\",\"content\":{\"endpoints url t9\":true}}").empty();
+         i < 1000 &&
+         !agent_fill(c.id, number(), "{\"action\":\"accept\",\"content\":{\"endpoints url t9\":true}}").empty();
          i++) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -194,16 +207,13 @@ int main() {
     // a message after the thread, a turn answering it; the call of its turn,
     // once it settled
     const auto message = [&](const std::string & text) {
-        std::string id;
-        library_change(c.id,
-                       [&](conversation & x) {
-                           conversation_entry e;
-                           e.text = text;
-                           id     = x.entries[conversation_append(x, x.leaf, e)].id;
-                           return std::string();
-                       },
-                       {});
-        return agent_answer(c.id, id).empty();
+        return agent_answer(c.id,
+                            [&](conversation & x) {
+                                conversation_entry e;
+                                e.text = text;
+                                return x.entries[conversation_append(x, x.leaf, e)].id;
+                            })
+            .empty();
     };
     const auto called = [&] {
         const conversation_entry e = entries().back();
@@ -221,14 +231,19 @@ int main() {
     law(library_follow(page, 0, {}).find("\"client\":\"abcd\"") != std::string::npos,
         "the first event names the page that holds its tool");
     law(message("page"), "a turn calling the page starts");
-    when([&] { return agent_grant(c.id, "once").empty(); });
+    const size_t count = entries().size();
+    law(!message("again") && entries().size() == count, "a message sent while a turn runs enters nothing");
+    when([&] { return agent_grant(c.id, 0, "once") == "question 0 is not the one asked"; });
+    law(agent_grant(c.id, 0, "once") == "question 0 is not the one asked",
+        "an answer that names another question settles nothing");
+    when([&] { return agent_grant(c.id, number(), "once").empty(); });
     std::string asked;
     when([&] {
         asked += library_follow(page, 0, {});
         return asked.find("\"kind\":\"run\",\"client\":\"abcd\",\"lines\":\"show version\"") != std::string::npos;
     });
     law(asked.find("\"lines\":\"show version\"") != std::string::npos, "the call asks the page to run its lines");
-    when([&] { return agent_ran(c.id, "! page ran", true).empty(); });
+    when([&] { return agent_ran(c.id, number(), "! page ran", true).empty(); });
     law(settled() && called().name == "abcd_client_config" && called().ok == true && called().result == "! page ran",
         "the page answers the call: " + called().result);
     library_follow(page, 0, {});
@@ -238,7 +253,7 @@ int main() {
             "the model sees the tool of the page: " + g_tools.back());
     }
     law(message("page"), "a second turn calling the page starts");
-    when([&] { return agent_grant(c.id, "once").empty(); });
+    when([&] { return agent_grant(c.id, number(), "once").empty(); });
     asked.clear();
     when([&] {
         asked += library_follow(page, 0, {});
@@ -255,6 +270,16 @@ int main() {
     }
     law(agent_attach("abcd"), "another page of that name takes the tool once the page that held it leaves");
     agent_detach("abcd");
+
+    const auto known = [](const std::string & secret) {
+        const words_t all = keychain_known();
+        return std::find(all.begin(), all.end(), secret) != all.end();
+    };
+    engine_run("set endpoints key t9 sk-dropped-1234", ENGINE_ADMIN);
+    const bool held = known("sk-dropped-1234");
+    engine_run("no endpoints t9", ENGINE_ADMIN);
+    law(held && !engine_get("endpoints key", "t9") && known("sk-dropped-1234"),
+        "a secret the configuration drops stays sealed in what still holds it");
 
     server.stop();
     listening.join();

@@ -107,10 +107,11 @@ export interface Conversation {
 	// the entry the thread ends on, none while the conversation is empty
 	leaf: string | null;
 	// in the page only, a conversation of a KiSS server while a turn of the
-	// server answers in it, its pulse, and what that turn asks: a call to
-	// grant, a form of one of its tools to fill, or lines an attached page runs
+	// server answers in it, its pulse, and what that turn asks under its
+	// number: a call to grant, a form of one of its tools to fill, or lines an
+	// attached page runs
 	turn?: Turn;
-	asking?: Grant | Form | Run;
+	asking?: (Grant | Form | Run) & { question: number };
 }
 
 export interface Outcome {

@@ -2,7 +2,7 @@
 // keychain.h: the keychain of the server: the one reader of the value of a
 // secret beside the engine that holds it, as the header of a route leaves
 // and as the key of a client is checked, and the one filter what goes back to
-// a client passes, every secret of the running configuration read <removed>:
+// a client passes, every secret the server has known read <removed>:
 // the answer of a proxied server, its headers, its body, each event of a
 // stream, a refusal of the proxy, and the result of a tool; JSON as decoded,
 // any other text as it is written
@@ -36,5 +36,6 @@ bool keychain_admits(const std::string & presented);
 // holds another goes whole
 words_t keychain_secrets(const engine_reader & config);
 
-// every secret of the running configuration
-words_t keychain_running();
+// every secret this server has known since it started, those of the running
+// configuration among them, the longest first: the list a seal reads
+words_t keychain_known();

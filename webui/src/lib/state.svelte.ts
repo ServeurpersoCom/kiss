@@ -22,7 +22,7 @@ import { EndpointError } from './api.js';
 import { locked } from './mcp.js';
 import { redact, run, settings } from '../engine/run.js';
 import { held, pulse, type Pulse } from './pulse.js';
-import { PAGE_COMMANDS, act, attached, serve, turnOf } from './sync.js';
+import { PAGE_COMMANDS, act, attached, follow as attaching, serve, turnOf } from './sync.js';
 import { resolve } from '../engine/registry.js';
 
 export { app };
@@ -62,9 +62,10 @@ function follow(): void {
 }
 
 // the conversations of the browser beside those opened while they load, the
-// one the URL names open
+// one the URL names open; a page attached meanwhile shows those of its server
 async function load(): Promise<void> {
 	const stored = await listConversations();
+	if (attached()) return;
 	const opened = app.conversations;
 	app.conversations = [...opened, ...stored.filter((c) => !opened.some((o) => o.id === c.id))].sort(
 		(a, b) => b.updated - a.updated
@@ -363,6 +364,8 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 		controllers.delete(id);
 		pulses.delete(id);
 		await save(conversation);
+		// the server a page attaches to while it answered, followed now
+		attaching(settings);
 	}
 }
 
