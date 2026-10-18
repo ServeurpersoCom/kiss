@@ -10,6 +10,7 @@
 
 #include "lib/file.h"
 #include "lib/library.h"
+#include "lib/log.h"
 #include "yyjson.h"
 
 #include <algorithm>
@@ -388,7 +389,9 @@ int main() {
 
     {
         // random changes of every kind, read by followers at three paces;
-        // at each check every follower holds what a new one gets
+        // at each check every follower holds what a new one gets, the log
+        // printing errors alone meanwhile
+        log_level_set(LOG_ERROR);
         std::mt19937       rng(20261017);
         const words_t      none;
         const char * const words[] = { "a", "bc ", "\"q\"", "\xc3\xa9t\xc3\xa9", "\\n", "{}" };
@@ -534,6 +537,7 @@ int main() {
                 checks++;
             }
         }
+        log_level_set(LOG_INFO);
         law(held && checks == 300,
             "every follower, read at any pace through random changes of every kind, holds what a new one gets");
     }

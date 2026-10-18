@@ -299,8 +299,12 @@ static setup_t setup(api_stop & stop, met_t & met) {
                 }
                 met.down.insert(signature(r));
                 tools = mcp_kept(r);
-                log_error("Agent", "MCP server %s serves the %zu tools it listed last: %s", r.name.c_str(),
-                          tools.size(), e.what());
+                if (tools.empty()) {
+                    log_error("Agent", "MCP server %s serves no tool: %s", r.name.c_str(), e.what());
+                } else {
+                    log_error("Agent", "MCP server %s serves the %zu tools it listed last: %s", r.name.c_str(),
+                              tools.size(), e.what());
+                }
             }
         }
         listed.insert(listed.end(), tools.begin(), tools.end());
