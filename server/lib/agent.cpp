@@ -370,11 +370,6 @@ static void logged(const std::string & id, const std::string & why) {
     }
 }
 
-// the conversation written as it settled, its reply holding its sent calls
-static void keep(const std::string & id) {
-    logged(id, library_keep(id, keychain_known()));
-}
-
 // what the user answers a question of a turn, the question made its number
 // and shown to every page following the conversation while it stands, the
 // time it stands taken out of the pulse
@@ -586,7 +581,13 @@ static void call(const std::string &           id,
         return;
     }
     grow(id, entry, stop, [&](conversation_entry & e) { e.rounds[r].calls[c].sent = true; });
-    keep(id);
+    // the call written as sent before it runs, or it does not run
+    const std::string unkept = library_keep(id, keychain_known());
+    if (!unkept.empty()) {
+        logged(id, unkept);
+        settle(called.args, "The conversation is not written: " + unkept, false, {});
+        return;
+    }
     log_info("Agent", "%.8s calls %s", id.c_str(), called.name.c_str());
     if (server) {
         // every text the user types in a form of the server is sealed from then on
