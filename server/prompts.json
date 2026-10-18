@@ -151,8 +151,5 @@
 		"server": "where it listens, its hostname, its key, its working directory, its logs",
 		"shells": "one tool per shell this machine has, named after it",
 		"tools": "each tool by its name here (bash, view, config): off hides it, consent asks the user at each call, on lets it run; max-rounds caps the tool rounds of a turn"
-	},
-	"notes": {
-		"problems": "These tools were left out during this turn; tell the user:"
 	}
 }

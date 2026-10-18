@@ -20,7 +20,9 @@ import { fill } from './form.js';
 // server, kept while its url and key stay, with the tool list it serves, asked
 // again as each turn starts, so a tool a server gains shows from the next turn
 // on and the tools the model sees stay the same from round to round; a
-// request that fails drops the client, and the next use connects again
+// request that fails drops the client, and the next use connects again; the
+// tool list a server gave last stays while it is named the same, so a server
+// that fails goes on serving it, each call answering its error
 
 // a client, the signature of the server it connected to, its tool list, and
 // whether that list came
@@ -34,6 +36,9 @@ interface Connection {
 
 const connections = new Map<string, Connection>();
 
+// the tools each server listed last, with the signature it was named under
+const kept = new Map<string, { signed: string; tools: Tool[] }>();
+
 // the HTTP status of a server that takes no request without the right key
 const UNAUTHORIZED = 401;
 
@@ -42,9 +47,10 @@ const UNAUTHORIZED = 401;
 const ROUTE_URI = 'kiss:proxy/';
 const ROUTE_KEYED_META = 'kiss/keyed';
 
-// what the server answered, or did not; a KiSS server also gives the line it
-// writes of itself, server forge 5633ee7 (2026-10-11) on linux; locked, it
-// answered that it takes no request without the right key
+// what the server answered, or did not, with the tools it listed last; a KiSS
+// server also gives the line it writes of itself, server forge 5633ee7
+// (2026-10-11) on linux; locked, it answered that it takes no request without
+// the right key
 interface Served {
 	server: string;
 	tools?: Tool[];
@@ -198,25 +204,36 @@ export function connecting(config: ConfigReader, down: ReadonlyMap<string, strin
 }
 
 // every server of the configuration with its tools or what went wrong, sorted
-// by name; servers no longer named are closed; a server down answers its
-// error again without a try, and a server that fails joins down, which lives
-// as long as its holder: a turn, so it tries each server once; down holds a
+// by name, a server that fails with the tools it listed last; servers no
+// longer named are closed and forgotten; a server down answers its error
+// again without a try, and a server that fails joins down, which lives as
+// long as its holder: a turn, so it tries each server once; down holds a
 // server as it was named, so a new url, key or header tries it again
 export async function served(config: ConfigReader, down: Map<string, string>): Promise<Served[]> {
 	const all = remotes(config, 'mcp');
 	for (const name of connections.keys()) if (!all.some((r) => r.name === name)) drop(name);
+	for (const name of kept.keys()) if (!all.some((r) => r.name === name)) kept.delete(name);
 	return Promise.all(
 		all.map(async (r): Promise<Served> => {
-			const error = down.get(signature(r));
-			if (error !== undefined) return { server: r.name, error };
+			const signed = signature(r);
+			const last = kept.get(r.name);
+			const tools = last?.signed === signed ? { tools: last.tools } : {};
+			const error = down.get(signed);
+			if (error !== undefined) return { server: r.name, error, ...tools };
 			try {
 				const c = connection(r);
-				const tools = await c.tools;
-				return { server: r.name, tools, ...system(await c.client) };
+				const listed = await c.tools;
+				kept.set(r.name, { signed, tools: listed });
+				return { server: r.name, tools: listed, ...system(await c.client) };
 			} catch (e) {
-				down.set(signature(r), (e as Error).message);
+				down.set(signed, (e as Error).message);
 				const locked = e instanceof SdkHttpError && e.status === UNAUTHORIZED;
-				return { server: r.name, error: (e as Error).message, ...(locked ? { locked } : {}) };
+				return {
+					server: r.name,
+					error: (e as Error).message,
+					...tools,
+					...(locked ? { locked } : {})
+				};
 			}
 		})
 	);
@@ -273,8 +290,9 @@ export async function locked(config: ConfigReader): Promise<string[]> {
 
 // the tools the model sees: the given ones, then those of every server, each
 // under its own name, but those the user turned off; a server that fails
-// serves nothing, a name already served stays with the first to serve it, and
-// each tells why as a problem, never stopping anything
+// serves the tools it listed last, a name already served stays with the first
+// to serve it, and each tells why as a problem the user reads, never stopping
+// anything
 export async function aggregate(
 	config: ConfigReader,
 	own: readonly Tool[],
@@ -285,11 +303,8 @@ export async function aggregate(
 	const tools = own.filter(on);
 	const problems: string[] = [];
 	for (const s of await served(config, down)) {
-		if (s.error) {
-			problems.push(`mcp ${s.server}: ${s.error}`);
-			continue;
-		}
-		for (const t of s.tools!.filter(on)) {
+		if (s.error) problems.push(`mcp ${s.server}: ${s.error}`);
+		for (const t of (s.tools ?? []).filter(on)) {
 			const first = owner.get(t.name);
 			if (first) {
 				problems.push(`mcp ${s.server}: tool ${t.name} left out, ${first} serves it`);

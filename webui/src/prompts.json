@@ -20,8 +20,5 @@
 				"additionalProperties": false
 			}
 		}
-	},
-	"notes": {
-		"problems": "These tools were left out during this turn; tell the user:"
 	}
 }

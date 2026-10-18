@@ -3,7 +3,7 @@
 // twin of mcp.ts of the page: Streamable HTTP in the era each server speaks,
 // one session per server, kept
 // with its tool list while its url, key and headers stay; a request that
-// fails drops it, and the next use connects again
+// fails closes it, its tool list kept, and the next use connects again
 
 #include "lib/api.h"
 #include "lib/conversation.h"
@@ -31,6 +31,10 @@ struct mcp_outcome {
 
 // the tools a server serves; throws why it serves none
 std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop);
+
+// the tools a server listed last while its url, key and headers stay, none
+// from a server never listed
+std::vector<mcp_tool> mcp_kept(const remote & r);
 
 // what the user answers to an input a server asks for before a call goes on,
 // the input as JSON, a form whose fields are text or yes: their response as

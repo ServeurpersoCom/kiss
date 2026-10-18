@@ -624,7 +624,7 @@ describe('an MCP server', () => {
 		expect(calls[2]).toMatchObject({ result: 'no', ok: false });
 	});
 
-	it('that does not answer serves nothing, the model told and the save warning of it', async () => {
+	it('that does not answer serves nothing, the save warning of it, the model reading no word of it', async () => {
 		const p = await page({ a: legacy(SHELL) }, [stream([{ content: 'ok' }])]);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url gone http://gone/mcp', 'user');
 		await (
@@ -637,8 +637,7 @@ describe('an MCP server', () => {
 			'fail',
 			'wait'
 		]);
-		expect(p.bodies[0].messages[0]).toMatchObject({ role: 'system' });
-		expect(p.bodies[0].messages[0].content).toContain('mcp gone');
+		expect(p.bodies[0].messages.some((m) => m.role === 'system')).toBe(false);
 		const saved = await p.engine.run('copy running-config a', 'user');
 		expect(saved.text).toMatch(/^! copied running-config to a\n! mcp gone/);
 		expect((await p.engine.run('show tools', 'user')).text).toContain('! mcp gone');
@@ -671,7 +670,6 @@ describe('an MCP server', () => {
 		const once = tries - before;
 		expect(once).toBeGreaterThan(0);
 		expect(p.bodies).toHaveLength(3);
-		for (const b of p.bodies) expect(b.messages[0].content).toContain('mcp down');
 		await (
 			await p.go()
 		).done;
@@ -692,10 +690,8 @@ describe('an MCP server', () => {
 		await (
 			await p.go()
 		).done;
-		expect(p.bodies[0].messages[0].content).toContain('mcp locked');
+		expect(p.bodies[0].tools.map((t) => t.function.name)).not.toContain('bash_tool');
 		expect(p.bodies[1].tools.map((t) => t.function.name)).toContain('bash_tool');
-		// the model still reads why it asked for the key, the server back
-		expect(p.bodies[1].messages[0].content).toBe(p.bodies[0].messages[0].content);
 	});
 
 	it('names the servers a round waits for in its line', async () => {
@@ -734,7 +730,7 @@ describe('an MCP server', () => {
 		expect(p.methods.w).toHaveLength(before);
 	});
 
-	it('tells what it left out in the one system message, after the system prompt', async () => {
+	it('sends the system prompt alone, whatever a server answers', async () => {
 		const p = await page({}, [stream([{ content: 'ok' }])]);
 		await p.engine.run(
 			'set chat system-prompt "be brief"\nset mcp url gone http://gone/mcp',
@@ -744,12 +740,31 @@ describe('an MCP server', () => {
 			await p.go()
 		).done;
 		const system = p.bodies[0].messages.filter((m) => m.role === 'system');
-		expect(system).toHaveLength(1);
-		expect(system[0].content).toMatch(/^be brief\n\n[^\n]+\nmcp gone/);
-		expect(p.bodies[0].messages[0].role).toBe('system');
+		expect(system).toEqual([{ role: 'system', content: 'be brief' }]);
 	});
 
-	it('leaves out a name another one serves first, the model told', async () => {
+	it('that fails goes on serving the tools it listed last, each call answering its error', async () => {
+		const live = legacy(SHELL);
+		let gone = false;
+		const a = async (req: Request): Promise<Response> => {
+			if (gone) throw new TypeError('fetch failed: gone');
+			return live(req);
+		};
+		const p = await page({ a }, [
+			stream([call('bash_tool', { description: 'list', text: 'ls' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		await vi.waitFor(() => expect(p.methods.a).toContain('tools/list'));
+		gone = true;
+		const t = await p.go();
+		await t.done;
+		for (const b of p.bodies) expect(b.tools.map((x) => x.function.name)).toContain('bash_tool');
+		expect(t.reply.rounds.flatMap((r) => r.calls)[0]).toMatchObject({ ok: false });
+		expect(t.reply.rounds.flatMap((r) => r.calls)[0].result).toMatch(/^mcp a: /);
+	});
+
+	it('leaves out a name another one serves first, the save warning of it', async () => {
 		const p = await page(
 			{
 				a: legacy(SHELL),
@@ -771,9 +786,9 @@ describe('an MCP server', () => {
 			'fail',
 			'wait'
 		]);
-		const told = p.bodies[0].messages[0].content;
-		expect(told).toContain('mcp b: tool bash_tool left out, mcp a serves it');
-		expect(told).toContain('mcp b: tool config left out, KiSS serves it');
+		const saved = (await p.engine.run('copy running-config a', 'user')).text;
+		expect(saved).toContain('mcp b: tool bash_tool left out, mcp a serves it');
+		expect(saved).toContain('mcp b: tool config left out, KiSS serves it');
 	});
 
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {

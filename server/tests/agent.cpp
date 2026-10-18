@@ -1,8 +1,7 @@
 // agent.cpp: the laws of the agent of the server, run as the build ends, a
-// turn against an endpoint and MCP servers of the test: every round tells
-// the model what the turn left out, under the note of prompts.json, as the
-// agent of the page does; a server that fails sits out the rest of the turn,
-// asked once; a tool served twice stays with the first, the server itself;
+// turn against an endpoint and MCP servers of the test: every round sends the
+// system prompt alone; a server that fails is asked once in the turn; a tool
+// served twice stays with the first, the server itself;
 // a line the user types runs as the config tool runs it, its output after
 // the thread, a url it asks to let shown as a form, the line running again
 // once the user lets it; the config tool of an attached page is the model's
@@ -16,7 +15,6 @@
 #include "httplib.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
-#include "lib/prompts.h"
 #include "server/server.conf.hpp"
 #include "yyjson.h"
 
@@ -146,16 +144,14 @@ int main() {
     }
     law(!agent_busy(c.id), "the turn ends");
 
-    const std::string note = "be brief\n\n" + prompts_note("problems") + "\n";
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         law(g_systems.size() == 2, "the turn takes two rounds, a call then an answer");
         g_systems.resize(2);
         g_tools.resize(2);
         for (size_t r = 0; r < 2; r++) {
-            law(g_systems[r].rfind(note, 0) == 0 && g_systems[r].find("\nmcp down: ") != std::string::npos &&
-                    g_systems[r].find("\nmcp twin: tool config left out, KiSS serves it") != std::string::npos,
-                "round " + std::to_string(r + 1) + " tells the model what the turn left out: " + json(g_systems[r]));
+            law(g_systems[r] == "be brief",
+                "round " + std::to_string(r + 1) + " sends the system prompt alone: " + json(g_systems[r]));
         }
         law(g_down == 1, "a server that fails is asked once in the turn: " + std::to_string(g_down.load()));
         law(g_tools[0].find("bash") != std::string::npos &&

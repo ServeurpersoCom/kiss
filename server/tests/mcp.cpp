@@ -5,7 +5,8 @@
 // a call gives its text, its images and its error flag; a server of the
 // 2026-07-28 era gets its envelope and headers, and a call it asks the user
 // about comes again with their response, unless KiSS answers no such input;
-// a server that answers what does not read serves nothing
+// a server that answers what does not read serves nothing; a server that
+// fails keeps the tools it listed last, each call failing
 
 #include "lib/mcp.h"
 
@@ -29,6 +30,8 @@ static void law(bool kept, const std::string & what) {
 // what the server of the test saw: the session id and protocol version of
 // every request after the handshake, and the arguments of the last call
 static bool        g_session = true;
+// whether the server of the 2025 era fails every request
+static bool        g_gone    = false;
 static std::string g_args;
 // whether every request of the 2026-07-28 era carried its envelope and headers
 static bool        g_modern = true;
@@ -41,6 +44,10 @@ static std::string event(const std::string & json) {
 int main() {
     httplib::Server server;
     server.Post("/mcp", [](const httplib::Request & req, httplib::Response & res) {
+        if (g_gone) {
+            res.status = 503;
+            return;
+        }
         const std::shared_ptr<yyjson_doc> doc(yyjson_read(req.body.data(), req.body.size(), 0), yyjson_doc_free);
         yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
         const std::string                 method = yyjson_get_str(yyjson_obj_get(root, "method"));
@@ -191,6 +198,25 @@ int main() {
         threw = true;
     }
     law(threw, "a server that answers what does not read serves nothing");
+    law(mcp_kept(bad).empty(), "a server never listed keeps no tools");
+
+    g_gone      = true;
+    bool failed = false;
+    try {
+        mcp_call(r, "a", "{}", stop, none);
+    } catch (const std::exception &) {
+        failed = true;
+    }
+    bool unlisted = false;
+    try {
+        mcp_tools(r, stop);
+    } catch (const std::exception &) {
+        unlisted = true;
+    }
+    law(failed && unlisted && mcp_kept(r).size() == 2, "a server that fails keeps the tools it listed last");
+    remote moved = r;
+    moved.url += "/moved";
+    law(mcp_kept(moved).empty(), "a server named anew keeps none of the tools of its old name");
 
     server.stop();
     listening.join();

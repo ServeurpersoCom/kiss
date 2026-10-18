@@ -1,7 +1,7 @@
 #pragma once
 // prompts.h: what a model reads of this server, from the prompts.json it
 // embeds: each tool, its description and the JSON schema of its arguments,
-// each module, what it sets, and the notes of the agent; and the config tool
+// each module and what it sets; and the config tool
 // of the page, from the prompts.json of the page it embeds too; a {mark} of a
 // description stands for what only the running server knows
 
@@ -26,10 +26,6 @@ std::string prompts_page_input();
 
 // what a module sets
 std::string prompts_module(const std::string & module);
-
-// a note the agent adds to what the model reads: problems, which heads what
-// a turn left out
-std::string prompts_note(const std::string & note);
 
 // what the modules of the engine miss in prompts.json, empty when every one
 // has its text

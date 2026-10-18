@@ -2,7 +2,6 @@ import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } fr
 import { ALWAYS, REFUSE } from '../engine/engine.js';
 import { chat, describe, pick } from './api.js';
 import { aggregate, connecting, relist } from './mcp.js';
-import prompts from '../prompts.json';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
@@ -68,21 +67,18 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 // it stands: the model, its parameters, what its endpoint lists of it when
 // the protocol reads it, the system prompt, and the own tools
 // of KiSS then those of every MCP server, the same from round to round while
-// the configuration and the servers stay; a server down sits out the turn, and
-// the pulse names the servers the round waits for; told gathers what the
-// rounds of the turn left out, and the model reads all of it every round, so
-// what it did about a server stays explained once the server is back
+// the configuration stays, a server that fails serving the tools it listed
+// last; the pulse names the servers the round waits for
 async function setup(
 	messages: readonly Message[],
 	signal: AbortSignal,
 	p: Pulse,
-	down: Map<string, string>,
-	told: string[]
+	down: Map<string, string>
 ) {
 	const { endpoint, model } = await pick(settings, signal);
 	const waits = connecting(settings, down);
 	if (waits.length) mark(p, 'preparing', `mcp ${waits.join(', ')}`, performance.now());
-	const prompt = String(settings.get('chat system-prompt') ?? '');
+	const system = String(settings.get('chat system-prompt') ?? '');
 	// the parameters set for this model, numbers as numbers
 	const parameters = Object.fromEntries(
 		Object.entries(models.keys).flatMap(([name, def]) => {
@@ -90,12 +86,7 @@ async function setup(
 			return value === undefined ? [] : [[name, def.kind === 'number' ? Number(value) : value]];
 		})
 	);
-	const { tools, problems } = await aggregate(settings, own, down);
-	for (const problem of problems) if (!told.includes(problem)) told.push(problem);
-	// the system prompt, then what the turn left out
-	const system = [prompt, told.length ? [prompts.notes.problems, ...told].join('\n') : '']
-		.filter((part) => part)
-		.join('\n\n');
+	const { tools } = await aggregate(settings, own, down);
 	const info = endpoint.protocol.described ? await describe(endpoint, model, signal) : undefined;
 	const request: Request = { model, system, messages, tools, parameters, info };
 	return { endpoint, request, tools };
@@ -116,9 +107,8 @@ export async function turn(
 ): Promise<void> {
 	let r = 0;
 	// the servers that failed this turn, as they were named, with what they
-	// answered, and every tool the turn left out, as the model was told
+	// answered
 	const down = new Map<string, string>();
-	const told: string[] = [];
 	relist();
 	try {
 		for (; r < Number(settings.get('tools max-rounds')); r++) {
@@ -127,7 +117,7 @@ export async function turn(
 			// the history as it stands before this round, which the round goes on
 			// writing while the request streams
 			const history = [...messages, { ...reply, rounds: [...reply.rounds] }];
-			const { endpoint, request, tools } = await setup(history, signal, p, down, told);
+			const { endpoint, request, tools } = await setup(history, signal, p, down);
 			mark(p, 'waiting', endpoint.name, performance.now());
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
 			const round = reply.rounds[reply.rounds.length - 1];

@@ -29,10 +29,12 @@ static const char * const VERSION_HEADER    = "MCP-Protocol-Version";
 static const char * const DATA              = "data:";
 static const size_t       CHUNK             = 16384;
 
-// a session: what it was opened with, the era the server speaks, its id in
-// the 2025 era, and the tools of the server
+// a session: what it was opened with, whether it stands, the era the server
+// speaks, its id in the 2025 era, and the tools of the server; a session that
+// fails stops standing and keeps its tools
 struct session {
     std::string           signature;
+    bool                  open   = true;
     bool                  modern = false;
     std::string           id;
     std::vector<mcp_tool> tools;
@@ -189,7 +191,7 @@ static std::string text_of(yyjson_val * v) {
 // offers it; a server that answers anything else, or an error, speaks the
 // 2025 era, while one that does not answer at all is not reached
 static bool speaks_modern(const remote & r, api_stop & stop) {
-    session     probe{ signature(r), true, "", {} };
+    session     probe{ signature(r), true, true, "", {} };
     std::string given;
     doc_t       d;
     try {
@@ -219,11 +221,11 @@ static session opened(const remote & r, api_stop & stop) {
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         const auto                  it = g_sessions.find(r.name);
-        if (it != g_sessions.end() && it->second.signature == signature(r)) {
+        if (it != g_sessions.end() && it->second.open && it->second.signature == signature(r)) {
             return it->second;
         }
     }
-    session     s{ signature(r), speaks_modern(r, stop), "", {} };
+    session     s{ signature(r), true, speaks_modern(r, stop), "", {} };
     std::string given;
     if (!s.modern) {
         request(r, s, "initialize",
@@ -259,7 +261,10 @@ static session opened(const remote & r, api_stop & stop) {
 
 static void drop(const std::string & name) {
     std::lock_guard<std::mutex> lock(g_mutex);
-    g_sessions.erase(name);
+    const auto                  it = g_sessions.find(name);
+    if (it != g_sessions.end()) {
+        it->second.open = false;
+    }
 }
 
 std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop) {
@@ -269,6 +274,12 @@ std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop) {
         drop(r.name);
         throw;
     }
+}
+
+std::vector<mcp_tool> mcp_kept(const remote & r) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const auto                  it = g_sessions.find(r.name);
+    return it != g_sessions.end() && it->second.signature == signature(r) ? it->second.tools : std::vector<mcp_tool>{};
 }
 
 // why KiSS does not answer an input a server asks for, empty when it does: a
