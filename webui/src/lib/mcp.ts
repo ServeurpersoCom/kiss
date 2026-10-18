@@ -17,10 +17,10 @@ import { OFF } from './tools.js';
 import { fill } from './form.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
-// server, kept while its url and key stay, with the tool list it serves, asked
-// again as each turn starts, so a tool a server gains shows from the next turn
-// on and the tools the model sees stay the same from round to round; a
-// request that fails drops the client, and the next use connects again; the
+// server, kept while its url and key stay, with the tool list it serves,
+// listed once a connection, so the tools the model sees stay the same from
+// turn to turn; a request that fails drops the client, and the next use
+// connects again, listing anew; the
 // tool list a server gave last stays while it is named the same, so a server
 // that fails goes on serving it, each call answering its error
 
@@ -185,16 +185,6 @@ function connection(remote: Remote): Connection {
 	return made;
 }
 
-// a turn starts on the tools every connected server serves now, each listing
-// them again on the client it holds
-export function relist(): void {
-	for (const made of connections.values()) {
-		if (!made.settled) continue;
-		made.tools = made.client.then((c) => listed(made.remote, c));
-		watch(made);
-	}
-}
-
 // the servers of the configuration a use waits for: those not down that hold
 // no tool list yet, connecting or about to
 export function connecting(config: ConfigReader, down: ReadonlyMap<string, string>): string[] {
@@ -203,16 +193,22 @@ export function connecting(config: ConfigReader, down: ReadonlyMap<string, strin
 		.map((r) => r.name);
 }
 
+// closes and forgets every server the configuration no longer names, the
+// tools it listed last with it
+export function forget(config: ConfigReader): void {
+	const named = remotes(config, 'mcp').map((r) => r.name);
+	for (const name of connections.keys()) if (!named.includes(name)) drop(name);
+	for (const name of kept.keys()) if (!named.includes(name)) kept.delete(name);
+}
+
 // every server of the configuration with its tools or what went wrong, sorted
-// by name, a server that fails with the tools it listed last; servers no
-// longer named are closed and forgotten; a server down answers its error
-// again without a try, and a server that fails joins down, which lives as
-// long as its holder: a turn, so it tries each server once; down holds a
-// server as it was named, so a new url, key or header tries it again
+// by name, a server that fails with the tools it listed last; a server down
+// answers its error again without a try, and a server that fails joins down,
+// which lives as long as its holder: a turn, so it tries each server once;
+// down holds a server as it was named, so a new url, key or header tries it
+// again
 export async function served(config: ConfigReader, down: Map<string, string>): Promise<Served[]> {
 	const all = remotes(config, 'mcp');
-	for (const name of connections.keys()) if (!all.some((r) => r.name === name)) drop(name);
-	for (const name of kept.keys()) if (!all.some((r) => r.name === name)) kept.delete(name);
 	return Promise.all(
 		all.map(async (r): Promise<Served> => {
 			const signed = signature(r);

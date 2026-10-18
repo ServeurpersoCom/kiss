@@ -5,6 +5,7 @@
 // with its tool list while its url, key and headers stay; a request that
 // fails closes it, its tool list kept, and the next use connects again
 
+#include "engine/text.h"
 #include "lib/api.h"
 #include "lib/conversation.h"
 #include "lib/remote.h"
@@ -35,6 +36,9 @@ std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop);
 // the tools a server listed last while its url, key and headers stay, none
 // from a server never listed
 std::vector<mcp_tool> mcp_kept(const remote & r);
+
+// forgets every server the configuration no longer names, its tools with it
+void mcp_forget(const words_t & named);
 
 // what the user answers to an input a server asks for before a call goes on,
 // the input as JSON, a form whose fields are text or yes: their response as

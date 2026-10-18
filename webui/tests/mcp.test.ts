@@ -278,7 +278,7 @@ describe('an MCP server', () => {
 		expect(p.bodies[1].tools).toEqual(p.bodies[0].tools);
 	});
 
-	it('lists its tools again as each turn starts, the same from round to round', async () => {
+	it('lists its tools once a connection, the same from turn to turn, a tool it gains unseen', async () => {
 		const tools: Declared[] = [];
 		tools.push({
 			name: 'grow',
@@ -302,7 +302,8 @@ describe('an MCP server', () => {
 		const names = (i: number) => p.bodies[i].tools.map((t) => t.function.name);
 		expect(names(0)).toEqual(['config', 'grow']);
 		expect(names(1)).toEqual(names(0));
-		expect(names(2)).toEqual(['config', 'grow', 'grown']);
+		expect(names(2)).toEqual(names(0));
+		expect(p.methods.a.filter((m) => m === 'tools/list')).toHaveLength(1);
 	});
 
 	it('of KiSS shows in show version with the line it gives of itself, in either era', async () => {

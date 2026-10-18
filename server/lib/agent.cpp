@@ -56,7 +56,8 @@ struct question_t {
 static uint64_t g_asked = 0;
 
 // the pages attached to this server that run their config tool for its
-// agent, by hostname, in the order they came
+// agent, by hostname, sorted, so the tools a model sees stay the same
+// whatever order the pages attach in
 static words_t g_clients;
 
 static const char * const ALWAYS = AGENT_VERDICTS[1];
@@ -161,10 +162,11 @@ std::string agent_ran(const std::string & id, uint64_t question, const std::stri
 
 bool agent_attach(const std::string & client) {
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (std::find(g_clients.begin(), g_clients.end(), client) != g_clients.end()) {
+    const auto                  at = std::lower_bound(g_clients.begin(), g_clients.end(), client);
+    if (at != g_clients.end() && *at == client) {
         return false;
     }
-    g_clients.push_back(client);
+    g_clients.insert(at, client);
     log_info("Agent", "Page %s attaches, %s%s", client.c_str(), client.c_str(), AGENT_CLIENT_TOOL);
     return true;
 }
@@ -188,7 +190,7 @@ void agent_detach(const std::string & client) {
     }
 }
 
-// the attached pages, as they came
+// the attached pages, sorted
 static words_t clients() {
     std::lock_guard<std::mutex> lock(g_mutex);
     return g_clients;
@@ -221,7 +223,8 @@ void agent_stop(const std::string & id) {
 // served twice staying with the first; a server that fails serves the tools
 // it listed last, each call answering its error, and is not asked again in
 // the turn, the turn holding it as it was named, so a new url, key or header
-// tries it again; a failure and a name served twice log once a turn
+// tries it again, and a server no longer named is forgotten; a failure and a
+// name served twice log once a turn
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
@@ -285,6 +288,11 @@ static setup_t setup(api_stop & stop, met_t & met) {
             }
         }
     });
+    words_t named;
+    for (const remote & r : servers) {
+        named.push_back(r.name);
+    }
+    mcp_forget(named);
     std::vector<mcp_tool> listed;
     for (const remote & r : servers) {
         std::vector<mcp_tool> tools;

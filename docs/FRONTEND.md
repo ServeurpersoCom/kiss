@@ -566,8 +566,8 @@ time of the system.
 KiSS calls the tools of any MCP server over Streamable HTTP, with the official TypeScript SDK. A
 server speaking the 2026 protocol is talked to in it, an older one through the `initialize`
 handshake. One client per server lives while its url, key, headers and timeout stay, with the tool
-list it serves, asked again on that client as each turn starts, so a tool a server gains shows from
-the next turn on; a request that fails drops the client, and the next use connects again. A server
+list it serves, listed once a connection as the server does, so the tools stay the same from turn to
+turn; a request that fails drops the client, and the next use connects again, listing anew. A server
 connects as soon as the configuration names it, at load or on a change, so the first round that
 needs its tools finds them listed; a round waits only for a server still connecting, and its line
 names it, `Preparing mcp sandbox - 812 ms`. A server that fails serves the tools it listed last

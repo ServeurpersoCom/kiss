@@ -16,6 +16,7 @@
 #include "yyjson.h"
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -273,6 +274,13 @@ std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop) {
     } catch (...) {
         drop(r.name);
         throw;
+    }
+}
+
+void mcp_forget(const words_t & named) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    for (auto it = g_sessions.begin(); it != g_sessions.end();) {
+        it = std::find(named.begin(), named.end(), it->first) == named.end() ? g_sessions.erase(it) : std::next(it);
     }
 }
 

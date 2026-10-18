@@ -217,6 +217,10 @@ int main() {
     remote moved = r;
     moved.url += "/moved";
     law(mcp_kept(moved).empty(), "a server named anew keeps none of the tools of its old name");
+    mcp_forget({ r.name });
+    const bool named = mcp_kept(r).size() == 2;
+    mcp_forget({});
+    law(named && mcp_kept(r).empty(), "a server no longer named is forgotten, its tools with it");
 
     server.stop();
     listening.join();

@@ -1,7 +1,7 @@
 import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } from './types.js';
 import { ALWAYS, REFUSE } from '../engine/engine.js';
 import { chat, describe, pick } from './api.js';
-import { aggregate, connecting, relist } from './mcp.js';
+import { aggregate, connecting } from './mcp.js';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
@@ -109,7 +109,6 @@ export async function turn(
 	// the servers that failed this turn, as they were named, with what they
 	// answered
 	const down = new Map<string, string>();
-	relist();
 	try {
 		for (; r < Number(settings.get('tools max-rounds')); r++) {
 			p.round = r + 1;
