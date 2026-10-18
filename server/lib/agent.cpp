@@ -77,7 +77,8 @@ static void answered(const std::shared_ptr<question_t> & q, const std::string & 
     q->settled.notify_all();
 }
 
-// the question a conversation asks settled, if one stands
+// the question a conversation asks settled, if one stands: woken once its
+// turn stops
 static void settle_question(const std::string & id, const std::string & verdict) {
     std::shared_ptr<question_t> q;
     {
@@ -168,19 +169,21 @@ bool agent_attach(const std::string & client) {
 }
 
 void agent_detach(const std::string & client) {
-    words_t left;
+    // the runs the page was asked, the questions themselves, so none asked
+    // after them is settled in their place
+    std::vector<std::shared_ptr<question_t>> left;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_clients.erase(std::remove(g_clients.begin(), g_clients.end(), client), g_clients.end());
         for (const auto & q : g_questions) {
             if (q.second->kind == ASK_RUN && q.second->client == client) {
-                left.push_back(q.first);
+                left.push_back(q.second);
             }
         }
     }
     log_info("Agent", "Page %s detaches", client.c_str());
-    for (const std::string & id : left) {
-        settle_question(id, gone(client));
+    for (const std::shared_ptr<question_t> & q : left) {
+        answered(q, gone(client));
     }
 }
 
