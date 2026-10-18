@@ -11,10 +11,9 @@ constexpr const char * SYNC_ACTIONS = "send|command|complete|edit|retry|stop|ans
 
 // events, over a WebSocket: every conversation with the protocol, then what
 // changes, each message one event per line, an empty message after 15
-// seconds of silence, until the page leaves or the listener moves;
-// ?client=<hostname> names an attached page, whose config tool the agent
-// calls while its stream lasts, unless another page holds that name, a name a
-// tool name does not take closing it as a policy violation
+// seconds of silence, until the page leaves or the listener moves; every
+// stream is an attached page, which runs the calls of the config tool of the
+// pages while it lasts
 void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws);
 
 // an action of the user on conversations, a JSON body: send {text, id?}, a
@@ -25,7 +24,8 @@ void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws);
 // text}; retry {id, entry}; browse {id, entry}; stop {id}; answer {id,
 // verdict}, once, always or refuse to the call its turn asks about, {id,
 // response}, the response of the user to the form it asks them to fill, or
-// {id, output, ok}, what the page a call runs on answers; pin {id, pinned};
+// {id, output, ok}, what a page that runs a call answers, the first answer
+// settling it; pin {id, pinned};
 // drop {id, entry}; erase {ids};
 // 204 once applied, else why not: 400 a body that does not hold, 404 a
 // conversation or an entry unknown, 409 a turn that runs or a question that
