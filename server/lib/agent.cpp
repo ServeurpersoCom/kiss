@@ -220,8 +220,8 @@ void agent_stop(const std::string & id) {
 // off by its own name, then each tool of every MCP server not off, a name
 // served twice staying with the first; a server that fails serves the tools
 // it listed last, each call answering its error, and is not asked again in
-// the turn, down holding it as it was named, so a new url, key or header
-// tries it again
+// the turn, the turn holding it as it was named, so a new url, key or header
+// tries it again; a failure and a name served twice log once a turn
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
@@ -248,7 +248,14 @@ static std::string signature(const remote & r) {
     return r.name + "\n" + r.url + "\n" + r.headers + "\n" + r.value;
 }
 
-static setup_t setup(api_stop & stop, std::set<std::string> & down) {
+// what a turn met: the servers that failed, as they were named, and the
+// names served twice, as logged
+struct met_t {
+    std::set<std::string> down;
+    std::set<std::string> clashes;
+};
+
+static setup_t setup(api_stop & stop, met_t & met) {
     setup_t             s;
     std::vector<remote> servers;
     engine_with([&](const engine_reader & config) {
@@ -281,7 +288,7 @@ static setup_t setup(api_stop & stop, std::set<std::string> & down) {
     std::vector<mcp_tool> listed;
     for (const remote & r : servers) {
         std::vector<mcp_tool> tools;
-        if (down.count(signature(r))) {
+        if (met.down.count(signature(r))) {
             tools = mcp_kept(r);
         } else {
             try {
@@ -290,7 +297,7 @@ static setup_t setup(api_stop & stop, std::set<std::string> & down) {
                 if (stop.stopped) {
                     throw;
                 }
-                down.insert(signature(r));
+                met.down.insert(signature(r));
                 tools = mcp_kept(r);
                 log_error("Agent", "MCP server %s serves the %zu tools it listed last: %s", r.name.c_str(),
                           tools.size(), e.what());
@@ -312,8 +319,11 @@ static setup_t setup(api_stop & stop, std::set<std::string> & down) {
             }
             const auto first = owner.find(t.name);
             if (first != owner.end()) {
-                log_error("Agent", "MCP server %s: tool %s left out, %s serves it", t.server.c_str(), t.name.c_str(),
-                          first->second.c_str());
+                const std::string clash =
+                    "MCP server " + t.server + ": tool " + t.name + " left out, " + first->second + " serves it";
+                if (met.clashes.insert(clash).second) {
+                    log_error("Agent", "%s", clash.c_str());
+                }
                 continue;
             }
             owner[t.name] = "mcp " + t.server;
@@ -649,11 +659,11 @@ static bool round(const std::string &                     id,
                   size_t                                  r,
                   api_stop &                              stop,
                   pulse &                                 p,
-                  std::set<std::string> &                 down) {
+                  met_t &                                 met) {
     p.round = (int) r + 1;
     pulse_mark(p, PHASE_PREPARING, "", pulse_now());
     beat(id, p);
-    const setup_t     s     = setup(stop, down);
+    const setup_t     s     = setup(stop, met);
     const auto        pick  = api_pick(s.endpoints, s.chosen, stop);
     const endpoint &  e     = pick.first;
     const std::string model = pick.second;
@@ -767,15 +777,14 @@ static void turn(std::string                     id,
                  pulse                           p) {
     std::optional<std::string> error;
     size_t                     r = 0;
-    // the servers that failed this turn, as they were named
-    std::set<std::string>      down;
+    met_t                      met;
     try {
         int rounds = 0;
         engine_with(
             [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
-            more = round(id, entry, before, r, *stop, p, down);
+            more = round(id, entry, before, r, *stop, p, met);
         }
         if (more) {
             error = "Stopped after " + std::to_string(r) + " tool rounds";

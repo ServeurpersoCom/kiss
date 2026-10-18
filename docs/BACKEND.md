@@ -562,17 +562,19 @@ It calls the tools of the MCP servers the `mcp` module names as well, each by th
 gives it, after the tools of the server, a name served twice staying with the first. A server is
 reached over Streamable HTTP in the era it speaks: one that answers `server/discover` with
 2026-07-28 gets the envelope and the headers of that era on every request, any other the
-`initialize` handshake of 2025-06-18 and its session. Its tools are listed once, kept while its url, key and headers stay. A server that fails sits
-out the rest of the turn, logged, and is asked again by the next turn or once its url, key or
-headers change; a name a server serves that another tool already holds stays with the first. Every
-round tells the model what the turn left out, under the system prompt, as the agent of the page
-does:
+`initialize` handshake of 2025-06-18 and its session. Its tools are listed once, kept while its url,
+key and headers stay. A server that fails goes on serving the tools it listed last, each call
+answering its error, so the tools and the system prompt stay the same from round to round and the
+endpoint reuses its prefill; it is logged once and asked again by the next turn or once its url, key
+or headers change, and a server never listed serves nothing. A name a server serves that another
+tool already holds stays with the first, logged once a turn:
 
 ```
-These tools were left out during this turn; tell the user:
-mcp exa: https://mcp.exa.ai/mcp does not answer: Could not establish connection
-mcp twin: tool config left out, KiSS serves it
+[Agent] MCP server exa serves the 3 tools it listed last: https://mcp.exa.ai/mcp does not answer
+[Agent] MCP server twin: tool config left out, KiSS serves it
 ```
+
+The model reads the system prompt alone.
 
 A turn that needs the user asks every page following the conversation and waits, the first answer
 settling it and `{"set":["<id>","asking"],"value":null}` withdrawing it from every page; Stop

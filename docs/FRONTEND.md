@@ -298,13 +298,14 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   reads what was there before.
 - One batch runs at a time, whoever sends it. Once a turn is stopped, a batch of the model neither
   starts, nor runs another line, nor replaces anything.
-- A request holds one system message, first, as every template takes it: the system prompt, then
-  what the turn left out.
+- A request holds at most one system message, first, as every template takes it: the system prompt
+  alone, the same from round to round.
 - The line under a turn and what the turn spent measure the system alone: the time the user takes on
   a question leaves every clock of the turn that asks, a round counts its tokens once, by the count
   of the endpoint when it gives one, and the rate starts from the second token.
-- A turn tries each MCP server once: a server that fails sits out its other rounds, and the next
-  turn tries it again; a server connects as soon as the configuration names it.
+- A turn tries each MCP server once: a server that fails serves the tools it listed last for its
+  other rounds, each call answering its error, and the next turn tries it again; a server connects
+  as soon as the configuration names it.
 - Each conversation answers on its own, beside the others: its turn, its Stop and its questions are
   its own, and deleting it stops its turn alone. Questions wait their turn, each answered to the
   turn that asked it.
@@ -460,15 +461,16 @@ set mcp key sandbox
 A turn picks the endpoint and the model `chat model` names, `endpoint/model`; left empty, it takes
 the one model of the one endpoint, any other choice being the user's, since a router loads whatever
 model it is asked for. The tools the model sees are those of KiSS, then those of every MCP server,
-those turned off left out; a server that fails, or a name served twice, becomes a system note to the
-model, which tells the user, the note kept until the turn ends, so what the model did about a server
-stays explained once the server is back. Each round streams its thinking, its text and its calls,
-the arguments of a call read as the stream writes them, their JSON closed where it stops; a round
-that calls nothing ends the turn, at most `tools max-rounds` of them, which the model may raise like
-any free key, a cost shown in its change. A line of the stream that does not read stops the turn
-naming the endpoint and the line. Every round reads the configuration as it stands, so a tool a call
-turns on is offered from the next round on, as is a model, a system prompt or a parameter a call
-changes. A tool in `consent` asks before its call, and a turn stopped keeps what settled.
+those turned off left out; a server that fails serves the tools it listed last, and a name served
+twice stays with the first, both told to the user on save and in `show tools`, never to the model,
+so the tools and the system prompt stay the same from round to round. Each round streams its
+thinking, its text and its calls, the arguments of a call read as the stream writes them, their JSON
+closed where it stops; a round that calls nothing ends the turn, at most `tools max-rounds` of them,
+which the model may raise like any free key, a cost shown in its change. A line of the stream that
+does not read stops the turn naming the endpoint and the line. Every round reads the configuration
+as it stands, so a tool a call turns on is offered from the next round on, as is a model, a system
+prompt or a parameter a call changes. A tool in `consent` asks before its call, and a turn stopped
+keeps what settled.
 
 Every endpoint speaks the protocol `endpoints protocol` names: the protocol builds the request from
 the history, carries the key and reads the stream, and the rest of KiSS sees the same deltas
@@ -568,9 +570,9 @@ list it serves, asked again on that client as each turn starts, so a tool a serv
 the next turn on; a request that fails drops the client, and the next use connects again. A server
 connects as soon as the configuration names it, at load or on a change, so the first round that
 needs its tools finds them listed; a round waits only for a server still connecting, and its line
-names it, `Preparing mcp sandbox - 812 ms`. A server that fails sits out the rest of the turn, its
-error told to the model every round, and the next turn tries it again: a server that never answers
-costs one wait a turn, the tools of a turn the same from round to round.
+names it, `Preparing mcp sandbox - 812 ms`. A server that fails serves the tools it listed last
+for the rest of the turn, each call answering its error, and the next turn tries it again: a server
+that never answers costs one wait a turn, the tools of a turn the same from round to round.
 
 A server is reached directly at its url, or through the route of its name on a KiSS server: `set
 mcp proxy exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, with the key and
