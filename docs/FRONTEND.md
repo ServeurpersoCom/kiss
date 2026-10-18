@@ -38,8 +38,6 @@ modules
   chat
     model <model>                   the one model of the one endpoint
     system-prompt <text>            none
-  client
-    hostname <name>                 four letters drawn once
   display
     thinking closed|open|inference  closed
     tool-calls closed|open|inference
@@ -266,7 +264,6 @@ opens on a URL, written as it is; what a server answers goes as it came.
 | Module      | Keys                                                                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `chat`      | `model`, `system-prompt`                                                                                                                                                                   |
-| `client`    | `hostname`                                                                                                                                                                                 |
 | `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
@@ -634,30 +631,30 @@ miss 300 by ten on purpose, so whoever wonders why they do not fall on it finds 
 
 ## Conversations
 
-The page is attached to a KiSS server or detached from it, two worlds that never mix.
-Attached, to the server the item `backend` of `mcp` names, the page shows
-the conversations of that server alone, follows them by one stream of events, a WebSocket, the Conversations API
-of BACKEND.md, and never writes one. A message goes to the server, which runs the turn, holds the
-conversation and writes it, the browser closed or not; retry, edit, versions, pin, delete and Stop
-go to the server, and every page following it sees them. Every CLI line runs on the server, its
-completion coming from it as it is typed, except `attach` and `detach`, which the page runs itself.
-Detached, the default, the page holds the conversations of the browser, answers them itself and
-runs every line. `attach` and `detach` swap the two, and the browser keeps which one they left,
-apart from the configuration: `write` writes the configuration of where it runs. Until either runs,
-a page with a `backend` attaches to it, as the page a KiSS server serves, which names that server
-`backend`. Every conversation leaves the page as it attaches or detaches, those of the browser
-coming back once it detaches. The key
-of a server the page reaches is asked on the page, in the open conversation of a detached page, in
-none on an attached one. An attached page is a machine of KiSS beside its server: `client hostname`,
-four letters the page draws the first time it opens and the browser keeps, is the name the agent of
-the server calls its config tool by, `<hostname>_client_config`, the page running the lines of
-such a call itself, with the rights of a model, the questions they ask shown on that page alone. A call the server asks about shows on every page following the
-conversation as the consent card, and a form a tool of the server asks the user to fill as the cards
-of its fields, a secret in the masked field, a yes as a confirmation; the first page to answer sends
-it to the server, which withdraws the question from every page. The line under an answer the
-server writes is its pulse, read on the clock of the page. The stream is a WebSocket, which takes none of
-the six connections a browser opens to a site for the requests of its tabs; one silent for 45 seconds
-opens again, and a server that speaks another protocol of the events is followed no more, the console
+The page is attached to a KiSS server or detached from it, two worlds that never mix. Attached, to
+the server the item `backend` of `mcp` names, the page shows the conversations of that server alone,
+follows them by one stream of events, a WebSocket, the Conversations API of BACKEND.md, and never
+writes one. A message goes to the server, which runs the turn, holds the conversation and writes it,
+the browser closed or not; retry, edit, versions, pin, delete and Stop go to the server, and every
+page following it sees them. Every CLI line runs on the server, its completion coming from it as it
+is typed, except `attach` and `detach`, which the page runs itself. Detached, the default, the page
+holds the conversations of the browser, answers them itself and runs every line. `attach` and
+`detach` swap the two, and the browser keeps which one they left, apart from the configuration:
+`write` writes the configuration of where it runs. Until either runs, a page with a `backend`
+attaches to it, as the page a KiSS server serves, which names that server `backend`. Every
+conversation leaves the page as it attaches or detaches, those of the browser coming back once it
+detaches. The key of a server the page reaches is asked on the page, in the open conversation of a
+detached page, in none on an attached one. An attached page is a machine of KiSS beside its server:
+the agent of the server calls the config tool of the pages, `client_config`, one for every page
+attached, each page running the lines of such a call itself, with the rights of a model, the
+questions they ask shown on that page, the first page to answer settling the call and the others
+stopping their run. A call the server asks about shows on every page following the conversation as
+the consent card, and a form a tool of the server asks the user to fill as the cards of its fields,
+a secret in the masked field, a yes as a confirmation; the first page to answer sends it to the
+server, which withdraws the question from every page. The line under an answer the server writes is
+its pulse, read on the clock of the page. The stream is a WebSocket, which takes none of the six
+connections a browser opens to a site for the requests of its tabs; one silent for 45 seconds opens
+again, and a server that speaks another protocol of the events is followed no more, the console
 telling why.
 
 A conversation is a tree, kept flat: every entry holds its id, the entry it follows and the moment

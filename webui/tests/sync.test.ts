@@ -25,7 +25,7 @@ vi.mock('../src/lib/db.js', () => ({
 // neither attached nor detached attaches to, or one without it
 function config(backend: boolean): ConfigReader {
 	const values: Record<string, string> = backend
-		? { 'mcp url backend': 'http://kiss/mcp', 'mcp key backend': 'k', 'client hostname': 'abcd' }
+		? { 'mcp url backend': 'http://kiss/mcp', 'mcp key backend': 'k' }
 		: {};
 	const get = (key: string, name?: string) => values[name ? `${key} ${name}` : key];
 	return { get, reveal: get, names: (m) => (m === 'mcp' && backend ? ['backend'] : []) };
@@ -109,9 +109,7 @@ describe('the conversations of a KiSS server', () => {
 		};
 		app.conversations = [];
 		follow(config(true));
-		await vi.waitFor(() =>
-			expect(s.sent[0]?.url).toBe('ws://kiss/conversations/events?client=abcd')
-		);
+		await vi.waitFor(() => expect(s.sent[0]?.url).toBe('ws://kiss/conversations/events'));
 		await vi.waitFor(() => expect(s.sent[0].first?.Authorization).toBe('Bearer k'));
 		s.push({
 			set: [],
@@ -277,7 +275,7 @@ describe('the conversations of a KiSS server', () => {
 		await vi.waitFor(() => expect(app.conversations).toEqual([mine]));
 	});
 
-	it('run the lines the server asks of this page alone, while it holds its name, what they answer going to the server with the secrets of the page sealed', async () => {
+	it('run the lines the server asks of the pages, what they answer going to the server with the secrets of the page sealed', async () => {
 		const s = server();
 		learn('sk-page-only');
 		const ran: string[] = [];
@@ -290,19 +288,8 @@ describe('the conversations of a KiSS server', () => {
 		});
 		app.conversations = [];
 		follow(config(true));
-		const run = (client: string, question: number) => ({
-			kind: 'run',
-			client,
-			lines: 'show version',
-			question
-		});
-		s.push({
-			set: [],
-			value: { protocol: 1, client: 'abcd', now: 0, conversations: [conversation('a', 'A', 1)] }
-		});
-		s.push({ set: ['a', 'asking'], value: run('efgh', 1) });
-		s.push({ set: ['a', 'asking'], value: null });
-		s.push({ set: ['a', 'asking'], value: run('abcd', 2) });
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
+		s.push({ set: ['a', 'asking'], value: { kind: 'run', lines: 'show version', question: 2 } });
 		await vi.waitFor(() =>
 			expect(s.sent.some((r) => r.url.endsWith('/conversations/answer'))).toBe(true)
 		);
@@ -315,24 +302,6 @@ describe('the conversations of a KiSS server', () => {
 			ok: true
 		});
 		expect(app.asks).toEqual([]);
-	});
-
-	it('run nothing it is asked under a name another page holds', async () => {
-		const s = server();
-		const ran: string[] = [];
-		serve({
-			load: async () => undefined,
-			run: async (id) => (ran.push(id), { ok: true, text: '' })
-		});
-		app.conversations = [];
-		follow(config(true));
-		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
-		s.push({
-			set: ['a', 'asking'],
-			value: { kind: 'run', client: 'abcd', lines: 'show version', question: 1 }
-		});
-		await new Promise((resolve) => setTimeout(resolve, 20));
-		expect(ran).toEqual([]);
 	});
 
 	it('stay detached once detach ran, the backend there or not, until attach runs', async () => {

@@ -130,5 +130,3 @@ export const DRAFTS_STORAGE_KEY = 'kiss.drafts';
 // whether the page is attached to its server, on or off, as attach or detach
 // left it; none while neither ran
 export const ATTACHED_STORAGE_KEY = 'kiss.attached';
-// the hostname the page draws the first time it opens, its default ever since
-export const HOSTNAME_STORAGE_KEY = 'kiss.hostname';

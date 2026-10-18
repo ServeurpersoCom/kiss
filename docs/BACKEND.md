@@ -337,20 +337,16 @@ closes a stream it refuses with 1008, policy violation, and why. Every next mess
 events, one JSON object per line, an empty message after 15 seconds without one, so a page that
 hears nothing for 45 seconds knows its stream gone and opens another; the server pings every 15
 seconds and lets go of a page silent for 45. A WebSocket counts in none of the six connections a
-browser opens to a site in HTTP/1.1, which all its tabs share, so no number of pages blocks
-another. The server keeps no log
-of events: it holds, for each page, what that page has, and sends what it lacks, so a page that
-comes back gets every conversation as it stands. The first event sets every conversation, with the
-protocol of the events and the moment of the server on its clock, in milliseconds since 1970; a
-page that does not read that protocol stops following the server and says so.
-`?client=<hostname>` names an attached page, a-z, 0-9 and `_`, a policy violation otherwise: while its stream lasts,
-the agent calls the config tool of the page as `<hostname>_client_config`, and the first event names
-the client, unless another page holds that name, which the first event then leaves out. Once the
-page that holds the name leaves, a stream of that name takes the tool within a second, its next
-event setting every conversation again, the client named.
+browser opens to a site in HTTP/1.1, which all its tabs share, so no number of pages blocks another.
+The server keeps no log of events: it holds, for each page, what that page has, and sends what it
+lacks, so a page that comes back gets every conversation as it stands. The first event sets every
+conversation, with the protocol of the events and the moment of the server on its clock, in
+milliseconds since 1970; a page that does not read that protocol stops following the server and says
+so. Every stream is an attached page: while one lasts, the agent calls the config tool of the pages,
+`client_config`.
 
 ```
-{"set":[],"value":{"protocol":1,"client":"abcd","now":1792220666396,"conversations":[...]}}
+{"set":[],"value":{"protocol":1,"now":1792220666396,"conversations":[...]}}
 ```
 
 Every next event changes what the page holds at its path, conversations by id, then the keys and
@@ -519,8 +515,8 @@ text a model reads of the server lives in `server/prompts.json`, as every one of
 `webui/src/prompts.json`: each tool with its description and the JSON Schema of its arguments,
 `{hostname}`, `{platform}`, `{shell}` and `{modules}` standing for what only the running server
 knows, and each module with what it sets. A module that has no text there stops the server as it
-starts. The server embeds `webui/src/prompts.json` too: `<hostname>_client_config` reads the config
-tool of the page as the page does, `{page}` naming that page where the page reads this chat page.
+starts. The server embeds `webui/src/prompts.json` too: `client_config` reads the config tool of the
+page as the page does, `{page}` naming every attached page where the page reads this chat page.
 
 Every tool takes `description` first, why the call is made, then what it does: its schema lists it
 first and says so, for a model to write the why before the what. A model still writes its arguments
@@ -594,14 +590,16 @@ the response, or `{"action":"cancel"}`, which answers `The user answered nothing
 fields are other than text or yes fails the call unasked. Every text the user types in a form of an
 MCP server is sealed out of every outcome from then on, as the keychain seals its secrets.
 
-The agent calls the config tool of every attached page as well, `<hostname>_client_config`, in
-`consent` until `set tools use <hostname>_client_config on`: a page is a machine of its own, whose
-configuration this server never reads. Granted, the call poses
-`{"set":["<id>","asking"],"value":{"kind":"run","client":...,"lines":...}}`, which every page
-following the conversation sees and the page of that hostname alone runs, on its own engine with
-the rights of a model, asking its user what its lines ask on that page; `POST /conversations/answer
-{"id":...,"question":...,"output":...,"ok":...}` settles it with what the lines answered. A page whose stream ends
-answers its call `The page <hostname> is gone`, and its tool leaves the next round.
+While a page is attached, the agent calls the config tool of the pages as well, `client_config`, one
+tool for all of them, in `consent` until `set tools use client_config on`: a page is a machine of
+its own, whose configuration this server never reads, and the pages of one user share their
+configuration by running the same lines. Granted, the call poses
+`{"set":["<id>","asking"],"value":{"kind":"run","lines":...}}`, which every page following the
+conversation runs, on its own engine with the rights of a model, asking its user what its lines ask
+on that page; `POST /conversations/answer {"id":...,"question":...,"output":...,"ok":...}` settles
+it with what the lines answered, the first page to answer winning, the question then withdrawn from
+every page, which stops a run that waits there. Once the last page leaves, the call answers `No page
+is attached`, and the tool leaves the next round.
 
 The turn writes its answer in the conversation as it streams, the pages that follow it getting each
 piece; the conversation is written to its file before a turn, before each call reaches its tool and

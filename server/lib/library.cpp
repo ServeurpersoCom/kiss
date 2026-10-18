@@ -364,7 +364,6 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
             turns += turn_of(h, f.held[h.c.id]);
         }
         const std::string head = "{\"protocol\":" + std::to_string(LIBRARY_PROTOCOL) +
-                                 (f.client.empty() ? "" : ",\"client\":\"" + f.client + "\"") +
                                  ",\"now\":" + std::to_string((int64_t) conversation_now());
         return set_event("", head + ",\"conversations\":[" + list + "]}") + turns;
     }

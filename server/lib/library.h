@@ -87,11 +87,8 @@ struct library_held {
 };
 
 // what a follower holds: whether it has every conversation yet, each
-// conversation as it holds it, and the version of the library it last read;
-// the hostname of the page it is when the page holds its config tool for the
-// agent, which the first event names
+// conversation as it holds it, and the version of the library it last read
 struct library_follower {
-    std::string                         client;
     bool                                started = false;
     std::map<std::string, library_held> held;
     uint64_t                            seen = 0;
@@ -101,7 +98,7 @@ struct library_follower {
 constexpr int LIBRARY_PROTOCOL = 1;
 
 // what a follower is to apply, as events, one JSON object per line: every conversation at its first
-// call, with the protocol, the client it is, if any, and the moment on the clock of conversation_now(),
+// call, with the protocol and the moment on the clock of conversation_now(),
 // which the moments of a pulse read on; after it, a conversation changed otherwise than by
 // growth, whole, one gone, as null, the turn that answers in it, its pulse or
 // null, what it asks the user, the question or null, and what an entry a turn

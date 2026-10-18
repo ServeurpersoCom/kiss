@@ -87,10 +87,9 @@ export interface Form {
 }
 
 // the lines a call of the model of a KiSS server runs on the config tool of
-// the attached page the client names, that page alone running them
+// the attached pages, every one of them running them
 export interface Run {
 	kind: 'run';
-	client: string;
 	lines: string;
 }
 

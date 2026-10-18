@@ -4,9 +4,10 @@
 // served twice stays with the first, the server itself;
 // a line the user types runs as the config tool runs it, its output after
 // the thread, a url it asks to let shown as a form, the line running again
-// once the user lets it; the config tool of an attached page is the model's
-// once the page attaches, under one name for one page, its call granted then
-// run by the page, a page that leaves answering that it is gone
+// once the user lets it; the config tool of the pages is the model's while a
+// page is attached, one for all of them, its call granted then run by the
+// pages, the first answer winning, the last page that leaves answering that
+// none is attached
 
 #include "lib/agent.h"
 
@@ -60,7 +61,7 @@ static std::string json(const std::string & s) {
 int main() {
     httplib::Server server;
     // the endpoint: a message go calls bash, a message page calls the config
-    // tool of the page abcd, a tool result answers text
+    // tool of the pages, a tool result answers text
     server.Get("/v1/models", [](const httplib::Request &, httplib::Response & res) {
         res.set_content("{\"data\":[{\"id\":\"m\"}]}", "application/json");
     });
@@ -87,7 +88,7 @@ int main() {
             text == "go" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"bash\",\"arguments\":"
                            "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo hi\\\"}\"}}]}" :
             text == "page" ?
-                           "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"abcd_client_config\","
+                           "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"client_config\","
                            "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"show version\\\"}\"}}]}" :
                            "{\"content\":\"done\"}";
         res.set_content("data: {\"choices\":[{\"delta\":" + delta + "}]}\n\ndata: [DONE]\n\n", "text/event-stream");
@@ -222,11 +223,10 @@ int main() {
         }
     };
     library_follower page;
-    law(agent_attach("abcd") && !agent_attach("abcd"), "a page attaches under its name, one page per name");
-    page.client = "abcd";
-    law(library_follow(page, 0, {}).find("\"client\":\"abcd\"") != std::string::npos,
-        "the first event names the page that holds its tool");
-    law(message("page"), "a turn calling the page starts");
+    agent_attach();
+    agent_attach();
+    library_follow(page, 0, {});
+    law(message("page"), "a turn calling the pages starts");
     const size_t count = entries().size();
     law(!message("again") && entries().size() == count, "a message sent while a turn runs enters nothing");
     when([&] { return agent_grant(c.id, 0, "once") == "question 0 is not the one asked"; });
@@ -236,36 +236,38 @@ int main() {
     std::string asked;
     when([&] {
         asked += library_follow(page, 0, {});
-        return asked.find("\"kind\":\"run\",\"client\":\"abcd\",\"lines\":\"show version\"") != std::string::npos;
+        return asked.find("\"kind\":\"run\",\"lines\":\"show version\"") != std::string::npos;
     });
-    law(asked.find("\"lines\":\"show version\"") != std::string::npos, "the call asks the page to run its lines");
-    when([&] { return agent_ran(c.id, number(), "! page ran", true).empty(); });
-    law(settled() && called().name == "abcd_client_config" && called().ok == true && called().result == "! page ran",
-        "the page answers the call: " + called().result);
+    law(asked.find("\"lines\":\"show version\"") != std::string::npos, "the call asks the pages to run its lines");
+    const uint64_t run = number();
+    when([&] { return agent_ran(c.id, run, "! page ran", true).empty(); });
+    law(settled() && called().name == "client_config" && called().ok == true && called().result == "! page ran",
+        "the first page that answers settles the call: " + called().result);
+    law(!agent_ran(c.id, run, "! page ran too", true).empty() && called().result == "! page ran",
+        "the answer of another page settles nothing more");
     library_follow(page, 0, {});
     {
         std::lock_guard<std::mutex> lock(g_mutex);
-        law(g_tools.back().find("abcd_client_config") != std::string::npos,
-            "the model sees the tool of the page: " + g_tools.back());
+        law(g_tools.back().find("client_config") != std::string::npos,
+            "the model sees the tool of the pages: " + g_tools.back());
     }
-    law(message("page"), "a second turn calling the page starts");
+    agent_detach();
+    law(message("page"), "a second turn calling the pages starts");
     when([&] { return agent_grant(c.id, number(), "once").empty(); });
     asked.clear();
     when([&] {
         asked += library_follow(page, 0, {});
         return asked.find("\"kind\":\"run\"") != std::string::npos;
     });
-    agent_detach("abcd");
+    agent_detach();
     const bool left = settled();
-    law(left && called().ok == false && called().result == "The page abcd is gone",
-        "a page that leaves answers its call: " + called().result);
+    law(left && called().ok == false && called().result == "No page is attached",
+        "the last page that leaves answers the call: " + called().result);
     {
         std::lock_guard<std::mutex> lock(g_mutex);
-        law(g_tools.back().find("abcd_client_config") == std::string::npos,
-            "the tool leaves with the page: " + g_tools.back());
+        law(g_tools.back().find("client_config") == std::string::npos,
+            "the tool leaves with the last page: " + g_tools.back());
     }
-    law(agent_attach("abcd"), "another page of that name takes the tool once the page that held it leaves");
-    agent_detach("abcd");
 
     const auto known = [](const std::string & secret) {
         const words_t all = keychain_known();

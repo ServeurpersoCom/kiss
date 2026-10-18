@@ -32,21 +32,22 @@ std::string agent_answer(const std::string & id, const std::function<std::string
 // runs
 std::string agent_command(const std::string & id, const std::string & input);
 
-// what the agent of this server names the config tool of an attached page
-// after the hostname of the page: abcd_client_config
-constexpr const char * AGENT_CLIENT_TOOL = "_client_config";
+// the config tool of the pages attached to this server, one for all of them,
+// the model seeing it while a page is attached
+constexpr const char * AGENT_CLIENT_TOOL = "client_config";
 
-// a page attaches under its hostname, the agent calling its config tool from
-// then on, unless another page holds that name: whether it holds it now
-bool agent_attach(const std::string & client);
+// a page attaches, every attached page running the calls of the config tool
+// of the pages
+void agent_attach();
 
-// a page that held its name leaves, a call it runs answering that it is gone
-void agent_detach(const std::string & client);
+// a page leaves; once none is left, a call they run answers that no page is
+// attached
+void agent_detach();
 
-// what an attached page answers the call a turn asks it to run in a
-// conversation, the question it settles by its number: its output and
-// whether it went; the message of what keeps it from reaching the turn, no
-// such question standing, empty once it does
+// what an attached page answers the call a turn asks the pages to run in a
+// conversation, the question it settles by its number, the first answer
+// winning: its output and whether it went; the message of what keeps it
+// from reaching the turn, no such question standing, empty once it does
 std::string agent_ran(const std::string & id, uint64_t question, const std::string & output, bool ok);
 
 // whether a turn runs in a conversation

@@ -9,7 +9,6 @@
 #include "lib/library.h"
 #include "lib/listener.h"
 #include "lib/log.h"
-#include "lib/tools.h"
 #include "yyjson.h"
 
 #include <algorithm>
@@ -24,42 +23,13 @@
 static const int TICK_MS = 1000;
 static const int IDLE_MS = 15000;
 
-// the longest hostname of a page, which its tool name keeps within what every
-// model API takes
-static const size_t CLIENT_MAX = TOOL_NAME_MAX - std::char_traits<char>::length(AGENT_CLIENT_TOOL);
-
-// a stream of a page takes the config tool of its name, the next event a
-// whole one that names it, so the page learns it holds the tool
-static bool take(library_follower & f, const std::string & client) {
-    if (!agent_attach(client)) {
-        return false;
-    }
-    f.client  = client;
-    f.started = false;
-    f.held.clear();
-    return true;
-}
-
-// a hostname of a page: a-z, 0-9 and _, as a tool name takes them
-static bool a_client(const std::string & name) {
-    return !name.empty() && name.size() <= CLIENT_MAX && std::all_of(name.begin(), name.end(), [](char c) {
-        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
-    });
-}
-
+// a page follows the conversations attached, running the lines the agent
+// calls the config tool of the pages with while its stream lasts
 void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
-    const std::string client = req.get_param_value("client");
-    if (req.has_param("client") && !a_client(client)) {
-        ws.close(httplib::ws::CloseStatus::PolicyViolation,
-                 "client \"" + client + "\" takes a-z, 0-9 and _ only, " + std::to_string(CLIENT_MAX) + " at most");
-        return;
-    }
     const unsigned    epoch = listener_epoch();
     const std::string from  = req.remote_addr;
     library_follower  f;
-    if (!client.empty() && !take(f, client)) {
-        log_info("Agent", "Page %s attaches without its tool, another page holds that name", client.c_str());
-    }
+    agent_attach();
     log_info("Sync", "%s follows the conversations", from.c_str());
     // the page sends nothing more: what it reads only answers the pings, and
     // ends once the page closes
@@ -70,12 +40,7 @@ void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
         }
         gone = true;
     });
-    // a page without the tool of its name takes it once the page that held it
-    // leaves
     for (int idle = 0; !gone && listener_epoch() == epoch;) {
-        if (!client.empty() && f.client.empty()) {
-            take(f, client);
-        }
         const std::string events = library_follow(f, TICK_MS, keychain_known());
         idle                     = events.empty() ? idle + TICK_MS : 0;
         if ((!events.empty() || idle >= IDLE_MS) && !ws.send(events)) {
@@ -83,9 +48,7 @@ void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
         }
         idle = idle >= IDLE_MS ? 0 : idle;
     }
-    if (!f.client.empty()) {
-        agent_detach(f.client);
-    }
+    agent_detach();
     ws.close();
     reader.join();
     log_info("Sync", "%s leaves", from.c_str());

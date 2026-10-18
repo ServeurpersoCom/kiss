@@ -107,7 +107,7 @@ describe('a batch', () => {
 		const r = await k.run('set display tool-calls open\ncopy running-config a', 'user');
 		expect(r.text).toContain('copy runs alone');
 		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
-		expect((await k.run('attach\nset client hostname BAD', 'user')).text).toContain(
+		expect((await k.run('attach\nset display tool-calls open', 'user')).text).toContain(
 			'attach runs alone'
 		);
 		expect((await k.run('detach\nshow version', 'user')).text).toContain('detach runs alone');
