@@ -3,6 +3,7 @@ import type { ConfigReader } from '../src/engine/engine.js';
 import { learn } from '../src/engine/keychain.js';
 import { ATTACHED_STORAGE_KEY } from '../src/lib/config.js';
 import { app } from '../src/lib/app.svelte.js';
+import { restore } from '../src/lib/state.svelte.js';
 import {
 	SYNC_RETRY_MS,
 	SYNC_SILENCE_MS,
@@ -302,6 +303,20 @@ describe('the conversations of a KiSS server', () => {
 			ok: true
 		});
 		expect(app.asks).toEqual([]);
+	});
+
+	it('answer no to what the lines the server takes back ask the page', async () => {
+		const s = server();
+		await restore();
+		app.conversations = [];
+		app.asks = [];
+		follow(config(true));
+		s.push({ set: [], value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] } });
+		const lines = 'set mcp url z http://z/mcp';
+		s.push({ set: ['a', 'asking'], value: { kind: 'run', lines, question: 3 } });
+		await vi.waitFor(() => expect(app.asks.map((q) => [q.kind, q.from])).toEqual([['grant', 'a']]));
+		s.push({ set: ['a', 'asking'], value: null });
+		await vi.waitFor(() => expect(app.asks).toEqual([]));
 	});
 
 	it('stay detached once detach ran, the backend there or not, until attach runs', async () => {

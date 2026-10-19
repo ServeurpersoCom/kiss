@@ -46,12 +46,11 @@ export default {
 		sheet: { kind: 'string', named: true }
 	},
 	apply(config) {
-		set.textContent = ':root {}';
-		const root = set.sheet!.cssRules[0] as CSSStyleRule;
-		for (const [key, def] of Object.entries(keys)) {
+		const tokens = Object.entries(keys).flatMap(([key, def]) => {
 			const value = config.get(`style ${key}`)!;
-			if (value !== def.default) root.style.setProperty(`--${key}`, value);
-		}
+			return value === def.default ? [] : [`--${key}: ${value};`];
+		});
+		set.textContent = `:root { ${tokens.join(' ')} }`;
 		sheet.textContent = config
 			.names('style')
 			.map((name) => String(config.get('style sheet', name)))

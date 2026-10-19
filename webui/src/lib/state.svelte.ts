@@ -75,10 +75,12 @@ async function load(): Promise<void> {
 }
 
 // the lines the model of the server runs on the page, with the rights of a
-// model, its questions asked in the conversation of its turn
+// model, its questions asked in the conversation of its turn and answered no
+// once the run stops
 function serving(id: string, lines: string, signal: AbortSignal) {
 	const grant = (request: Grant): Promise<Verdict> =>
 		pose(id, (settle) => ({ kind: 'grant', request, settle }));
+	signal.addEventListener('abort', () => refuse(id), { once: true });
 	return run(lines, 'llm', { ...reach(id), signal, grant });
 }
 
@@ -398,6 +400,11 @@ function reach(from: string) {
 export function stop(id: string): void {
 	if (attached()) void act('stop', { id });
 	controllers.get(id)?.abort();
+	refuse(id);
+}
+
+// every question a conversation asks the page answered no
+function refuse(id: string): void {
 	for (const ask of app.asks.filter((q) => q.from === id)) {
 		if (ask.kind === 'grant') ask.settle(REFUSE);
 		else if (ask.kind === 'offer' || ask.kind === 'confirm') ask.settle(false);

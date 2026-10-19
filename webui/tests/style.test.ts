@@ -50,6 +50,15 @@ describe('style', () => {
 		expect(media()).toEqual(['', '']);
 	});
 
+	it('writes the tokens set as the text of their sheet', () => {
+		const defaults = style.keys as Record<string, { default?: string }>;
+		const set: Record<string, string> = { 'style bg': '#faf9f5', 'style fg': '#141413' };
+		const get = (key: string) => set[key] ?? defaults[key.slice('style '.length)]?.default;
+		style.apply({ names: () => [], get } as unknown as Config);
+		const tokens = [...document.head.querySelectorAll('style')].at(-2)!.textContent;
+		expect(tokens).toBe(':root { --bg: #faf9f5; --fg: #141413; }');
+	});
+
 	it('reads every size of text floored, so no size hides what the thread shows', () => {
 		const read = Object.values(sources).filter((s) => /var\(--size-/.test(s));
 		expect(read).toEqual([]);

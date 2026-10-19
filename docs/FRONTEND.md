@@ -343,7 +343,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A secret a `set` line leaves out is asked of the user, and never enters the conversation; the line
   that asks stays as written, a value written is kept as `<removed>`, which no `set` takes.
 - No style token or sheet applies while a question stands, whatever it sets meanwhile: the card the
-  user answers reads in the style of the page alone.
+  user answers reads in the style of the page alone. The lines a server takes back from an attached
+  page answer no to what they asked it.
 - `title` renames the conversation the batch was sent in, with the batch; a title is no
   configuration: no save keeps it, no `copy` moves it.
 - A conversation takes its title from its first message; one the CLI opened has none until then, and
