@@ -380,14 +380,13 @@ asked again, and the first and last chunk of the round with its tokens, `null` b
 changes as the turn does; a page reads its moments on its own clock from `now`, and runs the line
 itself.
 
-The question is `{"kind":"call","tool":...,"args":...}` for a call in `consent`, or
+The question is `{"kind":"call","tool":...,"args":...}` for a call in `consent`,
 `{"kind":"form","server":...,"input":...}` for a form a tool asks the user to fill, `input` the MCP
-input request of an `elicitation/create` form (see The agent), each with `question`, its number,
-which no other question of the server has.
+input request of an `elicitation/create` form, or `{"kind":"run","lines":...}` for a call of
+`client_config` the pages run (see The agent), each with `question`, its number, which no other
+question of the server has.
 
-A comment line comes each second the stream stays quiet; a page that hears nothing for three
-seconds counts the connection as gone and opens the stream again. The stream ends when the
-listener moves.
+The stream ends when the listener moves.
 
 #### Acting: `POST /conversations/<action>`
 
