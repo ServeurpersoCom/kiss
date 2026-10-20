@@ -1,11 +1,14 @@
 // models.cpp: the models module: every setting of a model, the model named as
 // the item endpoint/model as chat model takes it, the parameters of a request
 // under their own names, each sent only when set and only by a protocol that
-// sends it; the twin of the models module of the page
+// sends it, then when its history compacts, the tokens a request holds once
+// answered that fold it before the next, none never, and the last steps a
+// summary keeps, none when unset; the twin of the models module of the page
 
 #include "engine/engine.h"
 #include "engine/text.h"
 #include "lib/api.h"
+#include "lib/compaction.h"
 
 // every model is one of an endpoint, and none holds a parameter the protocol
 // of its endpoint never sends
@@ -59,7 +62,9 @@ static engine_module make_models() {
                    number("presence_penalty", -2, 2, false),
                    number("frequency_penalty", -2, 2, false),
                    seed,
-                   effort };
+                   effort,
+                   number(COMPACTION_TRIGGER, 1, std::nullopt, true),
+                   number(COMPACTION_PRESERVE, 0, std::nullopt, true) };
     m.validate = validate;
     return m;
 }

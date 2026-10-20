@@ -65,7 +65,7 @@ std::optional<conversation_stats> pulse_stats(pulse & p, double now) {
     if (last < 0) {
         return std::nullopt;
     }
-    return conversation_stats{ p.total, std::round(p.generation), std::round(now - p.start) };
+    return conversation_stats{ p.total, std::round(p.generation), std::round(now - p.start), std::nullopt };
 }
 
 std::string pulse_json(const pulse & p) {

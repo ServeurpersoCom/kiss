@@ -26,20 +26,25 @@ export interface Call {
 // one request of an assistant turn: what the model streamed back, then the
 // calls it made; the turn ends with the first round that calls nothing; and
 // what the protocol it streamed in needs back that the rest cannot rebuild,
-// sent back to that protocol only
+// sent back to that protocol only; a summary holds kept, its text the summary
+// of the steps before it but the kept last ones, which the model reads after
+// it in their place
 export interface Round {
 	reasoning: string;
 	text: string;
 	calls: Call[];
 	opaque?: { protocol: string; items: object[] };
+	kept?: number;
 }
 
 // what a turn spent, the time the user took on a question left out: its
-// tokens, and in milliseconds of the system, generating them and in all
+// tokens, and in milliseconds of the system, generating them and in all; and
+// the tokens its last request held once answered, when the endpoint told them
 export interface Stats {
 	tokens: number;
 	generation: number;
 	system: number;
+	context?: number;
 }
 
 // user: what the user typed; assistant: one whole turn, round by round, what
@@ -164,14 +169,16 @@ export interface Request {
 
 // what one event of a stream adds to the round: its thinking, its text, the
 // calls by the index the stream gives them, an item the round keeps for its
-// protocol, the tokens the endpoint counted so far; or that the stream ends,
-// or fails with the message of the endpoint, empty when it gives none
+// protocol, the tokens the endpoint counted so far, the tokens the request
+// holds, its prompt and what it generated; or that the stream ends, or fails
+// with the message of the endpoint, empty when it gives none
 export interface Delta {
 	content?: string;
 	reasoning?: string;
 	calls?: { index: number; id?: string; name?: string; args?: string }[];
 	opaque?: object;
 	usage?: number;
+	context?: number;
 	end?: true;
 	error?: string;
 }

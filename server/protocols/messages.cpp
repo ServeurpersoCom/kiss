@@ -231,11 +231,13 @@ struct thought {
 };
 
 // a thinking block is kept once it closes, its text and its signature whole;
-// a redacted one as it opens; the tokens counted so far come with every
-// change of the message
+// a redacted one as it opens; the tokens of the prompt, read from the cache,
+// written to it or neither, come as the message starts, those generated so
+// far with every change of the message
 static std::function<std::optional<api_delta>(const std::string &)> reader() {
     auto thinking = std::make_shared<std::map<int, thought>>();
-    return [thinking](const std::string & data) -> std::optional<api_delta> {
+    auto prompt   = std::make_shared<std::optional<double>>();
+    return [thinking, prompt](const std::string & data) -> std::optional<api_delta> {
         const doc_t doc = parsed(data);
         if (!doc) {
             throw std::runtime_error("not JSON");
@@ -244,6 +246,16 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
         const std::string type  = text_of(yyjson_obj_get(e, "type"));
         const int         index = (int) yyjson_get_int(yyjson_obj_get(e, "index"));
         api_delta         out;
+        if (type == "message_start") {
+            yyjson_val * u = yyjson_obj_get(yyjson_obj_get(e, "message"), "usage");
+            for (const char * count : { "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens" }) {
+                yyjson_val * n = yyjson_obj_get(u, count);
+                if (yyjson_is_num(n)) {
+                    *prompt = prompt->value_or(0) + yyjson_get_num(n);
+                }
+            }
+            return std::nullopt;
+        }
         if (type == "content_block_start") {
             yyjson_val *      b    = yyjson_obj_get(e, "content_block");
             const std::string kind = text_of(yyjson_obj_get(b, "type"));
@@ -308,6 +320,9 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
                 return std::nullopt;
             }
             out.usage = yyjson_get_num(usage);
+            if (*prompt) {
+                out.context = **prompt + *out.usage;
+            }
             return out;
         }
         if (type == "message_stop") {

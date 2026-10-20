@@ -3,9 +3,17 @@ import { capital } from './config.js';
 
 // what a turn does now, as the system spends it: preparing a round, its model
 // and its tools, waiting for the endpoint, asking it again, streaming its
-// thinking, its text or a call, or running a tool
+// thinking, its text or a call, running a tool, or streaming the summary its
+// history compacts into
 export type Phase =
-	'preparing' | 'waiting' | 'retrying' | 'thinking' | 'writing' | 'calling' | 'running';
+	| 'preparing'
+	| 'waiting'
+	| 'retrying'
+	| 'thinking'
+	| 'writing'
+	| 'calling'
+	| 'running'
+	| 'compacting';
 
 // the clock of one turn, in milliseconds of performance.now(); the time the
 // user takes on a question is taken out of it, so it measures the system alone
@@ -122,7 +130,8 @@ const PHASES: Record<Phase, string> = {
 	thinking: 'thinking',
 	writing: 'writing',
 	calling: 'calling',
-	running: 'running'
+	running: 'running',
+	compacting: 'compacting'
 };
 
 // the line of a turn at a moment, each of its parts capital: its round from the
@@ -133,7 +142,7 @@ export function line(p: Pulse, now: number): string {
 	parts.push(p.name ? `${PHASES[p.phase]} ${p.name}` : p.phase);
 	if (p.phase === 'retrying') parts.push(`error ${p.status}`, `attempt ${p.attempt}/${p.attempts}`);
 	parts.push(ms(now - p.since));
-	if (p.phase === 'thinking' || p.phase === 'writing') {
+	if (p.phase === 'thinking' || p.phase === 'writing' || p.phase === 'compacting') {
 		parts.push(tokens(p.tokens));
 		if (p.tokens > 1) parts.push(rate(p.tokens - 1, p.last - p.first));
 	}

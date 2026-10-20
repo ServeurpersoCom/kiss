@@ -8,6 +8,8 @@ import chat from '../src/protocols/chat.js';
 import messages from '../src/protocols/messages.js';
 import responses from '../src/protocols/responses.js';
 import served from './bodies.jsonl?raw';
+import compaction from './compaction.jsonl?raw';
+import prompts from '../src/prompts.json';
 
 interface Body {
 	tools: { function: { name: string } }[];
@@ -736,5 +738,165 @@ describe('the twins of the server', () => {
 				chat.body(request({ info: sees(true), messages: history('messages', thought) }))
 			)
 		]);
+	});
+});
+
+// one streamed answer of text, the endpoint counting the tokens of the
+// request, its prompt and what it generated, on a last chunk of its own
+function counted(content: string, prompt: number, completion: number): Reply {
+	const chunks = [
+		{ choices: [{ delta: { content } }] },
+		{ choices: [], usage: { prompt_tokens: prompt, completion_tokens: completion } }
+	];
+	const text = chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
+	return () => new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+}
+
+describe('the tokens a request holds', () => {
+	it('come as its prompt and what it generated, in every protocol, the cache of messages counted', () => {
+		const c = chat.reader();
+		expect(c('{"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2}}')).toEqual({
+			usage: 2,
+			context: 7
+		});
+		const m = messages.reader();
+		m(
+			JSON.stringify({
+				type: 'message_start',
+				message: {
+					usage: { input_tokens: 3, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 }
+				}
+			})
+		);
+		expect(m('{"type":"message_delta","usage":{"output_tokens":2}}')).toEqual({
+			usage: 2,
+			context: 10
+		});
+		const r = responses.reader();
+		expect(
+			r('{"type":"response.completed","response":{"usage":{"input_tokens":5,"output_tokens":2}}}')
+		).toEqual({ usage: 2, context: 7, end: true });
+	});
+});
+
+describe('a history compacted', () => {
+	const COMPACT =
+		"set chat system-prompt 'be brief'\nset models compaction-trigger-tokens m/x 100\n" +
+		'set models compaction-preserve-steps m/x 2';
+	// the turn the server answers the same way: a question asked after a turn
+	// whose last request held 150 tokens
+	const before: Message[] = [
+		{ role: 'user', text: 'one' },
+		{
+			role: 'assistant',
+			rounds: [{ reasoning: '', text: 'first', calls: [] }],
+			stats: { tokens: 1, generation: 1, system: 1, context: 150 }
+		},
+		{ role: 'user', text: 'two' }
+	];
+
+	it('folds before the first request the steps but the preserved ones, as the server does', async () => {
+		const p = await page([counted('S', 20, 5), counted('done', 130, 10)], COMPACT, [{ id: 'x' }]);
+		const { turn } = await import('../src/lib/agent.js');
+		await turn(before, p.reply, p.tools, p.stop.signal, pulse(performance.now()));
+		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(compaction.trim().split('\n'));
+		expect(p.reply.rounds.map((r) => [r.text, r.kept])).toEqual([
+			['S', 2],
+			['done', undefined]
+		]);
+		// the summary spent its tokens, the request that answered held them
+		expect(p.reply.stats).toMatchObject({ tokens: 15, context: 140 });
+		// the next turn reads from the summary, under a trigger it does not reach
+		const q = await page([counted('later', 150, 5)], COMPACT.replace('m/x 100', 'm/x 1000'), [
+			{ id: 'x' }
+		]);
+		const next = await import('../src/lib/agent.js');
+		const after: Message[] = [...before, p.reply, { role: 'user', text: 'three' }];
+		await next.turn(after, q.reply, q.tools, q.stop.signal, pulse(0));
+		expect(q.bodies.map((b) => b.messages.map((m) => m.content))).toEqual([
+			[
+				'be brief',
+				prompts.compaction.summary.replace('{summary}', 'S'),
+				'first',
+				'two',
+				'done',
+				'three'
+			]
+		]);
+	});
+
+	it('folds in the middle of a turn, the rounds before the summary kept as written', async () => {
+		// a call, the request holding 150 tokens once answered
+		const call: Reply = () => {
+			const chunks = [
+				{ choices: [{ delta: calls(['c1', 'show version']) }] },
+				{ choices: [], usage: { prompt_tokens: 140, completion_tokens: 10 } }
+			];
+			const text =
+				chunks.map((c) => `data: ${JSON.stringify(c)}\n\n`).join('') + 'data: [DONE]\n\n';
+			return new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+		};
+		const p = await page(
+			[call, counted('S', 20, 5), counted('done', 60, 5)],
+			COMPACT.replace('preserve-steps m/x 2', 'preserve-steps m/x 1'),
+			[{ id: 'x' }]
+		);
+		const { turn } = await import('../src/lib/agent.js');
+		await turn([{ role: 'user', text: 'go' }], p.reply, p.tools, p.stop.signal, pulse(0));
+		const sent = (i: number) => p.bodies[i].messages.map((m) => m.role + ':' + (m.content ?? ''));
+		expect(sent(1)).toEqual([
+			'system:be brief',
+			'user:go',
+			expect.stringMatching(/^user:Summarize/)
+		]);
+		expect(sent(2)).toEqual([
+			'system:be brief',
+			expect.stringMatching(/^user:The conversation so far, summarized:\n\nS$/),
+			'assistant:',
+			expect.stringMatching(/^tool:/)
+		]);
+		expect(p.reply.rounds.map((r) => [r.text, r.kept, r.calls.length])).toEqual([
+			['', undefined, 1],
+			['S', 1, 0],
+			['done', undefined, 0]
+		]);
+		// the summary asked once: the next request held fewer tokens than the trigger
+		expect(p.bodies).toHaveLength(3);
+		expect(p.reply.stats).toMatchObject({ context: 65 });
+	});
+
+	it('never folds a model without a trigger, nor once its endpoint counts nothing', async () => {
+		const p = await page([counted('done', 130, 10)], "set chat system-prompt 'be brief'", [
+			{ id: 'x' }
+		]);
+		const { turn } = await import('../src/lib/agent.js');
+		await turn(before, p.reply, p.tools, p.stop.signal, pulse(0));
+		expect(p.bodies).toHaveLength(1);
+		const q = await page([stream([{ content: 'done' }])], COMPACT, [{ id: 'x' }]);
+		const unknown: Message[] = before.map((m) =>
+			m.role === 'assistant' ? { ...m, stats: { tokens: 1, generation: 1, system: 1 } } : m
+		);
+		const again = await import('../src/lib/agent.js');
+		await again.turn(unknown, q.reply, q.tools, q.stop.signal, pulse(0));
+		expect(q.bodies).toHaveLength(1);
+		expect(q.reply.stats).not.toHaveProperty('context');
+		// once folded, the tokens held are those the next request tells
+		const r = await page([counted('S', 20, 5), stream([{ content: 'done' }])], COMPACT, [
+			{ id: 'x' }
+		]);
+		const third = await import('../src/lib/agent.js');
+		await third.turn(before, r.reply, r.tools, r.stop.signal, pulse(0));
+		expect(r.bodies).toHaveLength(2);
+		expect(r.reply.stats).not.toHaveProperty('context');
+	});
+
+	it('fails the turn when the summary comes back empty, the history left as it was', async () => {
+		const p = await page([counted('', 20, 0)], COMPACT, [{ id: 'x' }]);
+		const { turn } = await import('../src/lib/agent.js');
+		await expect(turn(before, p.reply, p.tools, p.stop.signal, pulse(0))).rejects.toThrow(
+			'Endpoint m wrote no summary'
+		);
+		expect(p.reply.rounds).toEqual([]);
+		expect(p.bodies).toHaveLength(1);
 	});
 });

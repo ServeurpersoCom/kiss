@@ -27,6 +27,11 @@ std::string prompts_page_input();
 // what a module sets
 std::string prompts_module(const std::string & module);
 
+// a text of the compaction of a history, from the prompts.json of the page:
+// ask, what a summary asks the model, or summary, the text a summary is read
+// in, {summary} standing for it
+std::string prompts_compaction(const std::string & name);
+
 // what the modules of the engine miss in prompts.json, empty when every one
 // has its text
 std::string prompts_check();

@@ -88,7 +88,7 @@ export default {
 	last: 'response.completed',
 	// a call by the index of its item, its arguments as they stream; a
 	// reasoning item kept once done, whole, and the phase of a message; the
-	// tokens counted come with the end
+	// tokens counted, generated and of the prompt, come with the end
 	reader: () => (data) => {
 		const e = JSON.parse(data);
 		const item = e.item;
@@ -115,7 +115,13 @@ export default {
 			case 'response.completed':
 			case 'response.incomplete': {
 				const usage = e.response?.usage?.output_tokens;
-				return { ...(typeof usage === 'number' ? { usage } : {}), end: true };
+				const prompt = e.response?.usage?.input_tokens;
+				if (typeof usage !== 'number') return { end: true };
+				return {
+					usage,
+					...(typeof prompt === 'number' ? { context: prompt + usage } : {}),
+					end: true
+				};
 			}
 			case 'response.failed':
 				return { error: e.response?.error?.message ?? '' };

@@ -138,4 +138,18 @@ target_link_libraries(agent_test PRIVATE httplib yyjson stb Threads::Threads)
 if(WIN32)
     target_link_libraries(agent_test PRIVATE ws2_32)
 endif()
+target_compile_definitions(agent_test PRIVATE COMPACTION="${CMAKE_CURRENT_SOURCE_DIR}/webui/tests/compaction.jsonl")
 add_custom_command(TARGET agent_test POST_BUILD COMMAND agent_test)
+
+# compaction_test: the laws of the compaction of a history, the twins of those
+# of the page, built the same way, run once built, a broken law failing the
+# build
+add_executable(compaction_test server/tests/compaction.cpp ${SERVER_LIBRARY} ${EMBEDDED})
+add_dependencies(compaction_test version)
+target_include_directories(compaction_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
+                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
+target_link_libraries(compaction_test PRIVATE httplib yyjson stb Threads::Threads)
+if(WIN32)
+    target_link_libraries(compaction_test PRIVATE ws2_32)
+endif()
+add_custom_command(TARGET compaction_test POST_BUILD COMMAND compaction_test)

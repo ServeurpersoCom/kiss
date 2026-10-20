@@ -146,7 +146,7 @@
 		"endpoints": "the LLM APIs this server talks to",
 		"files": "the limits of view, str_replace and create_file",
 		"mcp": "the MCP servers whose tools this server calls, each tool taking tools use by its name, consent unless set",
-		"models": "the request parameters of an endpoint/model, each sent only when set",
+		"models": "the request parameters of an endpoint/model, each sent only when set, and when its history compacts: compaction-trigger-tokens, the tokens a request holds that fold the history into a summary before the next, and compaction-preserve-steps, the last steps the summary keeps as written",
 		"proxy": "the routes of this server, each relaying proxy/<name> to its url",
 		"server": "where it listens, its hostname, its key, its working directory, its logs",
 		"shells": "one tool per shell this machine has, named after it",

@@ -1,6 +1,7 @@
 // chat.cpp: OpenAI chat completions, the open standard of llama.cpp, vLLM and
 // Hugging Face: one delta per event until [DONE], the endpoint counting the
-// tokens it generated on a last chunk of its own; the images of the calls go
+// tokens it generated and those of the prompt on a last chunk of its own; the
+// images of the calls go
 // to a model whose list says it sees them, or says nothing
 
 #include "engine/keychain.h"
@@ -147,9 +148,13 @@ static std::optional<api_delta> read_event(const std::string & data) {
         d.error = text_of(yyjson_obj_get(error, "message"));
         return d;
     }
-    yyjson_val * usage = yyjson_obj_get(yyjson_obj_get(root, "usage"), "completion_tokens");
+    yyjson_val * usage  = yyjson_obj_get(yyjson_obj_get(root, "usage"), "completion_tokens");
+    yyjson_val * prompt = yyjson_obj_get(yyjson_obj_get(root, "usage"), "prompt_tokens");
     if (yyjson_is_num(usage)) {
         d.usage = yyjson_get_num(usage);
+        if (yyjson_is_num(prompt)) {
+            d.context = yyjson_get_num(prompt) + *d.usage;
+        }
     }
     yyjson_val * delta = yyjson_obj_get(yyjson_arr_get(yyjson_obj_get(root, "choices"), 0), "delta");
     if (!delta) {

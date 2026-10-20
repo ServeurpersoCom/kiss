@@ -151,12 +151,24 @@ export default {
 	},
 	last: 'message_stop',
 	// a thinking block is kept once it closes, its text and its signature whole;
-	// a redacted one as it opens; the tokens counted so far come with every
-	// change of the message
+	// a redacted one as it opens; the tokens of the prompt, read from the cache,
+	// written to it or neither, come as the message starts, those generated so
+	// far with every change of the message
 	reader() {
 		const thinking = new Map<number, { type: string; thinking: string; signature: string }>();
+		let prompt: number | undefined;
 		return (data) => {
 			const e = JSON.parse(data);
+			if (e.type === 'message_start') {
+				const u = e.message?.usage;
+				const counts = [
+					u?.input_tokens,
+					u?.cache_read_input_tokens,
+					u?.cache_creation_input_tokens
+				].filter((n): n is number => typeof n === 'number');
+				prompt = counts.length ? counts.reduce((sum, n) => sum + n, 0) : undefined;
+				return undefined;
+			}
 			if (e.type === 'content_block_start') {
 				const b = e.content_block;
 				if (b.type === 'thinking') {
@@ -187,7 +199,8 @@ export default {
 			}
 			if (e.type === 'message_delta') {
 				const usage = e.usage?.output_tokens;
-				return typeof usage === 'number' ? { usage } : undefined;
+				if (typeof usage !== 'number') return undefined;
+				return { usage, ...(prompt !== undefined ? { context: prompt + usage } : {}) };
 			}
 			if (e.type === 'message_stop') return { end: true };
 			if (e.type === 'error') return { error: e.error?.message ?? '' };

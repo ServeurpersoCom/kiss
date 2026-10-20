@@ -75,6 +75,8 @@ modules
     frequency_penalty <model> <-2..2>
     seed <model> <integer>
     reasoning_effort <model> <word>
+    compaction-trigger-tokens <model> <integer>   none, never compacts
+    compaction-preserve-steps <model> <integer>   none, keeps no step
   style
     <token> <value>                 show style lists them; bg, fg, accent set a theme
     sheet <name> <css>
@@ -267,7 +269,7 @@ opens on a URL, written as it is; what a server answers goes as it came.
 | `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`                                                                                                                                       |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`, `compaction-trigger-tokens <endpoint/model>`, `compaction-preserve-steps <endpoint/model>`                                            |
 | `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                                                                                              |
 | `tools`     | `max-rounds`, `use <tool>` guarded when opening, `preview-argument <tool>`                                                                                                                 |
 
@@ -539,7 +541,25 @@ set endpoints timeout prod 300
 
 The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `presence_penalty`,
 `frequency_penalty`, `seed` and `reasoning_effort`, the last one as the template of the model
-reads it. A reply streams until it ends or the turn is stopped. Several conversations answer at
+reads it. A reply streams until it ends or the turn is stopped.
+
+A model compacts its history once a request held as many tokens as `compaction-trigger-tokens`,
+its prompt and what it generated as the endpoint counted them, the keys of KiSS itself, never sent.
+Before the next request, the steps the model reads but the last `compaction-preserve-steps` fold
+into a summary, a step being a message of the user or one round of an assistant turn. The summary
+asks the endpoint the very prefix it cached, the same system prompt and tools, so only the ask is
+new to it; it streams as a round of the turn, folded under Summary, and the next request reads it
+then the preserved steps in place of what it folds. The history keeps every step, on the screen and
+in every file, so what the model reads follows from the history alone: an export, a reload or a
+change of trigger, preserve or model leaves it as it is; an edit or a retry before the summary
+opens a branch without it. A summary that writes nothing fails the turn, and none folds while no
+step lies past the preserved ones.
+
+```
+! fold at 100k tokens, the last 4 steps kept as written
+set models compaction-trigger-tokens prod/qwen3:8b 100000
+set models compaction-preserve-steps prod/qwen3:8b 4
+``` Several conversations answer at
 once, each turn in its own; a server running one model at a time loads them in turn.
 
 One line under the turn says what the system does now, redrawn at every frame of the screen:
@@ -551,6 +571,7 @@ One line under the turn says what the system does now, redrawn at every frame of
 - `Writing - 3,518 ms - 177 tokens - 51.3 t/s` while it answers
 - `Calling config - 312 ms` while a call streams
 - `Running config - 47 ms` while the tool runs
+- `Compacting local - 2,104 ms - 310 tokens - 48.2 t/s` while the summary streams
 - `Round 2 - Running config - 47 ms` from the second round on
 
 It hides while a question of the turn stands, as the time the user takes is none of the system. A

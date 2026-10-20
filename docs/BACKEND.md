@@ -71,6 +71,10 @@ modules
     temperature, top_p, top_k, min_p, max_tokens, presence_penalty,
     frequency_penalty, seed, reasoning_effort <endpoint/model> <value>
                                     sent only when set
+    compaction-trigger-tokens <endpoint/model> <tokens>
+                                    none, never compacts
+    compaction-preserve-steps <endpoint/model> <steps>
+                                    none, keeps no step
   mcp
     url <item> <url>                an MCP server the agent calls
     key <item> <secret>
@@ -547,6 +551,12 @@ way. What a protocol needs back enters the round as the turn streams and reaches
 it. A model holds no parameter its protocol never sends, `models top_k` for `responses` say; and
 `messages` takes its tokens from `models max_tokens`, else from what the endpoint lists of the
 model, else asks for it.
+
+It compacts a history as the page does, from the same `compaction` texts of the prompts.json of the
+page, which it embeds: once a request held `models compaction-trigger-tokens`, the steps but the
+last `compaction-preserve-steps` fold into a summary round of the turn before the next request,
+the summary asking the very prefix the endpoint cached. Both twins send the very bytes for the same
+history, a law of `agent_test` reading the golden `webui/tests/compaction.jsonl` the page writes.
 
 The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
 as a router names its interfaces: `forge_server_bash` is how a client sees it, and the configuration of the

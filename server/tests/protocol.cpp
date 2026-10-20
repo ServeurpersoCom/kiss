@@ -227,6 +227,18 @@ int main() {
                 phase->opaque == "{\"type\":\"message\",\"phase\":\"commentary\"}" && done && done->end &&
                 *done->usage == 5 && *rr("{\"type\":\"error\",\"message\":\"no\"}")->error == "no",
             "responses reads a call by its item, the parts of a summary, the items it needs back, the end");
+
+        const auto held = read("{\"choices\":[],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2}}");
+        const auto mh   = protocol_messages().reader();
+        mh("{\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":3,"
+           "\"cache_read_input_tokens\":4,\"cache_creation_input_tokens\":1}}}");
+        const auto mc = mh("{\"type\":\"message_delta\",\"usage\":{\"output_tokens\":2}}");
+        const auto rc = protocol_responses().reader()(
+            "{\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":2}}}");
+        law(held && held->context && *held->context == 7 && mc && mc->context && *mc->context == 10 && rc &&
+                rc->context && *rc->context == 7 && u && !u->context,
+            "the tokens a request holds come as its prompt and what it generated, in every protocol, the cache of "
+            "messages counted, none when the prompt goes untold");
     }
 
     printf("[Laws] protocol_test: %zu laws, %zu broken\n", g_laws, g_fails);

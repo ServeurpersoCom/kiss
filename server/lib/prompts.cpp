@@ -76,6 +76,10 @@ std::string prompts_module(const std::string & module) {
     return text(entry(root(), "modules", module));
 }
 
+std::string prompts_compaction(const std::string & name) {
+    return text(entry(page(), "compaction", name));
+}
+
 std::string prompts_check() {
     words_t missing;
     for (const engine_module & m : schema_modules()) {

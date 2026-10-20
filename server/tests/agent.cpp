@@ -2,6 +2,7 @@
 // turn against an endpoint and MCP servers of the test: every round sends the
 // system prompt alone; a server that fails is asked once in the turn; a tool
 // served twice stays with the first, the server itself;
+// a history compacts as the page compacts it, the very bodies sent;
 // a line the user types runs as the config tool runs it, its output after
 // the thread, a url it asks to let shown as a form, the line running again
 // once the user lets it; the config tool of the pages is the model's while a
@@ -50,6 +51,8 @@ static std::mutex               g_mutex;
 static std::vector<std::string> g_systems;
 static std::vector<std::string> g_tools;
 static std::atomic<int>         g_down{ 0 };
+// the messages of each request of the conversation that compacts
+static std::vector<std::string> g_compacted;
 
 static std::string json(const std::string & s) {
     const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
@@ -83,6 +86,29 @@ int main() {
             std::lock_guard<std::mutex> lock(g_mutex);
             g_systems.push_back(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(messages, 0), "content")));
             g_tools.push_back(tools);
+        }
+        // the turns that compact: the summary they ask, empty when the
+        // history opens on empty, then the request they fold, answered with
+        // the tokens it held, none for quiet; the bodies of the turn that
+        // opens on one and asks two kept
+        const bool        summary = text.rfind("Summarize this conversation", 0) == 0;
+        yyjson_val *      opening = yyjson_obj_get(yyjson_arr_get(messages, 1), "content");
+        const std::string first   = yyjson_is_str(opening) ? yyjson_get_str(opening) : "";
+        if (summary || text == "two" || text == "quiet") {
+            const std::shared_ptr<char> sent(yyjson_val_write(messages, 0, nullptr), free);
+            if (summary ? first == "one" : text == "two") {
+                std::lock_guard<std::mutex> lock(g_mutex);
+                g_compacted.push_back(sent.get());
+            }
+            const std::string content = summary ? (first == "empty" ? "" : "S") : "done";
+            const std::string usage   = summary       ? "{\"prompt_tokens\":20,\"completion_tokens\":5}" :
+                                        text == "two" ? "{\"prompt_tokens\":130,\"completion_tokens\":10}" :
+                                                        "";
+            res.set_content("data: {\"choices\":[{\"delta\":{\"content\":\"" + content + "\"}}]}\n\n" +
+                                (usage.empty() ? "" : "data: {\"choices\":[],\"usage\":" + usage + "}\n\n") +
+                                "data: [DONE]\n\n",
+                            "text/event-stream");
+            return;
         }
         const std::string delta =
             text == "go" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"bash\",\"arguments\":"
@@ -126,6 +152,8 @@ int main() {
     std::ofstream(root / "server.conf") << "set endpoints url e " << at << "/v1\n"
                                         << "set chat model e/m\n"
                                         << "set chat system-prompt 'be brief'\n"
+                                        << "set models compaction-trigger-tokens e/m 100\n"
+                                        << "set models compaction-preserve-steps e/m 2\n"
                                         << "set mcp url down " << at << "/down\n"
                                         << "set mcp url twin " << at << "/twin\n";
     engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
@@ -268,6 +296,60 @@ int main() {
         law(g_tools.back().find("client_config") == std::string::npos,
             "the tool leaves with the last page: " + g_tools.back());
     }
+
+    // a question asked after a turn whose last request held 150 tokens, the
+    // first message of the conversation given, its turn once it settled, the
+    // turn the page answers the same way for one then two
+    const auto compacting = [&](const std::string & opening, const std::string & question) {
+        conversation folded;
+        folded.id = conversation_uuid();
+        conversation_entry first;
+        first.text = opening;
+        conversation_append(folded, std::nullopt, first);
+        conversation_entry earlier;
+        earlier.role = ROLE_ASSISTANT;
+        earlier.rounds.emplace_back();
+        earlier.rounds[0].text = "first";
+        earlier.stats          = conversation_stats{ 1, 1, 1, 150 };
+        conversation_append(folded, folded.leaf, earlier);
+        conversation_entry asked;
+        asked.text            = question;
+        const std::string ask = folded.entries[conversation_append(folded, folded.leaf, asked)].id;
+        library_create(folded, {});
+        agent_answer(folded.id, [&](conversation &) { return ask; });
+        for (int i = 0; i < 1000 && agent_busy(folded.id); i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        conversation_entry answer;
+        library_each([&](const conversation & x) {
+            if (x.id == folded.id) {
+                answer = x.entries.back();
+            }
+        });
+        return answer;
+    };
+    const conversation_entry answer = compacting("one", "two");
+    {
+        std::ifstream            in(COMPACTION);
+        std::vector<std::string> golden;
+        for (std::string line; std::getline(in, line);) {
+            golden.push_back(line);
+        }
+        std::lock_guard<std::mutex> lock(g_mutex);
+        law(golden.size() == 2 && g_compacted == golden,
+            "a history compacts as the page compacts it, the very bodies sent: " +
+                (g_compacted.empty() ? std::string("none") : g_compacted[0]));
+    }
+    law(answer.rounds.size() == 2 && answer.rounds[0].text == "S" && answer.rounds[0].kept == 2 &&
+            answer.rounds[1].text == "done" && !answer.rounds[1].kept && answer.stats && answer.stats->tokens == 15 &&
+            answer.stats->context == 140,
+        "the summary is a round of the turn that keeps the preserved steps, the tokens held kept with the turn");
+    const conversation_entry empty = compacting("empty", "two");
+    law(empty.rounds.empty() && empty.error == std::optional<std::string>("Endpoint e wrote no summary"),
+        "a summary that comes back empty fails the turn, the history left as it was");
+    const conversation_entry quiet = compacting("silent", "quiet");
+    law(quiet.rounds.size() == 2 && quiet.stats && !quiet.stats->context,
+        "once folded, the tokens held are those the next request tells");
 
     const auto known = [](const std::string & secret) {
         const words_t all = keychain_known();

@@ -159,8 +159,8 @@ static std::string body(const api_request & r) {
 static void headers(httplib::Headers &) {}
 
 // a call by the index of its item, its arguments as they stream; a reasoning
-// item kept once done, whole, and the phase of a message; the tokens counted
-// come with the end
+// item kept once done, whole, and the phase of a message; the tokens counted,
+// generated and of the prompt, come with the end
 static std::optional<api_delta> read_event(const std::string & data) {
     const doc_t doc = parsed(data);
     if (!doc) {
@@ -218,9 +218,14 @@ static std::optional<api_delta> read_event(const std::string & data) {
         return std::nullopt;
     }
     if (type == "response.completed" || type == "response.incomplete") {
-        yyjson_val * usage = yyjson_obj_get(yyjson_obj_get(yyjson_obj_get(e, "response"), "usage"), "output_tokens");
+        yyjson_val * counts = yyjson_obj_get(yyjson_obj_get(e, "response"), "usage");
+        yyjson_val * usage  = yyjson_obj_get(counts, "output_tokens");
+        yyjson_val * prompt = yyjson_obj_get(counts, "input_tokens");
         if (yyjson_is_num(usage)) {
             out.usage = yyjson_get_num(usage);
+            if (yyjson_is_num(prompt)) {
+                out.context = yyjson_get_num(prompt) + *out.usage;
+            }
         }
         out.end = true;
         return out;

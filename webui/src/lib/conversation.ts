@@ -11,14 +11,15 @@ const INDENT = '\t';
 const ROOT = 'file';
 
 // the text a message holds as written, for the clipboard: what the user
-// typed, what the model answered without its thinking and calls, what a
-// command printed
+// typed, what the model answered without its thinking, calls and summaries,
+// what a command printed
 export function source(m: Message): string {
 	switch (m.role) {
 		case 'user':
 			return m.text;
 		case 'assistant':
 			return m.rounds
+				.filter((r) => r.kept === undefined)
 				.map((r) => r.text)
 				.filter((text) => text)
 				.join('\n\n');
@@ -31,10 +32,11 @@ export function source(m: Message): string {
 export const STOPPED = 'Stopped before it answered: the tool may have acted';
 
 // what of a turn holds once it stops or leaves the page: the calls that ran,
-// those sent as stopped, with the arguments they went with, and the rounds
-// that streamed something; a call never sent never ran
+// those sent as stopped, with the arguments they went with, the rounds that
+// streamed something, and a summary that wrote its text once a round follows
+// it; a call never sent never ran
 export function settled(rounds: readonly Round[]): Round[] {
-	return rounds
+	const out = rounds
 		.map((r) => ({
 			...r,
 			calls: r.calls.flatMap(({ sent, ...c }) => {
@@ -42,7 +44,8 @@ export function settled(rounds: readonly Round[]): Round[] {
 				return sent ? [{ ...c, result: STOPPED, ok: false }] : [];
 			})
 		}))
-		.filter((r) => r.reasoning || r.text || r.calls.length);
+		.filter((r) => (r.kept === undefined ? r.reasoning || r.text || r.calls.length : r.text));
+	return out.at(-1)?.kept === undefined ? out : out.slice(0, -1);
 }
 
 // the entries as they settled, even while the model answers
@@ -163,6 +166,9 @@ function fail(at: string, what: string): never {
 const string: Check = (v, at) => typeof v === 'string' || fail(at, 'not a string');
 const boolean: Check = (v, at) => typeof v === 'boolean' || fail(at, 'not a boolean');
 const number: Check = (v, at) => Number.isFinite(v) || fail(at, 'not a number');
+// a whole number, none below zero
+const count: Check = (v, at) =>
+	(Number.isInteger(v) && (v as number) >= 0) || fail(at, 'not a count');
 const parent: Check = (v, at) =>
 	v === null || typeof v === 'string' || fail(at, 'not an id or null');
 const constant =
@@ -212,9 +218,12 @@ const call = object(
 const record: Check = (v, at) =>
 	(!!v && typeof v === 'object' && !Array.isArray(v)) || fail(at, 'not an object');
 const opaque = object({ protocol: string, items: array(record) });
-const round = object({ reasoning: string, text: string, calls: array(call) }, { opaque });
+const round = object(
+	{ reasoning: string, text: string, calls: array(call) },
+	{ opaque, kept: count }
+);
 const link = { id: string, parent, time: number };
-const stats = object({ tokens: number, generation: number, system: number });
+const stats = object({ tokens: number, generation: number, system: number }, { context: number });
 const MESSAGES: Record<string, Check> = {
 	user: object({ ...link, role: constant('user'), text: string }),
 	assistant: object(

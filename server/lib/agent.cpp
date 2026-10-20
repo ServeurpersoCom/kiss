@@ -8,6 +8,7 @@
 #include "engine/schema.h"
 #include "engine/seal.h"
 #include "lib/api.h"
+#include "lib/compaction.h"
 #include "lib/library.h"
 #include "lib/log.h"
 #include "lib/mcp.h"
@@ -214,7 +215,8 @@ void agent_stop(const std::string & id) {
 
 // what one round reads of the running configuration, as it stands when the
 // round starts: the endpoints, the model chosen, the system prompt, the
-// parameters of every model, numbers as numbers, each tool of the server not
+// parameters of every model, numbers as numbers, the tokens that compact the
+// history of a model and the steps its summary keeps, each tool of the server not
 // off by its own name, then each tool of every MCP server not off, a name
 // served twice staying with the first; a server that fails serves the tools
 // it listed last, each call answering its error, and is not asked again in
@@ -226,6 +228,8 @@ struct setup_t {
     std::string                                                             chosen;
     std::string                                                             system;
     std::map<std::string, std::vector<std::pair<std::string, std::string>>> parameters;
+    std::map<std::string, double>                                           triggers;
+    std::map<std::string, int>                                              preserves;
     std::vector<tool>                                                       tools;
     bool                                                                    pages = false;
     std::vector<mcp_tool>                                                   served;
@@ -268,7 +272,14 @@ static setup_t setup(api_stop & stop, met_t & met) {
         for (const std::string & item : config.names("models")) {
             for (const engine_key & k : m->keys) {
                 const auto v = config.get("models " + k.name, item);
-                if (v) {
+                if (!v) {
+                    continue;
+                }
+                if (k.name == COMPACTION_TRIGGER) {
+                    s.triggers[item] = std::stod(*v);
+                } else if (k.name == COMPACTION_PRESERVE) {
+                    s.preserves[item] = std::stoi(*v);
+                } else {
                     s.parameters[item].emplace_back(k.name, k.kind == ENGINE_NUMBER ? *v : json_string(*v));
                 }
             }
@@ -646,27 +657,90 @@ static std::string explain(const std::exception & e, const api_stop & stop) {
     return s;
 }
 
-// one round streamed into the reply; whether it called anything
+// the endpoint asked again, the clock running since it first failed
+static void retried(const std::string & id, const endpoint & e, pulse & p, int status, int attempt, int attempts) {
+    log_info("Agent", "%.8s %s answers %d, attempt %d/%d", id.c_str(), e.server.name.c_str(), status, attempt,
+             attempts);
+    pulse_retry(p, e.server.name, status, attempt, attempts, pulse_now());
+    beat(id, p);
+}
+
+// the summary the steps a request folds go into, streamed into a round of the
+// reply that keeps the steps it does not fold; it runs no call, and one that
+// writes no summary fails the turn
+static void summarize(const std::string & id,
+                      const std::string & entry,
+                      const endpoint &    e,
+                      const api_request & req,
+                      int                 kept,
+                      api_stop &          stop,
+                      pulse &             p) {
+    log_info("Agent", "%.8s compacting, %d steps kept", id.c_str(), kept);
+    pulse_mark(p, PHASE_COMPACTING, e.server.name, pulse_now());
+    beat(id, p);
+    size_t at = 0;
+    grow(id, entry, stop, [&](conversation_entry & x) {
+        conversation_round r;
+        r.kept = kept;
+        x.rounds.push_back(r);
+        at = x.rounds.size() - 1;
+    });
+    std::optional<double> usage;
+    api_chat(
+        e, req, stop,
+        [&](const api_delta & d) {
+            const double now = pulse_now();
+            if (d.usage) {
+                usage = d.usage;
+            }
+            pulse_chunk(p, !d.content.empty() || !d.reasoning.empty(), now);
+            if (d.content.empty() && d.reasoning.empty()) {
+                return;
+            }
+            pulse_mark(p, PHASE_COMPACTING, e.server.name, now);
+            grow(id, entry, stop, [&](conversation_entry & x) {
+                x.rounds[at].reasoning += d.reasoning;
+                x.rounds[at].text += d.content;
+            });
+            beat(id, p);
+        },
+        [&](int status, int attempt, int attempts) { retried(id, e, p, status, attempt, attempts); });
+    pulse_close(p, usage);
+    if (reply_of(id, entry).rounds[at].text.empty()) {
+        throw api_error("Endpoint " + e.server.name + " wrote no summary");
+    }
+}
+
+// one round streamed into the reply, the history first compacted when the
+// last request held as many tokens as the trigger of the model; whether it
+// called anything; context, the tokens the last request held once answered,
+// none once unknown
 static bool round(const std::string &                     id,
                   const std::string &                     entry,
                   const std::vector<conversation_entry> & before,
                   size_t                                  r,
+                  std::optional<double> &                 context,
                   api_stop &                              stop,
                   pulse &                                 p,
                   met_t &                                 met) {
     p.round = (int) r + 1;
     pulse_mark(p, PHASE_PREPARING, "", pulse_now());
     beat(id, p);
-    const setup_t     s     = setup(stop, met);
-    const auto        pick  = api_pick(s.endpoints, s.chosen, stop);
-    const endpoint &  e     = pick.first;
-    const std::string model = pick.second;
-    api_request       req;
-    req.model    = model;
-    req.system   = s.system;
-    req.messages = before;
-    req.messages.push_back(reply_of(id, entry));
-    const auto params = s.parameters.find(e.server.name + "/" + model);
+    const setup_t     s       = setup(stop, met);
+    const auto        pick    = api_pick(s.endpoints, s.chosen, stop);
+    const endpoint &  e       = pick.first;
+    const std::string model   = pick.second;
+    const std::string item    = e.server.name + "/" + model;
+    // the history as it stands, the reply as the library holds it last
+    const auto        history = [&] {
+        std::vector<conversation_entry> h = before;
+        h.push_back(reply_of(id, entry));
+        return h;
+    };
+    api_request req;
+    req.model         = model;
+    req.system        = s.system;
+    const auto params = s.parameters.find(item);
     if (params != s.parameters.end()) {
         req.parameters = params->second;
     }
@@ -683,10 +757,27 @@ static bool round(const std::string &                     id,
     if (e.speaks->described) {
         req.info = api_describe(e, model, stop);
     }
+    const auto trigger = s.triggers.find(item);
+    if (trigger != s.triggers.end() && context && *context >= trigger->second) {
+        const auto preserve = s.preserves.find(item);
+        const auto fold     = compaction_folding(history(), preserve == s.preserves.end() ? 0 : preserve->second);
+        if (fold) {
+            api_request ask = req;
+            ask.messages    = fold->messages;
+            summarize(id, entry, e, ask, fold->kept, stop, p);
+        }
+    }
+    context.reset();
+    req.messages = compaction_compacted(history());
     log_info("Agent", "%.8s round %zu: %s/%s", id.c_str(), r + 1, e.server.name.c_str(), model.c_str());
     pulse_mark(p, PHASE_WAITING, e.server.name, pulse_now());
     beat(id, p);
-    grow(id, entry, stop, [](conversation_entry & x) { x.rounds.emplace_back(); });
+    // the round as the reply holds it
+    size_t at = 0;
+    grow(id, entry, stop, [&](conversation_entry & x) {
+        x.rounds.emplace_back();
+        at = x.rounds.size() - 1;
+    });
     // the calls of the round by the index the stream gives them
     std::map<int, size_t> calls;
     std::optional<double> usage;
@@ -699,6 +790,9 @@ static bool round(const std::string &                     id,
             if (d.usage) {
                 usage = d.usage;
             }
+            if (d.context) {
+                context = d.context;
+            }
             pulse_chunk(p, !d.content.empty() || !d.reasoning.empty() || !d.calls.empty(), now);
             if (d.content.empty() && d.reasoning.empty() && d.calls.empty() && d.opaque.empty()) {
                 return;
@@ -710,7 +804,7 @@ static bool round(const std::string &                     id,
                 pulse_mark(p, PHASE_WRITING, "", now);
             }
             grow(id, entry, stop, [&](conversation_entry & x) {
-                conversation_round & round = x.rounds[r];
+                conversation_round & round = x.rounds[at];
                 round.reasoning += d.reasoning;
                 round.text += d.content;
                 if (!d.opaque.empty()) {
@@ -742,28 +836,24 @@ static bool round(const std::string &                     id,
             }
             beat(id, p);
         },
-        [&](int status, int attempt, int attempts) {
-            log_info("Agent", "%.8s %s answers %d, attempt %d/%d", id.c_str(), e.server.name.c_str(), status, attempt,
-                     attempts);
-            pulse_retry(p, e.server.name, status, attempt, attempts, pulse_now());
-            beat(id, p);
-        });
+        [&](int status, int attempt, int attempts) { retried(id, e, p, status, attempt, attempts); });
     pulse_close(p, usage);
-    const size_t n = reply_of(id, entry).rounds[r].calls.size();
+    const size_t n = reply_of(id, entry).rounds[at].calls.size();
     for (size_t c = 0; c < n; c++) {
         if (stop.stopped) {
             throw api_error("Stopped");
         }
-        pulse_mark(p, PHASE_RUNNING, reply_of(id, entry).rounds[r].calls[c].name, pulse_now());
+        pulse_mark(p, PHASE_RUNNING, reply_of(id, entry).rounds[at].calls[c].name, pulse_now());
         beat(id, p);
-        call(id, entry, r, c, stop, p, s.served);
+        call(id, entry, at, c, stop, p, s.served);
     }
     return n > 0;
 }
 
 // one turn, rounds streamed until a round calls nothing; after a stop no call
 // runs, and the reply keeps what settled before it, with what it spent once
-// it streamed anything; the pulse follows the turn chunk by chunk
+// it streamed anything and the tokens its last request held; the pulse
+// follows the turn chunk by chunk
 static void turn(std::string                     id,
                  std::string                     entry,
                  std::vector<conversation_entry> before,
@@ -772,13 +862,21 @@ static void turn(std::string                     id,
     std::optional<std::string> error;
     size_t                     r = 0;
     met_t                      met;
+    // the tokens the last request held once answered, as the last turn kept
+    // them, none once unknown
+    std::optional<double>      context;
+    for (const conversation_entry & e : before) {
+        if (e.role == ROLE_ASSISTANT) {
+            context = e.stats ? e.stats->context : std::nullopt;
+        }
+    }
     try {
         int rounds = 0;
         engine_with(
             [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
-            more = round(id, entry, before, r, *stop, p, met);
+            more = round(id, entry, before, r, context, *stop, p, met);
         }
         if (more) {
             error = "Stopped after " + std::to_string(r) + " tool rounds";
@@ -786,7 +884,10 @@ static void turn(std::string                     id,
     } catch (const std::exception & e) {
         error = explain(e, *stop);
     }
-    const std::optional<conversation_stats> spent = pulse_stats(p, pulse_now());
+    std::optional<conversation_stats> spent = pulse_stats(p, pulse_now());
+    if (spent) {
+        spent->context = context;
+    }
     logged(id, library_change(
                    id,
                    [&](conversation & c) {

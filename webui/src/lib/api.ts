@@ -29,7 +29,7 @@ export const DEFAULT_PROTOCOL = chatProtocol.name;
 
 // an endpoint: a remote server, the protocol it speaks, the times a reply is
 // asked again and the seconds between two of them
-interface Endpoint extends Remote {
+export interface Endpoint extends Remote {
 	protocol: Protocol;
 	retries: number;
 	pause: number;

@@ -51,6 +51,13 @@ static void number(yyjson_val * v, const std::string & at) {
     }
 }
 
+// a whole number, none below zero
+static void count(yyjson_val * v, const std::string & at) {
+    if (!yyjson_is_uint(v) && !(yyjson_is_sint(v) && yyjson_get_sint(v) >= 0)) {
+        wrong(at, "not a count");
+    }
+}
+
 static void parent(yyjson_val * v, const std::string & at) {
     if (!yyjson_is_null(v) && !yyjson_is_str(v)) {
         wrong(at, "not an id or null");
@@ -156,13 +163,15 @@ static const check_t & file() {
                 { "text",      string      },
                 { "calls",     array(call) }
         },
-            { { "opaque", opaque } });
-        const check_t  stats = object({
-            { "tokens",     number },
-            { "generation", number },
-            { "system",     number }
-        });
-        const fields_t link  = {
+            { { "opaque", opaque }, { "kept", count } });
+        const check_t stats = object(
+            {
+                { "tokens",     number },
+                { "generation", number },
+                { "system",     number }
+        },
+            { { "context", number } });
+        const fields_t link = {
             { "id",     string },
             { "parent", parent },
             { "time",   number }
@@ -265,7 +274,7 @@ static conversation_call call_of(yyjson_val * v) {
 }
 
 static conversation_round round_of(yyjson_val * v) {
-    conversation_round r{ field_text(v, "reasoning"), field_text(v, "text"), {}, std::nullopt };
+    conversation_round r{ field_text(v, "reasoning"), field_text(v, "text"), {}, std::nullopt, std::nullopt };
     size_t             i, n;
     yyjson_val *       x;
     yyjson_arr_foreach(yyjson_obj_get(v, "calls"), i, n, x) {
@@ -274,6 +283,9 @@ static conversation_round round_of(yyjson_val * v) {
     if (yyjson_val * o = yyjson_obj_get(v, "opaque")) {
         const std::shared_ptr<char> items(yyjson_val_write(yyjson_obj_get(o, "items"), 0, nullptr), free);
         r.opaque = conversation_opaque{ field_text(o, "protocol"), items.get() };
+    }
+    if (yyjson_val * kept = yyjson_obj_get(v, "kept")) {
+        r.kept = (int) yyjson_get_num(kept);
     }
     return r;
 }
@@ -301,7 +313,10 @@ static conversation_entry entry_of(yyjson_val * v) {
             if (yyjson_val * stats = yyjson_obj_get(v, "stats")) {
                 e.stats = conversation_stats{ yyjson_get_num(yyjson_obj_get(stats, "tokens")),
                                               yyjson_get_num(yyjson_obj_get(stats, "generation")),
-                                              yyjson_get_num(yyjson_obj_get(stats, "system")) };
+                                              yyjson_get_num(yyjson_obj_get(stats, "system")), std::nullopt };
+                if (yyjson_val * context = yyjson_obj_get(stats, "context")) {
+                    e.stats->context = yyjson_get_num(context);
+                }
             }
             break;
         case ROLE_CLI:
@@ -402,6 +417,9 @@ static yyjson_mut_val * round_val(yyjson_mut_doc * d, const conversation_round &
                                                 yyjson_doc_free);
         yyjson_mut_obj_add_val(d, opaque, "items", yyjson_val_mut_copy(d, yyjson_doc_get_root(items.get())));
     }
+    if (r.kept) {
+        yyjson_mut_obj_add_int(d, o, "kept", *r.kept);
+    }
     return o;
 }
 
@@ -427,6 +445,9 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
                     yyjson_mut_obj_add_val(d, stats, "tokens", number_val(d, e.stats->tokens));
                     yyjson_mut_obj_add_val(d, stats, "generation", number_val(d, e.stats->generation));
                     yyjson_mut_obj_add_val(d, stats, "system", number_val(d, e.stats->system));
+                    if (e.stats->context) {
+                        yyjson_mut_obj_add_val(d, stats, "context", number_val(d, *e.stats->context));
+                    }
                 }
                 break;
             }
@@ -508,9 +529,12 @@ std::vector<conversation_round> conversation_settled(const std::vector<conversat
             }
         }
         r.calls = std::move(calls);
-        if (!r.reasoning.empty() || !r.text.empty() || !r.calls.empty()) {
+        if (r.kept ? !r.text.empty() : !r.reasoning.empty() || !r.text.empty() || !r.calls.empty()) {
             out.push_back(std::move(r));
         }
+    }
+    if (!out.empty() && out.back().kept) {
+        out.pop_back();
     }
     return out;
 }

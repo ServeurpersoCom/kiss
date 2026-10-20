@@ -260,6 +260,43 @@ int main() {
        at + ".entries[1].rounds[0].calls[0].ok: missing");
     is(altered([](auto d) { set(d, "/conversations/0/entries/2/ok", yyjson_mut_str(d, "yes")); }),
        at + ".entries[2].ok: not a boolean");
+    is(altered([](auto d) { set(d, "/conversations/0/entries/1/rounds/0/kept", yyjson_mut_real(d, 1.5)); }),
+       at + ".entries[1].rounds[0].kept: not a count");
+    is(altered([](auto d) { set(d, "/conversations/0/entries/1/rounds/0/kept", yyjson_mut_sint(d, -1)); }),
+       at + ".entries[1].rounds[0].kept: not a count");
+    {
+        const auto made = [](const std::string & text, std::optional<int> kept = std::nullopt) {
+            conversation_round r;
+            r.text = text;
+            r.kept = kept;
+            return r;
+        };
+        const auto texts = [](const std::vector<conversation_round> & rounds) {
+            std::string out;
+            for (const conversation_round & r : rounds) {
+                out += "[" + r.text + "]";
+            }
+            return out;
+        };
+        conversation_round thought = made("", 1);
+        thought.reasoning          = "r";
+        law(texts(conversation_settled({ made("a"), made("S", 1), made("b") })) == "[a][S][b]" &&
+                texts(conversation_settled({ made("a"), made("S", 1) })) == "[a]" &&
+                texts(conversation_settled({ made("a"), thought, made("b") })) == "[a][b]" &&
+                texts(conversation_settled({ made("a"), made("S", 1), made("") })) == "[a]",
+            "a summary holds once a round follows it and it wrote its text");
+        const std::string text =
+            R"({"kiss":"conversations","conversations":[{"id":"c","title":"t","updated":1,"leaf":"b","entries":[)"
+            R"({"id":"a","parent":null,"time":1,"role":"user","text":"one"},{"id":"b","parent":"a","time":2,)"
+            R"("role":"assistant","rounds":[{"reasoning":"","text":"a1","calls":[]},{"reasoning":"","text":"S",)"
+            R"("calls":[],"kept":0},{"reasoning":"","text":"a2","calls":[]}],"stats":{"tokens":1,"generation":1,)"
+            R"("system":1,"context":150}}]}]})";
+        const std::string                 back = conversation_file(conversation_parse(text), {});
+        const std::shared_ptr<yyjson_doc> a(yyjson_read(text.data(), text.size(), 0), yyjson_doc_free);
+        const std::shared_ptr<yyjson_doc> b(yyjson_read(back.data(), back.size(), 0), yyjson_doc_free);
+        law(b && yyjson_equals(yyjson_doc_get_root(a.get()), yyjson_doc_get_root(b.get())),
+            "a summary and the tokens a turn held read back as written: " + back);
+    }
     is(altered([](auto d) { set(d, "/conversations/0/entries/1/id", copy(d, "/conversations/0/entries/0/id")); }),
        at + ".entries[1].id: used twice");
     is(altered([](auto d) { set(d, "/conversations/0/entries/0/parent", copy(d, "/conversations/0/entries/2/id")); }),

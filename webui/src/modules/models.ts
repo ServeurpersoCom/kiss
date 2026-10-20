@@ -1,23 +1,33 @@
-import type { Module } from '../engine/engine.js';
+import type { Key, Module } from '../engine/engine.js';
 import { endpoints, listModels } from '../lib/api.js';
+import { PRESERVE, TRIGGER } from '../lib/compaction.js';
 import { MODEL_SEPARATOR, SLASH } from '../lib/config.js';
 
+// the parameters of an OpenAI compatible request under their own names, each
+// sent only when set
+export const PARAMETERS: Record<string, Key> = {
+	temperature: { kind: 'number', min: 0, named: true },
+	top_p: { kind: 'number', min: 0, max: 1, named: true },
+	top_k: { kind: 'number', min: 0, integer: true, named: true },
+	min_p: { kind: 'number', min: 0, max: 1, named: true },
+	max_tokens: { kind: 'number', min: 1, integer: true, named: true },
+	presence_penalty: { kind: 'number', min: -2, max: 2, named: true },
+	frequency_penalty: { kind: 'number', min: -2, max: 2, named: true },
+	seed: { kind: 'number', integer: true, named: true },
+	// as the template of the model reads it: low, medium, high or its own
+	reasoning_effort: { kind: 'string', named: true }
+};
+
 // every setting of a model, the model named as the item endpoint/model as chat
-// model takes it: the parameters of an OpenAI compatible request under their
-// own names, each sent only when set
+// model takes it: its parameters, then when its history compacts, the tokens
+// a request holds once answered that fold it before the next, none never, and
+// the last steps a summary keeps, none when unset
 export default {
 	name: 'models',
 	keys: {
-		temperature: { kind: 'number', min: 0, named: true },
-		top_p: { kind: 'number', min: 0, max: 1, named: true },
-		top_k: { kind: 'number', min: 0, integer: true, named: true },
-		min_p: { kind: 'number', min: 0, max: 1, named: true },
-		max_tokens: { kind: 'number', min: 1, integer: true, named: true },
-		presence_penalty: { kind: 'number', min: -2, max: 2, named: true },
-		frequency_penalty: { kind: 'number', min: -2, max: 2, named: true },
-		seed: { kind: 'number', integer: true, named: true },
-		// as the template of the model reads it: low, medium, high or its own
-		reasoning_effort: { kind: 'string', named: true }
+		...PARAMETERS,
+		[TRIGGER]: { kind: 'number', min: 1, integer: true, named: true },
+		[PRESERVE]: { kind: 'number', min: 0, integer: true, named: true }
 	},
 	// every model is one of an endpoint, and none holds a parameter the
 	// protocol of its endpoint never sends

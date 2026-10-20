@@ -54,13 +54,15 @@ struct api_call_piece {
 
 // what one event of a stream tells: text, thinking, pieces of calls, an item
 // the protocol needs back as it came, JSON, the tokens the endpoint counted,
-// the end, or an error
+// the tokens the request holds, its prompt and what it generated, the end, or
+// an error
 struct api_delta {
     std::string                 content;
     std::string                 reasoning;
     std::vector<api_call_piece> calls;
     std::string                 opaque;
     std::optional<double>       usage;
+    std::optional<double>       context;
     bool                        end = false;
     std::optional<std::string>  error;
 };

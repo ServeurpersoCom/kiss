@@ -6,7 +6,8 @@
 	import Icon from './Icon.svelte';
 	import { INFERENCE, MARKDOWN, OPEN, display, type Fold } from '../display.svelte.js';
 
-	// live: the round the model writes now
+	// live: the round the model writes now; a summary shows folded once
+	// written, the history it folds staying above it
 	let { round, live = false }: { round: Round; live?: boolean } = $props();
 
 	// open, or under inference open while the model writes it only
@@ -51,7 +52,18 @@
 		</div>
 	</details>
 {/if}
-{#if round.text}
+{#if round.kept !== undefined}
+	<details {@attach fold(() => live)}>
+		<summary><Icon name="chevron" /><span class="head">Summary</span></summary>
+		<div class="body">
+			{#if display.render.reply === MARKDOWN}
+				<Markdown text={round.text} />
+			{:else}
+				<div class="plain">{round.text}</div>
+			{/if}
+		</div>
+	</details>
+{:else if round.text}
 	{#if display.render.reply === MARKDOWN}
 		<Markdown text={round.text} />
 	{:else}

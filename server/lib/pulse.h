@@ -11,14 +11,16 @@
 #include <string>
 
 // what a turn does now: preparing a round, waiting for the endpoint, asking
-// it again, streaming its thinking, its text or a call, or running a tool
-constexpr const char * PHASE_PREPARING = "preparing";
-constexpr const char * PHASE_WAITING   = "waiting";
-constexpr const char * PHASE_RETRYING  = "retrying";
-constexpr const char * PHASE_THINKING  = "thinking";
-constexpr const char * PHASE_WRITING   = "writing";
-constexpr const char * PHASE_CALLING   = "calling";
-constexpr const char * PHASE_RUNNING   = "running";
+// it again, streaming its thinking, its text or a call, running a tool, or
+// streaming the summary its history compacts into
+constexpr const char * PHASE_PREPARING  = "preparing";
+constexpr const char * PHASE_WAITING    = "waiting";
+constexpr const char * PHASE_RETRYING   = "retrying";
+constexpr const char * PHASE_THINKING   = "thinking";
+constexpr const char * PHASE_WRITING    = "writing";
+constexpr const char * PHASE_CALLING    = "calling";
+constexpr const char * PHASE_RUNNING    = "running";
+constexpr const char * PHASE_COMPACTING = "compacting";
 
 // the clock of one turn, in milliseconds of pulse_now()
 struct pulse {
