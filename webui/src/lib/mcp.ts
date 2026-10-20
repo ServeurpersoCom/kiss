@@ -272,9 +272,9 @@ export async function routed(
 		if (!server) continue;
 		const route = (await routes(server)).find((r) => r.name === name);
 		if (!route)
-			return `mcp ${proxy} has no route ${name} -> set proxy url ${name} <url> on mcp ${proxy}`;
+			return `mcp ${proxy} has no route ${name} -> set proxies url ${name} <url> on mcp ${proxy}`;
 		if (!route.keyed && config.get(`${module} key`, name) !== undefined)
-			return `${module} ${name} holds a key, route ${name} of mcp ${proxy} holds none -> set proxy key ${name} on mcp ${proxy}`;
+			return `${module} ${name} holds a key, route ${name} of mcp ${proxy} holds none -> set proxies key ${name} on mcp ${proxy}`;
 	}
 	return null;
 }

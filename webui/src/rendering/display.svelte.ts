@@ -19,7 +19,7 @@ type Block = (typeof BLOCKS)[number];
 export const display = $state({
 	thinking: CLOSED as Fold,
 	tools: CLOSED as Fold,
-	render: Object.fromEntries(BLOCKS.map((b) => [b, MARKDOWN])) as Record<Block, Render>,
+	rendering: Object.fromEntries(BLOCKS.map((b) => [b, MARKDOWN])) as Record<Block, Render>,
 	argument: '',
 	preview: {} as Record<string, string>
 });

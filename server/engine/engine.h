@@ -105,7 +105,7 @@ struct engine_result {
     std::vector<engine_ask> asks;
 };
 
-// the values the user typed, by stored key: proxy key deepwiki
+// the values the user typed, by stored key: proxies key deepwiki
 using engine_typed = std::map<std::string, std::string>;
 
 // the platform this server runs on: linux, macos or windows

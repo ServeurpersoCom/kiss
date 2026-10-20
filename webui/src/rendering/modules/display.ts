@@ -18,13 +18,19 @@ export default {
 	keys: {
 		thinking: { kind: 'enum', values: FOLDS, default: CLOSED },
 		'tool-calls': { kind: 'enum', values: FOLDS, default: CLOSED },
-		render: { kind: 'enum', values: RENDERS, default: MARKDOWN, named: true, names: () => BLOCKS },
+		rendering: {
+			kind: 'enum',
+			values: RENDERS,
+			default: MARKDOWN,
+			named: true,
+			names: () => BLOCKS
+		},
 		'preview-argument': { kind: 'string', default: 'description' }
 	},
 	apply(config) {
 		display.thinking = config.get('display thinking') as Fold;
 		display.tools = config.get('display tool-calls') as Fold;
-		for (const b of BLOCKS) display.render[b] = config.get('display render', b) as Render;
+		for (const b of BLOCKS) display.rendering[b] = config.get('display rendering', b) as Render;
 		display.argument = String(config.get('display preview-argument') ?? '');
 	},
 	// the blocks of text a turn renders

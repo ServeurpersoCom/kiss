@@ -25,8 +25,8 @@ static tool_outcome run(yyjson_val * args, const engine_typed & typed, const too
             } else if (a.yes) {
                 const std::string module = parts.first.substr(0, parts.first.find(' '));
                 const std::string with   = a.along.empty() ? "" : ", " + join(a.along, ", ") + " with it";
-                told.push_back(module == "proxy" ? "let proxy/" + parts.second + " proxy " + a.to + with :
-                                                   "let " + module + " " + parts.second + " reach " + a.to + with);
+                told.push_back(module == "proxies" ? "let proxy/" + parts.second + " proxy " + a.to + with :
+                                                     "let " + module + " " + parts.second + " reach " + a.to + with);
             } else {
                 told.push_back("type " + (a.to.empty() ? a.key : a.key + " sent to " + a.to));
             }

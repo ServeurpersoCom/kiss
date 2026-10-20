@@ -40,14 +40,14 @@ modules
   shells
     command <item> <line>           bash, zsh, powershell, pwsh, where found
     timeout <item> <seconds>        290
-    output <item> <bytes>           65536
+    max-output <item> <bytes>       65536
   files
     max-output <bytes>              65536, the text view returns
     max-load <bytes>                52428800, a file loaded whole
     max-megapixels <count>          100, decoded at most
     max-dimension <pixels>          1920, the longest side sent
     jpeg-quality <1..100>           85, of a JPEG made again
-  proxy
+  proxies
     url <item> <url>                a server proxied at proxy/<item>
     key <item> <secret>
     auth-header <item> <Header[: Scheme]>
@@ -126,7 +126,7 @@ server/tools/              one file per tool source, registered by existing
 server/mcp/                the MCP: the entry of both eras, the JSON-RPC answers, the methods
 server/lib/listener.cpp|h  the socket, moved when server listen-address or listen-port changes
 server/lib/http.cpp|h      the routes and the checks of Host, Origin and the key
-server/lib/proxy.cpp|h     the proxy of the servers the proxy module names
+server/lib/proxy.cpp|h     the proxy of the servers the proxies module names
 server/lib/console.cpp|h   the console of the interactive mode, opened on a terminal in the
                            foreground
 server/lib/term.h          the terminal of the console, per OS: raw mode, a key, the width
@@ -276,17 +276,17 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `server log-buffer`        | number | bytes of the last lines of the log `show logging` keeps         |
 | `shells command <item>`    | string | command line that runs a script read on stdin                   |
 | `shells timeout <item>`    | number | seconds a call may run                                          |
-| `shells output <item>`     | number | bytes of output a call returns                                  |
+| `shells max-output <item>` | number | bytes of output a call returns                                  |
 | `files max-output`         | number | bytes of text `view` returns, its head and its tail             |
 | `files max-load`           | number | bytes of a file a tool loads whole, an image or a text to edit  |
 | `files max-megapixels`     | number | megapixels an image may declare before it is decoded            |
 | `files max-dimension`      | number | the longest side of an image sent, in pixels                    |
 | `files jpeg-quality`       | number | the JPEG quality of an image made again, 1 to 100               |
-| `proxy url <item>`         | string | URL of a server this server proxies at `proxy/<item>`           |
-| `proxy key <item>`         | secret | key sent to that server                                         |
-| `proxy auth-header <item>` | string | the header of the key, `Header` or `Header: Scheme`             |
-| `proxy headers <item>`     | string | more headers sent to it, `Name: value; Name: value`             |
-| `proxy timeout <item>`     | number | seconds it may stay silent                                      |
+| `proxies url <item>`         | string | URL of a server this server proxies at `proxy/<item>`           |
+| `proxies key <item>`         | secret | key sent to that server                                         |
+| `proxies auth-header <item>` | string | the header of the key, `Header` or `Header: Scheme`             |
+| `proxies headers <item>`     | string | more headers sent to it, `Name: value; Name: value`             |
+| `proxies timeout <item>`     | number | seconds it may stay silent                                      |
 
 A command line splits into arguments on spaces, double quotes grouping. On Windows it reaches
 `CreateProcessW` unchanged, which is the command line Windows expects.
@@ -303,7 +303,7 @@ set shells command powershell powershell -NoProfile -NonInteractive -Command "<b
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 ```
 
-Every shell runs at the reset values of its other keys, `timeout` 290 seconds and `output` 65536
+Every shell runs at the reset values of its other keys, `timeout` 290 seconds and `max-output` 65536
 bytes, until a line sets its own. `<boot>` stands for the PowerShell bootstrap below, written in
 full in the file.
 
@@ -705,7 +705,7 @@ answers `! the user typed server key`. The server keeps nothing between the two 
 client gives a route asks the user to let it, a yes field of the same form, `Let proxy/exa proxy
 https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
 holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
-proxy/b proxy https://b.example/mcp, proxy key b with it`, so a key is never typed again for a url
+proxy/b proxy https://b.example/mcp, proxies key b with it`, so a key is never typed again for a url
 that changes. A `copy`, a `write` or an `erase` asks a yes field the same way, `Copy running-config
 to startup-config for the KiSS server forge`, the batch running again once the user says yes. A line
 that writes the value of a secret is refused, and a client that takes no form, every client of the
@@ -811,15 +811,15 @@ its version, and as its description the line it gives of itself in `show version
 
 ## Proxy routes
 
-The server proxies the servers its `proxy` module names, MCP servers and LLM endpoints alike, each
+The server proxies the servers its `proxies` module names, MCP servers and LLM endpoints alike, each
 at `proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
-this machine sees, or one whose key stays on the server. The server holds the route, `set proxy url
-hf https://router.huggingface.co/v1` and `set proxy key hf`, and the page reaches it by the item of
+this machine sees, or one whose key stays on the server. The server holds the route, `set proxies url
+hf https://router.huggingface.co/v1` and `set proxies key hf`, and the page reaches it by the item of
 the same name, `set endpoints proxy hf backend` or `set mcp proxy deepwiki backend`, its own url and
 key waiting unused while it goes through; the model may add a route through the config tool, the user letting its url
 and typing its key, the form naming where each goes. `resources/list` publishes every route as
 `kiss:proxy/<name>`, its `_meta` `kiss/keyed` telling whether it holds a key, so the page checks the
-route before it sends an item there. `show proxy` writes after each route where a client reaches it,
+route before it sends an item there. `show proxies` writes after each route where a client reaches it,
 `! proxy/hf proxies https://router.huggingface.co/v1`.
 
 The proxy speaks HTTP and knows no protocol: a request to `proxy/<name>/<rest>` goes to the url of
@@ -828,7 +828,7 @@ the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/com
 body and every header but those that stay on its side (`Host`, `Origin`, `Cookie`, `Authorization`,
 `x-api-key`, `Accept-Encoding`, the length and the connection), then the headers of the route, which
 replace those of the same name and never name the header of its key, then its key in the header
-`proxy auth-header` names, `Header` or `Header: Scheme`, a bearer token unless set, `set proxy
+`proxies auth-header` names, `Header` or `Header: Scheme`, a bearer token unless set, `set proxy
 auth-header claude x-api-key` for the Messages API of Anthropic; the key of this server never goes
 on. The answer comes back with its status and every header but those that stay on its side, each
 through the keychain, every secret of the configuration the route was read from read `<removed>`: a
@@ -838,9 +838,9 @@ goes through yyjson: every string and every name of a property is sealed as deco
 escapes wrote the key, and the JSON is written again, its numbers as they were written; any other
 text, a header and a refusal of the proxy are sealed as they are written. A page served elsewhere
 passes CORS: the server lets the headers it asks to send and shows every header it answers. A server
-that refuses the key of its route answers 424 with the fix, `set proxy key <name>`, so the page
+that refuses the key of its route answers 424 with the fix, `set proxies key <name>`, so the page
 never takes it for a refusal of its own key nor for a server down for a while, which it asks again;
-one that redirects answers 424 naming where, `set proxy url <name>`, since a redirect followed would
+one that redirects answers 424 naming where, `set proxies url <name>`, since a redirect followed would
 carry the key elsewhere; an url no client of the build reaches answers 424 too. A server that cannot
 be reached answers 502. A route the configuration does not name answers 404. A server that hides its
 own key some other way, deeper than the JSON a page decodes or in pieces across events, betrays a

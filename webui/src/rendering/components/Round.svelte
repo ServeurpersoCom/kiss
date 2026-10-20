@@ -44,7 +44,7 @@
 	<details {@attach fold(() => thinking)}>
 		<summary><Icon name="chevron" /><span class="head">Thinking</span></summary>
 		<div class="body">
-			{#if display.render.thinking === MARKDOWN}
+			{#if display.rendering.thinking === MARKDOWN}
 				<Markdown text={round.reasoning} />
 			{:else}
 				<div class="plain">{round.reasoning}</div>
@@ -56,7 +56,7 @@
 	<details {@attach fold(() => live)}>
 		<summary><Icon name="chevron" /><span class="head">Summary</span></summary>
 		<div class="body">
-			{#if display.render.reply === MARKDOWN}
+			{#if display.rendering.reply === MARKDOWN}
 				<Markdown text={round.text} />
 			{:else}
 				<div class="plain">{round.text}</div>
@@ -64,7 +64,7 @@
 		</div>
 	</details>
 {:else if round.text}
-	{#if display.render.reply === MARKDOWN}
+	{#if display.rendering.reply === MARKDOWN}
 		<Markdown text={round.text} />
 	{:else}
 		<div class="plain">{round.text}</div>

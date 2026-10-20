@@ -1,4 +1,4 @@
-// proxy.cpp: the proxy of the servers the proxy module names
+// proxy.cpp: the proxy of the servers the proxies module names
 //
 // Each request is built anew from the one it proxies, never spliced: its method,
 // the rest of its path and its query after the url of the route, its body and
@@ -87,14 +87,14 @@ struct route_conf {
 static std::optional<route_conf> route_of(const std::string & name) {
     std::optional<route_conf> r;
     engine_with([&](const engine_reader & config) {
-        const auto url = config.get("proxy url", name);
+        const auto url = config.get("proxies url", name);
         if (url) {
             r          = route_conf{};
             r->url     = *url;
-            r->keyed   = credential(config, config.get("proxy auth-header", name).value_or(BEARER), "proxy", name,
+            r->keyed   = credential(config, config.get("proxies auth-header", name).value_or(BEARER), "proxies", name,
                                     r->header, r->value);
-            r->headers = config.get("proxy headers", name).value_or("");
-            r->timeout = std::stoi(config.get("proxy timeout", name).value_or("0"));
+            r->headers = config.get("proxies headers", name).value_or("");
+            r->timeout = std::stoi(config.get("proxies timeout", name).value_or("0"));
             r->secrets = keychain_secrets(config);
         }
     });
@@ -166,13 +166,13 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     const int status = stream->response->status;
     if (status == httplib::StatusCode::Unauthorized_401 || status == httplib::StatusCode::Forbidden_403) {
         refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
-               r->url + " answers " + std::to_string(status) + " -> set proxy key " + route);
+               r->url + " answers " + std::to_string(status) + " -> set proxies key " + route);
         return;
     }
     if (status >= httplib::StatusCode::MultipleChoices_300 && status < httplib::StatusCode::BadRequest_400) {
         refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
                r->url + " answers " + std::to_string(status) + " to " + stream->response->get_header_value("Location") +
-                   " -> set proxy url " + route);
+                   " -> set proxies url " + route);
         return;
     }
     log_debug("Proxy", "Route proxy/%s: %s %s %d", route.c_str(), req.method.c_str(),

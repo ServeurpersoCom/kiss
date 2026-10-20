@@ -443,20 +443,20 @@ describe('the display', () => {
 
 	it('renders the thinking and the reply as markdown by default, each plain on demand', async () => {
 		const k = await page();
-		expect(k.settings.get('display render', 'thinking')).toBe('markdown');
-		expect(k.settings.get('display render', 'reply')).toBe('markdown');
-		expect((await k.run('show display render', 'user')).text).toBe(
-			['set display render thinking markdown', 'set display render reply markdown'].join('\n')
+		expect(k.settings.get('display rendering', 'thinking')).toBe('markdown');
+		expect(k.settings.get('display rendering', 'reply')).toBe('markdown');
+		expect((await k.run('show display rendering', 'user')).text).toBe(
+			['set display rendering thinking markdown', 'set display rendering reply markdown'].join('\n')
 		);
-		expect((await k.run('set display render tools plain', 'user')).text).toContain(
-			'unknown display render "tools"'
+		expect((await k.run('set display rendering tools plain', 'user')).text).toContain(
+			'unknown display rendering "tools"'
 		);
-		expect((await k.run('set display render reply rich', 'user')).text).toContain(
+		expect((await k.run('set display rendering reply rich', 'user')).text).toContain(
 			'not one of markdown plain'
 		);
-		expect((await k.run('set display render reply plain', 'user')).ok).toBe(true);
+		expect((await k.run('set display rendering reply plain', 'user')).ok).toBe(true);
 		const { display } = await import('../src/rendering/display.svelte.js');
-		expect(display.render).toEqual({ thinking: 'markdown', reply: 'plain' });
+		expect(display.rendering).toEqual({ thinking: 'markdown', reply: 'plain' });
 	});
 
 	it('previews the description of every folded call, a tool of its own over it', async () => {
@@ -511,11 +511,11 @@ describe('a proxy', () => {
 			'% endpoints: endpoints proxy hf: no mcp nowhere -> a proxy names the KiSS server holding route hf, one of mcp kiss'
 		);
 		expect((await k.run('set endpoints proxy nope kiss', 'user')).text).toBe(
-			'% endpoints: mcp kiss has no route nope -> set proxy url nope <url> on mcp kiss'
+			'% endpoints: mcp kiss has no route nope -> set proxies url nope <url> on mcp kiss'
 		);
 		await k.run('set endpoints url bare http://b/v1\nset endpoints key bare B', 'user');
 		expect((await k.run('set endpoints proxy bare kiss', 'user')).text).toBe(
-			'% endpoints: endpoints bare holds a key, route bare of mcp kiss holds none -> set proxy key bare on mcp kiss'
+			'% endpoints: endpoints bare holds a key, route bare of mcp kiss holds none -> set proxies key bare on mcp kiss'
 		);
 		expect((await k.run('no endpoints proxy hf', 'llm')).ok).toBe(true);
 		await k.run('show models', 'user');
@@ -1554,7 +1554,7 @@ describe('every key', () => {
 			'set models max_tokens m/nope 5',
 			'set models max_tokens nowhere/x 5',
 			'set tools use nope on',
-			'set display render nope plain'
+			'set display rendering nope plain'
 		]) {
 			expect((await k.run(line, 'user')).text).toMatch(/^% unknown [a-z ]+"[a-z/]+"/);
 		}

@@ -61,7 +61,7 @@ static engine_module make_shells() {
     timeout.reset   = "290";
 
     // the head and the tail of the output share the budget
-    engine_key output("output", ENGINE_NUMBER);
+    engine_key output("max-output", ENGINE_NUMBER);
     output.named   = true;
     output.min     = 2;
     output.integer = true;

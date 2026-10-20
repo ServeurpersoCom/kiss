@@ -62,7 +62,7 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
         s.command = command;
         s.cwd     = cwd;
         s.timeout = std::stoi(config.get("shells timeout", name).value_or("0"));
-        s.output  = (size_t) std::stoul(config.get("shells output", name).value_or("0"));
+        s.output  = (size_t) std::stoul(config.get("shells max-output", name).value_or("0"));
 
         tool t;
         t.suffix      = name;

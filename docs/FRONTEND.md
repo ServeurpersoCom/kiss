@@ -42,7 +42,7 @@ modules
     thinking closed|open|inference  closed
     tool-calls closed|open|inference
                                     closed
-    render thinking|reply markdown|plain
+    rendering thinking|reply markdown|plain
                                     markdown
     preview-argument <argument>     description, the argument every folded call shows
   endpoints
@@ -266,10 +266,10 @@ opens on a URL, written as it is; what a server answers goes as it came.
 | Module      | Keys                                                                                                                                                                                       |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `chat`      | `model`, `system-prompt`                                                                                                                                                                   |
-| `display`   | `thinking`, `tool-calls`, `render <thinking or reply>`, `preview-argument`                                                                                                                 |
+| `display`   | `thinking`, `tool-calls`, `rendering <thinking or reply>`, `preview-argument`                                                                                                              |
 | `endpoints` | `url <name>` guarded, `protocol <name>`, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `max-retries <name>`, `retry-pause <name>`, `proxy <name>` guarded |
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
-| `models`    | `temperature` to `reasoning_effort <endpoint/model>`, `compaction-trigger-tokens <endpoint/model>`, `compaction-preserve-steps <endpoint/model>`                                            |
+| `models`    | `temperature` to `reasoning_effort <endpoint/model>`, `compaction-trigger-tokens <endpoint/model>`, `compaction-preserve-steps <endpoint/model>`                                           |
 | `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                                                                                              |
 | `tools`     | `max-rounds`, `use <tool>` guarded when opening, `preview-argument <tool>`                                                                                                                 |
 
@@ -333,7 +333,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The model opens a way out only once the user agrees, every time, whatever command spells the
   change: a url given a value, a tool opened; closing never asks.
 - A question offers always only for a call, and says what it gives.
-- The thinking and the reply render as Markdown unless set `plain`; `render` takes these two blocks
+- The thinking and the reply render as Markdown unless set `plain`; `rendering` takes these two blocks
   only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
   from the page itself, checked in Chromium.
@@ -373,7 +373,7 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuses the line with its error. `chat model` names an endpoint of the configuration, the model
   left to the endpoint. A model names an endpoint, and holds no parameter its protocol never sends.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
-  known items only, `display render`, `tools use`, or a value its key no longer takes, at boot, in a
+  known items only, `display rendering`, `tools use`, or a value its key no longer takes, at boot, in a
   copy and wherever it shows, and a copy says so; a line naming one fails.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue; every
   endpoint lists at once, one that fails beside the others.
@@ -505,7 +505,7 @@ headers of the protocol; the route holds the url and the key it sends, so a key 
 reaches the browser, and the url and key of `hf` here wait unused until `no endpoints proxy hf`
 sends it direct again, one line either way. The batch that sets a proxy asks the server for its
 routes, which it publishes as MCP resources: one without a route of that name, or without a key when
-the item holds one, stops the batch with the fix, `set proxy key hf on mcp monstre`, so the model
+the item holds one, stops the batch with the fix, `set proxies key hf on mcp monstre`, so the model
 never cuts itself off its own endpoint. The proxy names a KiSS server of the page that has a url and
 no proxy itself, the refusal of any other listing those, and the model sets it only once the user
 agrees, as a url.
@@ -755,7 +755,7 @@ under `kiss.saves`, the startup-config under `kiss.startup`, and the width of th
 
 ## Rendering
 
-The thinking and the reply render as Markdown, each plain on demand, `set display render reply
+The thinking and the reply render as Markdown, each plain on demand, `set display rendering reply
 plain`: a plain block reads as written, in monospace. The thinking keeps its small size and the font
 of the page, its headings at its size. Markdown renders with remark and rehype: GitHub flavored
 Markdown, LaTeX through KaTeX, code highlighted in every language lowlight knows, under a head

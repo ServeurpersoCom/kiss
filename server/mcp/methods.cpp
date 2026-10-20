@@ -113,8 +113,8 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
 void method_resources_list(httplib::Response & res, yyjson_val * id, bool modern) {
     std::vector<std::pair<std::string, bool>> routes;
     engine_with([&](const engine_reader & config) {
-        for (const std::string & name : config.names("proxy")) {
-            routes.emplace_back(name, config.get("proxy key", name).has_value());
+        for (const std::string & name : config.names("proxies")) {
+            routes.emplace_back(name, config.get("proxies key", name).has_value());
         }
     });
     jsonrpc_result(res, id, modern, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
