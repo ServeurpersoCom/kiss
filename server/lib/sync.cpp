@@ -302,6 +302,10 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
     if (action == "retry" && found->role == ROLE_CLI) {
         return { MALFORMED, "\"" + entry + "\" is not a message of the user nor an answer" };
     }
+    // an answer whose command was dismissed at the root follows no entry
+    if (action == "retry" && found->role == ROLE_ASSISTANT && !found->parent) {
+        return { MALFORMED, "\"" + entry + "\" follows no entry" };
+    }
     if (action == "drop" && found->role != ROLE_CLI) {
         return { MALFORMED, "\"" + entry + "\" is not a command" };
     }

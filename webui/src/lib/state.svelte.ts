@@ -271,7 +271,8 @@ export async function edit(id: string, text: string): Promise<void> {
 
 // the model answers a message of the user again, the answer entering as a
 // version beside those it had: from the message itself or from an answer to
-// it; a summary writes itself again from the entry it follows
+// it; a summary writes itself again from the entry it follows, an answer that
+// follows none, its command dismissed at the root, writing nothing
 export async function retry(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || !entry || app.current.id in app.replies) return;

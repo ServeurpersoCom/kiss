@@ -177,7 +177,9 @@
 				{@render clip()}
 			{:else if message.role === 'assistant'}
 				{@render clip()}
-				{@render again()}
+				{#if message.parent !== null}
+					{@render again()}
+				{/if}
 				{@render switcher()}
 				{@render when()}
 				{#if message.stats}

@@ -17,6 +17,7 @@
 #include "httplib.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
+#include "lib/sync.h"
 #include "lib/tools.h"
 #include "server/server.conf.hpp"
 #include "yyjson.h"
@@ -439,6 +440,30 @@ int main() {
     law(after.back().parent == after[1].id && after.back().compaction && after.back().rounds.size() == 1 &&
             after.back().rounds[0].kept == 1 && !after.back().error,
         "a summary whose line is dropped writes itself again after the answer it now follows");
+    // a summary whose line was the first entry, dismissed: its retry follows no
+    // entry and is refused, the conversation left as it was
+    conversation lone;
+    lone.id = conversation_uuid();
+    conversation_entry lone_line;
+    lone_line.role             = ROLE_CLI;
+    lone_line.input            = "compact";
+    lone_line.ok               = true;
+    const std::string  line_id = lone.entries[conversation_append(lone, std::nullopt, lone_line)].id;
+    conversation_entry lone_reply;
+    lone_reply.role            = ROLE_ASSISTANT;
+    lone_reply.compaction      = true;
+    lone_reply.error           = "Nothing to compact";
+    const std::string reply_id = lone.entries[conversation_append(lone, lone.leaf, lone_reply)].id;
+    conversation_drop(lone, line_id);
+    library_create(lone, {});
+    httplib::Request  retry_req;
+    httplib::Response retry_res;
+    retry_req.body = "{\"id\":\"" + lone.id + "\",\"entry\":\"" + reply_id + "\"}";
+    sync_action(retry_req, retry_res, "retry");
+    law(retry_res.status == 400 && retry_res.body.find("follows no entry") != std::string::npos &&
+            !agent_busy(lone.id) && waited(lone.id).size() == 1,
+        "a retry of a summary that follows no entry is refused: " + std::to_string(retry_res.status) + " " +
+            retry_res.body);
     // a summary the output limit cuts fails its turn, never a boundary
     conversation cut;
     cut.id = conversation_uuid();
