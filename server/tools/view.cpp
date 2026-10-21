@@ -125,7 +125,7 @@ static tool_outcome listing(const fs::path & root, const std::string & given, si
     output_buffer kept(budget);
     for (const auto & [rel, size] : sizes) {
         const std::string path = rel.empty() ? given : (fs::u8path(given) / fs::u8path(rel)).u8string();
-        const std::string line = human(size) + "\t" + path + "\n";
+        const std::string line = human(size) + " " + path + "\n";
         kept.add(line.data(), line.size());
     }
     const std::string tail = hidden ? ", " + std::to_string(hidden) + " hidden" : "";

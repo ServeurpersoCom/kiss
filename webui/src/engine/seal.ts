@@ -24,6 +24,6 @@ function sealed(value: unknown, all: readonly string[]): unknown {
 // a value as JSON, every string it holds sealed as decoded, a name of a
 // property as a value, so a secret escaped or streamed in pieces is whole
 // there
-export function seal(value: unknown, all: readonly string[], indent?: string): string {
-	return JSON.stringify(sealed(JSON.parse(JSON.stringify(value)), all), null, indent);
+export function seal(value: unknown, all: readonly string[]): string {
+	return JSON.stringify(sealed(JSON.parse(JSON.stringify(value)), all));
 }

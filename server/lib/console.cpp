@@ -251,7 +251,7 @@ static void complete() {
     }
     const std::string line = extend(typed, hits);
     if (line == typed) {
-        below(join(hits, "  "));
+        below(join(hits, " "));
         return;
     }
     edit([&]() {
@@ -263,7 +263,7 @@ static void complete() {
 // ?: what may follow the line, or the words the word typed starts
 static void help() {
     const words_t next = suggest(g_text.substr(0, g_cursor));
-    below(next.empty() ? std::string(ERROR_PREFIX) + "nothing may follow" : join(next, "  "));
+    below(next.empty() ? std::string(ERROR_PREFIX) + "nothing may follow" : join(next, " "));
 }
 
 static void editor() {

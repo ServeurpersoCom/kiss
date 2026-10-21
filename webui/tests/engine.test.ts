@@ -953,7 +953,7 @@ describe('the conversations', () => {
 		const list = [talk('bbbbbbbb-2', 'Two words', 2), talk('aaaaaaaa-1', 'one', 1)];
 		const r = await k.run('show conversations', 'llm', { ...shelf(list), conversation: list[1] });
 		expect(r.text).toBe(
-			[`!   bbbbbbbb ${localTime(2)} "Two words"`, `! * aaaaaaaa ${localTime(1)} one`].join('\n')
+			[`! bbbbbbbb ${localTime(2)} "Two words"`, `! * aaaaaaaa ${localTime(1)} one`].join('\n')
 		);
 		expect((await k.run('show conversations', 'llm', shelf([]))).text).toBe(
 			'! no conversation yet'

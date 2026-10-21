@@ -125,7 +125,7 @@ describe('a summary kept', () => {
 		const [back] = parse(serialize([c]));
 		expect(back).toEqual(c);
 		expect(compacted(back.entries)).toEqual(compacted(c.entries));
-		const wrong = serialize([c]).replace('"kept": 0', '"kept": 1.5');
+		const wrong = serialize([c]).replace('"kept":0', '"kept":1.5');
 		expect(() => parse(wrong)).toThrow(
 			'file.conversations[0].entries[1].rounds[1].kept: not a count'
 		);

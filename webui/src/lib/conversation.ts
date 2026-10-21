@@ -6,7 +6,6 @@ import { seal } from '../engine/seal.js';
 // conversations as the browser stores them, ids included
 const MARK = 'kiss';
 const KIND = 'conversations';
-const INDENT = '\t';
 // the root of a place named in an error
 const ROOT = 'file';
 
@@ -135,7 +134,7 @@ export function serialize(conversations: readonly Conversation[]): string {
 			entries: stored(c.entries)
 		}))
 	};
-	return seal(file, secrets(), INDENT) + '\n';
+	return seal(file, secrets()) + '\n';
 }
 
 // the one conversation a prefix of its id names

@@ -30,7 +30,7 @@ static step_t compile_show_conversations(const words_t & args) {
         words_t out;
         library_each([&](const conversation & c) {
             out.push_back(
-                comment("  " + c.id.substr(0, ID_SHOWN) + " " + local_time(c.updated) + conversation_titled(c.title)));
+                comment(c.id.substr(0, ID_SHOWN) + " " + local_time(c.updated) + conversation_titled(c.title)));
         });
         return out.empty() ? comment("no conversation yet") : join(out, "\n");
     };
