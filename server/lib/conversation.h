@@ -42,13 +42,14 @@ struct conversation_opaque {
 // one request of an assistant turn: what the model streamed back, then the
 // calls it made; a summary holds kept, its text the summary of the steps
 // before it but the kept last ones, which the model reads after it in their
-// place
+// place; folding, in memory only while the summary streams
 struct conversation_round {
     std::string                        reasoning;
     std::string                        text;
     std::vector<conversation_call>     calls;
     std::optional<conversation_opaque> opaque;
     std::optional<int>                 kept;
+    bool                               folding = false;
 };
 
 // what a turn spent: its tokens, and in milliseconds of the system,
@@ -119,8 +120,8 @@ std::string conversation_file(const std::vector<conversation> & conversations, c
 constexpr const char * STOPPED = "Stopped before it answered: the tool may have acted";
 
 // what of a turn holds once it stops: the calls that ran, those sent as
-// stopped, the rounds that streamed something, and a summary that wrote its
-// text once a round follows it; a call never sent never ran
+// stopped, the rounds that streamed something, and a summary once it
+// finished; a call never sent never ran
 std::vector<conversation_round> conversation_settled(const std::vector<conversation_round> & rounds);
 
 // the conversation as it settled, even while the model answers

@@ -103,6 +103,8 @@ struct engine_result {
     bool                    ok;
     std::string             text;
     std::vector<engine_ask> asks;
+    // the batch asks the conversation it ran in to compact its history
+    bool                    compact = false;
 };
 
 // the values the user typed, by stored key: proxies key deepwiki
@@ -137,8 +139,12 @@ std::string engine_factory(const std::string & text);
 void engine_start(const std::string & path, const std::string & version);
 
 // one batch at a time, whoever sends it; typed fills the set lines of secrets
-// written without their value
-engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed = {});
+// written without their value; conversation tells it runs in one, the only
+// place compact takes
+engine_result engine_run(const std::string &  text,
+                         engine_role          role,
+                         const engine_typed & typed        = {},
+                         bool                 conversation = false);
 
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");

@@ -18,10 +18,14 @@ struct context {
     engine_role             role;
     const engine_typed &    typed;
     words_t &               asks;
-    std::vector<engine_ask> questions = {};
-    bool                    save      = false;
-    bool                    erase     = false;
-    words_t                 forget    = {};
+    std::vector<engine_ask> questions    = {};
+    bool                    save         = false;
+    bool                    erase        = false;
+    words_t                 forget       = {};
+    // the batch runs in a conversation, which compact asks to compact its
+    // history once the batch holds
+    bool                    conversation = false;
+    bool                    compact      = false;
 };
 
 // whether the user lets a step do what question says: always on the console;

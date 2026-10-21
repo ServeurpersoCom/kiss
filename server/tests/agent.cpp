@@ -17,6 +17,7 @@
 #include "httplib.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
+#include "lib/tools.h"
 #include "server/server.conf.hpp"
 #include "yyjson.h"
 
@@ -111,6 +112,8 @@ int main() {
             return;
         }
         const std::string delta =
+            text == "fold" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"config\","
+                             "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"compact\\\"}\"}}]}" :
             text == "go" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"bash\",\"arguments\":"
                            "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo hi\\\"}\"}}]}" :
             text == "page" ?
@@ -350,6 +353,85 @@ int main() {
     const conversation_entry quiet = compacting("silent", "quiet");
     law(quiet.rounds.size() == 2 && quiet.stats && !quiet.stats->context,
         "once folded, the tokens held are those the next request tells");
+
+    // compact runs only in a conversation, the config tool of the agent the
+    // one place it takes
+    const engine_result               console = engine_run("compact", ENGINE_ADMIN);
+    const std::shared_ptr<yyjson_doc> lines(yyjson_read("{\"lines\":\"compact\"}", 19, 0), yyjson_doc_free);
+    law(!console.ok && console.text == "% no conversation here" && !console.compact &&
+            tools_config(yyjson_doc_get_root(lines.get()), {}, true).compact &&
+            !tools_config(yyjson_doc_get_root(lines.get()), {}, false).compact,
+        "compact runs only in a conversation: " + console.text);
+    engine_run("set models compaction-preserve-steps e/m 1", ENGINE_ADMIN);
+    // the entries of a conversation once its turn ended
+    const auto waited = [&](const std::string & id) {
+        for (int i = 0; i < 1000 && agent_busy(id); i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        std::vector<conversation_entry> out;
+        library_each([&](const conversation & x) {
+            if (x.id == id) {
+                out = x.entries;
+            }
+        });
+        return out;
+    };
+    // a turn answered, then the line that asks to compact, the summary it
+    // asks the same on the page
+    conversation typed;
+    typed.id = conversation_uuid();
+    conversation_entry asked_one;
+    asked_one.text = "one";
+    conversation_append(typed, std::nullopt, asked_one);
+    conversation_entry first_reply;
+    first_reply.role = ROLE_ASSISTANT;
+    first_reply.rounds.emplace_back();
+    first_reply.rounds[0].text = "first";
+    conversation_append(typed, typed.leaf, first_reply);
+    library_create(typed, {});
+    law(agent_command(typed.id, "compact").empty(), "a line that compacts starts");
+    std::vector<conversation_entry> after = waited(typed.id);
+    {
+        std::ifstream in(COMPACT);
+        std::string   golden;
+        std::getline(in, golden);
+        std::lock_guard<std::mutex> lock(g_mutex);
+        law(!g_compacted.empty() && g_compacted.back() == golden,
+            "a line that compacts asks the summary the page asks: " +
+                (g_compacted.empty() ? std::string("none") : g_compacted.back()));
+    }
+    law(after.size() == 4 && after[2].role == ROLE_CLI && after[2].ok && after[2].output.empty() &&
+            after[3].role == ROLE_ASSISTANT && after[3].parent == after[2].id && after[3].rounds.size() == 1 &&
+            after[3].rounds[0].text == "S" && after[3].rounds[0].kept == 1 && !after[3].error,
+        "the summary is written alone after the line that asks it");
+    law(agent_answer(typed.id, [&](conversation &) { return after[2].id; }).empty(),
+        "a summary writes itself again after its line");
+    after = waited(typed.id);
+    law(after.size() == 5 && after[4].parent == after[2].id && after[4].rounds.size() == 1 &&
+            after[4].rounds[0].kept == 1,
+        "the summary written again enters beside the one it had");
+    engine_run("set models compaction-preserve-steps e/m 3", ENGINE_ADMIN);
+    law(agent_command(typed.id, "compact").empty(), "a line with nothing to compact starts");
+    after = waited(typed.id);
+    law(after.back().role == ROLE_ASSISTANT && after.back().rounds.empty() &&
+            after.back().error == std::optional<std::string>("Nothing to compact"),
+        "a line with nothing to compact fails its turn, asking nothing");
+    engine_run("set models compaction-preserve-steps e/m 1", ENGINE_ADMIN);
+    // the model asks a compaction through its config tool: the history folds
+    // before its next request
+    conversation folding;
+    folding.id = conversation_uuid();
+    conversation_entry fold;
+    fold.text                = "fold";
+    const std::string folded = folding.entries[conversation_append(folding, std::nullopt, fold)].id;
+    library_create(folding, {});
+    law(agent_answer(folding.id, [&](conversation &) { return folded; }).empty(), "a turn that folds starts");
+    after = waited(folding.id);
+    law(after.size() == 2 && after[1].rounds.size() == 3 && after[1].rounds[0].calls.size() == 1 &&
+            after[1].rounds[0].calls[0].ok && after[1].rounds[1].text == "S" && after[1].rounds[1].kept == 1 &&
+            after[1].rounds[2].text == "done" && !after[1].error,
+        "a batch of the model that compacts folds the history before its next request");
+    engine_run("set models compaction-preserve-steps e/m 2", ENGINE_ADMIN);
 
     const auto known = [](const std::string & secret) {
         const words_t all = keychain_known();

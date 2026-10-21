@@ -455,7 +455,11 @@ static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val *
         return !stop.stopped;
     };
     engine_typed typed;
-    tool_outcome out = t.run(args, typed, tick);
+    // the config tool of this server runs its batch in the conversation
+    const auto   go = [&] {
+        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, true) : t.run(args, typed, tick);
+    };
+    tool_outcome out = go();
     while (!out.asks.empty() && !stop.stopped) {
         const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
         yyjson_mut_val *                      input = yyjson_mut_obj(made.get());
@@ -467,7 +471,7 @@ static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val *
         if (!tools_typed(yyjson_doc_get_root(answered.get()), typed)) {
             return { false, "The user answered nothing" };
         }
-        out = t.run(args, typed, tick);
+        out = go();
     }
     if (stop.stopped) {
         throw api_error("Stopped");
@@ -510,8 +514,8 @@ static tool_outcome run_client(const std::string & id, yyjson_val * args, api_st
 // tool in consent asks the user, the turn waiting for a page to answer: once,
 // always, which turns the tool on, or refuse; a tool that asks the user to
 // fill a form, a secret to type or a url to let, gets their response the
-// same way
-static void call(const std::string &           id,
+// same way; whether its batch asks the conversation to compact
+static bool call(const std::string &           id,
                  const std::string &           entry,
                  size_t                        r,
                  size_t                        c,
@@ -562,7 +566,7 @@ static void call(const std::string &           id,
     if (!known || (!called.args.empty() && !yyjson_is_obj(args))) {
         settle(NO_ARGS, known ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"", false,
                {});
-        return;
+        return false;
     }
     if (use != USE_ON) {
         const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
@@ -576,7 +580,7 @@ static void call(const std::string &           id,
         log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
         if (verdict == REFUSE) {
             settle(called.args, "The user refused the call", false, {});
-            return;
+            return false;
         }
         if (verdict == ALWAYS) {
             engine_run("set tools use " + quote(called.name) + " " + USE_ON, ENGINE_ADMIN);
@@ -585,7 +589,7 @@ static void call(const std::string &           id,
     const std::string refused = found ? tools_check(*found, args) : paged ? tools_check(client_tool(), args) : "";
     if (!refused.empty()) {
         settle(called.args, refused, false, {});
-        return;
+        return false;
     }
     grow(id, entry, stop, [&](conversation_entry & e) { e.rounds[r].calls[c].sent = true; });
     // the call written as sent before it runs, or it does not run
@@ -593,7 +597,7 @@ static void call(const std::string &           id,
     if (!unkept.empty()) {
         logged(id, unkept);
         settle(called.args, "The conversation is not written: " + unkept, false, {});
-        return;
+        return false;
     }
     log_info("Agent", "%.8s calls %s", id.c_str(), called.name.c_str());
     if (server) {
@@ -628,12 +632,12 @@ static void call(const std::string &           id,
             typed = g_typed;
         }
         settle(called.args, seal_text(out.text, typed), out.ok, out.images);
-        return;
+        return false;
     }
     if (paged) {
         const tool_outcome out = run_client(id, args, stop, p);
         settle(called.args, out.text, out.ok, {});
-        return;
+        return false;
     }
     const tool_outcome              out = run_own(id, *found, args, stop, p);
     std::vector<conversation_image> images;
@@ -641,6 +645,7 @@ static void call(const std::string &           id,
         images.push_back({ out.mime, out.image });
     }
     settle(called.args, out.text, out.ok, images);
+    return out.compact;
 }
 
 // what went wrong, with the command that fixes it when the endpoint is the
@@ -681,7 +686,8 @@ static void summarize(const std::string & id,
     size_t at = 0;
     grow(id, entry, stop, [&](conversation_entry & x) {
         conversation_round r;
-        r.kept = kept;
+        r.kept    = kept;
+        r.folding = true;
         x.rounds.push_back(r);
         at = x.rounds.size() - 1;
     });
@@ -709,17 +715,22 @@ static void summarize(const std::string & id,
     if (reply_of(id, entry).rounds[at].text.empty()) {
         throw api_error("Endpoint " + e.server.name + " wrote no summary");
     }
+    grow(id, entry, stop, [&](conversation_entry & x) { x.rounds[at].folding = false; });
 }
 
 // one round streamed into the reply, the history first compacted when the
-// last request held as many tokens as the trigger of the model; whether it
-// called anything; context, the tokens the last request held once answered,
-// none once unknown
+// last request held as many tokens as the trigger of the model or when asked,
+// a batch of the model asking it; whether it called anything; context, the
+// tokens the last request held once answered, none once unknown; a turn that
+// compacts writes the summary alone, failing when no step lies past the
+// preserved ones
 static bool round(const std::string &                     id,
                   const std::string &                     entry,
                   const std::vector<conversation_entry> & before,
                   size_t                                  r,
                   std::optional<double> &                 context,
+                  bool &                                  asked,
+                  bool                                    compact,
                   api_stop &                              stop,
                   pulse &                                 p,
                   met_t &                                 met) {
@@ -758,16 +769,23 @@ static bool round(const std::string &                     id,
         req.info = api_describe(e, model, stop);
     }
     const auto trigger = s.triggers.find(item);
-    if (trigger != s.triggers.end() && context && *context >= trigger->second) {
+    if (asked || (trigger != s.triggers.end() && context && *context >= trigger->second)) {
         const auto preserve = s.preserves.find(item);
         const auto fold     = compaction_folding(history(), preserve == s.preserves.end() ? 0 : preserve->second);
+        if (compact && !fold) {
+            throw api_error("Nothing to compact");
+        }
         if (fold) {
             api_request ask = req;
             ask.messages    = fold->messages;
             summarize(id, entry, e, ask, fold->kept, stop, p);
         }
     }
+    asked = false;
     context.reset();
+    if (compact) {
+        return false;
+    }
     req.messages = compaction_compacted(history());
     log_info("Agent", "%.8s round %zu: %s/%s", id.c_str(), r + 1, e.server.name.c_str(), model.c_str());
     pulse_mark(p, PHASE_WAITING, e.server.name, pulse_now());
@@ -845,23 +863,26 @@ static bool round(const std::string &                     id,
         }
         pulse_mark(p, PHASE_RUNNING, reply_of(id, entry).rounds[at].calls[c].name, pulse_now());
         beat(id, p);
-        call(id, entry, at, c, stop, p, s.served);
+        asked = call(id, entry, at, c, stop, p, s.served) || asked;
     }
     return n > 0;
 }
 
-// one turn, rounds streamed until a round calls nothing; after a stop no call
-// runs, and the reply keeps what settled before it, with what it spent once
-// it streamed anything and the tokens its last request held; the pulse
-// follows the turn chunk by chunk
+// one turn, rounds streamed until a round calls nothing, or the summary alone
+// of a turn that compacts; after a stop no call runs, and the reply keeps what
+// settled before it, with what it spent once it streamed anything and the
+// tokens its last request held; the pulse follows the turn chunk by chunk
 static void turn(std::string                     id,
                  std::string                     entry,
                  std::vector<conversation_entry> before,
+                 bool                            compact,
                  std::shared_ptr<api_stop>       stop,
                  pulse                           p) {
     std::optional<std::string> error;
     size_t                     r = 0;
     met_t                      met;
+    // a compaction asked before the next request
+    bool                       asked = compact;
     // the tokens the last request held once answered, as the last turn kept
     // them, none once unknown
     std::optional<double>      context;
@@ -876,7 +897,7 @@ static void turn(std::string                     id,
             [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
-            more = round(id, entry, before, r, context, *stop, p, met);
+            more = round(id, entry, before, r, context, asked, compact, *stop, p, met);
         }
         if (more) {
             error = "Stopped after " + std::to_string(r) + " tool rounds";
@@ -909,8 +930,40 @@ static void turn(std::string                     id,
     g_turns.erase(id);
 }
 
+// the reply a turn writes after the entry from names, a message of the user
+// it answers or a command it writes the summary after, appended with the
+// path up to that entry; the message of what keeps it from it, empty once
+// appended
+static std::string reply(const std::string &                                id,
+                         const std::function<std::string(conversation &)> & from,
+                         std::string &                                      entry,
+                         std::vector<conversation_entry> &                  before,
+                         bool &                                             compact) {
+    return library_change(
+        id,
+        [&](conversation & c) {
+            const std::string asked = from(c);
+            const auto        e     = std::find_if(c.entries.begin(), c.entries.end(),
+                                                   [&](const conversation_entry & x) { return x.id == asked; });
+            if (e == c.entries.end() || (e->role != ROLE_USER && e->role != ROLE_CLI)) {
+                return "\"" + asked + "\" is not a message of the user nor a command";
+            }
+            compact = e->role == ROLE_CLI;
+            c.leaf  = asked;
+            before  = conversation_path(c);
+            conversation_entry r;
+            r.role             = ROLE_ASSISTANT;
+            const size_t index = conversation_append(c, asked, r);
+            entry              = c.entries[index].id;
+            c.updated          = c.entries[index].time;
+            return std::string();
+        },
+        keychain_known());
+}
+
 // a line the user typed runs as the config tool of this server runs it, the
-// turn of the conversation while it asks; its output enters after the thread
+// turn of the conversation while it asks; its output enters after the thread,
+// and the summary of the history after it when it asks to compact
 static void command(std::string id, std::string input, std::shared_ptr<api_stop> stop, pulse p) {
     std::optional<tool> config;
     engine_with([&](const engine_reader & reader) {
@@ -926,23 +979,34 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
     yyjson_mut_obj_add_strncpy(made.get(), args, "lines", input.data(), input.size());
     const std::shared_ptr<yyjson_doc> doc(yyjson_mut_doc_imut_copy(made.get(), nullptr), yyjson_doc_free);
     conversation_entry                e;
-    e.role  = ROLE_CLI;
-    e.input = input;
+    e.role       = ROLE_CLI;
+    e.input      = input;
+    bool compact = false;
     try {
         const tool_outcome out = run_own(id, *config, yyjson_doc_get_root(doc.get()), *stop, p);
         e.output               = out.text;
         e.ok                   = out.ok;
+        compact                = out.compact;
     } catch (const std::exception & err) {
         e.output = explain(err, *stop);
     }
+    std::string line;
     logged(id, library_change(
                    id,
                    [&](conversation & c) {
-                       conversation_append(c, c.leaf, e);
+                       line = c.entries[conversation_append(c, c.leaf, e)].id;
                        return std::string();
                    },
                    keychain_known()));
     log_info("Agent", "%.8s ran %s", id.c_str(), e.ok ? "a line" : "a line that failed");
+    // a line that asks to compact: the summary written after it, as the same
+    // turn of the conversation
+    std::string                     entry;
+    std::vector<conversation_entry> before;
+    if (compact && !stop->stopped && reply(id, [&](conversation &) { return line; }, entry, before, compact).empty()) {
+        turn(id, entry, before, true, stop, pulse_start(pulse_now()));
+        return;
+    }
     library_turn(id, "");
     std::lock_guard<std::mutex> lock(g_mutex);
     g_turns.erase(id);
@@ -975,27 +1039,8 @@ std::string agent_answer(const std::string & id, const std::function<std::string
     }
     std::string                     entry;
     std::vector<conversation_entry> before;
-    const std::string               why = library_change(
-        id,
-        [&](conversation & c) {
-            const std::string asked   = user(c);
-            bool              is_user = false;
-            for (const conversation_entry & e : c.entries) {
-                is_user = is_user || (e.id == asked && e.role == ROLE_USER);
-            }
-            if (!is_user) {
-                return "\"" + asked + "\" is not a message of the user";
-            }
-            c.leaf = asked;
-            before = conversation_path(c);
-            conversation_entry reply;
-            reply.role         = ROLE_ASSISTANT;
-            const size_t index = conversation_append(c, asked, reply);
-            entry              = c.entries[index].id;
-            c.updated          = c.entries[index].time;
-            return std::string();
-        },
-        keychain_known());
+    bool                            compact = false;
+    const std::string               why     = reply(id, user, entry, before, compact);
     if (!why.empty()) {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_turns.erase(id);
@@ -1003,6 +1048,6 @@ std::string agent_answer(const std::string & id, const std::function<std::string
     }
     const pulse p = pulse_start(pulse_now());
     beat(id, p);
-    std::thread(turn, id, entry, before, stop, p).detach();
+    std::thread(turn, id, entry, before, compact, stop, p).detach();
     return "";
 }

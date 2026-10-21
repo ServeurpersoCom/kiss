@@ -138,7 +138,8 @@ target_link_libraries(agent_test PRIVATE httplib yyjson stb Threads::Threads)
 if(WIN32)
     target_link_libraries(agent_test PRIVATE ws2_32)
 endif()
-target_compile_definitions(agent_test PRIVATE COMPACTION="${CMAKE_CURRENT_SOURCE_DIR}/webui/tests/compaction.jsonl")
+target_compile_definitions(agent_test PRIVATE COMPACTION="${CMAKE_CURRENT_SOURCE_DIR}/webui/tests/compaction.jsonl"
+                                              COMPACT="${CMAKE_CURRENT_SOURCE_DIR}/webui/tests/compact.jsonl")
 add_custom_command(TARGET agent_test POST_BUILD COMMAND agent_test)
 
 # compaction_test: the laws of the compaction of a history, the twins of those

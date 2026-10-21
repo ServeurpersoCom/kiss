@@ -9,6 +9,7 @@ import messages from '../src/protocols/messages.js';
 import responses from '../src/protocols/responses.js';
 import served from './bodies.jsonl?raw';
 import compaction from './compaction.jsonl?raw';
+import compact from './compact.jsonl?raw';
 import prompts from '../src/prompts.json';
 
 interface Body {
@@ -898,5 +899,89 @@ describe('a history compacted', () => {
 		);
 		expect(p.reply.rounds).toEqual([]);
 		expect(p.bodies).toHaveLength(1);
+	});
+});
+
+describe('a compaction asked', () => {
+	const ONE = "set chat system-prompt 'be brief'\nset models compaction-preserve-steps m/x 1";
+	const conversation = { id: 'c', title: '' };
+	// a turn answered, then the line that asks to compact, the summary it
+	// asks the same on the server
+	const before: Message[] = [
+		{ role: 'user', text: 'one' },
+		{ role: 'assistant', rounds: [{ reasoning: '', text: 'first', calls: [] }] },
+		{ role: 'cli', input: 'compact', output: '', ok: true }
+	];
+
+	it('runs only in a conversation, its batch holding first', async () => {
+		await page([]);
+		const { run } = await import('../src/engine/run.js');
+		expect(await run('compact', 'user')).toEqual({
+			ok: false,
+			text: '% no conversation here'
+		});
+		expect(await run('compact', 'user', { conversation })).toEqual({
+			ok: true,
+			text: '',
+			compact: true
+		});
+		const both = await run("compact\nset chat system-prompt 'x'", 'llm', { conversation });
+		expect(both.compact).toBe(true);
+		expect(both.text).toContain('+ set chat system-prompt x');
+		const failed = await run('compact\nset chat nope 1', 'user', { conversation });
+		expect(failed.ok).toBe(false);
+		expect(failed).not.toHaveProperty('compact');
+		expect((await run('compact now', 'user', { conversation })).ok).toBe(false);
+	});
+
+	it('writes the summary alone in a turn of its own, as the server does', async () => {
+		const p = await page([counted('S', 20, 5)], ONE, [{ id: 'x' }]);
+		const { turn } = await import('../src/lib/agent.js');
+		await turn(before, p.reply, p.tools, p.stop.signal, pulse(0), true);
+		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(compact.trim().split('\n'));
+		expect(p.reply.rounds.map((r) => [r.text, r.kept])).toEqual([['S', 1]]);
+		expect(p.reply.stats).not.toHaveProperty('context');
+	});
+
+	it('fails the turn when no step lies past the preserved ones, asking nothing', async () => {
+		const p = await page([], ONE.replace('m/x 1', 'm/x 2'), [{ id: 'x' }]);
+		const { turn } = await import('../src/lib/agent.js');
+		await expect(turn(before, p.reply, p.tools, p.stop.signal, pulse(0), true)).rejects.toThrow(
+			'Nothing to compact'
+		);
+		expect(p.bodies).toHaveLength(0);
+		expect(p.reply.rounds).toEqual([]);
+	});
+
+	it('folds before the next request once a batch of the model asks it', async () => {
+		const p = await page(
+			[stream([calls(['c1', 'compact'])]), counted('S', 20, 5), counted('done', 40, 5)],
+			ONE,
+			[{ id: 'x' }]
+		);
+		const engine = await import('../src/engine/run.js');
+		const { turn } = await import('../src/lib/agent.js');
+		const tools = {
+			...p.tools,
+			cli: (l: string) => engine.run(l, 'llm', { signal: p.stop.signal, conversation })
+		};
+		await turn([{ role: 'user', text: 'go' }], p.reply, tools, p.stop.signal, pulse(0));
+		const sent = (i: number) => p.bodies[i].messages.map((m) => m.role + ':' + (m.content ?? ''));
+		expect(sent(1)).toEqual([
+			'system:be brief',
+			'user:go',
+			expect.stringMatching(/^user:Summarize/)
+		]);
+		expect(sent(2)).toEqual([
+			'system:be brief',
+			expect.stringMatching(/^user:The conversation so far, summarized:\n\nS$/),
+			'assistant:',
+			expect.stringMatching(/^tool:/)
+		]);
+		expect(p.reply.rounds.map((r) => [r.text, r.kept, r.calls.length])).toEqual([
+			['', undefined, 1],
+			['S', 1, 0],
+			['done', undefined, 0]
+		]);
 	});
 });

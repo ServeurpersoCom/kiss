@@ -283,4 +283,7 @@ export interface Context extends Scope {
 	// the n-th value when the batch runs again with an answer of the user, so
 	// a command figures with it what its question is about
 	once<T>(make: () => T): T;
+	// set by compact: the conversation the batch runs in compacts its history
+	// once the batch holds
+	compact?: true;
 }

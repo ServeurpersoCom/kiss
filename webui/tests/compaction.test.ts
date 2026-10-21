@@ -82,18 +82,16 @@ describe('a summary asked', () => {
 });
 
 describe('a summary kept', () => {
-	it('holds once a round follows it and it wrote its text', () => {
-		expect(settled([round('a'), summary('S', 1), round('b')]).map((r) => r.text)).toEqual([
+	it('holds once it finished and wrote its text, alone or followed', () => {
+		const texts = (rounds: Round[]) => settled(rounds).map((r) => r.text);
+		expect(texts([round('a'), summary('S', 1), round('b')])).toEqual(['a', 'S', 'b']);
+		expect(texts([round('a'), summary('S', 1)])).toEqual(['a', 'S']);
+		expect(texts([round('a'), { ...summary('S', 1), folding: true }])).toEqual(['a']);
+		expect(texts([round('a'), { ...summary('', 1), reasoning: 'r' }, round('b')])).toEqual([
 			'a',
-			'S',
 			'b'
 		]);
-		expect(settled([round('a'), summary('S', 1)]).map((r) => r.text)).toEqual(['a']);
-		expect(settled([round('a'), { ...summary('', 1), reasoning: 'r' }, round('b')])).toEqual([
-			round('a'),
-			round('b')
-		]);
-		expect(settled([round('a'), summary('S', 1), round('')])).toEqual([round('a')]);
+		expect(texts([round('a'), summary('S', 1), round('')])).toEqual(['a', 'S']);
 	});
 
 	it('reads back from a file, kept a count, and with it the history the model reads', () => {

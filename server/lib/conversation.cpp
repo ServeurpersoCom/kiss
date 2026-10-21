@@ -529,12 +529,9 @@ std::vector<conversation_round> conversation_settled(const std::vector<conversat
             }
         }
         r.calls = std::move(calls);
-        if (r.kept ? !r.text.empty() : !r.reasoning.empty() || !r.text.empty() || !r.calls.empty()) {
+        if (r.kept ? !r.folding && !r.text.empty() : !r.reasoning.empty() || !r.text.empty() || !r.calls.empty()) {
             out.push_back(std::move(r));
         }
-    }
-    if (!out.empty() && out.back().kept) {
-        out.pop_back();
     }
     return out;
 }

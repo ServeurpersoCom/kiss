@@ -135,7 +135,7 @@ async function summarize(
 	retrying: (status: number, attempt: number, attempts: number) => void
 ): Promise<void> {
 	mark(p, 'compacting', endpoint.name, performance.now());
-	reply.rounds.push({ reasoning: '', text: '', calls: [], kept });
+	reply.rounds.push({ reasoning: '', text: '', calls: [], kept, folding: true });
 	const round = reply.rounds[reply.rounds.length - 1];
 	let usage: number | undefined;
 	for await (const d of chat(endpoint, request, signal, retrying)) {
@@ -148,25 +148,39 @@ async function summarize(
 	}
 	close(p, usage);
 	if (!round.text) throw new Error(`Endpoint ${endpoint.name} wrote no summary`);
+	delete round.folding;
 }
 
 // one assistant turn: rounds streamed into reply as they arrive, until a round
 // calls nothing; every round reads the configuration as it stands, so what a
-// call changes holds from the next round on; a round whose last request held
-// as many tokens as the trigger of its model first compacts the history;
-// reply belongs to the page state, so the round and its calls are read back
-// from it once added; after a stop no call runs, and the reply keeps what
-// settled before it; the pulse follows the turn chunk by chunk, and what it
-// spent enters the reply once it streamed, with the tokens its last request
-// held
+// call changes holds from the next round on; a round first compacts the
+// history once its last request held as many tokens as the trigger of its
+// model, or once a batch of the model asked it to; a turn that compacts writes
+// the summary alone, failing when no step lies past the preserved ones; reply
+// belongs to the page state, so the round and its calls are read back from it
+// once added; after a stop no call runs, and the reply keeps what settled
+// before it; the pulse follows the turn chunk by chunk, and what it spent
+// enters the reply once it streamed, with the tokens its last request held
 export async function turn(
 	messages: readonly Message[],
 	reply: Assistant,
 	ctx: ToolContext,
 	signal: AbortSignal,
-	p: Pulse
+	p: Pulse,
+	compact = false
 ): Promise<void> {
 	let r = 0;
+	// a compaction asked before the next request
+	let asked = compact;
+	// what the calls reach, a batch of the model asking for a compaction
+	const own: ToolContext = {
+		...ctx,
+		cli: async (lines) => {
+			const outcome = await ctx.cli(lines);
+			if (outcome.compact) asked = true;
+			return outcome;
+		}
+	};
 	// the servers that failed this turn, as they were named, with what they
 	// answered
 	const down = new Map<string, string>();
@@ -183,9 +197,11 @@ export async function turn(
 			const retrying = (status: number, attempt: number, attempts: number) =>
 				retry(p, endpoint.name, status, attempt, attempts, performance.now());
 			const fold =
-				trigger !== null && context !== undefined && context >= trigger
+				asked || (trigger !== null && context !== undefined && context >= trigger)
 					? folding(history, preserve)
 					: null;
+			asked = false;
+			if (compact && !fold) throw new Error('Nothing to compact');
 			if (fold) {
 				await summarize(
 					endpoint,
@@ -199,6 +215,7 @@ export async function turn(
 				request.messages = compacted([...messages, { ...reply, rounds: [...reply.rounds] }]);
 			}
 			context = undefined;
+			if (compact) return;
 			mark(p, 'waiting', endpoint.name, performance.now());
 			reply.rounds.push({ reasoning: '', text: '', calls: [] });
 			const round = reply.rounds[reply.rounds.length - 1];
@@ -239,7 +256,7 @@ export async function turn(
 			for (const c of round.calls) {
 				signal.throwIfAborted();
 				mark(p, 'running', c.name, performance.now());
-				await call(tools, ctx, c);
+				await call(tools, own, c);
 			}
 		}
 		reply.error = `Stopped after ${r} tool rounds`;

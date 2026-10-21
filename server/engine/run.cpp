@@ -184,7 +184,8 @@ static engine_result batch(layer &              target,
                            const std::string &  text,
                            engine_role          role,
                            bool                 running,
-                           const engine_typed & typed) {
+                           const engine_typed & typed,
+                           bool                 conversation) {
     words_t lines = split_lines(text);
     if (lines.empty()) {
         lines.push_back("");
@@ -201,6 +202,7 @@ static engine_result batch(layer &              target,
     layer   draft = target;
     words_t asks;
     context ctx{ draft, role, typed, asks };
+    ctx.conversation = conversation;
     words_t out;
     for (size_t i = 0; i < steps.size(); i++) {
         try {
@@ -255,7 +257,7 @@ static engine_result batch(layer &              target,
         }
     }
     out.insert(out.end(), change.begin(), change.end());
-    return { true, out.empty() ? comment("no change") : join(out, "\n"), {} };
+    return { true, out.empty() ? (ctx.compact ? "" : comment("no change")) : join(out, "\n"), {}, ctx.compact };
 }
 
 // the block a line that compiles belongs to, as IOS groups the lines of an
@@ -315,7 +317,7 @@ static words_t enter(layer & target, const std::string & text) {
     for (bool moved = true; moved;) {
         moved = false;
         for (auto it = blocks.begin(); it != blocks.end();) {
-            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {});
+            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {}, false);
             if (r.ok) {
                 it    = blocks.erase(it);
                 moved = true;
@@ -409,10 +411,10 @@ void engine_start(const std::string & path, const std::string & version) {
 
 // a batch that changes the running configuration says who changed it, as IOS
 // logs a configuration from the console
-engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed) {
+engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed, bool conversation) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const layer                 before = g_running;
-    const engine_result         r      = batch(g_running, text, role, true, typed);
+    const engine_result         r      = batch(g_running, text, role, true, typed, conversation);
     if (r.ok && !(before == g_running)) {
         log_info("Engine", "Configured by %s", role == ENGINE_ADMIN ? "the administrator" : "an MCP client");
     }

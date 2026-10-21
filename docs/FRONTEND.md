@@ -27,6 +27,7 @@ commands
   export [<id>|conversations|<config>]
   import
   title <title>
+  compact                           the history folds into a summary now
   attach
   detach
   <command> | begin|count|exclude|include <pattern>
@@ -541,7 +542,8 @@ set endpoints timeout prod 300
 
 The parameters are `temperature`, `top_p`, `top_k`, `min_p`, `max_tokens`, `presence_penalty`,
 `frequency_penalty`, `seed` and `reasoning_effort`, the last one as the template of the model
-reads it. A reply streams until it ends or the turn is stopped.
+reads it. A reply streams until it ends or the turn is stopped. Several conversations answer at
+once, each turn in its own; a server running one model at a time loads them in turn.
 
 A model compacts its history once a request held as many tokens as `compaction-trigger-tokens`,
 its prompt and what it generated as the endpoint counted them, the keys of KiSS itself, never sent.
@@ -555,12 +557,17 @@ change of trigger, preserve or model leaves it as it is; an edit or a retry befo
 opens a branch without it. A summary that writes nothing fails the turn, and none folds while no
 step lies past the preserved ones.
 
+`compact` folds the history at once, whatever the trigger. Typed by the user, its line enters the
+thread and a turn of its own writes the summary after it, failing with Nothing to compact while no
+step lies past the preserved ones; a retry of that summary writes it again. Run by the model through
+its config tool, the history folds before its next request, the turn going on from the summary. It
+runs only in a conversation.
+
 ```
 ! fold at 100k tokens, the last 4 steps kept as written
 set models compaction-trigger-tokens prod/qwen3:8b 100000
 set models compaction-preserve-steps prod/qwen3:8b 4
-``` Several conversations answer at
-once, each turn in its own; a server running one model at a time loads them in turn.
+```
 
 One line under the turn says what the system does now, redrawn at every frame of the screen:
 

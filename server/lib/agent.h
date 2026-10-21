@@ -17,19 +17,20 @@ constexpr const char * AGENT_BUSY = "a turn runs in this conversation";
 // tool on, or refuse
 constexpr const char * AGENT_VERDICTS[] = { "once", "always", "refuse" };
 
-// the model answers a message of the user in a conversation, from the path up
-// to it, the answer entering as a new entry beside those it had; user names
-// that message, writing it first when it enters with the turn, once the turn
-// is taken, so a message enters only with the turn that answers it; the
-// message of what keeps it from starting, AGENT_BUSY while a turn runs there,
-// empty once it runs
+// the model answers an entry of a conversation, from the path up to it, the
+// answer entering as a new entry beside those it had: a message of the user,
+// or a command it writes the summary of the history after, compacting it;
+// user names that entry, writing it first when it enters with the turn, once
+// the turn is taken, so a message enters only with the turn that answers it;
+// the message of what keeps it from starting, AGENT_BUSY while a turn runs
+// there, empty once it runs
 std::string agent_answer(const std::string & id, const std::function<std::string(conversation &)> & user);
 
 // a line the user typed runs on this server as its config tool runs it, as
 // the turn of the conversation, the forms it asks shown to every page
-// following it, its output entering after the thread; the message of what
-// keeps it from starting, AGENT_BUSY while a turn runs there, empty once it
-// runs
+// following it, its output entering after the thread, the summary of the
+// history after it when it asks to compact; the message of what keeps it from
+// starting, AGENT_BUSY while a turn runs there, empty once it runs
 std::string agent_command(const std::string & id, const std::string & input);
 
 // the config tool of the pages attached to this server, one for all of them,

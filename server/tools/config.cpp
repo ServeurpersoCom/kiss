@@ -12,9 +12,10 @@
 // to let it, the item reached at <module>/<item> of this server, and one that
 // writes or erases a configuration asks their yes; it runs again with what
 // they answered
-static tool_outcome run(yyjson_val * args, const engine_typed & typed, const tool_tick &) {
+tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, bool conversation) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
-    const engine_result r = engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP, typed);
+    const engine_result r =
+        engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP, typed, conversation);
     if (!r.asks.empty()) {
         words_t keys, told;
         for (const engine_ask & a : r.asks) {
@@ -38,7 +39,9 @@ static tool_outcome run(yyjson_val * args, const engine_typed & typed, const too
         asked.outcome = "asks the user for " + join(keys, ", ");
         return asked;
     }
-    return { r.ok, r.text };
+    tool_outcome out(r.ok, r.text);
+    out.compact = r.compact;
+    return out;
 }
 
 static std::vector<tool> config_tool(const engine_reader & config) {
@@ -51,14 +54,16 @@ static std::vector<tool> config_tool(const engine_reader & config) {
         modules.push_back(m.name + " (" + join(keys, " ") + "): " + prompts_module(m.name));
     }
     tool t;
-    t.suffix      = "config";
+    t.suffix      = TOOL_CONFIG;
     t.description = prompts_description("config", {
                                                       { "hostname", config.get("server hostname").value_or("") },
                                                       { "platform", engine_platform() },
                                                       { "modules", join(modules, "; ") }
     });
     t.input       = prompts_input("config");
-    t.run         = run;
+    t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick &) {
+        return tools_config(args, typed, false);
+    };
     return { t };
 }
 

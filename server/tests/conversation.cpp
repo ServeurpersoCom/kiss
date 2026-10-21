@@ -280,11 +280,14 @@ int main() {
         };
         conversation_round thought = made("", 1);
         thought.reasoning          = "r";
+        conversation_round folding = made("S", 1);
+        folding.folding            = true;
         law(texts(conversation_settled({ made("a"), made("S", 1), made("b") })) == "[a][S][b]" &&
-                texts(conversation_settled({ made("a"), made("S", 1) })) == "[a]" &&
+                texts(conversation_settled({ made("a"), made("S", 1) })) == "[a][S]" &&
+                texts(conversation_settled({ made("a"), folding })) == "[a]" &&
                 texts(conversation_settled({ made("a"), thought, made("b") })) == "[a][b]" &&
-                texts(conversation_settled({ made("a"), made("S", 1), made("") })) == "[a]",
-            "a summary holds once a round follows it and it wrote its text");
+                texts(conversation_settled({ made("a"), made("S", 1), made("") })) == "[a][S]",
+            "a summary holds once it finished and wrote its text, alone or followed");
         const std::string text =
             R"({"kiss":"conversations","conversations":[{"id":"c","title":"t","updated":1,"leaf":"b","entries":[)"
             R"({"id":"a","parent":null,"time":1,"role":"user","text":"one"},{"id":"b","parent":"a","time":2,)"

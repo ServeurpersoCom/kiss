@@ -33,10 +33,10 @@ export const STOPPED = 'Stopped before it answered: the tool may have acted';
 
 // what of a turn holds once it stops or leaves the page: the calls that ran,
 // those sent as stopped, with the arguments they went with, the rounds that
-// streamed something, and a summary that wrote its text once a round follows
-// it; a call never sent never ran
+// streamed something, and a summary once it finished; a call never sent never
+// ran
 export function settled(rounds: readonly Round[]): Round[] {
-	const out = rounds
+	return rounds
 		.map((r) => ({
 			...r,
 			calls: r.calls.flatMap(({ sent, ...c }) => {
@@ -44,8 +44,9 @@ export function settled(rounds: readonly Round[]): Round[] {
 				return sent ? [{ ...c, result: STOPPED, ok: false }] : [];
 			})
 		}))
-		.filter((r) => (r.kept === undefined ? r.reasoning || r.text || r.calls.length : r.text));
-	return out.at(-1)?.kept === undefined ? out : out.slice(0, -1);
+		.filter((r) =>
+			r.kept === undefined ? r.reasoning || r.text || r.calls.length : !r.folding && r.text
+		);
 }
 
 // the entries as they settled, even while the model answers

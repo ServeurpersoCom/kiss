@@ -24,6 +24,7 @@ commands
   write erase                       erase startup-config, as IOS writes it
   erase running-config|startup-config
   erase conversations|<id>          every one but the pinned ones, or one by its id
+  compact                           in a conversation only: its history folds now
   <command> | begin|count|exclude|include <pattern>
   exit, quit                        the console only: stop the server
 
@@ -557,6 +558,13 @@ page, which it embeds: once a request held `models compaction-trigger-tokens`, t
 last `compaction-preserve-steps` fold into a summary round of the turn before the next request,
 the summary asking the very prefix the endpoint cached. Both twins send the very bytes for the same
 history, a law of `agent_test` reading the golden `webui/tests/compaction.jsonl` the page writes.
+
+`compact` folds the history at once, as the page does. The engine knows no conversation, so the
+config tool of the agent runs its batch in one and the batch hands the request back, as `copy` hands
+back a write: a line the user sends is followed by a turn that writes the summary alone, its retry
+writing it again, and a batch of the model folds the history before its next request. The console
+and every MCP client run without a conversation, so `compact` refuses there. The summary of a line
+sends the bytes of the page too, read from the golden `webui/tests/compact.jsonl`.
 
 The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
 as a router names its interfaces: `forge_server_bash` is how a client sees it, and the configuration of the

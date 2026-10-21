@@ -383,7 +383,8 @@ async function batch(
 	for (const m of modules) {
 		if (changed.some((k) => k.startsWith(m.name + ' '))) m.apply?.(running);
 	}
-	return { ok: true, text: [...out, ...diff].join('\n') || comment('no change') };
+	const said = [...out, ...diff].join('\n') || (ctx.compact ? '' : comment('no change'));
+	return ctx.compact ? { ok: true, text: said, compact: true } : { ok: true, text: said };
 }
 
 // the items of a module, as its sources list them from the running

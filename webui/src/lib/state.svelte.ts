@@ -270,13 +270,14 @@ export async function edit(id: string, text: string): Promise<void> {
 }
 
 // the model answers a message of the user again, the answer entering as a
-// version beside those it had: from the message itself or from an answer to it
+// version beside those it had: from the message itself or from an answer to
+// it; a summary after a command writes itself again from that command
 export async function retry(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || !entry || app.current.id in app.replies) return;
 	if (attached()) return void (await act('retry', { id: app.current.id, entry: id }));
-	const user = entry.role === 'assistant' ? entry.parent : entry.role === 'user' ? id : null;
-	if (user) await answer(app.current, user);
+	const from = entry.role === 'assistant' ? entry.parent : entry.role === 'user' ? id : null;
+	if (from) await answer(app.current, from);
 }
 
 // a slash command leaves the open conversation: the model never reads one, so
@@ -300,7 +301,8 @@ export async function browse(id: string): Promise<void> {
 }
 
 // a line entering a conversation after an entry: a line starting with / runs
-// on the CLI as the user, anything else goes to the model
+// on the CLI as the user, the model writing a summary after it when it asks
+// for one, anything else goes to the model
 async function enter(
 	conversation: Conversation,
 	parent: string | null,
@@ -309,13 +311,14 @@ async function enter(
 	if (text.startsWith(SLASH)) {
 		const input = text.slice(SLASH.length);
 		const result = await run(input, 'user', { ...reach(conversation.id), conversation });
-		append(conversation, parent, {
+		const line = append(conversation, parent, {
 			role: 'cli',
 			input: redact(input),
 			output: result.text,
 			ok: result.ok
 		});
 		await save(conversation);
+		if (result.compact) await answer(conversation, line.id);
 		return result.ok;
 	}
 	// a conversation with no title yet takes it from its first message
@@ -325,15 +328,17 @@ async function enter(
 	return true;
 }
 
-// the model answers a message of the user from the path up to it, the very
-// prefix it read for any answer it gave the message before; the conversation
+// the model answers an entry from the path up to it, the very prefix it read
+// for any answer it gave the entry before: a message of the user, or a command
+// it writes the summary of the history after, compacting it; the conversation
 // dates from that answer, and is saved before the model answers and once it is
 // done; each conversation answers on its own, beside the others
-async function answer(conversation: Conversation, user: string): Promise<void> {
+async function answer(conversation: Conversation, from: string): Promise<void> {
 	const { id } = conversation;
-	conversation.leaf = user;
+	const compact = conversation.entries.find((e) => e.id === from)?.role === 'cli';
+	conversation.leaf = from;
 	const before = path(conversation);
-	const entry = append(conversation, user, { role: 'assistant', rounds: [] });
+	const entry = append(conversation, from, { role: 'assistant', rounds: [] });
 	conversation.updated = entry.time;
 	const reply = entry as Assistant;
 	const p = pulse(performance.now());
@@ -358,7 +363,7 @@ async function answer(conversation: Conversation, user: string): Promise<void> {
 	};
 	try {
 		await save(conversation);
-		await turn(before, reply, tools, signal, p);
+		await turn(before, reply, tools, signal, p, compact);
 	} catch (e) {
 		reply.error = explain(e as Error);
 	} finally {

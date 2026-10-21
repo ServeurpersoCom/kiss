@@ -33,10 +33,20 @@ struct tool_outcome {
     // what the user is to answer before the call is asked again with it, its
     // text telling what
     std::vector<engine_ask> asks;
+    // the batch of a config call asks the conversation it ran in to compact
+    // its history
+    bool                    compact = false;
 };
 
 // called every second while a tool runs, false once the client is gone
 using tool_tick = std::function<bool()>;
+
+// the tool the CLI of this server is reached by
+constexpr const char * TOOL_CONFIG = "config";
+
+// a call of the config tool, in a conversation of the agent of this server or
+// for a client that has none
+tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, bool conversation);
 
 struct tool {
     std::string                                                                                        suffix;

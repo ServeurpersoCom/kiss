@@ -28,13 +28,14 @@ export interface Call {
 // what the protocol it streamed in needs back that the rest cannot rebuild,
 // sent back to that protocol only; a summary holds kept, its text the summary
 // of the steps before it but the kept last ones, which the model reads after
-// it in their place
+// it in their place; folding, in the page only while the summary streams
 export interface Round {
 	reasoning: string;
 	text: string;
 	calls: Call[];
 	opaque?: { protocol: string; items: object[] };
 	kept?: number;
+	folding?: true;
 }
 
 // what a turn spent, the time the user took on a question left out: its
@@ -122,6 +123,8 @@ export interface Outcome {
 	ok: boolean;
 	text: string;
 	images?: Image[];
+	// the batch asks the conversation it ran in to compact its history
+	compact?: true;
 }
 
 // what a tool reaches, handed over by the agent for one turn
