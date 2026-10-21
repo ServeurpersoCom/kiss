@@ -17,14 +17,16 @@ constexpr const char * AGENT_BUSY = "a turn runs in this conversation";
 // tool on, or refuse
 constexpr const char * AGENT_VERDICTS[] = { "once", "always", "refuse" };
 
-// the model answers an entry of a conversation, from the path up to it, the
-// answer entering as a new entry beside those it had: a message of the user,
-// or a command it writes the summary of the history after, compacting it;
-// user names that entry, writing it first when it enters with the turn, once
-// the turn is taken, so a message enters only with the turn that answers it;
-// the message of what keeps it from starting, AGENT_BUSY while a turn runs
-// there, empty once it runs
-std::string agent_answer(const std::string & id, const std::function<std::string(conversation &)> & user);
+// the model answers a message of the user in a conversation, from the path up
+// to it, the answer entering as a new entry beside those it had, or when it
+// compacts writes the summary of the history after any entry; user names that
+// entry, writing it first when it enters with the turn, once the turn is
+// taken, so a message enters only with the turn that answers it; the message
+// of what keeps it from starting, AGENT_BUSY while a turn runs there, empty
+// once it runs
+std::string agent_answer(const std::string &                                id,
+                         const std::function<std::string(conversation &)> & user,
+                         bool                                               compact = false);
 
 // a line the user typed runs on this server as its config tool runs it, as
 // the turn of the conversation, the forms it asks shown to every page

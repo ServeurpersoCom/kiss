@@ -229,7 +229,7 @@ const MESSAGES: Record<string, Check> = {
 	user: object({ ...link, role: constant('user'), text: string }),
 	assistant: object(
 		{ ...link, role: constant('assistant'), rounds: array(round) },
-		{ error: string, stats }
+		{ error: string, stats, compaction: constant(true) }
 	),
 	cli: object({ ...link, role: constant('cli'), input: string, output: string, ok: boolean })
 };

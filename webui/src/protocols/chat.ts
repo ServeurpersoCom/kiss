@@ -96,6 +96,7 @@ export default {
 		if (!delta) return typeof usage === 'number' ? count : undefined;
 		return {
 			...count,
+			...(json.choices[0].finish_reason === 'length' ? { cut: true } : {}),
 			content: delta.content ?? undefined,
 			reasoning: delta.reasoning_content ?? undefined,
 			calls: delta.tool_calls?.map(

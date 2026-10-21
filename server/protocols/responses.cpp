@@ -227,6 +227,7 @@ static std::optional<api_delta> read_event(const std::string & data) {
                 out.context = yyjson_get_num(prompt) + *out.usage;
             }
         }
+        out.cut = type == "response.incomplete";
         out.end = true;
         return out;
     }

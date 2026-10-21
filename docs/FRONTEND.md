@@ -554,12 +554,13 @@ new to it; it streams as a round of the turn, folded under Summary, and the next
 then the preserved steps in place of what it folds. The history keeps every step, on the screen and
 in every file, so what the model reads follows from the history alone: an export, a reload or a
 change of trigger, preserve or model leaves it as it is; an edit or a retry before the summary
-opens a branch without it. A summary that writes nothing fails the turn, and none folds while no
-step lies past the preserved ones.
+opens a branch without it. A summary that writes nothing, or that the output limit of the model
+cuts, fails the turn, and none folds while no step lies past the preserved ones.
 
 `compact` folds the history at once, whatever the trigger. Typed by the user, its line enters the
 thread and a turn of its own writes the summary after it, failing with Nothing to compact while no
-step lies past the preserved ones; a retry of that summary writes it again. Run by the model through
+step lies past the preserved ones; its entry holds `compaction`, so a retry writes the summary
+again after the entry it follows, the line dismissed or not. Run by the model through
 its config tool, the history folds before its next request, the turn going on from the summary. It
 runs only in a conversation.
 

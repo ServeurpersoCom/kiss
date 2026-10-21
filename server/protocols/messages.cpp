@@ -316,8 +316,9 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
         }
         if (type == "message_delta") {
             yyjson_val * usage = yyjson_obj_get(yyjson_obj_get(e, "usage"), "output_tokens");
+            out.cut            = text_of(yyjson_obj_get(yyjson_obj_get(e, "delta"), "stop_reason")) == "max_tokens";
             if (!yyjson_is_num(usage)) {
-                return std::nullopt;
+                return out.cut ? std::optional<api_delta>(out) : std::nullopt;
             }
             out.usage = yyjson_get_num(usage);
             if (*prompt) {

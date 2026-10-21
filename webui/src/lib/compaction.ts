@@ -64,8 +64,9 @@ function view(messages: readonly Message[]): View {
 // the rounds of one turn in a row as one assistant message
 function render(messages: readonly Message[], v: View): Message[] {
 	const out: Message[] = [];
-	if (v.summary !== null) {
-		out.push({ role: 'user', text: prompts.compaction.summary.replace(SUMMARY, v.summary) });
+	const summary = v.summary;
+	if (summary !== null) {
+		out.push({ role: 'user', text: prompts.compaction.summary.replace(SUMMARY, () => summary) });
 	}
 	// the assistant message the rounds of the turn read now go into
 	let reply: Assistant | null = null;

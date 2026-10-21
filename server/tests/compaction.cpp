@@ -114,6 +114,10 @@ int main() {
     law(read(compaction_compacted(twice)) == framed("S2") + "|[a2]|two|[b1,b2]",
         "the kept steps read across the summary before it, which it folds: " + read(compaction_compacted(twice)));
 
+    const std::vector<conversation_entry> dollars = { user("one"), assistant({ made("a"), made("x $& $$ $'", 0) }) };
+    law(read(compaction_compacted(dollars)) == framed("x $& $$ $'"),
+        "a summary reads as written, whatever it holds: " + read(compaction_compacted(dollars)));
+
     const auto fold = compaction_folding(history, 2);
     law(fold && fold->kept == 2 && read(fold->messages) == "one|[a1]|two|[b1]|" + prompts_compaction("ask"),
         "a summary folds the steps the model reads but the preserved ones, then asks");

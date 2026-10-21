@@ -561,8 +561,10 @@ history, a law of `agent_test` reading the golden `webui/tests/compaction.jsonl`
 
 `compact` folds the history at once, as the page does. The engine knows no conversation, so the
 config tool of the agent runs its batch in one and the batch hands the request back, as `copy` hands
-back a write: a line the user sends is followed by a turn that writes the summary alone, its retry
-writing it again, and a batch of the model folds the history before its next request. The console
+back a write: a line the user sends is followed by a turn that writes the summary alone, in an entry
+holding `compaction` that a retry writes again after whatever it follows, and a batch of the model
+folds the history before its next request. A summary the output limit cuts fails its turn, every
+protocol telling the cut: `finish_reason` length, `stop_reason` max_tokens or `response.incomplete`. The console
 and every MCP client run without a conversation, so `compact` refuses there. The summary of a line
 sends the bytes of the page too, read from the golden `webui/tests/compact.jsonl`.
 

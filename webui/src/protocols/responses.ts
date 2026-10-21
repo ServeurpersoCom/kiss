@@ -116,10 +116,12 @@ export default {
 			case 'response.incomplete': {
 				const usage = e.response?.usage?.output_tokens;
 				const prompt = e.response?.usage?.input_tokens;
-				if (typeof usage !== 'number') return { end: true };
+				const cut = e.type === 'response.incomplete' ? { cut: true as const } : {};
+				if (typeof usage !== 'number') return { ...cut, end: true };
 				return {
 					usage,
 					...(typeof prompt === 'number' ? { context: prompt + usage } : {}),
+					...cut,
 					end: true
 				};
 			}

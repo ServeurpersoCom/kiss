@@ -102,10 +102,11 @@ int main() {
                 g_compacted.push_back(sent.get());
             }
             const std::string content = summary ? (first == "empty" ? "" : "S") : "done";
+            const std::string finish  = summary && first == "cut" ? ",\"finish_reason\":\"length\"" : "";
             const std::string usage   = summary       ? "{\"prompt_tokens\":20,\"completion_tokens\":5}" :
                                         text == "two" ? "{\"prompt_tokens\":130,\"completion_tokens\":10}" :
                                                         "";
-            res.set_content("data: {\"choices\":[{\"delta\":{\"content\":\"" + content + "\"}}]}\n\n" +
+            res.set_content("data: {\"choices\":[{\"delta\":{\"content\":\"" + content + "\"}" + finish + "}]}\n\n" +
                                 (usage.empty() ? "" : "data: {\"choices\":[],\"usage\":" + usage + "}\n\n") +
                                 "data: [DONE]\n\n",
                             "text/event-stream");
@@ -401,11 +402,15 @@ int main() {
                 (g_compacted.empty() ? std::string("none") : g_compacted.back()));
     }
     law(after.size() == 4 && after[2].role == ROLE_CLI && after[2].ok && after[2].output.empty() &&
-            after[3].role == ROLE_ASSISTANT && after[3].parent == after[2].id && after[3].rounds.size() == 1 &&
-            after[3].rounds[0].text == "S" && after[3].rounds[0].kept == 1 && !after[3].error,
-        "the summary is written alone after the line that asks it");
-    law(agent_answer(typed.id, [&](conversation &) { return after[2].id; }).empty(),
-        "a summary writes itself again after its line");
+            after[3].role == ROLE_ASSISTANT && after[3].parent == after[2].id && after[3].compaction &&
+            after[3].rounds.size() == 1 && after[3].rounds[0].text == "S" && after[3].rounds[0].kept == 1 &&
+            !after[3].error,
+        "the summary is written alone after the line that asks it, its entry holding so");
+    law(!agent_answer(typed.id, [&](conversation &) { return after[2].id; }).empty() &&
+            agent_answer(
+                typed.id, [&](conversation &) { return after[2].id; }, true)
+                .empty(),
+        "a summary writes itself again after its line, a line no message to answer");
     after = waited(typed.id);
     law(after.size() == 5 && after[4].parent == after[2].id && after[4].rounds.size() == 1 &&
             after[4].rounds[0].kept == 1,
@@ -417,6 +422,36 @@ int main() {
             after.back().error == std::optional<std::string>("Nothing to compact"),
         "a line with nothing to compact fails its turn, asking nothing");
     engine_run("set models compaction-preserve-steps e/m 1", ENGINE_ADMIN);
+    // the line dropped, the summary hangs from the answer before it and still
+    // writes itself again from there
+    library_change(typed.id,
+                   [&](conversation & c) {
+                       conversation_drop(c, after[2].id);
+                       return std::string();
+                   },
+                   {});
+    after = waited(typed.id);
+    law(agent_answer(
+            typed.id, [&](conversation &) { return after[1].id; }, true)
+            .empty(),
+        "a summary whose line is dropped writes itself again");
+    after = waited(typed.id);
+    law(after.back().parent == after[1].id && after.back().compaction && after.back().rounds.size() == 1 &&
+            after.back().rounds[0].kept == 1 && !after.back().error,
+        "a summary whose line is dropped writes itself again after the answer it now follows");
+    // a summary the output limit cuts fails its turn, never a boundary
+    conversation cut;
+    cut.id = conversation_uuid();
+    conversation_entry asked_cut;
+    asked_cut.text = "cut";
+    conversation_append(cut, std::nullopt, asked_cut);
+    conversation_append(cut, cut.leaf, first_reply);
+    library_create(cut, {});
+    law(agent_command(cut.id, "compact").empty(), "a line whose summary is cut starts");
+    after = waited(cut.id);
+    law(after.back().compaction && after.back().rounds.empty() &&
+            after.back().error == std::optional<std::string>("Endpoint e cut the summary at its output limit"),
+        "a summary the output limit cuts fails its turn, never a boundary");
     // the model asks a compaction through its config tool: the history folds
     // before its next request
     conversation folding;

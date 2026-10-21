@@ -672,7 +672,7 @@ static void retried(const std::string & id, const endpoint & e, pulse & p, int s
 
 // the summary the steps a request folds go into, streamed into a round of the
 // reply that keeps the steps it does not fold; it runs no call, and one that
-// writes no summary fails the turn
+// writes no summary, or that the output limit cuts, fails the turn
 static void summarize(const std::string & id,
                       const std::string & entry,
                       const endpoint &    e,
@@ -692,6 +692,7 @@ static void summarize(const std::string & id,
         at = x.rounds.size() - 1;
     });
     std::optional<double> usage;
+    bool                  cut = false;
     api_chat(
         e, req, stop,
         [&](const api_delta & d) {
@@ -699,6 +700,7 @@ static void summarize(const std::string & id,
             if (d.usage) {
                 usage = d.usage;
             }
+            cut = cut || d.cut;
             pulse_chunk(p, !d.content.empty() || !d.reasoning.empty(), now);
             if (d.content.empty() && d.reasoning.empty()) {
                 return;
@@ -712,6 +714,9 @@ static void summarize(const std::string & id,
         },
         [&](int status, int attempt, int attempts) { retried(id, e, p, status, attempt, attempts); });
     pulse_close(p, usage);
+    if (cut) {
+        throw api_error("Endpoint " + e.server.name + " cut the summary at its output limit");
+    }
     if (reply_of(id, entry).rounds[at].text.empty()) {
         throw api_error("Endpoint " + e.server.name + " wrote no summary");
     }
@@ -931,28 +936,28 @@ static void turn(std::string                     id,
 }
 
 // the reply a turn writes after the entry from names, a message of the user
-// it answers or a command it writes the summary after, appended with the
-// path up to that entry; the message of what keeps it from it, empty once
-// appended
+// it answers, or when it compacts, any entry it writes the summary of the
+// history after, the reply holding so, appended with the path up to that
+// entry; the message of what keeps it from it, empty once appended
 static std::string reply(const std::string &                                id,
                          const std::function<std::string(conversation &)> & from,
+                         bool                                               compact,
                          std::string &                                      entry,
-                         std::vector<conversation_entry> &                  before,
-                         bool &                                             compact) {
+                         std::vector<conversation_entry> &                  before) {
     return library_change(
         id,
         [&](conversation & c) {
             const std::string asked = from(c);
             const auto        e     = std::find_if(c.entries.begin(), c.entries.end(),
                                                    [&](const conversation_entry & x) { return x.id == asked; });
-            if (e == c.entries.end() || (e->role != ROLE_USER && e->role != ROLE_CLI)) {
-                return "\"" + asked + "\" is not a message of the user nor a command";
+            if (e == c.entries.end() || (!compact && e->role != ROLE_USER)) {
+                return "\"" + asked + "\" is not a message of the user";
             }
-            compact = e->role == ROLE_CLI;
-            c.leaf  = asked;
-            before  = conversation_path(c);
+            c.leaf = asked;
+            before = conversation_path(c);
             conversation_entry r;
             r.role             = ROLE_ASSISTANT;
+            r.compaction       = compact;
             const size_t index = conversation_append(c, asked, r);
             entry              = c.entries[index].id;
             c.updated          = c.entries[index].time;
@@ -1003,7 +1008,7 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
     // turn of the conversation
     std::string                     entry;
     std::vector<conversation_entry> before;
-    if (compact && !stop->stopped && reply(id, [&](conversation &) { return line; }, entry, before, compact).empty()) {
+    if (compact && !stop->stopped && reply(id, [&](conversation &) { return line; }, true, entry, before).empty()) {
         turn(id, entry, before, true, stop, pulse_start(pulse_now()));
         return;
     }
@@ -1028,7 +1033,9 @@ std::string agent_command(const std::string & id, const std::string & input) {
     return "";
 }
 
-std::string agent_answer(const std::string & id, const std::function<std::string(conversation &)> & user) {
+std::string agent_answer(const std::string &                                id,
+                         const std::function<std::string(conversation &)> & user,
+                         bool                                               compact) {
     const auto stop = std::make_shared<api_stop>();
     {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -1039,8 +1046,7 @@ std::string agent_answer(const std::string & id, const std::function<std::string
     }
     std::string                     entry;
     std::vector<conversation_entry> before;
-    bool                            compact = false;
-    const std::string               why     = reply(id, user, entry, before, compact);
+    const std::string               why = reply(id, user, compact, entry, before);
     if (!why.empty()) {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_turns.erase(id);

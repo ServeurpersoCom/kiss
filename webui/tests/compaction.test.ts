@@ -7,7 +7,7 @@ import prompts from '../src/prompts.json';
 
 const round = (text: string): Round => ({ reasoning: '', text, calls: [] });
 const summary = (text: string, kept: number): Round => ({ ...round(text), kept });
-const framed = (text: string) => prompts.compaction.summary.replace('{summary}', text);
+const framed = (text: string) => prompts.compaction.summary.replace('{summary}', () => text);
 
 // what the model reads of a history, a step by its text, a summary framed
 const read = (messages: readonly Message[]) =>
@@ -35,6 +35,15 @@ describe('a history the model reads', () => {
 			{ role: 'assistant', rounds: [round('b1'), round('b2'), summary('S', 2), round('b3')] }
 		];
 		expect(read(compacted(h))).toEqual([framed('S'), ['b1', 'b2', 'b3']]);
+	});
+
+	it('reads a summary as written, whatever it holds', () => {
+		const h: Message[] = [
+			{ role: 'user', text: 'one' },
+			{ role: 'assistant', rounds: [round('a'), summary("x $& $$ $'", 0)] }
+		];
+		expect(read(compacted(h))).toEqual([framed("x $& $$ $'")]);
+		expect(framed("x $& $$ $'")).toContain("x $& $$ $'");
 	});
 
 	it('reads the kept steps across the summary before it, which it folds', () => {
@@ -108,7 +117,8 @@ describe('a summary kept', () => {
 					time: 2,
 					role: 'assistant',
 					rounds: [round('a1'), summary('S', 0), round('a2')],
-					stats: { tokens: 1, generation: 1, system: 1, context: 150 }
+					stats: { tokens: 1, generation: 1, system: 1, context: 150 },
+					compaction: true
 				}
 			]
 		};

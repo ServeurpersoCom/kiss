@@ -80,10 +80,11 @@ struct conversation_entry {
     conversation_role                 role = ROLE_USER;
     // user
     std::string                       text;
-    // assistant
+    // assistant, compaction when it writes the summary of the history alone
     std::vector<conversation_round>   rounds;
     std::optional<std::string>        error;
     std::optional<conversation_stats> stats;
+    bool                              compaction = false;
     // cli
     std::string                       input;
     std::string                       output;

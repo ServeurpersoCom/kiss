@@ -156,10 +156,12 @@ static std::optional<api_delta> read_event(const std::string & data) {
             d.context = yyjson_get_num(prompt) + *d.usage;
         }
     }
-    yyjson_val * delta = yyjson_obj_get(yyjson_arr_get(yyjson_obj_get(root, "choices"), 0), "delta");
+    yyjson_val * choice = yyjson_arr_get(yyjson_obj_get(root, "choices"), 0);
+    yyjson_val * delta  = yyjson_obj_get(choice, "delta");
     if (!delta) {
         return d.usage ? std::optional<api_delta>(d) : std::nullopt;
     }
+    d.cut       = text_of(yyjson_obj_get(choice, "finish_reason")) == "length";
     d.content   = text_of(yyjson_obj_get(delta, "content"));
     d.reasoning = text_of(yyjson_obj_get(delta, "reasoning_content"));
     size_t       i, n;

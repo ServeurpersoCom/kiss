@@ -184,7 +184,7 @@ static const check_t & file() {
         const fields_t messages = {
             { "user", object(with({ { "role", constant("user") }, { "text", string } })) },
             { "assistant", object(with({ { "role", constant("assistant") }, { "rounds", array(round) } }),
-             { { "error", string }, { "stats", stats } }) },
+             { { "error", string }, { "stats", stats }, { "compaction", yes } }) },
             { "cli",
              object(with(
                   { { "role", constant("cli") }, { "input", string }, { "output", string }, { "ok", boolean } })) },
@@ -310,6 +310,7 @@ static conversation_entry entry_of(yyjson_val * v) {
             if (yyjson_val * error = yyjson_obj_get(v, "error")) {
                 e.error = text_of(error);
             }
+            e.compaction = yyjson_obj_get(v, "compaction") != nullptr;
             if (yyjson_val * stats = yyjson_obj_get(v, "stats")) {
                 e.stats = conversation_stats{ yyjson_get_num(yyjson_obj_get(stats, "tokens")),
                                               yyjson_get_num(yyjson_obj_get(stats, "generation")),
@@ -439,6 +440,9 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
                 }
                 if (e.error) {
                     add_text(d, o, "error", *e.error);
+                }
+                if (e.compaction) {
+                    yyjson_mut_obj_add_true(d, o, "compaction");
                 }
                 if (e.stats) {
                     yyjson_mut_val * stats = yyjson_mut_obj_add_obj(d, o, "stats");

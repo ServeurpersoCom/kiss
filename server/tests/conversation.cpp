@@ -293,7 +293,7 @@ int main() {
             R"({"id":"a","parent":null,"time":1,"role":"user","text":"one"},{"id":"b","parent":"a","time":2,)"
             R"("role":"assistant","rounds":[{"reasoning":"","text":"a1","calls":[]},{"reasoning":"","text":"S",)"
             R"("calls":[],"kept":0},{"reasoning":"","text":"a2","calls":[]}],"stats":{"tokens":1,"generation":1,)"
-            R"("system":1,"context":150}}]}]})";
+            R"("system":1,"context":150},"compaction":true}]}]})";
         const std::string                 back = conversation_file(conversation_parse(text), {});
         const std::shared_ptr<yyjson_doc> a(yyjson_read(text.data(), text.size(), 0), yyjson_doc_free);
         const std::shared_ptr<yyjson_doc> b(yyjson_read(back.data(), back.size(), 0), yyjson_doc_free);

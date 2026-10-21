@@ -780,6 +780,22 @@ describe('the tokens a request holds', () => {
 	});
 });
 
+describe('an answer the output limit cuts', () => {
+	it('says so, in every protocol', () => {
+		const c = chat.reader();
+		expect(c('{"choices":[{"delta":{},"finish_reason":"length"}]}')).toMatchObject({ cut: true });
+		expect(c('{"choices":[{"delta":{},"finish_reason":"stop"}]}')).not.toHaveProperty('cut');
+		const m = messages.reader();
+		expect(
+			m('{"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":2}}')
+		).toMatchObject({ cut: true });
+		expect(m('{"type":"message_delta","usage":{"output_tokens":2}}')).not.toHaveProperty('cut');
+		const r = responses.reader();
+		expect(r('{"type":"response.incomplete","response":{}}')).toEqual({ cut: true, end: true });
+		expect(r('{"type":"response.completed","response":{}}')).toEqual({ end: true });
+	});
+});
+
 describe('a history compacted', () => {
 	const COMPACT =
 		"set chat system-prompt 'be brief'\nset models compaction-trigger-tokens m/x 100\n" +
@@ -817,7 +833,7 @@ describe('a history compacted', () => {
 		expect(q.bodies.map((b) => b.messages.map((m) => m.content))).toEqual([
 			[
 				'be brief',
-				prompts.compaction.summary.replace('{summary}', 'S'),
+				prompts.compaction.summary.replace('{summary}', () => 'S'),
 				'first',
 				'two',
 				'done',
@@ -941,6 +957,21 @@ describe('a compaction asked', () => {
 		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(compact.trim().split('\n'));
 		expect(p.reply.rounds.map((r) => [r.text, r.kept])).toEqual([['S', 1]]);
 		expect(p.reply.stats).not.toHaveProperty('context');
+	});
+
+	it('fails the turn when the output limit cuts the summary, never a boundary', async () => {
+		const cut: Reply = () => {
+			const text =
+				'data: {"choices":[{"delta":{"content":"S"},"finish_reason":"length"}]}\n\n' +
+				'data: [DONE]\n\n';
+			return new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+		};
+		const p = await page([cut], ONE, [{ id: 'x' }]);
+		const { turn } = await import('../src/lib/agent.js');
+		await expect(turn(before, p.reply, p.tools, p.stop.signal, pulse(0), true)).rejects.toThrow(
+			'Endpoint m cut the summary at its output limit'
+		);
+		expect(p.reply.rounds).toEqual([]);
 	});
 
 	it('fails the turn when no step lies past the preserved ones, asking nothing', async () => {

@@ -124,7 +124,7 @@ function held(messages: readonly Message[]): number | undefined {
 
 // the summary the steps a request folds go into, streamed into a round of
 // the reply that keeps the steps it does not fold; it runs no call, and one
-// that writes no summary fails the turn
+// that writes no summary, or that the output limit cuts, fails the turn
 async function summarize(
 	endpoint: Endpoint,
 	request: Request,
@@ -138,15 +138,18 @@ async function summarize(
 	reply.rounds.push({ reasoning: '', text: '', calls: [], kept, folding: true });
 	const round = reply.rounds[reply.rounds.length - 1];
 	let usage: number | undefined;
+	let cut = false;
 	for await (const d of chat(endpoint, request, signal, retrying)) {
 		const now = performance.now();
 		if (d.usage !== undefined) usage = d.usage;
+		if (d.cut) cut = true;
 		chunk(p, !!(d.reasoning || d.content), now);
 		if (d.reasoning) round.reasoning += d.reasoning;
 		if (d.content) round.text += d.content;
 		mark(p, 'compacting', endpoint.name, now);
 	}
 	close(p, usage);
+	if (cut) throw new Error(`Endpoint ${endpoint.name} cut the summary at its output limit`);
 	if (!round.text) throw new Error(`Endpoint ${endpoint.name} wrote no summary`);
 	delete round.folding;
 }

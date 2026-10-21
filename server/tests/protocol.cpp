@@ -235,6 +235,15 @@ int main() {
         const auto mc = mh("{\"type\":\"message_delta\",\"usage\":{\"output_tokens\":2}}");
         const auto rc = protocol_responses().reader()(
             "{\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":2}}}");
+        const auto chat_cut = read("{\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}");
+        const auto chat_end = read("{\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}");
+        const auto msg_cut =
+            mh("{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"max_tokens\"},"
+               "\"usage\":{\"output_tokens\":2}}");
+        const auto rsp_cut = protocol_responses().reader()("{\"type\":\"response.incomplete\",\"response\":{}}");
+        law(chat_cut && chat_cut->cut && chat_end && !chat_end->cut && msg_cut && msg_cut->cut && !mc->cut && rsp_cut &&
+                rsp_cut->cut && rsp_cut->end && !rc->cut,
+            "an answer the output limit cuts says so, in every protocol");
         law(held && held->context && *held->context == 7 && mc && mc->context && *mc->context == 10 && rc &&
                 rc->context && *rc->context == 7 && u && !u->context,
             "the tokens a request holds come as its prompt and what it generated, in every protocol, the cache of "

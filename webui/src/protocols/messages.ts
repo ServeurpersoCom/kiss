@@ -199,8 +199,10 @@ export default {
 			}
 			if (e.type === 'message_delta') {
 				const usage = e.usage?.output_tokens;
-				if (typeof usage !== 'number') return undefined;
-				return { usage, ...(prompt !== undefined ? { context: prompt + usage } : {}) };
+				const cut = e.delta?.stop_reason === 'max_tokens' ? { cut: true as const } : {};
+				if (typeof usage !== 'number')
+					return e.delta?.stop_reason === 'max_tokens' ? cut : undefined;
+				return { usage, ...(prompt !== undefined ? { context: prompt + usage } : {}), ...cut };
 			}
 			if (e.type === 'message_stop') return { end: true };
 			if (e.type === 'error') return { error: e.error?.message ?? '' };

@@ -125,8 +125,10 @@ static refusal changed(const std::string & id, const std::function<refusal(conve
 
 // the model answers the message of the user that user names, writing it
 // first when it enters with the turn
-static refusal answer(const std::string & id, const std::function<std::string(conversation &)> & user) {
-    const std::string why = agent_answer(id, user);
+static refusal answer(const std::string &                                id,
+                      const std::function<std::string(conversation &)> & user,
+                      bool                                               compact = false) {
+    const std::string why = agent_answer(id, user, compact);
     return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
 }
 
@@ -307,8 +309,10 @@ static refusal act(const std::string & action, yyjson_val * body, std::string & 
         return found->text == text ? refusal{} : say(id, text, found->parent);
     }
     if (action == "retry") {
+        // a summary writes itself again after the entry it follows, whatever
+        // that entry is now
         const std::string user = found->role == ROLE_ASSISTANT ? *found->parent : entry;
-        return answer(id, [&](conversation &) { return user; });
+        return answer(id, [&](conversation &) { return user; }, found->compaction);
     }
     // a turn taken before the change refuses it, one taken after it starts
     // from it: a turn is taken before it writes its entry, under the lock of

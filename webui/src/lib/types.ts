@@ -53,7 +53,7 @@ export interface Stats {
 // command and its output, never sent to the model
 export type Message =
 	| { role: 'user'; text: string }
-	| { role: 'assistant'; rounds: Round[]; error?: string; stats?: Stats }
+	| { role: 'assistant'; rounds: Round[]; error?: string; stats?: Stats; compaction?: true }
 	| { role: 'cli'; input: string; output: string; ok: boolean };
 
 export type Assistant = Extract<Message, { role: 'assistant' }>;
@@ -173,8 +173,9 @@ export interface Request {
 // what one event of a stream adds to the round: its thinking, its text, the
 // calls by the index the stream gives them, an item the round keeps for its
 // protocol, the tokens the endpoint counted so far, the tokens the request
-// holds, its prompt and what it generated; or that the stream ends, or fails
-// with the message of the endpoint, empty when it gives none
+// holds, its prompt and what it generated, whether the output limit cut the
+// answer; or that the stream ends, or fails with the message of the endpoint,
+// empty when it gives none
 export interface Delta {
 	content?: string;
 	reasoning?: string;
@@ -182,6 +183,7 @@ export interface Delta {
 	opaque?: object;
 	usage?: number;
 	context?: number;
+	cut?: true;
 	end?: true;
 	error?: string;
 }
