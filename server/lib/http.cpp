@@ -16,12 +16,13 @@
 #include "version.h"
 #include "yyjson.h"
 
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <sstream>
 
-// the site configuration a directory gives the page it serves
-static const char * const SITE_FILE = "client.conf";
+// the file of the site configuration the server gives the page it serves
+static std::string g_site;
 
 // the path of a proxied server, its route name then the rest of the path
 // captured
@@ -112,6 +113,10 @@ static void cors(const httplib::Request & req, httplib::Response & res) {
     }
 }
 
+void http_open(const std::string & site) {
+    g_site = site;
+}
+
 void http_routes(httplib::Server & server) {
     server.set_socket_options([](socket_t sock) {
         int one = 1;
@@ -145,10 +150,10 @@ void http_routes(httplib::Server & server) {
                         "text/html; charset=utf-8");
     });
 
-    // the site configuration of the page: client.conf of the directory the
-    // server runs in, else the one it embeds, its backend at a relative URL
+    // the site configuration of the page: its file, else the one the server
+    // embeds, its backend at a relative URL
     server.Get("/client.conf", [](const httplib::Request &, httplib::Response & res) {
-        std::ifstream site(SITE_FILE, std::ios::binary);
+        std::ifstream site(std::filesystem::u8path(g_site), std::ios::binary);
         if (site) {
             std::ostringstream text;
             text << site.rdbuf();

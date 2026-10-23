@@ -103,10 +103,11 @@ build/server
 The server serves the page on http://127.0.0.1:8089/ and the MCP of the machine beside it, as
 `docs/BACKEND.md` describes. `./buildwebui.sh` rebuilds the page first, when it changes.
 
-It starts on `server.conf` of the directory it runs in, and serves `client.conf` of that directory
-to the page when there is one. To host the page alone, copy `webui/dist/index.html` to any static
-web server, with an optional `client.conf` beside it: `set` lines that give a fresh page its
-endpoints.
+It starts on `server.conf` of the directory it starts in, keeps its conversations in
+`conversations/` there, and serves `client.conf` of that directory to the page when there is one;
+`--server-conf`, `--client-conf` and `--conversations` give each a path of its own. To host the page
+alone, copy `webui/dist/index.html` to any static web server, with an optional `client.conf` beside
+it: `set` lines that give a fresh page its endpoints.
 
 ## Built with itself
 

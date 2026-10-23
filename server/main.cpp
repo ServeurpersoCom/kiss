@@ -1,13 +1,15 @@
 // main.cpp: the KiSS server: one binary per machine that serves the page, its
 // site configuration and the MCP of the machine
 //
-// The server starts on server.conf of the directory it runs in, over the
-// defaults it embeds, reads the conversations of that directory, then
+// The server starts on its startup configuration over the defaults it embeds,
+// reads its conversations, serves its site configuration to the page, then
 // listens; a terminal it runs in the foreground of opens the console, anything
-// else runs it as a daemon. It takes no argument.
+// else runs it as a daemon. Each file is server.conf, client.conf and
+// conversations of the directory it starts in, or the path an option gives.
 
 #include "engine/engine.h"
 #include "lib/console.h"
+#include "lib/http.h"
 #include "lib/library.h"
 #include "lib/listener.h"
 #include "lib/log.h"
@@ -20,10 +22,23 @@
 #include <cstdio>
 #include <string>
 
-// the startup-config, in the directory the server runs in
-static const char * const STARTUP_FILE = "server.conf";
-// the conversations, a file each, in the directory the server runs in
-static const char * const LIBRARY_DIR  = "conversations";
+static void print_usage(const char * prog) {
+    fprintf(stderr, "KiSS %s\n\n", KISS_VERSION);
+    fprintf(stderr,
+            "Usage: %s [options]\n"
+            "\n"
+            "Files:\n"
+            "  --server-conf <file>   Startup configuration the server runs and write saves\n"
+            "                         (default: ./server.conf)\n"
+            "  --client-conf <file>   Site configuration the page reads at /client.conf\n"
+            "                         (default: ./client.conf, else the one it embeds)\n"
+            "  --conversations <dir>  Directory holding the conversations, an <id>.json each\n"
+            "                         (default: ./conversations)\n"
+            "\n"
+            "Everything else is configuration: show running-config all lists it on the\n"
+            "console, set changes it live, write saves it to the startup configuration.\n",
+            prog);
+}
 
 static void on_signal(int) {
     listener_stop();
@@ -32,9 +47,24 @@ static void on_signal(int) {
 int main(int argc, char ** argv) {
     utf8_init(&argc, &argv);
 
-    if (argc > 1) {
-        fprintf(stderr, "usage: %s\n", argv[0]);
-        return 1;
+    std::string startup       = "server.conf";
+    std::string site          = "client.conf";
+    std::string conversations = "conversations";
+
+    for (int i = 1; i < argc; i++) {
+        const std::string arg       = argv[i];
+        const bool        has_value = i + 1 < argc;
+
+        if (arg == "--server-conf" && has_value) {
+            startup = argv[++i];
+        } else if (arg == "--client-conf" && has_value) {
+            site = argv[++i];
+        } else if (arg == "--conversations" && has_value) {
+            conversations = argv[++i];
+        } else {
+            print_usage(argv[0]);
+            return 1;
+        }
     }
 
     log_info("Server", "%s, %s", ENGINE_SYSTEM, engine_component("", KISS_VERSION).c_str());
@@ -51,8 +81,9 @@ int main(int argc, char ** argv) {
         log_error("Server", "The factory configuration refuses:\n%s", refused.c_str());
         return 1;
     }
-    engine_start(STARTUP_FILE, KISS_VERSION);
-    library_open(LIBRARY_DIR);
+    http_open(site);
+    engine_start(startup, KISS_VERSION);
+    library_open(conversations);
 
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);

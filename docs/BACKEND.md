@@ -117,7 +117,7 @@ concept, the engine file for file. A feature adds a file; no file grows with the
 
 ```
 webui/                     the page, as FRONTEND.md describes it
-server/main.cpp            the start: prompts, defaults, startup-config, console, listener
+server/main.cpp            the start: options, prompts, defaults, startup-config, console, listener
 server/prompts.json        what a model reads of the server: its tools, its modules
 server/engine/             the CLI: text, parse, filter, near, schema, values, registry, archive,
                            run, complete, and the keychain with its seal
@@ -234,16 +234,17 @@ engine knows no module by name, so a module joins without a change to the engine
 `server.conf` holds set lines in the grammar of `client.conf`: a module, a key, the item name for a
 collection, then the value. `!` starts a comment, `no` removes an item or a value.
 
-The startup-config is `server.conf` of the directory the server runs in: the root of the repository
-during development, where git ignores it, the working directory of a systemd unit, the directory of
-a prebuilt binary. Several servers run on one machine from several directories. At start the file
-runs as IOS boots: a line the parser refuses stays out, then the rest goes block by block, an item
-with all its lines, a block a rule refuses staying out and tried again once others entered, as one
-item may name another. The log tells each one, `server.conf skips shells z: shells: shells command z
-is not set`, and the server starts on the rest, never stopped by a bad line. The factory
-configuration holds the rules of every module, or the binary does not start. The result is the
-running configuration, in memory; `copy running-config startup-config` writes it back to the file
-whole.
+The startup-config is `server.conf` of the directory the server starts in, or the file
+`--server-conf` names: the root of the repository during development, where git ignores it, the
+working directory of a systemd unit, `/etc/kiss.conf`. Several servers run on one machine from
+several directories, or on several machines from one shared file, each with a directory of
+conversations of its own. At start the file runs as IOS boots: a line the parser refuses stays out,
+then the rest goes block by block, an item with all its lines, a block a rule refuses staying out
+and tried again once others entered, as one item may name another. The log tells each one,
+`server.conf skips shells z: shells: shells command z is not set`, and the server starts on the
+rest, never stopped by a bad line. The factory configuration holds the rules of every module, or the
+binary does not start. The result is the running configuration, in memory;
+`copy running-config startup-config` writes it back to the file whole.
 
 A value resolves through layers, the first that holds it winning:
 
@@ -314,12 +315,12 @@ joins when its program is on the PATH.
 
 ## Conversations
 
-The conversations of a server live in `conversations/` of the directory it runs in, next to
-`server.conf`, a file each, `<id>.json`, in the format the page exports: that conversation alone,
-named by its id. The server reads them all as it starts; a file that does not read as the page
-reads it is logged and left out. Copying a file out exports a conversation, copying one in imports
-it at the next start. `show conversations` lists them, the newest first, and `erase` removes a
-conversation with its file.
+The conversations of a server live in `conversations/` of the directory it starts in, or the
+directory `--conversations` names, a file each, `<id>.json`, in the format the page exports: that
+conversation alone, named by its id. The server reads them all as it starts; a file that does not
+read as the page reads it is logged and left out. Copying a file out exports a conversation, copying
+one in imports it at the next start. `show conversations` lists them, the newest first, and `erase`
+removes a conversation with its file.
 
 The pages that show them follow them, as many as are open, and never write one: the server alone
 changes a conversation, its file written whole again through a file beside it renamed over it, then
@@ -442,9 +443,21 @@ conversation, never its body.
 
 ## Running
 
-`server` takes no argument. Its stdin tells how it runs: a terminal it runs in the foreground of
-opens the console; anything else, `/dev/null` under systemd, a Windows service, `nohup`,
-`< /dev/null` or a start with `&` from a shell, runs it as a daemon that leaves stdin alone.
+`server` takes three options, each a file it starts on, a relative path read from the directory it
+starts in, an absolute one as it is:
+
+```
+--server-conf <file>   the startup-config, server.conf by default
+--client-conf <file>   the site configuration served at /client.conf, client.conf by default,
+                       else the one the binary embeds
+--conversations <dir>  the conversations, conversations by default
+```
+
+Any other argument prints the usage and exits 1. Two servers never share a directory of
+conversations: each reads it once as it starts and writes it alone. Its stdin tells how it runs: a
+terminal it runs in the foreground of opens the console; anything else, `/dev/null` under systemd, a
+Windows service, `nohup`, `< /dev/null` or a start with `&` from a shell, runs it as a daemon that
+leaves stdin alone.
 
 Its log goes to stderr, one line per event in the form of every GGML project of the house,
 `[Module] Line`, and opens on the version. A server tells everything that happens, as the console
