@@ -125,8 +125,7 @@
 				bind:value={draft}
 				oninput={resize}
 				{onkeydown}
-				rows="1"
-			></textarea>
+				rows="1"></textarea>
 		{/if}
 	{:else if message.role === 'cli'}
 		<!-- a command reads like a block of code: a head naming the CLI, closed

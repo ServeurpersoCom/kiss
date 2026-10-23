@@ -78,7 +78,9 @@ beforeEach(() => {
 describe('a page served over plain HTTP', () => {
 	it('names its conversations and entries without randomUUID, which it lacks', async () => {
 		const random = globalThis.crypto;
-		vi.stubGlobal('crypto', { getRandomValues: (a: Uint8Array) => random.getRandomValues(a) });
+		vi.stubGlobal('crypto', {
+			getRandomValues: (a: Uint8Array<ArrayBuffer>) => random.getRandomValues(a)
+		});
 		try {
 			newChat();
 			const sent = send('one');

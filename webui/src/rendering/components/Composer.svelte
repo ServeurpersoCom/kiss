@@ -148,8 +148,7 @@
 		{onkeydown}
 		autocomplete="off"
 		placeholder="Message, or {SLASH} for the CLI"
-		rows="1"
-	></textarea>
+		rows="1"></textarea>
 	{#if busy}
 		<button type="button" onclick={halt} aria-label="Stop"><Icon name="stop" /></button>
 	{:else}

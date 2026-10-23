@@ -7,13 +7,17 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { gzipSync } from 'zlib';
 import { resolve } from 'path';
 import type { Plugin as CssPlugin } from 'postcss';
-import { scope } from './src/lib/config';
+import { scope } from './src/lib/config.ts';
 
 // git version baked at build time
 function gitVersion(): string {
 	try {
-		const hash = execSync('git rev-parse --short HEAD', { cwd: __dirname }).toString().trim();
-		const date = execSync('git show -s --format=%cs HEAD', { cwd: __dirname }).toString().trim();
+		const hash = execSync('git rev-parse --short HEAD', { cwd: import.meta.dirname })
+			.toString()
+			.trim();
+		const date = execSync('git show -s --format=%cs HEAD', { cwd: import.meta.dirname })
+			.toString()
+			.trim();
 		return `${hash} (${date})`;
 	} catch {
 		return 'unknown';
@@ -28,14 +32,14 @@ function kissGzip() {
 		name: 'kiss:gzip',
 		apply: 'build' as const,
 		closeBundle() {
-			const html = readFileSync(resolve(__dirname, 'dist', 'index.html'));
+			const html = readFileSync(resolve(import.meta.dirname, 'dist', 'index.html'));
 			const compressed = gzipSync(html, { level: 9 });
 			compressed[4] = 0; // mtime
 			compressed[5] = 0;
 			compressed[6] = 0;
 			compressed[7] = 0;
 			compressed[9] = 0; // OS
-			const publicDir = resolve(__dirname, '..', 'tools', 'public');
+			const publicDir = resolve(import.meta.dirname, '..', 'tools', 'public');
 			mkdirSync(publicDir, { recursive: true });
 			writeFileSync(resolve(publicDir, 'index.html.gz'), compressed);
 			console.log(
