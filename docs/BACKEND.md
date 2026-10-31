@@ -879,10 +879,13 @@ speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL else
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
 - On a loopback address, `Host` must name loopback and the port, against DNS rebinding.
-- A request without `Origin` (a CLI client) or from the origin of the page itself needs no key.
-- A request from any other origin needs the key: a page served elsewhere sends it as `mcp key`,
-  which KiSS keeps out of the context of the model. Without that rule any site the user visits could
-  run commands through `fetch`.
+- Once `server key` is set, every request needs it as `Authorization: Bearer <key>`, whatever the
+  address the server listens on, the address it comes from and its `Origin`: a reverse proxy on the
+  same machine, another user of the machine and a CLI client are all asked for it. The page sends it
+  as `mcp key`, which KiSS keeps out of the context of the model.
+- With no key, on loopback, a request without `Origin` (a CLI client) or from the origin of the page
+  itself passes, and a request from any other origin is refused: without that rule any site the
+  user visits could run commands through `fetch`.
 - Listening off loopback requires `server key`; the server refuses to start without it. The key is
   compared in constant time.
 - `/mcp` answers CORS preflights and allows `Authorization`, `Content-Type`, `MCP-Protocol-Version`

@@ -65,10 +65,19 @@ static bool host_allowed(const httplib::Request & req) {
     return (listener_loopback(name) || name == bound_host) && (port == bound || (port.empty() && bound == "80"));
 }
 
-// who may call /mcp: on loopback, a client without Origin, a command line, or
-// the page this server serves; anyone else, and everyone off loopback, with
-// the key as a bearer token; why not, otherwise
+// who may call the server: once a key is set, whoever sends it as a bearer
+// token, whatever the address and the origin; with no key, on loopback, a
+// client without Origin, a command line, or the page this server serves, so
+// no page of another site runs a tool through fetch; why not, otherwise
 static bool authorized(const httplib::Request & req, std::string & why) {
+    if (engine_get("server key")) {
+        const std::string bearer = req.get_header_value("Authorization");
+        if (bearer.compare(0, 7, "Bearer ") != 0 || !keychain_admits(bearer.substr(7))) {
+            why = "the key is missing or wrong";
+            return false;
+        }
+        return true;
+    }
     std::string bound_host;
     int         bound_port = 0;
     listener_address(bound_host, bound_port);
@@ -77,16 +86,8 @@ static bool authorized(const httplib::Request & req, std::string & why) {
     if (listener_loopback(bound_host) && (origin.empty() || origin == self)) {
         return true;
     }
-    if (!engine_get("server key")) {
-        why = "server key is not set, so another origin is refused";
-        return false;
-    }
-    const std::string bearer = req.get_header_value("Authorization");
-    if (bearer.compare(0, 7, "Bearer ") != 0 || !keychain_admits(bearer.substr(7))) {
-        why = "the key is missing or wrong";
-        return false;
-    }
-    return true;
+    why = "server key is not set, so another origin is refused";
+    return false;
 }
 
 // whether a request passes, else refused with why, the page told to send the
