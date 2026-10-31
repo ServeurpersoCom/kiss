@@ -8,7 +8,8 @@
 // once the user lets it; the config tool of the pages is the model's while a
 // page is attached, one for all of them, its call granted then run by the
 // pages, the first answer winning, the last page that leaves answering that
-// none is attached
+// none is attached; a conversation erased once its round streamed, before its
+// calls run, stops its turn
 
 #include "lib/agent.h"
 
@@ -111,6 +112,34 @@ int main() {
                                 (usage.empty() ? "" : "data: {\"choices\":[],\"usage\":" + usage + "}\n\n") +
                                 "data: [DONE]\n\n",
                             "text/event-stream");
+            return;
+        }
+        // the conversation of a message vanish erased once its call streamed
+        // into the reply, before the end of the stream
+        if (text == "vanish") {
+            res.set_chunked_content_provider("text/event-stream", [](size_t, httplib::DataSink & sink) {
+                const std::string call =
+                    "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":"
+                    "\"bash\",\"arguments\":\"{}\"}}]}";
+                const std::string chunk = "data: {\"choices\":[{\"delta\":" + call + "}]}\n\n";
+                sink.write(chunk.data(), chunk.size());
+                std::string id;
+                while (id.empty()) {
+                    library_each([&](const conversation & c) {
+                        for (const conversation_entry & e : c.entries) {
+                            if (!e.rounds.empty() && !e.rounds[0].calls.empty() && c.entries[0].text == "vanish") {
+                                id = c.id;
+                            }
+                        }
+                    });
+                    std::this_thread::yield();
+                }
+                library_remove({ id });
+                const std::string done = "data: [DONE]\n\n";
+                sink.write(done.data(), done.size());
+                sink.done();
+                return true;
+            });
             return;
         }
         const std::string delta =
@@ -502,6 +531,21 @@ int main() {
     engine_run("no endpoints t9", ENGINE_ADMIN);
     law(held && !engine_get("endpoints key", "t9") && known("sk-dropped-1234"),
         "a secret the configuration drops stays sealed in what still holds it");
+
+    conversation gone;
+    gone.id = conversation_uuid();
+    conversation_entry vanish;
+    vanish.text = "vanish";
+    conversation_append(gone, std::nullopt, vanish);
+    library_create(gone, {});
+    const std::string asked_gone = gone.entries[0].id;
+    law(agent_answer(gone.id, [&](conversation &) { return asked_gone; }).empty(), "a turn that vanishes starts");
+    for (int i = 0; i < 1000 && agent_busy(gone.id); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    bool found = false;
+    library_each([&](const conversation & x) { found = found || x.id == gone.id; });
+    law(!agent_busy(gone.id) && !found, "a conversation erased once its round streamed stops its turn");
 
     server.stop();
     listening.join();

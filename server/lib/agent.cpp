@@ -353,9 +353,10 @@ static void beat(const std::string & id, const pulse & p) {
     library_turn(id, pulse_json(p));
 }
 
-// the reply as the library holds it
-static conversation_entry reply_of(const std::string & id, const std::string & entry) {
-    conversation_entry out;
+// the reply as the library holds it; a reply gone, its conversation erased,
+// stops the turn
+static conversation_entry reply_of(const std::string & id, const std::string & entry, api_stop & stop) {
+    std::optional<conversation_entry> out;
     library_each([&](const conversation & c) {
         if (c.id == id) {
             for (const conversation_entry & e : c.entries) {
@@ -365,7 +366,11 @@ static conversation_entry reply_of(const std::string & id, const std::string & e
             }
         }
     });
-    return out;
+    if (!out) {
+        stop.stop();
+        throw api_error("Stopped");
+    }
+    return *out;
 }
 
 // the reply grows; a reply gone, its conversation erased, stops the turn
@@ -522,7 +527,7 @@ static bool call(const std::string &           id,
                  api_stop &                    stop,
                  pulse &                       p,
                  const std::vector<mcp_tool> & served) {
-    const conversation_call called = reply_of(id, entry).rounds[r].calls[c];
+    const conversation_call called = reply_of(id, entry, stop).rounds[r].calls[c];
     std::optional<tool>     found;
     bool                    paged = false;
     std::optional<remote>   server;
@@ -717,7 +722,7 @@ static void summarize(const std::string & id,
     if (cut) {
         throw api_error("Endpoint " + e.server.name + " cut the summary at its output limit");
     }
-    if (reply_of(id, entry).rounds[at].text.empty()) {
+    if (reply_of(id, entry, stop).rounds[at].text.empty()) {
         throw api_error("Endpoint " + e.server.name + " wrote no summary");
     }
     grow(id, entry, stop, [&](conversation_entry & x) { x.rounds[at].folding = false; });
@@ -750,7 +755,7 @@ static bool round(const std::string &                     id,
     // the history as it stands, the reply as the library holds it last
     const auto        history = [&] {
         std::vector<conversation_entry> h = before;
-        h.push_back(reply_of(id, entry));
+        h.push_back(reply_of(id, entry, stop));
         return h;
     };
     api_request req;
@@ -861,12 +866,12 @@ static bool round(const std::string &                     id,
         },
         [&](int status, int attempt, int attempts) { retried(id, e, p, status, attempt, attempts); });
     pulse_close(p, usage);
-    const size_t n = reply_of(id, entry).rounds[at].calls.size();
+    const size_t n = reply_of(id, entry, stop).rounds[at].calls.size();
     for (size_t c = 0; c < n; c++) {
         if (stop.stopped) {
             throw api_error("Stopped");
         }
-        pulse_mark(p, PHASE_RUNNING, reply_of(id, entry).rounds[at].calls[c].name, pulse_now());
+        pulse_mark(p, PHASE_RUNNING, reply_of(id, entry, stop).rounds[at].calls[c].name, pulse_now());
         beat(id, p);
         asked = call(id, entry, at, c, stop, p, s.served) || asked;
     }
