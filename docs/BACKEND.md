@@ -225,6 +225,14 @@ secret alone asks the user to type it. And as the page asks the user before its 
 erases a configuration, a `copy` or a `write` to the startup-config and an `erase` from an MCP
 client wait for the user's yes, whatever the client lets the tool do.
 
+Where commands run is the administrator's alone: `shells command`, which shell exists and what it
+starts, the host or a container, a VM, a machine it reaches, and `server working-directory`, which a
+relative path of such a command line reads on the host, a volume it mounts, a key it names. A batch
+of an MCP client that changes one of them, whatever line changes it, a `set`, a `no`, a `copy` or an
+`erase`, is refused whole: `shells command bash is the administrator's -> server.conf or the
+console`. So neither a model nor anyone holding the key of the server brings a shell back to the
+host; a page attached to the server types its lines as an MCP client does.
+
 A module registers itself by existing, with its keys, its rules and what it applies: `server`
 rebinds its socket, `shells` rebuilds the tool list, `files` bounds what its tools return. The
 engine knows no module by name, so a module joins without a change to the engine.

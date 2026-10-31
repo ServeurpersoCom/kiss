@@ -55,6 +55,9 @@ struct engine_key {
     // enum moved toward its more open values, which go from the most closed to
     // the most open, another key given a value
     bool                       guard = false;
+    // a key of the administrator alone, server.conf or the console: no batch
+    // of an MCP client changes its value, whatever line would
+    bool                       admin = false;
 };
 
 // what a module reads: the value of a key through every layer, none when no

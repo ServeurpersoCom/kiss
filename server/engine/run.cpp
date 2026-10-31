@@ -144,6 +144,21 @@ static bool opens(const engine_key &                 def,
     return at(to) > at(from);
 }
 
+// the first key of the administrator a batch of an MCP client changes, read
+// through the layers before and after it, whatever line changed it, none when
+// it changes none
+static std::optional<std::string> administered(const layer & before, const layer & draft) {
+    const reader from(before), to(draft);
+    for (const std::string & s : changed(before, draft)) {
+        const auto [key, item] = unstore(s);
+        const engine_key * def = find_key(key);
+        if (def && def->admin && from.reveal(key, item) != to.reveal(key, item)) {
+            return s;
+        }
+    }
+    return std::nullopt;
+}
+
 // the guarded registers an MCP client opens, read through the layers before
 // and after the batch, whatever line moved them: a yes of the user each, the
 // user not yet letting it in this call
@@ -214,7 +229,7 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // it opens, or a yes a command of an MCP client waits for, stops it once every
 // line ran, before the rules:
 // what the user answers decides them. A batch of an MCP client moves no
-// secret. A save writes the draft as the batch leaves it, an erase removes
+// secret and changes no key of the administrator. A save writes the draft as the batch leaves it, an erase removes
 // server.conf, and the conversations erased go, once the rules hold and
 // before it replaces the target
 static engine_result batch(layer &              target,
@@ -253,6 +268,12 @@ static engine_result batch(layer &              target,
             }
         } catch (const std::runtime_error & e) {
             return failed(i, alone, e.what());
+        }
+    }
+    if (role == ENGINE_MCP) {
+        const auto held = administered(target, draft);
+        if (held) {
+            return failed(std::nullopt, alone, *held + " is the administrator's -> server.conf or the console");
         }
     }
     std::vector<engine_ask> wanted = role == ENGINE_MCP ? unlet(target, draft, typed) : std::vector<engine_ask>{};

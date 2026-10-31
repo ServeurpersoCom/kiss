@@ -51,8 +51,11 @@ static words_t notes(const engine_reader & config, const std::string & shell) {
 }
 
 static engine_module make_shells() {
+    // where a shell runs, the host or a container, a VM, a machine it reaches,
+    // is the administrator's: a model never brings a shell back to the host
     engine_key command("command", ENGINE_STRING);
     command.named = true;
+    command.admin = true;
 
     engine_key timeout("timeout", ENGINE_NUMBER);
     timeout.named   = true;

@@ -5,7 +5,9 @@
 // goes, a set gives it back, an erase of the running configuration brings the
 // factory configuration back whole, and a no line that takes back nothing
 // stays out at boot; an MCP client opens a guarded register only once the user
-// lets it, whatever line opens it, while the administrator opens it at once
+// lets it, whatever line opens it, while the administrator opens it at once;
+// a key of the administrator moves by no line of an MCP client, the
+// administrator moving it at once
 
 #include "engine/engine.h"
 
@@ -96,7 +98,12 @@ int main() {
     law(!shell("pwsh") && shell("zsh"), "the boot takes back what server.conf names");
     law(admin("show running-config") == "no shells command pwsh", "a no line that takes back nothing stays out");
 
-    // the guard: what an MCP client asks before it applies, by stored key
+    // the guard: what an MCP client asks before it applies, by stored key, on
+    // the factory configuration
+    admin("erase running-config");
+    const engine_typed erase_yes = {
+        { "erase running-config", "true" }
+    };
     const auto asks = [](const engine_result & r) {
         words_t out;
         for (const engine_ask & a : r.asks) {
@@ -111,7 +118,7 @@ int main() {
         "an MCP client that opens a tool asks the user");
     law(use("probe") == "consent", "a tool the user has not let stays closed");
     law(engine_run("set tools use probe on", ENGINE_MCP,
-                   {
+                   engine_typed{
                        { "tools use probe", "true" }
     })
                 .text == "+ set tools use probe on",
@@ -129,13 +136,41 @@ int main() {
         "a no that opens a tool asks the user");
     law(use("probe") == "off", "nothing applies while the user has not let it");
     admin("set tools use bash consent");
-    law(asks(engine_run("erase running-config", ENGINE_MCP,
-                        {
-                            { "erase running-config", "true" }
-    })) ==
+    law(asks(engine_run("erase running-config", ENGINE_MCP, erase_yes)) ==
             "tools use bash yes: set tools use bash on\ntools use probe yes: set tools use probe consent",
         "an erase the user says yes to asks the user for each tool it opens, the factory turning them on");
     law(use("bash") == "consent", "the erase applies nothing while the user has not let the tool");
+
+    // the keys of the administrator: where a shell runs, the directory of the
+    // server
+    const std::string refused = "% shells command bash is the administrator's -> server.conf or the console";
+    const auto        mcp     = [](const std::string & lines, const engine_typed & typed = {}) {
+        return engine_run(lines, ENGINE_MCP, typed).text;
+    };
+    const auto bash = [] {
+        return engine_get("shells command", "bash").value_or("");
+    };
+    law(mcp("set shells command bash \"sh -s\"") == refused, "an MCP client sets no shell");
+    law(mcp("no shells command bash") == refused, "an MCP client takes back no shell");
+    law(mcp("no shells bash") == refused, "an MCP client drops no shell");
+    law(mcp("set shells command fresh \"sh -s\"") ==
+            "% shells command fresh is the administrator's -> server.conf or the console",
+        "an MCP client adds no shell");
+    law(mcp("set server working-directory /") ==
+            "% server working-directory is the administrator's -> server.conf or the console",
+        "an MCP client moves not the directory of the server");
+    law(mcp("set shells timeout bash 9") == "- set shells timeout bash 290\n+ set shells timeout bash 9",
+        "an MCP client sets what is not the administrator's");
+    admin("no shells timeout bash");
+    law(admin("no shells command bash") == "- set shells command bash \"bash -s\"",
+        "the administrator takes back a shell at once");
+    admin("write");
+    law(admin("set shells command bash \"bash -s\"") == "+ set shells command bash \"bash -s\"",
+        "the administrator sets a shell at once");
+    law(mcp("copy startup-config running-config") == refused, "a copy of an MCP client moves no shell");
+    admin("copy startup-config running-config");
+    law(mcp("erase running-config", erase_yes) == refused, "an erase of an MCP client moves no shell");
+    law(bash().empty(), "nothing applies of a batch the administrator's keys refuse");
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);

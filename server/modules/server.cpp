@@ -108,8 +108,11 @@ static engine_module make_server() {
     engine_key hostname("hostname", ENGINE_STRING);
     hostname.reset = host_name();
 
+    // the directory a relative path of a shell command line reads on the host,
+    // a volume it mounts, a key it names, is the administrator's
     engine_key cwd("working-directory", ENGINE_STRING);
     cwd.reset = start_directory();
+    cwd.admin = true;
 
     engine_key level("log-level", ENGINE_ENUM);
     level.values = { std::begin(LOG_LEVELS), std::end(LOG_LEVELS) };
