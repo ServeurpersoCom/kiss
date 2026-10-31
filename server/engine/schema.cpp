@@ -255,6 +255,10 @@ std::string show_line(const std::string & s, const std::string & v) {
     return secret(s) ? comment(s + " is set") : set_line(s, v);
 }
 
+std::string no_line(const std::string & s) {
+    return "no " + s;
+}
+
 const std::vector<engine_module> & schema_modules() {
     return registry();
 }

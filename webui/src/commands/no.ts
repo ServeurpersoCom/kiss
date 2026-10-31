@@ -2,7 +2,9 @@ import type { Command } from '../engine/engine.js';
 import { choose } from '../engine/near.js';
 
 // no endpoints prod names an item of a collection, no chat model a key; a
-// key takes the line show running-config writes, whatever value follows it
+// key takes the line show running-config writes, whatever value follows it; a
+// key a layer below the session holds stays as its no line, so its reset
+// value applies, as IOS keeps no ip http server
 type Plan = { module: string; item: string } | { key: string; name?: string };
 
 export default {
@@ -26,7 +28,7 @@ export default {
 		} else {
 			const [module] = plan.key.split(' ');
 			const name = plan.name && choose(plan.name, ctx.config.names(module), module);
-			ctx.config.unset(plan.key, name);
+			ctx.config.takeBack(plan.key, name);
 		}
 		return '';
 	},

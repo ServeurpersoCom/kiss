@@ -95,8 +95,8 @@ static std::set<std::pair<std::string, std::string>> urls(const layer & l) {
     for (const auto & kv : l) {
         const auto        parts  = unstore(kv.first);
         const std::string module = parts.first.substr(0, parts.first.find(' '));
-        if (!parts.second.empty() && parts.first == module + " " + URL_KEY) {
-            out.insert(kv);
+        if (!parts.second.empty() && parts.first == module + " " + URL_KEY && kv.second) {
+            out.insert({ kv.first, *kv.second });
         }
     }
     return out;
@@ -119,8 +119,9 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
         const std::string module = parts.first.substr(0, parts.first.find(' '));
         engine_ask        ask{ u.first, u.second, true, {}, "" };
         for (const engine_key & k : find_module(module)->keys) {
-            const std::string s = stored(module + " " + k.name, parts.second);
-            if (k.kind == ENGINE_SECRET && draft.count(s)) {
+            const std::string s    = stored(module + " " + k.name, parts.second);
+            const auto        held = draft.find(s);
+            if (k.kind == ENGINE_SECRET && held != draft.end() && held->second) {
                 ask.along.push_back(s);
             }
         }

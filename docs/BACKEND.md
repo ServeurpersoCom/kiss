@@ -232,7 +232,8 @@ engine knows no module by name, so a module joins without a change to the engine
 ### server.conf
 
 `server.conf` holds set lines in the grammar of `client.conf`: a module, a key, the item name for a
-collection, then the value. `!` starts a comment, `no` removes an item or a value.
+collection, then the value. `!` starts a comment, and a `no` line takes back what the factory
+configuration holds.
 
 The startup-config is `server.conf` of the directory the server starts in, or the file
 `--server-conf` names: the root of the repository during development, where git ignores it, the
@@ -248,14 +249,23 @@ binary does not start. The result is the running configuration, in memory;
 
 A value resolves through layers, the first that holds it winning:
 
-1. the running configuration;
+1. the running configuration, a key it takes back giving its reset value at once;
 2. the factory configuration `server/server.conf`, embedded in the binary, only what differs from a
    reset value;
 3. the reset value the key declares: the host name of the machine for `server hostname`, the start
    directory for `server working-directory`, `8089` for `server listen-port`.
 
+`no` takes back what the running configuration sets, the factory configuration giving its value
+again, as IOS goes back to the default. A key the running configuration sets nothing for that the
+factory configuration holds is taken back by a line of its own, `no shells command powershell`, as
+IOS keeps `no ip http server`: its reset value applies, and an item whose every key is taken back
+goes. `show running-config` writes that line, `write` saves it to `server.conf`, the boot reads it
+back, a `set` of the key replaces it, and `erase running-config` drops it with the rest, the factory
+configuration whole again. A `no` line that takes back nothing stays out at boot, logged.
+
 A batch answers with its change, every register the running layer moves, read through the layers
-before and after, a register of an item existing while a layer names the item, as on the page.
+before and after, a register of an item existing while one of its keys has a value through them, as
+on the page.
 
 ### One file for every machine
 
@@ -307,7 +317,8 @@ set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 
 Every shell runs at the reset values of its other keys, `timeout` 290 seconds and `max-output` 65536
 bytes, until a line sets its own. `<boot>` stands for the PowerShell bootstrap below, written in
-full in the file.
+full in the file. A machine that must not serve a shell of the factory configuration takes it back,
+`no shells command powershell`.
 
 Each machine serves the shells it has: bash on Linux, zsh and bash on macOS, Windows PowerShell 5.1
 on Windows, and PowerShell 7 wherever it is installed; on Windows the bash of Git Bash or of WSL

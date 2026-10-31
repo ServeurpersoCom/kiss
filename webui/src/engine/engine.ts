@@ -11,6 +11,10 @@ export type Role = 'user' | 'llm';
 
 export type Value = string;
 
+// what a layer holds for a key: a value, or null where it takes back the value
+// of the layers below it, as IOS keeps no ip http server
+export type Held = Value | null;
+
 export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret' | 'css';
 
 // what the user answers when the model asks for a change or a call: this time,
@@ -129,25 +133,34 @@ export interface Config extends ConfigReader {
 	// a value already parsed by the schema
 	set(key: string, value: Value, name?: string): void;
 	unset(key: string, name?: string): void;
-	// drops every key of one item of a collection
+	// takes back the value the session sets for a key, the layers below giving
+	// theirs again, as IOS goes back to the default; a key the session sets
+	// nothing for that a layer below holds is taken back by a line of its own,
+	// so the reset value applies, as IOS keeps no ip http server
+	takeBack(key: string, name?: string): void;
+	// takes back every key of one item of a collection
 	drop(module: string, name: string): void;
+	// what the first layer that holds a stored key holds: the session, the
+	// site, then the factory configuration
+	given(stored: string): Held | undefined;
 	// every stored key set or given by the site, sorted
 	stored(): string[];
 	// stored keys set in the session only, sorted: what a save keeps
-	values(): Record<string, Value>;
+	values(): Record<string, Held>;
 	// replaces every key set in the session; returns the keys dropped because no
-	// module declares them anymore or their key no longer takes their value
-	load(values: Record<string, Value>): string[];
+	// module declares them anymore, their key no longer takes their value, or
+	// nothing below holds what they take back
+	load(values: Record<string, Held>): string[];
 	// another configuration over the same site and factory layers, what load
 	// drops left out
-	reader(values: Record<string, Value>): Config;
+	reader(values: Record<string, Held>): Config;
 }
 
 export interface Save {
 	name: string;
 	// ISO 8601, UTC
 	date: string;
-	values: Record<string, Value>;
+	values: Record<string, Held>;
 }
 
 export interface Archive {
@@ -156,11 +169,11 @@ export interface Archive {
 	// throws when no save has that name
 	find(name: string): Save;
 	// a save of the same name gives way to the new one
-	save(name: string, values: Record<string, Value>): void;
+	save(name: string, values: Record<string, Held>): void;
 	remove(save: Save): void;
 	// what the page starts with over client.conf, nothing once erased
-	startup(): Record<string, Value>;
-	boot(values: Record<string, Value> | undefined): void;
+	startup(): Record<string, Held>;
+	boot(values: Record<string, Held> | undefined): void;
 }
 
 // the key the leading words of a line name, and the words after it
@@ -204,12 +217,14 @@ export interface Schema {
 	unstore(stored: string): [string, string | undefined];
 	// whether a stored key is one a module declares
 	known(stored: string): boolean;
-	// the line that sets a stored key, a secret with its value
-	set(stored: string, value: Value): string;
-	// one line of show running for a stored key: set, or a comment for a secret
-	line(stored: string, value: Value): string;
+	// the line that sets a stored key, a secret with its value, or takes it
+	// back
+	set(stored: string, value: Held): string;
+	// one line of show running for a stored key: set, a comment for a secret,
+	// or no
+	line(stored: string, value: Held): string;
 	// the lines turning one set of stored keys into another, - then +
-	diff(from: Record<string, Value | undefined>, to: Record<string, Value | undefined>): string[];
+	diff(from: Record<string, Held | undefined>, to: Record<string, Held | undefined>): string[];
 }
 
 // what a batch acts on beyond the configuration: the conversation it was sent

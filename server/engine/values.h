@@ -7,16 +7,17 @@
 #include <map>
 #include <set>
 
-using values_t = std::map<std::string, std::string>;
-
-// a layer of the configuration: every stored key it holds, with its value
-using layer = values_t;
+// a layer of the configuration: every stored key it holds, with its value,
+// or none where it takes back the value of the factory configuration, as IOS
+// keeps no ip http server
+using layer = std::map<std::string, std::optional<std::string>>;
 
 // the factory configuration the binary embeds, below every other layer
 layer & factory_layer();
 
 // a configuration as a module reads it: a layer over the factory
-// configuration, then the reset value of the key
+// configuration, then the reset value of the key, which a layer that takes a
+// key back gives at once
 struct reader : engine_reader {
     const layer & over;
 
@@ -27,11 +28,12 @@ struct reader : engine_reader {
     std::vector<std::string>   names(const std::string & module) const override;
 };
 
-// the items of a collection one layer holds, sorted
-words_t layer_names(const layer & l, const std::string & module);
+// whether the factory configuration holds a stored key, the only one a
+// layer takes back
+bool factory_holds(const std::string & s);
 
-// the lines of a layer, sorted; secrets in view only when they are to be
-// written
+// the lines of a layer, sorted, a key taken back as its no line; secrets in
+// view only when they are to be written
 words_t layer_lines(const layer & l, bool secrets);
 
 // what a change does, line by line: the old line after -, the new one after

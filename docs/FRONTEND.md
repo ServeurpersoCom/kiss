@@ -130,7 +130,12 @@ imports the engine, `lib/types.ts` and `lib/config.ts` only and reaches everythi
 A value resolves through layers, the first that holds it winning, as on a device of Cisco IOS: what
 the session sets, then `client.conf` of the site, then the factory configuration `webui/client.conf`
 the page bundles, then the reset value the key declares. The factory configuration holds only what
-differs from a reset value. A save keeps the session layer only, and so does the startup-config. A
+differs from a reset value. `no` takes back what the session sets, the layers below giving their
+value again, as IOS goes back to the default; a key the session sets nothing for that `client.conf`
+or the factory configuration holds is taken back by a line of its own, `no tools use config`, as IOS
+keeps `no ip http server`: its reset value applies, and an item whose every key is taken back goes.
+`client.conf` takes back what the factory configuration holds the same way. A save keeps the session
+layer only, its `no` lines included, and so does the startup-config. A
 key is two fixed words, a module then a key; a key of a collection takes the item name next, and the
 value always comes last. Its kind is `string`, `number`, `enum`, `url`, `secret` or `css`, a value
 of the CSS property it names, checked by the schema before anything runs.
@@ -310,8 +315,10 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   its own, and deleting it stops its turn alone. Questions wait their turn, each answered to the
   turn that asked it.
 - A value resolves from what the session sets, over `client.conf`, over the factory configuration,
-  over the reset value of its key; `erase running-config` drops what the session sets, a copy to
-  `running-config` puts back the configuration it names.
+  over the reset value of its key; `no` takes back what the session sets, then what a layer below
+  holds, as a `no` line of its own that a save keeps and the start reads back, a `no` that nothing
+  below holds anymore left out; `erase running-config` drops what the session sets, its `no` lines
+  too, a copy to `running-config` puts back the configuration it names.
 - Every configuration shows as it runs, over `client.conf`, the keys no module declares anymore left
   out: `show`, `show diff` and `export` alike, while a save keeps what the session sets only, so a
   `client.conf` changed reaches every save. `show running-config` lists what the session and the

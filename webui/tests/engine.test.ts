@@ -1061,7 +1061,7 @@ describe('client.conf', () => {
 			k.defaults(
 				'set chat system-prompt red\nshow running-config\nset mcp proxy a b\nset mcp url b http://b/mcp'
 			)
-		).toEqual(['show running-config: client.conf holds set lines only']);
+		).toEqual(['show running-config: client.conf holds set and no lines only']);
 		expect(k.start()).toEqual([]);
 		expect(k.settings.get('chat system-prompt')).toBe('red');
 		expect(k.settings.get('mcp proxy', 'a')).toBe('b');
@@ -1441,6 +1441,79 @@ describe('erase and copy', () => {
 		expect((await later.run('show endpoints protocol a', 'user')).text).toBe(
 			'set endpoints protocol a chat'
 		);
+	});
+});
+
+describe('no over the layers below', () => {
+	it('takes back what the session sets, then what a layer below holds, as a line of its own', async () => {
+		const k = await page('set chat system-prompt red');
+		await k.run('set chat system-prompt blue', 'user');
+		expect((await k.run('no chat system-prompt', 'user')).text).toBe(
+			'- set chat system-prompt blue\n+ set chat system-prompt red'
+		);
+		expect((await k.run('no chat system-prompt', 'user')).text).toBe(
+			'- set chat system-prompt red\n+ set chat system-prompt ""'
+		);
+		expect((await k.run('no tools use config', 'user')).text).toBe(
+			'- set tools use config on\n+ set tools use config consent'
+		);
+		expect((await k.run('no tools use config', 'user')).text).toBe('% unknown tools "config"');
+		expect((await k.run('show running-config', 'user')).text).toBe(
+			'no chat system-prompt\nno tools use config'
+		);
+		expect((await k.run('copy running-config startup-config', 'user')).ok).toBe(true);
+		const later = await page('set chat system-prompt red');
+		expect(later.settings.get('chat system-prompt')).toBe('');
+		expect(later.settings.get('tools use', 'config')).toBe('consent');
+		expect((await later.run('show diff running-config startup-config', 'user')).text).toBe(
+			'! no difference'
+		);
+		await later.run('set tools use config on', 'user');
+		expect((await later.run('show running-config', 'user')).text).toBe(
+			'no chat system-prompt\nset tools use config on'
+		);
+		await later.run('erase running-config', 'user', shelf([]));
+		expect(later.settings.get('chat system-prompt')).toBe('red');
+		expect(later.settings.get('tools use', 'config')).toBe('on');
+		expect((await later.run('show running-config', 'user')).text).toBe(
+			'set chat system-prompt red'
+		);
+	});
+
+	it('takes back an item a layer below gives, every key of it, and the item goes', async () => {
+		const k = await page('set endpoints url s http://s/v1\nset endpoints protocol s messages');
+		expect(k.settings.names('endpoints')).toEqual(['s']);
+		await k.run('no endpoints s', 'user');
+		expect(k.settings.names('endpoints')).toEqual([]);
+		expect((await k.run('show running-config', 'user')).text).toBe(
+			'no endpoints protocol s\nno endpoints url s'
+		);
+		await k.run('set endpoints url s http://t/v1', 'user');
+		expect(k.settings.names('endpoints')).toEqual(['s']);
+		expect(k.settings.get('endpoints protocol', 's')).toBe('chat');
+	});
+
+	it('client.conf takes back what the factory sets, a no line that takes back nothing left out', async () => {
+		vi.resetModules();
+		const k = await import('../src/engine/run.js');
+		expect(k.defaults('no tools use config\nno chat model')).toEqual([
+			'no chat model: the factory configuration sets nothing it takes back'
+		]);
+		k.start();
+		expect(k.settings.get('tools use', 'config')).toBe('consent');
+		expect((await k.run('show running-config', 'user')).text).toBe('no tools use config');
+	});
+
+	it('leaves out at start a no that nothing below holds anymore', async () => {
+		localStorage.setItem(
+			'kiss.startup',
+			JSON.stringify({ 'chat system-prompt': null, 'tools use config': null })
+		);
+		vi.resetModules();
+		const k = await import('../src/engine/run.js');
+		k.defaults('');
+		expect(k.start()).toEqual(['chat system-prompt: no key takes it']);
+		expect(k.settings.get('tools use', 'config')).toBe('consent');
 	});
 });
 

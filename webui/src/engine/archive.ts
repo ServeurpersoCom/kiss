@@ -1,4 +1,4 @@
-import type { Archive, Save, Value } from './engine.js';
+import type { Archive, Held, Save } from './engine.js';
 import { ARCHIVE_STORAGE_KEY, STARTUP_STORAGE_KEY } from '../lib/config.js';
 
 // what the browser keeps under a key, none when it keeps nothing readable
@@ -31,7 +31,7 @@ function saved(): Save[] {
 // one in memory once the browser stores it
 export class SaveArchive implements Archive {
 	private saves = saved();
-	private start = (read(STARTUP_STORAGE_KEY) as Record<string, Value> | null) ?? undefined;
+	private start = (read(STARTUP_STORAGE_KEY) as Record<string, Held> | null) ?? undefined;
 
 	list(): readonly Save[] {
 		return this.saves;
@@ -43,7 +43,7 @@ export class SaveArchive implements Archive {
 		return save;
 	}
 
-	save(name: string, values: Record<string, Value>): void {
+	save(name: string, values: Record<string, Held>): void {
 		const save: Save = { name, date: new Date().toISOString(), values };
 		this.keep([...this.saves.filter((s) => s.name !== name), save]);
 	}
@@ -52,11 +52,11 @@ export class SaveArchive implements Archive {
 		this.keep(this.saves.filter((s) => s !== save));
 	}
 
-	startup(): Record<string, Value> {
+	startup(): Record<string, Held> {
 		return this.start ?? {};
 	}
 
-	boot(values: Record<string, Value> | undefined): void {
+	boot(values: Record<string, Held> | undefined): void {
 		write(STARTUP_STORAGE_KEY, values);
 		this.start = values;
 	}

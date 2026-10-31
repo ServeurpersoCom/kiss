@@ -1,4 +1,4 @@
-import type { ConfigReader, Key, KeyWords, Known, Module, Schema, Value } from './engine.js';
+import type { ConfigReader, Held, Key, KeyWords, Known, Module, Schema, Value } from './engine.js';
 import { Incomplete } from './text.js';
 import { NAME_PATTERN } from '../lib/config.js';
 import { REMOVED, comment } from './text.js';
@@ -226,11 +226,11 @@ export class KeySchema implements Schema {
 
 	// what a change does, line by line: the old line after -, the new one after
 	// +; a secret replaced by another reads as one line, its values out of view
-	diff(from: Record<string, Value | undefined>, to: Record<string, Value | undefined>): string[] {
+	diff(from: Record<string, Held | undefined>, to: Record<string, Held | undefined>): string[] {
 		const lines: string[] = [];
 		for (const k of [...new Set([...Object.keys(from), ...Object.keys(to)])].sort()) {
 			if (from[k] === to[k]) continue;
-			if (from[k] !== undefined && to[k] !== undefined && this.secret(k)) {
+			if (from[k] != null && to[k] != null && this.secret(k)) {
 				lines.push(comment(`${k} changed`));
 				continue;
 			}
@@ -244,13 +244,15 @@ export class KeySchema implements Schema {
 		return this.find(unstore(stored)[0])?.kind === 'secret';
 	}
 
-	// the line that sets a key, a secret with its value
-	set(stored: string, value: Value): string {
-		return `set ${stored} ${this.quote(value)}`;
+	// the line that sets a key, a secret with its value, or takes it back
+	set(stored: string, value: Held): string {
+		return value === null ? `no ${stored}` : `set ${stored} ${this.quote(value)}`;
 	}
 
 	// the line that shows a key, a secret out of view
-	line(stored: string, value: Value): string {
-		return this.secret(stored) ? comment(`${stored} is set`) : this.set(stored, value);
+	line(stored: string, value: Held): string {
+		return value !== null && this.secret(stored)
+			? comment(`${stored} is set`)
+			: this.set(stored, value);
 	}
 }

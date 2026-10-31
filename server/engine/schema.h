@@ -49,3 +49,5 @@ bool        secret(const std::string & s);
 std::string set_line(const std::string & s, const std::string & v);
 // the line that shows a key, a secret out of view
 std::string show_line(const std::string & s, const std::string & v);
+// the line that takes a key back to its reset value
+std::string no_line(const std::string & s);

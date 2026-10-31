@@ -18,36 +18,40 @@ std::optional<std::string> reader::get(const std::string & key, const std::strin
     return value && def && def->kind == ENGINE_SECRET ? std::optional<std::string>(REMOVED) : value;
 }
 
+bool factory_holds(const std::string & s) {
+    return factory_layer().count(s) > 0;
+}
+
+// the value a layer over the factory configuration gives a stored key, from
+// the first of them that holds it, none where it takes the key back
+static std::optional<std::string> given(const layer & over, const std::string & s) {
+    const auto it = over.find(s);
+    if (it != over.end()) {
+        return it->second;
+    }
+    const auto f = factory_layer().find(s);
+    return f != factory_layer().end() ? f->second : std::nullopt;
+}
+
 std::optional<std::string> reader::reveal(const std::string & key, const std::string & item) const {
-    const std::string s       = stored(key, item);
-    const layer &     factory = factory_layer();
-    for (const layer * l : { &over, &factory }) {
-        const auto it = l->find(s);
-        if (it != l->end()) {
-            return it->second;
-        }
+    const auto value = given(over, stored(key, item));
+    if (value) {
+        return value;
     }
     const engine_key * def = find_key(key);
     return def ? def->reset : std::nullopt;
 }
 
-words_t layer_names(const layer & l, const std::string & module) {
-    std::set<std::string> names;
-    for (const auto & kv : l) {
-        const auto [key, item] = unstore(kv.first);
-        if (!item.empty() && starts_with(key, module + " ")) {
-            names.insert(item);
-        }
-    }
-    return words_t(names.begin(), names.end());
-}
-
+// an item exists while one of its keys has a value through the layers
 std::vector<std::string> reader::names(const std::string & module) const {
     std::set<std::string> names;
     const layer &         factory = factory_layer();
     for (const layer * l : { &over, &factory }) {
-        for (const std::string & n : layer_names(*l, module)) {
-            names.insert(n);
+        for (const auto & kv : *l) {
+            const auto [key, item] = unstore(kv.first);
+            if (!item.empty() && starts_with(key, module + " ") && given(over, kv.first)) {
+                names.insert(item);
+            }
         }
     }
     return words_t(names.begin(), names.end());
@@ -56,7 +60,11 @@ std::vector<std::string> reader::names(const std::string & module) const {
 words_t layer_lines(const layer & l, bool secrets) {
     words_t out;
     for (const auto & kv : l) {
-        out.push_back(secrets ? set_line(kv.first, kv.second) : show_line(kv.first, kv.second));
+        if (!kv.second) {
+            out.push_back(no_line(kv.first));
+        } else {
+            out.push_back(secrets ? set_line(kv.first, *kv.second) : show_line(kv.first, *kv.second));
+        }
     }
     return out;
 }

@@ -1,4 +1,4 @@
-import type { Command, Context, Value } from '../engine/engine.js';
+import type { Command, Context, Held } from '../engine/engine.js';
 import { Incomplete } from '../engine/text.js';
 import { CONVERSATIONS, NAME_PATTERN } from '../lib/config.js';
 import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
@@ -7,17 +7,20 @@ import { unstore } from '../engine/schema.js';
 
 // the values a name holds over client.conf: the running configuration, the
 // startup-config, or a save
-export function values(ctx: Context, name: string): Record<string, Value> {
+export function values(ctx: Context, name: string): Record<string, Held> {
 	if (name === RUNNING_CONFIG) return ctx.config.values();
 	if (name === STARTUP_CONFIG) return ctx.archive.startup();
 	return ctx.archive.find(name).values;
 }
 
-// a configuration as it runs: its values over client.conf, sorted, a key no
-// module declares anymore or a value its key no longer takes left out
-export function effective(ctx: Context, name: string): Record<string, Value> {
+// a configuration as it runs: its values over client.conf, sorted, a key it
+// takes back as null, a key no module declares anymore or a value its key no
+// longer takes left out
+export function effective(ctx: Context, name: string): Record<string, Held> {
 	const config = ctx.config.reader(values(ctx, name));
-	return Object.fromEntries(config.stored().map((k) => [k, config.reveal(...unstore(k))!]));
+	return Object.fromEntries(
+		config.stored().map((k) => [k, config.given(k) === null ? null : config.reveal(...unstore(k))!])
+	);
 }
 
 // a configuration as the lines that show it, or with secrets the lines that

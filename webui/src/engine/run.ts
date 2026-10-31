@@ -1,5 +1,5 @@
 import type { Outcome } from '../lib/types.js';
-import type { ConfigReader, Context, Key, Known, Role, Scope, Value } from './engine.js';
+import type { ConfigReader, Context, Held, Key, Known, Role, Scope, Value } from './engine.js';
 import { Incomplete } from './text.js';
 import { REFUSE } from './engine.js';
 import { FACTORY_FILE, SITE_CONFIG_URL } from '../lib/config.js';
@@ -17,14 +17,34 @@ import { hold } from './keychain.js';
 
 const schema = new KeySchema(modules);
 
-// set lines as a layer of stored values, and what they refuse
-function layer(text: string, file: string): [Map<string, Value>, string[]] {
-	const values = new Map<string, Value>();
+// set lines as a layer of stored values, and what they refuse; over the
+// factory configuration, no lines too, each taking back what it holds
+function layer(
+	text: string,
+	file: string,
+	factory?: Map<string, Held>
+): [Map<string, Held>, string[]] {
+	const values = new Map<string, Held>();
 	const problems: string[] = [];
 	for (const line of splitLines(text)) {
 		try {
 			const { command, args } = resolve(tokenize(line));
-			if (command.path.join(' ') !== 'set') throw new Error(`${file} holds set lines only`);
+			const path = command.path.join(' ');
+			if (path === 'no' && factory) {
+				const plan = command.parse!(schema, args) as
+					{ module: string; item: string } | { key: string; name?: string };
+				const keys = [...factory.keys()].filter((k) => {
+					const [key, name] = unstore(k);
+					return 'item' in plan
+						? name === plan.item && key.startsWith(plan.module + ' ')
+						: k === stored(plan.key, plan.name);
+				});
+				if (!keys.length) throw new Error(`the factory configuration sets nothing it takes back`);
+				for (const k of keys) values.set(k, null);
+				continue;
+			}
+			if (path !== 'set')
+				throw new Error(`${file} holds ${factory ? 'set and no' : 'set'} lines only`);
 			const { key, name, rest } = schema.read(args);
 			if (!rest.length) throw new Error(`${key} misses its value`);
 			values.set(stored(key, name), schema.parse(key, rest.join(' ')));
@@ -40,7 +60,7 @@ function layer(text: string, file: string): [Map<string, Value>, string[]] {
 const [factory, broken] = layer(factoryText, FACTORY_FILE);
 if (broken.length) throw new Error([FACTORY_FILE, ...broken].join('\n'));
 // what the site configuration gives, below every save
-const site = new Map<string, Value>();
+const site = new Map<string, Held>();
 const running = new Values(schema, site, factory);
 const archive = new SaveArchive();
 const unruly = breaks(running);
@@ -136,8 +156,8 @@ function breaks(config: ConfigReader): string | null {
 // breaks a rule stays out, tried again once others entered, as one item may
 // name another; returns each block that stays out and why
 function enter(
-	values: Map<string, Value>,
-	put: (stored: string, value: Value) => void,
+	values: Map<string, Held>,
+	put: (stored: string, value: Held) => void,
 	drop: (stored: string) => void
 ): string[] {
 	const blocks = new Map<string, string[]>();
@@ -168,7 +188,7 @@ function enter(
 // configuration and every save, entering line by line then block by block;
 // returns each line and block that stays out and why
 export function defaults(text: string): string[] {
-	const [values, problems] = layer(text, SITE_CONFIG_URL);
+	const [values, problems] = layer(text, SITE_CONFIG_URL, factory);
 	site.clear();
 	return [
 		...problems,
@@ -187,9 +207,10 @@ export function start(): string[] {
 	const dropped = running.load(archive.startup());
 	const values = new Map(Object.entries(running.values()));
 	running.load({});
-	const put = (k: string, v: Value) => {
+	const put = (k: string, v: Held) => {
 		const [key, name] = unstore(k);
-		running.set(key, v, name);
+		if (v === null) running.takeBack(key, name);
+		else running.set(key, v, name);
 	};
 	const drop = (k: string) => running.unset(...unstore(k));
 	const problems = [...dropped.map((k) => `${k}: no key takes it`), ...enter(values, put, drop)];
