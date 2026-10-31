@@ -1,13 +1,15 @@
-// engine.cpp: the laws of no over the factory configuration, run as the build
-// ends, twins of those of the page: no takes back what the running
-// configuration sets, the factory value applying again, then what the factory
-// configuration holds, as a no line of its own that write saves and the boot
-// reads back; an item taken back goes, a set gives it back, an erase of the
-// running configuration brings the factory configuration back whole, and a no
-// line that takes back nothing stays out at boot
+// engine.cpp: the laws of the engine, run as the build ends, twins of those of
+// the page: no takes back what the running configuration sets, the factory
+// value applying again, then what the factory configuration holds, as a no
+// line of its own that write saves and the boot reads back; an item taken back
+// goes, a set gives it back, an erase of the running configuration brings the
+// factory configuration back whole, and a no line that takes back nothing
+// stays out at boot; an MCP client opens a guarded register only once the user
+// lets it, whatever line opens it, while the administrator opens it at once
 
 #include "engine/engine.h"
 
+#include "engine/text.h"
 #include "server/server.conf.hpp"
 
 #include <cstdio>
@@ -93,6 +95,47 @@ int main() {
     engine_start(conf.u8string(), "test");
     law(!shell("pwsh") && shell("zsh"), "the boot takes back what server.conf names");
     law(admin("show running-config") == "no shells command pwsh", "a no line that takes back nothing stays out");
+
+    // the guard: what an MCP client asks before it applies, by stored key
+    const auto asks = [](const engine_result & r) {
+        words_t out;
+        for (const engine_ask & a : r.asks) {
+            out.push_back(a.key + (a.yes ? " yes: " : ": ") + a.question);
+        }
+        return join(out, "\n");
+    };
+    const auto use = [](const std::string & tool) {
+        return engine_get("tools use", tool).value_or("");
+    };
+    law(asks(engine_run("set tools use probe on", ENGINE_MCP)) == "tools use probe yes: set tools use probe on",
+        "an MCP client that opens a tool asks the user");
+    law(use("probe") == "consent", "a tool the user has not let stays closed");
+    law(engine_run("set tools use probe on", ENGINE_MCP,
+                   {
+                       { "tools use probe", "true" }
+    })
+                .text == "+ set tools use probe on",
+        "a tool the user lets opens");
+    law(engine_run("set tools use probe off", ENGINE_MCP).text == "- set tools use probe on\n+ set tools use probe off",
+        "an MCP client closes a tool without asking");
+    law(admin("set tools use probe on") == "- set tools use probe off\n+ set tools use probe on",
+        "the administrator opens a tool at once");
+    admin("write");
+    admin("set tools use probe off");
+    law(asks(engine_run("copy startup-config running-config", ENGINE_MCP)) ==
+            "tools use probe yes: set tools use probe on",
+        "a copy that opens a tool asks the user");
+    law(asks(engine_run("no tools use probe", ENGINE_MCP)) == "tools use probe yes: set tools use probe consent",
+        "a no that opens a tool asks the user");
+    law(use("probe") == "off", "nothing applies while the user has not let it");
+    admin("set tools use bash consent");
+    law(asks(engine_run("erase running-config", ENGINE_MCP,
+                        {
+                            { "erase running-config", "true" }
+    })) ==
+            "tools use bash yes: set tools use bash on\ntools use probe yes: set tools use probe consent",
+        "an erase the user says yes to asks the user for each tool it opens, the factory turning them on");
+    law(use("bash") == "consent", "the erase applies nothing while the user has not let the tool");
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);

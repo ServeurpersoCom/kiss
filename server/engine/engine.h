@@ -51,6 +51,10 @@ struct engine_key {
     // the declaration, or measured as the module registers, the host name, the
     // start directory
     std::optional<std::string> reset;
+    // a power an MCP client opens only once the user lets it, every time: an
+    // enum moved toward its more open values, which go from the most closed to
+    // the most open, another key given a value
+    bool                       guard = false;
 };
 
 // what a module reads: the value of a key through every layer, none when no
@@ -86,7 +90,8 @@ bool engine_register(engine_module (*make)());
 // url of its item, where it goes, when its module has one; or, yes set, a url
 // to let an item take, by its stored key, that url, and the secrets of the
 // item that go with it; or, question set too, a yes to what a command does,
-// under the key that names it
+// under the key that names it, or to the line that opens a guarded register,
+// under its stored key
 struct engine_ask {
     std::string              key;
     std::string              to;

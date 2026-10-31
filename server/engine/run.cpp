@@ -130,6 +130,41 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
     return out;
 }
 
+// whether a change opens a guarded register: an enum moved toward its more
+// open values, another key given a value
+static bool opens(const engine_key &                 def,
+                  const std::optional<std::string> & from,
+                  const std::optional<std::string> & to) {
+    if (def.kind != ENGINE_ENUM) {
+        return to && to != from;
+    }
+    const auto at = [&](const std::optional<std::string> & v) {
+        return std::find(def.values.begin(), def.values.end(), v.value_or("")) - def.values.begin();
+    };
+    return at(to) > at(from);
+}
+
+// the guarded registers an MCP client opens, read through the layers before
+// and after the batch, whatever line moved them: a yes of the user each, the
+// user not yet letting it in this call
+static std::vector<engine_ask> unguarded(const layer & before, const layer & draft, const engine_typed & typed) {
+    std::vector<engine_ask> out;
+    const reader            from(before), to(draft);
+    for (const std::string & s : changed(before, draft)) {
+        const auto [key, item] = unstore(s);
+        const engine_key * def = find_key(key);
+        const auto         let = typed.find(s);
+        if (!def || !def->guard || (let != typed.end() && let->second == YES)) {
+            continue;
+        }
+        const auto value = to.reveal(key, item);
+        if (opens(*def, from.reveal(key, item), value)) {
+            out.push_back({ s, "", true, {}, show_line(s, *value) });
+        }
+    }
+    return out;
+}
+
 static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) {
     std::vector<engine_ask> out;
     for (const std::string & s : keys) {
@@ -175,8 +210,9 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // target, which it replaces only when all of them succeed and the rules of
 // every module hold; the batch answers with what it changed, and on the
 // running configuration the modules whose keys changed apply. A secret left
-// to ask for, a url of an MCP client the user has not let, or a yes a command
-// of an MCP client waits for, stops it once every line ran, before the rules:
+// to ask for, a url of an MCP client the user has not let, a guarded register
+// it opens, or a yes a command of an MCP client waits for, stops it once every
+// line ran, before the rules:
 // what the user answers decides them. A batch of an MCP client moves no
 // secret. A save writes the draft as the batch leaves it, an erase removes
 // server.conf, and the conversations erased go, once the rules hold and
@@ -220,7 +256,11 @@ static engine_result batch(layer &              target,
         }
     }
     std::vector<engine_ask> wanted = role == ENGINE_MCP ? unlet(target, draft, typed) : std::vector<engine_ask>{};
-    const auto              typing = asked(draft, asks);
+    if (role == ENGINE_MCP) {
+        const auto opened = unguarded(target, draft, typed);
+        wanted.insert(wanted.end(), opened.begin(), opened.end());
+    }
+    const auto typing = asked(draft, asks);
     wanted.insert(wanted.end(), typing.begin(), typing.end());
     wanted.insert(wanted.end(), ctx.questions.begin(), ctx.questions.end());
     if (!wanted.empty()) {

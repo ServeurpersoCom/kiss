@@ -741,15 +741,18 @@ https://mcp.exa.ai/mcp`, unless the running-config before the batch or the start
 holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
 proxy/b proxy https://b.example/mcp, proxies key b with it`, so a key is never typed again for a url
 that changes. A `copy`, a `write` or an `erase` asks a yes field the same way, `Copy running-config
-to startup-config for the KiSS server forge`, the batch running again once the user says yes. A line
-that writes the value of a secret is refused, and a client that takes no form, every client of the
-2025 era, is told the secret goes in `server.conf` or on the console. The text every tool answers
-goes through the keychain of the server and reads `<removed>` where the value of a secret of the
-server stood, so a shell, `view` or `show logging` never hands a key on; a value the server never
-read, a line it refused, is no secret it knows. A module reads a secret `<removed>`: the keychain
-alone reads its value beside the engine, as a route sends its key and as the key of a client is
-checked. A line `server.conf` refuses is logged by its number, never by its text: `server.conf skips
-line 4: unterminated "`.
+to startup-config for the KiSS server forge`, the batch running again once the user says yes. A
+batch that opens a tool, its `tools use` moved toward `on` by whatever line, a `set`, a `no`, a
+`copy` or an `erase`, asks a yes field the same way for each, `Set tools use web_search_exa on for
+the KiSS server forge`, as the page asks before its model opens a way out; the administrator opens
+one at once. A line that writes the value of a secret is refused, and a client that takes no form,
+every client of the 2025 era, is told the secret goes in `server.conf` or on the console. The text
+every tool answers goes through the keychain of the server and reads `<removed>` where the value of
+a secret of the server stood, so a shell, `view` or `show logging` never hands a key on; a value the
+server never read, a line it refused, is no secret it knows. A module reads a secret `<removed>`:
+the keychain alone reads its value beside the engine, as a route sends its key and as the key of a
+client is checked. A line `server.conf` refuses is logged by its number, never by its text:
+`server.conf skips line 4: unterminated "`.
 
 ## The shell contract
 

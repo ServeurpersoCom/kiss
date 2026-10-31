@@ -20,6 +20,7 @@ static engine_module make_tools() {
     use.named  = true;
     use.values = words_t(std::begin(USES), std::end(USES));
     use.reset  = "consent";
+    use.guard  = true;
 
     engine_module m;
     m.name = "tools";
