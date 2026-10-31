@@ -217,9 +217,8 @@ int main() {
                 "round " + std::to_string(r + 1) + " sends the system prompt alone: " + json(g_systems[r]));
         }
         law(g_down == 1, "a server that fails is asked once in the turn: " + std::to_string(g_down.load()));
-        law(g_tools[0].find("bash") != std::string::npos &&
-                g_tools[0].find("bash", g_tools[0].find("bash") + 1) == std::string::npos,
-            "a tool served twice goes once: " + g_tools[0]);
+        const words_t listed = split(g_tools[0], ' ');
+        law(std::count(listed.begin(), listed.end(), "config") == 1, "a tool served twice goes once: " + g_tools[0]);
     }
 
     // the entries of the conversation, as the library holds them
