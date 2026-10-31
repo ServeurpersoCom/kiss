@@ -22,11 +22,16 @@ vi.mock('../src/lib/db.js', () => ({
 	deleteConversations: async () => {}
 }));
 
-// a configuration with the KiSS server backend and its key, which a page
-// neither attached nor detached attaches to, or one without it
-function config(backend: boolean): ConfigReader {
+// a configuration with the KiSS server backend, its key and the headers
+// given, which a page neither attached nor detached attaches to, or one
+// without it
+function config(backend: boolean, headers = ''): ConfigReader {
 	const values: Record<string, string> = backend
-		? { 'mcp url backend': 'http://kiss/mcp', 'mcp key backend': 'k' }
+		? {
+				'mcp url backend': 'http://kiss/mcp',
+				'mcp key backend': 'k',
+				'mcp headers backend': headers
+			}
 		: {};
 	const get = (key: string, name?: string) => values[name ? `${key} ${name}` : key];
 	return { get, reveal: get, names: (m) => (m === 'mcp' && backend ? ['backend'] : []) };
@@ -274,6 +279,21 @@ describe('the conversations of a KiSS server', () => {
 		follow(config(false));
 		expect(attached()).toBe(false);
 		await vi.waitFor(() => expect(app.conversations).toEqual([mine]));
+	});
+
+	it('follow the server again once its headers change, its stream and its actions sending the new ones', async () => {
+		const s = server();
+		serve({ load: async () => undefined, run: async () => ({ ok: true, text: '' }) });
+		const streams = () => s.sent.filter((r) => r.url.endsWith('/conversations/events'));
+		follow(config(true, 'X-Tag: one'));
+		await vi.waitFor(() => expect(streams()[0]?.first?.['X-Tag']).toBe('one'));
+		follow(config(true, 'X-Tag: one'));
+		follow(config(true, 'X-Tag: two'));
+		await vi.waitFor(() => expect(streams()[1]?.first?.['X-Tag']).toBe('two'));
+		expect(streams().length).toBe(2);
+		await act('send', { text: 'hi' });
+		const post = s.sent.find((r) => r.url === 'http://kiss/conversations/send')!;
+		expect((post.init?.headers as Record<string, string>)['X-Tag']).toBe('two');
 	});
 
 	it('run the lines the server asks of the pages, what they answer going to the server with the secrets of the page sealed', async () => {
