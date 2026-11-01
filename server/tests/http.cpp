@@ -17,6 +17,16 @@
 #include <string>
 #include <thread>
 
+#if defined(_WIN32)
+#    include <winsock2.h>
+#    include <ws2tcpip.h>
+#else
+#    include <arpa/inet.h>
+#    include <netinet/in.h>
+#    include <sys/socket.h>
+#    include <unistd.h>
+#endif
+
 namespace fs = std::filesystem;
 
 static size_t g_laws  = 0;
@@ -27,6 +37,38 @@ static void law(bool kept, const std::string & what) {
     if (!kept && g_fails++ < 8) {
         fprintf(stderr, "[Laws] http_test broken: %s\n", what.c_str());
     }
+}
+
+// a socket listening on [::1]:port that no other socket binds, as another
+// process holds an address: exclusive on Windows, without SO_REUSEPORT on
+// POSIX; -1 when the machine has no IPv6 loopback
+static long long hold(int port) {
+    const auto s = socket(AF_INET6, SOCK_STREAM, 0);
+#if defined(_WIN32)
+    const int one = 1;
+    setsockopt(s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char *>(&one), sizeof(one));
+#endif
+    sockaddr_in6 at{};
+    at.sin6_family = AF_INET6;
+    at.sin6_port   = htons((unsigned short) port);
+    at.sin6_addr   = in6addr_loopback;
+    if (bind(s, reinterpret_cast<sockaddr *>(&at), sizeof(at)) != 0 || listen(s, 1) != 0) {
+#if defined(_WIN32)
+        closesocket(s);
+#else
+        close(s);
+#endif
+        return -1;
+    }
+    return (long long) s;
+}
+
+static void release(long long s) {
+#if defined(_WIN32)
+    closesocket((SOCKET) s);
+#else
+    close((int) s);
+#endif
 }
 
 static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})";
@@ -113,10 +155,8 @@ int main() {
     // a move to an address another process holds goes back to the one it
     // left, a machine without IPv6 loopback leaving the law out
     engine_run("no server key", ENGINE_ADMIN);
-    httplib::Server holder;
-    if (holder.bind_to_port("::1", port)) {
-        std::thread holding([&] { holder.listen_after_bind(); });
-        holder.wait_until_ready();
+    const long long held = hold(port);
+    if (held >= 0) {
         law(engine_run("set server listen-address ::1", ENGINE_ADMIN).ok, "the move passes the rules");
         for (int i = 0; i < 200 && engine_get("server listen-address") != std::optional<std::string>("127.0.0.1");
              i++) {
@@ -125,8 +165,7 @@ int main() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         law(engine_get("server listen-address") == std::optional<std::string>("127.0.0.1") && status("/mcp", {}) == 200,
             "a move to an address another process holds goes back, the server still answering");
-        holder.stop();
-        holding.join();
+        release(held);
     }
 
     listener_stop();
