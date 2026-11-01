@@ -4,8 +4,8 @@
 #include "engine/run.h"
 #include "engine/schema.h"
 
-static words_t next_set(const words_t & args) {
-    return schema_next(reader(running_layer()), args, true, false);
+static words_t next_set(const words_t & args, const engine_known & known) {
+    return schema_next(reader(running_layer()), args, true, false, known);
 }
 
 // set server listen-port 9000. A model may write the lines of an MCP client, so a

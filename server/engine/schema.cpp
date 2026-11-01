@@ -195,7 +195,24 @@ key_words schema_read(const words_t & words) {
     return { key, def, module, words[2], words_t(words.begin() + 3, words.end()) };
 }
 
-words_t schema_next(const engine_reader & config, const words_t & words, bool value, bool items) {
+words_t schema_next(const engine_reader & config,
+                    const words_t &       words,
+                    bool                  value,
+                    bool                  items,
+                    const engine_known &  known) {
+    // the items of a module, those set then those its sources know
+    const auto all = [&](const std::string & module) {
+        words_t    out = config.names(module);
+        const auto it  = known.find(module);
+        if (it != known.end()) {
+            for (const std::string & n : it->second) {
+                if (std::find(out.begin(), out.end(), n) == out.end()) {
+                    out.push_back(n);
+                }
+            }
+        }
+        return out;
+    };
     try {
         if (words.empty()) {
             return module_names();
@@ -204,7 +221,7 @@ words_t schema_next(const engine_reader & config, const words_t & words, bool va
         words_t           keys   = key_names(module);
         if (words.size() == 1) {
             if (items && collection(module)) {
-                for (const std::string & n : config.names(module)) {
+                for (const std::string & n : all(module)) {
                     keys.push_back(n);
                 }
             }
@@ -217,7 +234,7 @@ words_t schema_next(const engine_reader & config, const words_t & words, bool va
         const std::string  key = module + " " + word;
         const engine_key * def = find_key(key);
         if (def->named && words.size() == 2) {
-            words_t names = config.names(module);
+            words_t names = all(module);
             if (value) {
                 names.push_back("<name>");
             }
@@ -234,6 +251,13 @@ words_t schema_next(const engine_reader & config, const words_t & words, bool va
         const auto current = def->kind == ENGINE_SECRET ? std::nullopt : config.get(key, def->named ? words[2] : "");
         if (current && !current->empty()) {
             next.push_back(quote(*current));
+        }
+        if (!def->of.empty()) {
+            for (const std::string & n : all(def->of)) {
+                if (std::find(next.begin(), next.end(), n) == next.end()) {
+                    next.push_back(n);
+                }
+            }
         }
         next.push_back(kinds[def->kind]);
         return next;

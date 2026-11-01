@@ -32,7 +32,7 @@ static step_t compile_copy(const words_t & args) {
     };
 }
 
-static words_t next_copy(const words_t & args) {
+static words_t next_copy(const words_t & args, const engine_known &) {
     return args.size() < 2 ? words_t{ RUNNING_CONFIG, STARTUP_CONFIG } : words_t{};
 }
 

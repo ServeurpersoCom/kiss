@@ -1,14 +1,16 @@
 #pragma once
 // complete.h: what may follow a line being typed, as the console completes it
 
+#include "engine/engine.h"
 #include "engine/text.h"
 
 #include <string>
 
 // what may follow the words, the partial word filtering the candidates: path
-// words while the path goes on, then the arguments the command proposes; a
-// candidate in <> names what to type and shows only before a word is started
-words_t complete(const words_t & words, const std::string & partial);
+// words while the path goes on, then the arguments the command proposes, the
+// items the sources know among them; a candidate in <> names what to type and
+// shows only before a word is started
+words_t complete(const words_t & words, const std::string & partial, const engine_known & known);
 
 // the word a line ends on, after its last blank or pipe
 std::string partial_word(const std::string & text);

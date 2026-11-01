@@ -12,7 +12,7 @@ static bool hint(const std::string & word) {
     return word[0] == '<';
 }
 
-words_t complete(const words_t & words, const std::string & partial) {
+words_t complete(const words_t & words, const std::string & partial, const engine_known & known) {
     const walk_t w = walk(words);
     if (!w.ambiguous.empty()) {
         return {};
@@ -26,7 +26,7 @@ words_t complete(const words_t & words, const std::string & partial) {
         }
     }
     if (w.found && w.found->complete && (w.consumed == words.size() || w.depth == w.consumed)) {
-        for (const std::string & a : w.found->complete(words_t(words.begin() + (long) w.depth, words.end()))) {
+        for (const std::string & a : w.found->complete(words_t(words.begin() + (long) w.depth, words.end()), known)) {
             found.insert(a);
         }
     }

@@ -3,12 +3,15 @@
 // under their own names, each sent only when set and only by a protocol that
 // sends it, then when its history compacts, the tokens a request holds once
 // answered that fold it before the next, none never, and the last steps a
-// summary keeps, none when unset; the twin of the models module of the page
+// summary keeps, none when unset; its items, the models every endpoint
+// serves, endpoint/model; the twin of the models module of the page
 
 #include "engine/engine.h"
 #include "engine/text.h"
 #include "lib/api.h"
 #include "lib/compaction.h"
+
+#include <thread>
 
 // every model is one of an endpoint, and none holds a parameter the protocol
 // of its endpoint never sends
@@ -43,6 +46,31 @@ static engine_key number(const char * name, double min, std::optional<double> ma
     return k;
 }
 
+// the models of every endpoint at once, by endpoint, each asked in a thread
+// of its own, one that fails holding why
+static std::vector<engine_group> items(const engine_reader & config) {
+    const std::vector<endpoint> all = api_endpoints(config);
+    std::vector<engine_group>   out(all.size());
+    std::vector<std::thread>    asking;
+    for (size_t i = 0; i < all.size(); i++) {
+        asking.emplace_back([&all, &out, i] {
+            out[i].group = "endpoints " + all[i].server.name;
+            try {
+                api_stop stop;
+                for (const std::string & id : api_models(all[i], stop)) {
+                    out[i].names.push_back(all[i].server.name + "/" + id);
+                }
+            } catch (const std::exception & e) {
+                out[i].error = e.what();
+            }
+        });
+    }
+    for (std::thread & t : asking) {
+        t.join();
+    }
+    return out;
+}
+
 static engine_module make_models() {
     engine_key seed("seed", ENGINE_NUMBER);
     seed.named   = true;
@@ -66,6 +94,7 @@ static engine_module make_models() {
                    number(COMPACTION_TRIGGER, 1, std::nullopt, true),
                    number(COMPACTION_PRESERVE, 0, std::nullopt, true) };
     m.validate = validate;
+    m.items    = items;
     return m;
 }
 

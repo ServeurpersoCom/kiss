@@ -116,6 +116,9 @@ struct api_stop {
 // stop while it waits; path is the path of its url
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path);
 
+// the ids of the models an endpoint serves; throws why it lists none
+std::vector<std::string> api_models(const endpoint & e, api_stop & stop);
+
 // what an endpoint lists of one model, kept for the life of the server, a
 // list that failed asked again; empty when it lists no such model
 std::string api_describe(const endpoint & e, const std::string & model, api_stop & stop);

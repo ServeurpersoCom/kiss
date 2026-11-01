@@ -24,7 +24,7 @@ static step_t compile_write(const words_t & args) {
     };
 }
 
-static words_t next_write(const words_t & args) {
+static words_t next_write(const words_t & args, const engine_known &) {
     return args.empty() ? words_t{ MEMORY, ERASE } : words_t{};
 }
 

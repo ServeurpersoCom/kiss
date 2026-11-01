@@ -145,6 +145,14 @@ static std::vector<std::pair<std::string, std::string>> api_list(const endpoint 
     return out;
 }
 
+std::vector<std::string> api_models(const endpoint & e, api_stop & stop) {
+    std::vector<std::string> out;
+    for (const auto & m : api_list(e, stop)) {
+        out.push_back(m.first);
+    }
+    return out;
+}
+
 std::string api_describe(const endpoint & e, const std::string & model, api_stop & stop) {
     static std::mutex                                                              m;
     static std::map<std::string, std::vector<std::pair<std::string, std::string>>> lists;

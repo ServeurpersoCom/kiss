@@ -58,6 +58,8 @@ struct engine_key {
     // a key of the administrator alone, server.conf or the console: no batch
     // of an MCP client changes its value, whatever line would
     bool                       admin = false;
+    // the module whose items its value names, chat model one of models
+    std::string                of;
 };
 
 // what a module reads: the value of a key through every layer, none when no
@@ -71,6 +73,17 @@ struct engine_reader {
     virtual std::vector<std::string>   names(const std::string & module) const                              = 0;
 };
 
+// a source of the items of a module: who serves them, the names it serves,
+// and why it serves none when it fails
+struct engine_group {
+    std::string              group;
+    std::vector<std::string> names;
+    std::string              error;
+};
+
+// the items every module with sources knows beyond those set, by module
+using engine_known = std::map<std::string, std::vector<std::string>>;
+
 // a module owns the keys spelled after its name: "server" owns "server listen-port"
 struct engine_module {
     std::string                                                                         name;
@@ -82,6 +95,10 @@ struct engine_module {
     std::function<void(const engine_reader &)>                                          apply;
     // what an item does, as notes show <module> writes after its lines
     std::function<std::vector<std::string>(const engine_reader &, const std::string &)> notes;
+    // the items its sources serve now, by source, read from the configuration
+    // given: they ask over the network, so the engine asks them before it
+    // holds the configuration, never while
+    std::function<std::vector<engine_group>(const engine_reader &)>                     items;
 };
 
 // a file in modules/ registers its module by existing

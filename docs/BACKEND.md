@@ -530,12 +530,24 @@ forge# copy run start
 ! copied running-config to startup-config
 ```
 
+Two modules know items beyond those set, as their twins of the page do: `models`, the models every
+endpoint serves, asked in the protocol of each, and `tools`, the tools of this server, the one the
+pages serve, and those of every MCP server. `show models` and `show tools` list them by source,
+`! endpoints hf`, `! KiSS`, `! mcp exa`, an item that has a setting by its lines, another by its
+name, those set that no source serves under `! unavailable`, a source that fails by why on its
+header; `show models hf/` names one by a prefix. The sources answer over the network, so the engine
+asks them before it holds the configuration and keeps their answer ten seconds for the same
+configuration, the time a line takes to type: a page attached completes and shows from this server
+as a page alone does from itself.
+
 The line is edited as in a shell, and completes as IOS does, from the words the engine reads:
 
 - Tab completes the word when one word fits, else the start every fitting word shares, else lists
-  them: the words of the engine, the items set, the filters after a pipe, and for a value its
-  current one, a secret aside; `?` lists what may follow, or the words the word typed starts, and
-  leaves the line as it is. Ctrl-V types the next key as it is, a `?` in a value.
+  them: the words of the engine, the items set and those their sources serve, the filters after a
+  pipe, and for a value its current one, a secret aside, and the items of the module it names,
+  `chat model` the models, `files shell` the shells; `?` lists what may follow, or the words the
+  word typed starts, and leaves the line as it is. Ctrl-V types the next key as it is, a `?` in a
+  value.
 - Left and Right, Home and End or Ctrl-A and Ctrl-E move; Backspace and Delete erase a character,
   Ctrl-U the line before the cursor, Ctrl-K the line after it; Up and Down walk the history.
 - `exit` and `quit`, Ctrl-C, and Ctrl-D on an empty line stop the server. They are words of the

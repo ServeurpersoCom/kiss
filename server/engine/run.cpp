@@ -12,6 +12,7 @@
 #include "lib/log.h"
 
 #include <algorithm>
+#include <chrono>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -66,7 +67,7 @@ static step compile(const std::string & text, bool alone) {
         }
         return { cmd->compile(args), filter };
     } catch (const incomplete &) {
-        const std::string next = join(complete(words, ""), " ");
+        const std::string next = join(complete(words, "", {}), " ");
         if (!alone) {
             fail("\"" + head + "\" misses words, it may go on with: " + next);
         }
@@ -233,12 +234,13 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // runs nor in the one the next start runs. A save writes the draft as the batch leaves it, an erase removes
 // server.conf, and the conversations erased go, once the rules hold and
 // before it replaces the target
-static engine_result batch(layer &              target,
-                           const std::string &  text,
-                           engine_role          role,
-                           bool                 running,
-                           const engine_typed & typed,
-                           bool                 conversation) {
+static engine_result batch(layer &                                                  target,
+                           const std::string &                                      text,
+                           engine_role                                              role,
+                           bool                                                     running,
+                           const engine_typed &                                     typed,
+                           bool                                                     conversation,
+                           const std::map<std::string, std::vector<engine_group>> & sourced) {
     words_t lines = split_lines(text);
     if (lines.empty()) {
         lines.push_back("");
@@ -255,6 +257,7 @@ static engine_result batch(layer &              target,
     layer   draft = target;
     words_t asks;
     context ctx{ draft, role, typed, asks };
+    ctx.sourced      = sourced;
     ctx.conversation = conversation;
     words_t out;
     for (size_t i = 0; i < steps.size(); i++) {
@@ -385,7 +388,7 @@ static words_t enter(layer & target, const std::string & text) {
     for (bool moved = true; moved;) {
         moved = false;
         for (auto it = blocks.begin(); it != blocks.end();) {
-            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {}, false);
+            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {}, false, {});
             if (r.ok) {
                 it    = blocks.erase(it);
                 moved = true;
@@ -479,10 +482,80 @@ void engine_start(const std::string & path, const std::string & version) {
 
 // a batch that changes the running configuration says who changed it, as IOS
 // logs a configuration from the console
+// the items the sources of a module serve, asked for the running
+// configuration as it is, outside the lock, as they ask over the network, and
+// kept a few seconds for that configuration, as completion asks them on every
+// word typed
+static const auto SOURCED_KEPT = std::chrono::seconds(10);
+
+static std::vector<engine_group> sourced(const engine_module & m) {
+    struct kept {
+        layer                                 at;
+        std::chrono::steady_clock::time_point when;
+        std::vector<engine_group>             groups;
+    };
+
+    static std::mutex                  cache_mutex;
+    static std::map<std::string, kept> cache;
+    layer                              now;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        now = g_running;
+    }
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        const auto                  it = cache.find(m.name);
+        if (it != cache.end() && it->second.at == now &&
+            std::chrono::steady_clock::now() - it->second.when < SOURCED_KEPT) {
+            return it->second.groups;
+        }
+    }
+    const std::vector<engine_group> groups = m.items(reader(now));
+    std::lock_guard<std::mutex>     lock(cache_mutex);
+    cache[m.name] = { now, std::chrono::steady_clock::now(), groups };
+    return groups;
+}
+
+// the items every module with sources knows, by module
+static engine_known known_items() {
+    engine_known out;
+    for (const engine_module & m : schema_modules()) {
+        if (m.items) {
+            for (const engine_group & g : sourced(m)) {
+                out[m.name].insert(out[m.name].end(), g.names.begin(), g.names.end());
+            }
+        }
+    }
+    return out;
+}
+
+// the groups of the modules the show lines of a batch list from their
+// sources, asked before the batch holds the configuration
+static std::map<std::string, std::vector<engine_group>> shown(const std::string & text) {
+    std::map<std::string, std::vector<engine_group>> out;
+    for (const std::string & raw : split_lines(text)) {
+        try {
+            const auto [line, spec] = split_filter(raw);
+            const auto [c, args]    = resolve(tokenize(line));
+            if (c->path != words_t{ "show" } || args.empty()) {
+                continue;
+            }
+            const engine_module * m = find_module(schema_module(args[0]));
+            if (m && m->items && !out.count(m->name)) {
+                out[m->name] = sourced(*m);
+            }
+        } catch (...) {
+            // a line that does not read yet lists nothing; the batch tells why
+        }
+    }
+    return out;
+}
+
 engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed, bool conversation) {
+    const auto                  groups = shown(text);
     std::lock_guard<std::mutex> lock(g_mutex);
     const layer                 before = g_running;
-    const engine_result         r      = batch(g_running, text, role, true, typed, conversation);
+    const engine_result         r      = batch(g_running, text, role, true, typed, conversation, groups);
     if (r.ok && !(before == g_running)) {
         log_info("Engine", "Configured by %s", role == ENGINE_ADMIN ? "the administrator" : "an MCP client");
     }
@@ -500,6 +573,7 @@ void engine_with(const std::function<void(const engine_reader &)> & read) {
 }
 
 std::vector<std::string> engine_suggest(const std::string & text) {
+    const engine_known          known = known_items();
     std::lock_guard<std::mutex> lock(g_mutex);
     try {
         const std::string partial = partial_word(text);
@@ -515,7 +589,7 @@ std::vector<std::string> engine_suggest(const std::string & text) {
             }
             return names;
         }
-        return complete(tokenize(line), partial);
+        return complete(tokenize(line), partial, known);
     } catch (...) {
         // a line still being typed may not read yet: nothing follows it
         return {};

@@ -21,7 +21,7 @@ static step_t compile_show_running(const words_t & args) {
         if (every) {
             words_t shown;
             for (const std::string & m : module_names()) {
-                shown.push_back(show_module(reader(ctx.draft), m, "", ""));
+                shown.push_back(show_module(reader(ctx.draft), m, "", "", nullptr));
             }
             return join(shown, "\n");
         }
@@ -30,7 +30,7 @@ static step_t compile_show_running(const words_t & args) {
     };
 }
 
-static words_t next_show_running(const words_t & args) {
+static words_t next_show_running(const words_t & args, const engine_known &) {
     return args.empty() ? words_t{ ALL } : words_t{};
 }
 

@@ -14,18 +14,21 @@
 // still to ask, whether the batch writes or erases server.conf once it holds,
 // and the conversations it erases then
 struct context {
-    layer &                 draft;
-    engine_role             role;
-    const engine_typed &    typed;
-    words_t &               asks;
-    std::vector<engine_ask> questions    = {};
-    bool                    save         = false;
-    bool                    erase        = false;
-    words_t                 forget       = {};
+    layer &                                          draft;
+    engine_role                                      role;
+    const engine_typed &                             typed;
+    words_t &                                        asks;
+    std::vector<engine_ask>                          questions    = {};
+    bool                                             save         = false;
+    bool                                             erase        = false;
+    words_t                                          forget       = {};
+    // the groups of items the sources of a module serve, listed before the
+    // batch holds the configuration, by module
+    std::map<std::string, std::vector<engine_group>> sourced      = {};
     // the batch runs in a conversation, which compact asks to compact its
     // history once the batch holds
-    bool                    conversation = false;
-    bool                    compact      = false;
+    bool                                             conversation = false;
+    bool                                             compact      = false;
 };
 
 // whether the user lets a step do what question says: always on the console;
@@ -46,8 +49,9 @@ struct command {
     bool    module;
     // the step the arguments spell, checked before any line runs
     step_t (*compile)(const words_t & args);
-    // candidates for the next argument; a candidate in <> names what to type
-    words_t (*complete)(const words_t & args);
+    // candidates for the next argument, the items the sources of the modules
+    // know besides; a candidate in <> names what to type
+    words_t (*complete)(const words_t & args, const engine_known & known);
     // it writes or erases server.conf, so it runs on a line of its own
     bool alone = false;
 };

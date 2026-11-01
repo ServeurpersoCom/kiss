@@ -14,6 +14,7 @@ static engine_module make_files() {
     // rather than act on the machine of the server
     engine_key shell("shell", ENGINE_STRING);
     shell.admin = true;
+    shell.of    = "shells";
 
     engine_key output("max-output", ENGINE_NUMBER);
     output.min     = 2;

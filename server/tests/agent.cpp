@@ -9,7 +9,8 @@
 // page is attached, one for all of them, its call granted then run by the
 // pages, the first answer winning, the last page that leaves answering that
 // none is attached; a conversation erased once its round streamed, before its
-// calls run, stops its turn
+// calls run, stops its turn; show and completion list the models and the tools
+// their sources serve
 
 #include "lib/agent.h"
 
@@ -545,6 +546,30 @@ int main() {
     bool found = false;
     library_each([&](const conversation & x) { found = found || x.id == gone.id; });
     law(!agent_busy(gone.id) && !found, "a conversation erased once its round streamed stops its turn");
+
+    // what the sources serve: the models of each endpoint, the tools of this
+    // server, of the pages and of each MCP server, a source that fails
+    // telling why, shown and completed as on the page
+    const auto has = [](const words_t & all, const std::string & w) {
+        return std::find(all.begin(), all.end(), w) != all.end();
+    };
+    law(engine_run("show models", ENGINE_ADMIN).text ==
+            "! endpoints e\nset models compaction-trigger-tokens e/m 100\nset models compaction-preserve-steps e/m 2",
+        "show models lists the models every endpoint serves, by endpoint");
+    const std::string tools = engine_run("show tools", ENGINE_ADMIN).text;
+    law(tools.find("! KiSS\nset tools use config on") != std::string::npos &&
+            tools.find("! pages\nset tools use client_config consent") != std::string::npos &&
+            tools.find("! mcp twin\nset tools use config on") != std::string::npos &&
+            tools.find("! mcp down http://") != std::string::npos,
+        "show tools lists the tools of this server, of the pages and of each MCP server, one that fails telling why");
+    law(engine_run("show models e/", ENGINE_ADMIN).text ==
+            "set models compaction-trigger-tokens e/m 100\nset models compaction-preserve-steps e/m 2",
+        "show names a model an endpoint serves by a prefix");
+    law(has(engine_suggest("set chat model "), "e/m"), "chat model completes with the models the endpoints serve");
+    const words_t use = engine_suggest("set tools use ");
+    law(has(use, "bash") && has(use, "client_config") && has(use, "config"),
+        "tools use completes with the tools served");
+    law(has(engine_suggest("set files shell "), "bash"), "files shell completes with the shells");
 
     server.stop();
     listening.join();

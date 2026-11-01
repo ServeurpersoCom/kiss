@@ -62,7 +62,7 @@ static step_t compile_erase(const words_t & args) {
     };
 }
 
-static words_t next_erase(const words_t & args) {
+static words_t next_erase(const words_t & args, const engine_known &) {
     return args.empty() ? words_t{ CONVERSATIONS, RUNNING_CONFIG, STARTUP_CONFIG, "<id>" } : words_t{};
 }
 

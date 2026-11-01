@@ -22,6 +22,7 @@ static std::string validate(const engine_reader & config) {
 static engine_module make_chat() {
     // endpoint/model; empty: the one model of the one endpoint
     engine_key model("model", ENGINE_STRING);
+    model.of    = "models";
     model.reset = "";
 
     // sent first in every request, none when empty
