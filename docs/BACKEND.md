@@ -537,8 +537,11 @@ pages serve, and those of every MCP server. `show models` and `show tools` list 
 name, those set that no source serves under `! unavailable`, a source that fails by why on its
 header; `show models hf/` names one by a prefix. The sources answer over the network, so the engine
 asks them before it holds the configuration and keeps their answer ten seconds for the same
-configuration, the time a line takes to type: a page attached completes and shows from this server
-as a page alone does from itself.
+configuration, the time a line takes to type. A `show` waits for them; completion never does: it
+offers what they served last and asks them again in the background, so a source slow or down never
+holds a Tab, and its answer completes the words typed next, as the page completes with what its
+modules listed last. A page attached completes and shows from this server as a page alone does from
+itself.
 
 The line is edited as in a shell, and completes as IOS does, from the words the engine reads:
 

@@ -16,6 +16,7 @@
 #include <mutex>
 #include <set>
 #include <stdexcept>
+#include <thread>
 
 const char * engine_platform() {
 #if defined(_WIN32)
@@ -485,43 +486,87 @@ void engine_start(const std::string & path, const std::string & version) {
 // the items the sources of a module serve, asked for the running
 // configuration as it is, outside the lock, as they ask over the network, and
 // kept a few seconds for that configuration, as completion asks them on every
-// word typed
+// word typed; the cache lives as long as the process, a refresh in flight
+// outliving any scope
 static const auto SOURCED_KEPT = std::chrono::seconds(10);
 
-static std::vector<engine_group> sourced(const engine_module & m) {
-    struct kept {
-        layer                                 at;
-        std::chrono::steady_clock::time_point when;
-        std::vector<engine_group>             groups;
-    };
+struct sourced_t {
+    layer                                 at;
+    std::chrono::steady_clock::time_point when;
+    std::vector<engine_group>             groups;
+    bool                                  asking = false;
+};
 
-    static std::mutex                  cache_mutex;
-    static std::map<std::string, kept> cache;
-    layer                              now;
+static std::mutex & sourced_mutex() {
+    static std::mutex * m = new std::mutex;
+    return *m;
+}
+
+static std::map<std::string, sourced_t> & sourced_cache() {
+    static auto * c = new std::map<std::string, sourced_t>;
+    return *c;
+}
+
+static layer running_now() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    return g_running;
+}
+
+static bool fresh(const sourced_t & k, const layer & now) {
+    return !k.groups.empty() && k.at == now && std::chrono::steady_clock::now() - k.when < SOURCED_KEPT;
+}
+
+// the groups the sources serve for the configuration as it runs, asked now
+// when the cache holds none fresh
+static std::vector<engine_group> sourced(const engine_module & m) {
+    const layer now = running_now();
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        now = g_running;
-    }
-    {
-        std::lock_guard<std::mutex> lock(cache_mutex);
-        const auto                  it = cache.find(m.name);
-        if (it != cache.end() && it->second.at == now &&
-            std::chrono::steady_clock::now() - it->second.when < SOURCED_KEPT) {
+        std::lock_guard<std::mutex> lock(sourced_mutex());
+        const auto                  it = sourced_cache().find(m.name);
+        if (it != sourced_cache().end() && fresh(it->second, now)) {
             return it->second.groups;
         }
     }
     const std::vector<engine_group> groups = m.items(reader(now));
-    std::lock_guard<std::mutex>     lock(cache_mutex);
-    cache[m.name] = { now, std::chrono::steady_clock::now(), groups };
+    std::lock_guard<std::mutex>     lock(sourced_mutex());
+    sourced_t &                     k = sourced_cache()[m.name];
+    k.at                              = now;
+    k.when                            = std::chrono::steady_clock::now();
+    k.groups                          = groups;
     return groups;
 }
 
-// the items every module with sources knows, by module
+// the groups the cache holds now, whatever their age, a stale cache asked
+// again in a thread of its own, as completion never waits on the network: the
+// words typed next complete with the answer, as the page completes with what
+// its modules listed last
+static std::vector<engine_group> sourced_now(const engine_module & m) {
+    const layer                 now = running_now();
+    std::lock_guard<std::mutex> lock(sourced_mutex());
+    sourced_t &                 k = sourced_cache()[m.name];
+    if (!fresh(k, now) && !k.asking) {
+        k.asking = true;
+        std::thread([name = m.name, items = m.items, now] {
+            std::vector<engine_group> groups;
+            try {
+                groups = items(reader(now));
+            } catch (...) {
+                // a source that throws serves nothing this time
+            }
+            std::lock_guard<std::mutex> lock(sourced_mutex());
+            sourced_t &                 k = sourced_cache()[name];
+            k                             = { now, std::chrono::steady_clock::now(), groups, false };
+        }).detach();
+    }
+    return k.groups;
+}
+
+// the items every module with sources knows now, by module
 static engine_known known_items() {
     engine_known out;
     for (const engine_module & m : schema_modules()) {
         if (m.items) {
-            for (const engine_group & g : sourced(m)) {
+            for (const engine_group & g : sourced_now(m)) {
                 out[m.name].insert(out[m.name].end(), g.names.begin(), g.names.end());
             }
         }

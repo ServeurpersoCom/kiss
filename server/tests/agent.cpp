@@ -10,7 +10,7 @@
 // pages, the first answer winning, the last page that leaves answering that
 // none is attached; a conversation erased once its round streamed, before its
 // calls run, stops its turn; show and completion list the models and the tools
-// their sources serve
+// their sources serve, completion never waiting on a slow one
 
 #include "lib/agent.h"
 
@@ -171,6 +171,11 @@ int main() {
                 "\"result\":{\"tools\":[{\"name\":\"config\",\"inputSchema\":{\"type\":\"object\"}}]}" :
                 "\"error\":{\"code\":-32601,\"message\":\"no such method\"}";
         res.set_content("{\"jsonrpc\":\"2.0\",\"id\":1," + result + "}", "application/json");
+    });
+    // an endpoint that lists its models two seconds late
+    server.Get("/slow/v1/models", [](const httplib::Request &, httplib::Response & res) {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        res.set_content("{\"data\":[{\"id\":\"z\"}]}", "application/json");
     });
     server.Post("/down", [](const httplib::Request & req, httplib::Response & res) {
         g_down += req.body.find("\"initialize\"") != std::string::npos;
@@ -570,6 +575,20 @@ int main() {
     law(has(use, "bash") && has(use, "client_config") && has(use, "config"),
         "tools use completes with the tools served");
     law(has(engine_suggest("set files shell "), "bash"), "files shell completes with the shells");
+
+    // completion never waits on a source: it answers with what the sources
+    // served last, and the answer of a slow one completes the words typed next
+    engine_run("set endpoints url slow " + at + "/slow/v1", ENGINE_ADMIN);
+    const auto started = std::chrono::steady_clock::now();
+    engine_suggest("set chat model ");
+    law(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(500),
+        "completion answers at once while a source is slow");
+    bool late = false;
+    for (int i = 0; i < 100 && !late; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        late = has(engine_suggest("set chat model "), "slow/z");
+    }
+    law(late, "completion offers what a slow source serves once it answers");
 
     server.stop();
     listening.join();
