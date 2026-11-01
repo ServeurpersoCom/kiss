@@ -5,7 +5,8 @@
 // telling whether it was there, and every entry below a directory with its
 // depth and the size of a regular file; a file past the limit loads through
 // neither; a wrapper that prints around the shell, an empty line first or
-// any other, changes nothing, nor does a wc that pads its counts, a far side
+// any other, changes nothing, nor does a wc that pads its counts or loses a
+// line of a batch, a far side
 // without find or wc lists nothing
 // and says so, a file is no directory to walk, a line it
 // slips into the answer fails the read, and a shell that frames no answer
@@ -183,6 +184,15 @@ int main() {
         place padded = shell;
         padded.shell = "sh -c \"PATH=" + sh_quoted(pads.u8string()) + ":$PATH; cd box && exec sh -s\"";
         law(walked(padded, ".") == server, "a shell whose wc pads its counts walks them the same");
+        // a wc that loses the first line of a batch, as one that cannot read a
+        // file does, the batch then counted one by one
+        const fs::path loses = root / "loses";
+        put(loses / "wc", "#!/bin/sh\nif [ $# -gt 1 ]; then " + sh_quoted(job_find("wc")) + " \"$@\" | sed 1d; else " +
+                              sh_quoted(job_find("wc")) + " \"$@\"; fi\n");
+        fs::permissions(loses / "wc", fs::perms::owner_all, fs::perm_options::add, ec);
+        place losing = shell;
+        losing.shell = "sh -c \"PATH=" + sh_quoted(loses.u8string()) + ":$PATH; cd box && exec sh -s\"";
+        law(walked(losing, ".") == server, "a batch wc loses a line of is counted one by one");
         // a far side with wc and no find, then with neither: a copy of wc in a
         // directory of its own, the paths quoted for the shell
         const fs::path bin = root / "bin";
