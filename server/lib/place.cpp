@@ -279,7 +279,8 @@ std::string place_write(const place &                 p,
 // type, size and path apart by spaces, records apart by NUL: what is no
 // regular file told by test alone, the regular files counted by one wc a
 // batch, which tells a file it could not read by a line less, the batch then
-// counted file by file, and a name with a line break counted alone
+// counted file by file, and a name with a line break counted alone; a count
+// goes through arithmetic, as a wc that reads stdin pads it with blanks
 static const char * const WALK =
     "command -v wc > /dev/null 2>&1 || fail 'wc is found nowhere on the far side'\n"
     "find . -mindepth 1 -prune > /dev/null 2>&1 || fail 'find lists nothing here, missing or without -mindepth'\n"
@@ -287,12 +288,12 @@ static const char * const WALK =
     "echo KISS-BEGIN\n"
     "find . -mindepth 1 ! -type f -exec sh -c 'for f do if [ -L \"$f\" ]; then t=l; elif [ -d \"$f\" ]; then t=d; "
     "else t=o; fi; printf \"%s 0 %s\\0\" $t \"$f\"; done' sh {} + 2>/dev/null\n"
-    "find . -mindepth 1 -type f -name \"*$nl*\" -exec sh -c 'for f do printf \"f %s %s\\0\" \"$(wc -c < \"$f\" || "
-    "echo 0)\" \"$f\"; done' sh {} + 2>/dev/null\n"
+    "find . -mindepth 1 -type f -name \"*$nl*\" -exec sh -c 'for f do s=$(wc -c < \"$f\") || s=0; printf \"f %s "
+    "%s\\0\" $((s)) \"$f\"; done' sh {} + 2>/dev/null\n"
     "find . -mindepth 1 -type f ! -name \"*$nl*\" -exec sh -c 'out=$(wc -c -- \"$@\")\n"
     "if [ \"$(printf \"%s\\n\" \"$out\" | wc -l)\" -eq $(( $# > 1 ? $# + 1 : $# )) ]; then printf \"%s\\n\" "
     "\"$out\" | { for f do read -r s rest; printf \"f %s %s\\0\" \"$s\" \"$f\"; done; }\n"
-    "else for f do printf \"f %s %s\\0\" \"$(wc -c < \"$f\" || echo 0)\" \"$f\"; done; fi' sh {} + 2>/dev/null\n"
+    "else for f do s=$(wc -c < \"$f\") || s=0; printf \"f %s %s\\0\" $((s)) \"$f\"; done; fi' sh {} + 2>/dev/null\n"
     "echo\n"
     "echo KISS-END\n";
 

@@ -5,7 +5,8 @@
 // telling whether it was there, and every entry below a directory with its
 // depth and the size of a regular file; a file past the limit loads through
 // neither; a wrapper that prints around the shell, an empty line first or
-// any other, changes nothing, a far side without find or wc lists nothing
+// any other, changes nothing, nor does a wc that pads its counts, a far side
+// without find or wc lists nothing
 // and says so, a file is no directory to walk, a line it
 // slips into the answer fails the read, and a shell that frames no answer
 // reads nothing; a machine with no POSIX shell
@@ -174,6 +175,14 @@ int main() {
     if (places.size() > 1) {
         law(walked(shell, ".") == server, "a shell walks the entries the server walks, whatever their names");
         law(walked(noisy, ".") == server && walked(blank, ".") == server, "a wrapped shell walks them the same");
+        // a wc that pads its counts with blanks, as the one of macOS does
+        // when it reads stdin, first on the PATH
+        const fs::path pads = root / "pads";
+        put(pads / "wc", "#!/bin/sh\n" + sh_quoted(job_find("wc")) + " \"$@\" | sed 's/^/   /'\n");
+        fs::permissions(pads / "wc", fs::perms::owner_all, fs::perm_options::add, ec);
+        place padded = shell;
+        padded.shell = "sh -c \"PATH=" + sh_quoted(pads.u8string()) + ":$PATH; cd box && exec sh -s\"";
+        law(walked(padded, ".") == server, "a shell whose wc pads its counts walks them the same");
         // a far side with wc and no find, then with neither: a copy of wc in a
         // directory of its own, the paths quoted for the shell
         const fs::path bin = root / "bin";
