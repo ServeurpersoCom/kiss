@@ -4,13 +4,17 @@
 // file whatever they are, a file written in place with its directories made,
 // telling whether it was there, and every entry below a directory with its
 // depth and the size of a regular file; a file past the limit loads through
-// neither; a machine with no POSIX shell keeps the laws of the server alone;
-// the configuration gives the tools the shell files shell names, else the
-// machine of the server
+// neither; a wrapper that prints around the shell changes nothing, a line it
+// slips into the answer fails the read, and a shell that frames no answer
+// reads nothing; a machine with no POSIX shell
+// keeps the laws of the server alone; the configuration gives the tools the
+// shell files shell names, else the machine of the server, and fails every
+// call when it names no shell
 
 #include "lib/place.h"
 
 #include "engine/engine.h"
+#include "lib/base64.h"
 #include "lib/job.h"
 #include "server/server.conf.hpp"
 
@@ -91,6 +95,7 @@ int main() {
     put(box / "été.txt", "ascii in utf-8 named");
     std::error_code ec;
     fs::create_symlink("a.txt", box / "link", ec);
+    const bool linked = !ec;
 
     place host;
     host.cwd = box.u8string();
@@ -98,15 +103,28 @@ int main() {
     shell.cwd                 = root.u8string();
     shell.shell               = "sh -c \"cd box && exec sh -s\"";
     shell.timeout             = 30;
+    // the same shell behind a wrapper that prints around it
+    place noisy               = shell;
+    noisy.shell               = "sh -c \"echo QUJD; cd box && sh -s; r=$?; echo QUJD; exit $r\"";
     std::vector<place> places = { host };
     if (!job_find(shell.shell).empty()) {
+        // names only a frame of NUL tells apart, a POSIX machine holding them
+        put(box / "odd/new\nline", "ab");
+        put(box / "odd/x -> y", "abc");
+        put(box / "odd/ lead", "a");
+        put(box / "odd/back\\slash", "abcd");
+        put(box / "odd/KISS-END", "e");
+        fs::create_symlink("x -> y", box / "odd/lnk -> z", ec);
         places.push_back(shell);
+        places.push_back(noisy);
     } else {
         printf("[Laws] place_test: no POSIX shell here, the laws of the server alone\n");
     }
 
     for (const place & at : places) {
-        const std::string where = at.shell.empty() ? "the server: " : "a shell: ";
+        const std::string where = at.shell.empty()        ? "the server: " :
+                                  at.shell == shell.shell ? "a shell: " :
+                                                            "a wrapped shell: ";
         law(stat(at, "a.txt") == "f 6" && stat(at, "deep") == "d 0" && stat(at, "nothing") == "n 0",
             where + "a path names a file with its size, a directory, or nothing");
         std::string bytes;
@@ -130,12 +148,27 @@ int main() {
 
     const std::vector<std::string> server = walked(host, ".");
     law(std::find(server.begin(), server.end(), "deep/er 1") != server.end() &&
-            std::find(server.begin(), server.end(), "deep/er/est/c.txt 3 file 3000") != server.end() &&
-            std::find(server.begin(), server.end(), "link 0") != server.end(),
-        "the server walks every entry with its depth, a link no regular file");
-    if (places.size() > 1) {
-        law(walked(shell, ".") == server, "a shell walks the entries the server walks");
+            std::find(server.begin(), server.end(), "deep/er/est/c.txt 3 file 3000") != server.end(),
+        "the server walks every entry with its depth and the size of a file");
+    if (linked) {
+        law(std::find(server.begin(), server.end(), "link 0") != server.end(), "a link is no regular file");
     }
+    if (places.size() > 1) {
+        law(walked(shell, ".") == server, "a shell walks the entries the server walks, whatever their names");
+        law(walked(noisy, ".") == server, "a wrapped shell walks them the same");
+        place mute = shell;
+        mute.shell = "sh -c \"cat > /dev/null; echo QUJD\"";
+        std::string bytes;
+        law(place_read(mute, "a.txt", 100, bytes, ALIVE).rfind("The shell answered nothing the server reads", 0) == 0,
+            "a shell that frames no answer reads nothing");
+        place slipping = shell;
+        slipping.shell = "sh -c \"cd box && sh -s | awk 'NR == 3 { print substr($0, 1, 4) } { print }'\"";
+        law(place_read(slipping, "bin", 1 << 20, bytes, ALIVE).rfind("Cannot read the file", 0) == 0 && bytes.empty(),
+            "a line a wrapper slips into the answer fails the read, never a byte more");
+    }
+    std::string decoded;
+    law(base64_decode(base64_encode(binary), decoded) && decoded == binary, "base64 gives back every byte");
+    law(!base64_decode("QUJD\nWARN: late", decoded), "base64 refuses a byte outside its alphabet");
 
     std::ofstream(root / "server.conf") << "set shells command box \"sh -s\"\nset shells timeout box 7\n";
     engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
@@ -147,7 +180,13 @@ int main() {
     };
     law(given().shell.empty(), "the tools on files act on the machine of the server by default");
     engine_run("set files shell box", ENGINE_ADMIN);
-    law(given().shell == "sh -s" && given().timeout == 7, "the tools on files act through the shell files shell names");
+    law(given().shell == "sh -s" && given().timeout == 7 && given().broken.empty(),
+        "the tools on files act through the shell files shell names");
+    engine_run("set files shell vm", ENGINE_ADMIN);
+    std::string bytes;
+    law(given().broken == "files shell vm names no shell" &&
+            place_read(given(), "a.txt", 100, bytes, ALIVE) == "files shell vm names no shell",
+        "a files shell that names no shell fails every call, never on the machine of the server");
 
     fs::remove_all(root);
     printf("[Laws] place_test: %zu laws, %zu broken\n", g_laws, g_fails);

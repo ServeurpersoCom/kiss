@@ -7,23 +7,11 @@
 // makes again
 
 #include "engine/engine.h"
-#include "engine/text.h"
-
-#include <algorithm>
-
-// the shell names an item of shells
-static std::string validate(const engine_reader & config) {
-    const auto    shell = config.get("files shell");
-    const words_t names = config.names("shells");
-    if (shell && std::find(names.begin(), names.end(), *shell) == names.end()) {
-        return "files shell " + *shell + " names no item of shells";
-    }
-    return "";
-}
 
 static engine_module make_files() {
     // where the tools on files act is the administrator's, as where the
-    // shells run is
+    // shells run is; a value that names no shell stays, so the tools fail
+    // rather than act on the machine of the server
     engine_key shell("shell", ENGINE_STRING);
     shell.admin = true;
 
@@ -54,8 +42,7 @@ static engine_module make_files() {
     quality.reset   = "85";
 
     engine_module m;
-    m.name     = "files";
-    m.validate = validate;
+    m.name = "files";
     m.keys.push_back(shell);
     m.keys.push_back(output);
     m.keys.push_back(load);

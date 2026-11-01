@@ -1,7 +1,9 @@
 #pragma once
 // place.h: the place the tools on files act on: the machine of the server,
 // a path read from its working directory, or the machine a shell reaches, a
-// path read by a POSIX shell there, the bytes going through base64 both ways
+// path read by a POSIX shell there, its answer framed, the bytes going
+// through base64 both ways and their count checked, the names of a listing
+// apart by NUL, the one byte no name holds
 
 #include "engine/engine.h"
 
@@ -17,10 +19,14 @@ struct place {
     std::string shell;
     // the seconds a run of the shell may take
     int         timeout = 0;
+    // what every call answers when the configuration names a shell that is
+    // none, so the tools fail rather than act on the machine of the server
+    std::string broken;
 };
 
 // the place the configuration gives the tools on files: the machine the
-// shell files shell names reaches, else the machine of the server
+// shell files shell names reaches, else the machine of the server; a files
+// shell that names no shell breaks the place
 place place_of(const engine_reader & config);
 
 enum place_kind {

@@ -42,9 +42,12 @@ bool base64_decode(const std::string & text, std::string & bytes) {
     int      bits   = 0;
     bool     padded = false;
     for (char c : text) {
+        if (c == '\n') {
+            continue;
+        }
         const int v = value(c);
         if (v == -2) {
-            continue;
+            return false;
         }
         if (v == -1) {
             padded = true;

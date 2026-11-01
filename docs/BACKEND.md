@@ -845,12 +845,26 @@ there.
 
 `files shell` names the shell whose machine `view`, `str_replace` and `create_file` act on; unset,
 they act on the machine of the server. Through a shell they keep their logic in the server and send
-it scripts of a POSIX shell: a file read and written through `base64`, so every byte goes through
-the merged output of the shell contract, and a directory listed by `ls -lnRA` in the C.UTF-8 locale.
-The far side needs `sh`, `base64` with `-d`, `ls`, `wc`, `dirname` and `mkdir`, as every Linux,
-macOS, WSL and container image has; a PowerShell item is no `files shell`. A path is read on the far
-side, relative to the directory its shell starts in, and a message names it as given. A machine
-whose commands and files all live elsewhere takes back every shell of the factory configuration:
+it scripts of a POSIX shell. Each script answers between a line `KISS-BEGIN` and a line `KISS-END`,
+so what a wrapper prints around it, a banner, a host key warning, a container warning on the merged
+output, stays out. A file reads and writes through `base64`, decoded strictly, its count of bytes
+checked against what the far side counts, so a line slipped into the answer fails the call rather
+than adds a byte. A directory lists through `find`, one record of type, size and path per entry,
+the records apart by NUL, the one byte no name holds, so a name with a line break or an arrow reads
+as it is; one `wc -c` counts a batch of files. The far side needs `sh`, `base64` with `-d`, `find`
+with `-mindepth`, `wc`, `dirname` and `mkdir`, as every Linux, macOS, WSL and container image has; a
+PowerShell item is no `files shell`. A path is read on the far side, relative to the directory its
+shell starts in, and a message names it as given.
+
+A `files shell` that names no shell, a VM taken out of `server.conf` or a line refused at the start,
+stays as it is written, and the three tools answer `files shell vm names no shell`: a destination
+asked and missing never becomes the machine of the server. A far side down answers as its client
+does, `ssh: connect to host vm port 22: Connection refused`.
+
+The far side confines, not KiSS: the directory a shell starts in is no prison, and an absolute path,
+`..` or a link reaches whatever its account may there. KiSS holds that no model changes where the
+commands and the files go. A machine whose commands and files all live elsewhere takes back every
+shell of the factory configuration:
 
 ```
 ! every command and every file in a VM, nothing on the machine of the server

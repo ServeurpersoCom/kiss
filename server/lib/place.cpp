@@ -1,6 +1,8 @@
 // place.cpp: the place the tools on files act on: the machine of the server
 // through the file system, or the machine a shell reaches through scripts of
-// a POSIX shell, run as the tools of the shells run theirs
+// a POSIX shell, run as the tools of the shells run theirs; a script answers
+// between a line KISS-BEGIN and a line KISS-END, so what a wrapper prints
+// around it, a banner or a warning on the merged output, stays out
 
 #include "lib/place.h"
 
@@ -13,22 +15,31 @@
 #include <cerrno>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 namespace fs = std::filesystem;
 
-// the bytes of a base64 line, as base64 writes them, and the bytes of a line
-// a script writes at most besides its data
+// the bytes of a base64 line, as base64 writes them, and the bytes a script
+// writes at most besides its data
 static const size_t BASE64_LINE = 76;
 static const size_t SLACK       = 4096;
+
+static const char * const BEGIN = "KISS-BEGIN\n";
+static const char * const END   = "\nKISS-END";
 
 place place_of(const engine_reader & config) {
     place p;
     p.cwd            = config.get("server working-directory").value_or("");
     const auto shell = config.get("files shell");
-    if (shell && !shell->empty()) {
-        p.shell   = config.get("shells command", *shell).value_or("");
-        p.timeout = std::stoi(config.get("shells timeout", *shell).value_or("0"));
+    if (!shell) {
+        return p;
+    }
+    const std::vector<std::string> names = config.names("shells");
+    p.shell                              = config.get("shells command", *shell).value_or("");
+    p.timeout                            = std::stoi(config.get("shells timeout", *shell).value_or("0"));
+    if (std::find(names.begin(), names.end(), *shell) == names.end() || p.shell.empty()) {
+        p.broken = "files shell " + *shell + " names no shell";
     }
     return p;
 }
@@ -48,15 +59,15 @@ static std::string trimmed(const std::string & s) {
     return a == std::string::npos ? "" : s.substr(a, b - a + 1);
 }
 
-// a script run by the shell of the place, its output within budget; the
-// message of what kept it from ending well, empty when it exits 0
+// a script run by the shell of the place, its output within budget, and the
+// answer it frames; the message of what kept it from ending well, empty when
+// it exits 0 with its answer framed
 static std::string run(const place &                 p,
                        const std::string &           script,
                        size_t                        budget,
-                       std::string &                 output,
+                       std::string &                 answer,
                        const std::function<bool()> & tick) {
     const job_result r = job_run(p.shell, p.cwd, script, p.timeout, budget, tick);
-    output             = r.output;
     if (!r.started) {
         return "Cannot start " + p.shell + ": " + r.error;
     }
@@ -69,11 +80,20 @@ static std::string run(const place &                 p,
     if (r.truncated) {
         return "Output larger than " + std::to_string(budget) + " bytes";
     }
+    // the first line KISS-BEGIN, as a wrapper prints before the script, and
+    // the last line KISS-END, as a name in a listing may hold one
+    const std::string & out    = r.output;
+    const size_t        line   = out.compare(0, strlen(BEGIN), BEGIN) == 0 ? 0 : out.find(std::string("\n") + BEGIN);
+    const size_t        from   = line == std::string::npos ? line : line + (line ? 1 : 0) + strlen(BEGIN);
+    const size_t        to     = out.rfind(END);
+    const bool          framed = from != std::string::npos && to != std::string::npos && to + 1 >= from;
+    answer                     = framed && to >= from ? out.substr(from, to - from) : "";
+    // a script that fails frames why, a shell that fails tells it its own way
     if (r.exit_code != 0) {
-        const std::string why = trimmed(output);
+        const std::string why = trimmed(framed ? answer : out);
         return why.empty() ? "Exit code " + std::to_string(r.exit_code) : why;
     }
-    return "";
+    return framed ? "" : "The shell answered nothing the server reads: " + trimmed(out);
 }
 
 // the bytes base64 writes for size bytes, its line breaks counted
@@ -82,12 +102,25 @@ static size_t encoded(size_t size) {
     return text + text / BASE64_LINE + SLACK;
 }
 
+// a count as a script prints it, none for another text
+static std::optional<uintmax_t> count(const std::string & s) {
+    const std::string n = trimmed(s);
+    if (n.empty() || n.size() > 19 || n.find_first_not_of("0123456789") != std::string::npos) {
+        return std::nullopt;
+    }
+    return std::stoull(n);
+}
+
 place_kind place_stat(const place &                 p,
                       const std::string &           given,
                       uintmax_t &                   size,
                       std::string &                 why,
                       const std::function<bool()> & tick) {
     size = 0;
+    why  = p.broken;
+    if (!why.empty()) {
+        return PLACE_NONE;
+    }
     if (p.shell.empty()) {
         std::error_code       ec;
         const fs::path        path = file_path(p.cwd, given);
@@ -106,26 +139,25 @@ place_kind place_stat(const place &                 p,
     }
     const std::string script = "p=" + quoted(given) +
                                "\n"
-                               "if [ -d \"$p\" ]; then echo d\n"
-                               "elif [ -f \"$p\" ]; then echo f; wc -c < \"$p\"\n"
-                               "elif [ -e \"$p\" ]; then echo o\n"
-                               "else echo n; fi\n";
-    std::string output;
-    why = run(p, script, SLACK, output, tick);
+                               "echo KISS-BEGIN\n"
+                               "if [ -d \"$p\" ]; then echo d 0\n"
+                               "elif [ -f \"$p\" ]; then echo f $(wc -c < \"$p\")\n"
+                               "elif [ -e \"$p\" ]; then echo o 0\n"
+                               "else echo n 0; fi\n"
+                               "echo KISS-END\n";
+    std::string answer;
+    why = run(p, script, SLACK, answer, tick);
     if (!why.empty()) {
         return PLACE_NONE;
     }
-    const std::string kind = trimmed(output.substr(0, output.find('\n')));
-    if (kind == "f") {
-        const std::string n = trimmed(output.substr(output.find('\n') + 1));
-        if (n.empty() || n.find_first_not_of("0123456789") != std::string::npos) {
-            why = trimmed(output);
-            return PLACE_NONE;
-        }
-        size = std::stoull(n);
-        return PLACE_FILE;
+    const std::string              kind = answer.substr(0, 2);
+    const std::optional<uintmax_t> n    = answer.size() > 2 ? count(answer.substr(2)) : std::nullopt;
+    if (!n || (kind != "d " && kind != "f " && kind != "o " && kind != "n ")) {
+        why = "The shell answered no kind of file: " + trimmed(answer);
+        return PLACE_NONE;
     }
-    return kind == "d" ? PLACE_DIRECTORY : kind == "o" ? PLACE_OTHER : PLACE_NONE;
+    size = *n;
+    return kind == "f " ? PLACE_FILE : kind == "d " ? PLACE_DIRECTORY : kind == "o " ? PLACE_OTHER : PLACE_NONE;
 }
 
 std::string place_read(const place &                 p,
@@ -134,6 +166,9 @@ std::string place_read(const place &                 p,
                        std::string &                 bytes,
                        const std::function<bool()> & tick) {
     bytes.clear();
+    if (!p.broken.empty()) {
+        return p.broken;
+    }
     if (p.shell.empty()) {
         const fs::path        path = file_path(p.cwd, given);
         std::error_code       ec;
@@ -163,19 +198,30 @@ std::string place_read(const place &                 p,
     const std::string n      = std::to_string(limit);
     const std::string script = "p=" + quoted(given) +
                                "\n"
-                               "if [ ! -e \"$p\" ]; then echo \"No such file or directory: $p\"; exit 1; fi\n"
-                               "if [ ! -f \"$p\" ]; then echo \"Not a regular file: $p\"; exit 1; fi\n"
+                               "fail() { printf 'KISS-BEGIN\\n%s\\nKISS-END\\n' \"$1\"; exit 1; }\n"
+                               "[ -e \"$p\" ] || fail \"No such file or directory: $p\"\n"
+                               "[ -f \"$p\" ] || fail \"Not a regular file: $p\"\n"
                                "n=$(wc -c < \"$p\") || exit 1\n"
-                               "if [ \"$n\" -gt " +
-                               n + " ]; then echo \"File larger than " + n +
-                               " bytes\"; exit 1; fi\n"
-                               "base64 < \"$p\"\n";
-    std::string       output;
-    const std::string why = run(p, script, encoded(limit), output, tick);
+                               "[ $n -le " +
+                               n + " ] || fail \"File larger than " + n +
+                               " bytes\"\n"
+                               "echo KISS-BEGIN\n"
+                               "echo $n\n"
+                               "base64 < \"$p\" || exit 1\n"
+                               "echo KISS-END\n";
+    std::string       answer;
+    const std::string why = run(p, script, encoded(limit), answer, tick);
     if (!why.empty()) {
         return why;
     }
-    return base64_decode(output, bytes) ? "" : "Cannot read the file: " + trimmed(output);
+    const size_t                   nl   = answer.find('\n');
+    const std::optional<uintmax_t> size = count(answer.substr(0, nl));
+    const std::string              text = nl == std::string::npos ? "" : answer.substr(nl + 1);
+    if (!size || !base64_decode(text, bytes) || bytes.size() != *size) {
+        bytes.clear();
+        return "Cannot read the file: the shell answered other bytes than the file holds";
+    }
+    return "";
 }
 
 std::string place_write(const place &                 p,
@@ -183,6 +229,10 @@ std::string place_write(const place &                 p,
                         const std::string &           bytes,
                         bool &                        existed,
                         const std::function<bool()> & tick) {
+    existed = false;
+    if (!p.broken.empty()) {
+        return p.broken;
+    }
     if (p.shell.empty()) {
         const fs::path  path = file_path(p.cwd, given);
         std::error_code ec;
@@ -196,55 +246,56 @@ std::string place_write(const place &                 p,
     }
     const std::string script = "p=" + quoted(given) +
                                "\n"
-                               "if [ -e \"$p\" ]; then echo existed; else echo created; fi\n"
-                               "d=$(dirname -- \"$p\") && mkdir -p -- \"$d\" && base64 -d > \"$p\" <<'KISS_BYTES'\n" +
-                               lines + "KISS_BYTES\n";
-    std::string       output;
-    const std::string why   = run(p, script, SLACK, output, tick);
-    const std::string first = output.substr(0, output.find('\n'));
-    existed                 = trimmed(first) == "existed";
+                               "if [ -e \"$p\" ]; then e=existed; else e=created; fi\n"
+                               "d=$(dirname -- \"$p\") && mkdir -p -- \"$d\" && base64 -d > \"$p\" <<'KISS_BYTES' || "
+                               "exit 1\n" +
+                               lines +
+                               "KISS_BYTES\n"
+                               "echo KISS-BEGIN\n"
+                               "echo $e $(wc -c < \"$p\")\n"
+                               "echo KISS-END\n";
+    std::string       answer;
+    const std::string why = run(p, script, SLACK, answer, tick);
     if (!why.empty()) {
-        const std::string rest = trimmed(output.substr(first.size()));
-        return "Cannot write the file: " + (rest.empty() ? why : rest);
+        return "Cannot write the file: " + why;
     }
+    const size_t                   sp   = answer.find(' ');
+    const std::string              told = answer.substr(0, sp);
+    const std::optional<uintmax_t> size = sp == std::string::npos ? std::nullopt : count(answer.substr(sp + 1));
+    if ((told != "existed" && told != "created") || !size || *size != bytes.size()) {
+        return "Cannot write the file: the shell wrote other bytes than were sent";
+    }
+    existed = told == "existed";
     return "";
 }
 
-// an entry line of ls -ln, its fields then its name: the type, the size, the
-// name, a link without what it points to; false for a line that is none
-static bool entry_of(const std::string & line, char & type, uintmax_t & size, std::string & name) {
-    std::vector<std::pair<size_t, size_t>> fields;
-    size_t                                 at   = 0;
-    // mode, links, owner, group, size, month, day, time; a device takes its
-    // major and minor numbers where a file takes its size
-    const size_t                           want = line.empty() || (line[0] != 'c' && line[0] != 'b') ? 8 : 9;
-    while (fields.size() < want) {
-        const size_t a = line.find_first_not_of(' ', at);
-        if (a == std::string::npos) {
-            return false;
-        }
-        const size_t b = line.find(' ', a);
-        if (b == std::string::npos) {
-            return false;
-        }
-        fields.push_back({ a, b - a });
-        at = b;
-    }
-    type                    = line[0];
-    const std::string bytes = line.substr(fields[4].first, fields[4].second);
-    size = type == '-' && bytes.find_first_not_of("0123456789") == std::string::npos ? std::stoull(bytes) : 0;
-    name = line.substr(at + 1);
-    if (type == 'l') {
-        name = name.substr(0, name.find(" -> "));
-    }
-    return !name.empty();
-}
+// every entry below the directory the shell starts in, one record each,
+// type, size and path apart by spaces, records apart by NUL: what is no
+// regular file told by test alone, the regular files counted by one wc a
+// batch, which tells a file it could not read by a line less, the batch then
+// counted file by file, and a name with a line break counted alone
+static const char * const WALK =
+    "nl='\n'\n"
+    "echo KISS-BEGIN\n"
+    "find . -mindepth 1 ! -type f -exec sh -c 'for f do if [ -L \"$f\" ]; then t=l; elif [ -d \"$f\" ]; then t=d; "
+    "else t=o; fi; printf \"%s 0 %s\\0\" $t \"$f\"; done' sh {} + 2>/dev/null\n"
+    "find . -mindepth 1 -type f -name \"*$nl*\" -exec sh -c 'for f do printf \"f %s %s\\0\" \"$(wc -c < \"$f\" || "
+    "echo 0)\" \"$f\"; done' sh {} + 2>/dev/null\n"
+    "find . -mindepth 1 -type f ! -name \"*$nl*\" -exec sh -c 'out=$(wc -c -- \"$@\")\n"
+    "if [ \"$(printf \"%s\\n\" \"$out\" | wc -l)\" -eq $(( $# > 1 ? $# + 1 : $# )) ]; then printf \"%s\\n\" "
+    "\"$out\" | { for f do read -r s rest; printf \"f %s %s\\0\" \"$s\" \"$f\"; done; }\n"
+    "else for f do printf \"f %s %s\\0\" \"$(wc -c < \"$f\" || echo 0)\" \"$f\"; done; fi' sh {} + 2>/dev/null\n"
+    "echo\n"
+    "echo KISS-END\n";
 
 std::string place_walk(const place &                                    p,
                        const std::string &                              given,
                        size_t                                           limit,
                        const std::function<bool(const place_entry &)> & each,
                        const std::function<bool()> &                    tick) {
+    if (!p.broken.empty()) {
+        return p.broken;
+    }
     if (p.shell.empty()) {
         const fs::path  root = file_path(p.cwd, given);
         std::error_code ec;
@@ -269,39 +320,29 @@ std::string place_walk(const place &                                    p,
         }
         return "";
     }
-    const std::string script = "cd " + quoted(given) + " || exit 1\nLC_ALL=C.UTF-8 ls -lnRA . 2>/dev/null\nexit 0\n";
-    std::string       output;
-    const std::string why = run(p, script, limit, output, tick);
+    std::string       answer;
+    const std::string why = run(p, "cd " + quoted(given) + " || exit 1\n" + WALK, limit, answer, tick);
     if (!why.empty()) {
         return why;
     }
-    std::string dir;
-    bool        header = true;
-    size_t      from   = 0;
-    while (from < output.size()) {
-        const size_t      nl   = output.find('\n', from);
-        const std::string line = output.substr(from, nl == std::string::npos ? std::string::npos : nl - from);
-        from                   = nl == std::string::npos ? output.size() : nl + 1;
-        if (line.empty()) {
-            header = true;
-            continue;
+    for (size_t from = 0; from < answer.size();) {
+        const size_t      nul    = answer.find('\0', from);
+        const std::string record = answer.substr(from, nul == std::string::npos ? std::string::npos : nul - from);
+        from                     = nul == std::string::npos ? answer.size() : nul + 1;
+        if (nul == std::string::npos && trimmed(record).empty()) {
+            break;
         }
-        if (header && line.back() == ':') {
-            const std::string d = line.substr(0, line.size() - 1);
-            dir                 = d == "." ? "" : d.substr(0, 2) == "./" ? d.substr(2) : d;
-            header              = false;
-            continue;
+        // t size ./path
+        const size_t sp = record.find(' ', 2);
+        if (record.size() < 2 || std::string("fdlo").find(record[0]) == std::string::npos || record[1] != ' ' ||
+            sp == std::string::npos || record.compare(sp + 1, 2, "./") != 0 || !count(record.substr(2, sp - 2))) {
+            return "The shell answered an entry the server reads not: " + trimmed(record);
         }
-        header = false;
-        char        type;
         place_entry e;
-        std::string name;
-        if (line.rfind("total ", 0) == 0 || !entry_of(line, type, e.size, name)) {
-            continue;
-        }
-        e.rel     = dir.empty() ? name : dir + "/" + name;
+        e.rel     = record.substr(sp + 3);
         e.depth   = (int) std::count(e.rel.begin(), e.rel.end(), '/');
-        e.regular = type == '-';
+        e.regular = record[0] == 'f';
+        e.size    = e.regular ? *count(record.substr(2, sp - 2)) : 0;
         if (!each(e)) {
             return "Cancelled";
         }

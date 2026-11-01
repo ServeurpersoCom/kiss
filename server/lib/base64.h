@@ -5,6 +5,7 @@
 
 std::string base64_encode(const std::string & bytes);
 
-// the bytes a base64 text holds, its line breaks and every other byte outside
-// the alphabet skipped; false when what remains does not decode
+// the bytes a base64 text holds, its line breaks skipped; false for any other
+// byte outside the alphabet, padding before its end, or a text that stops
+// within a byte
 bool base64_decode(const std::string & text, std::string & bytes);
