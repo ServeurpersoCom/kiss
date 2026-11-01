@@ -4,7 +4,9 @@
 // file whatever they are, a file written in place with its directories made,
 // telling whether it was there, and every entry below a directory with its
 // depth and the size of a regular file; a file past the limit loads through
-// neither; a wrapper that prints around the shell changes nothing, a line it
+// neither; a wrapper that prints around the shell, an empty line first or
+// any other, changes nothing, a far side without find or wc lists nothing
+// and says so, a file is no directory to walk, a line it
 // slips into the answer fails the read, and a shell that frames no answer
 // reads nothing; a machine with no POSIX shell
 // keeps the laws of the server alone; the configuration gives the tools the
@@ -106,6 +108,9 @@ int main() {
     // the same shell behind a wrapper that prints around it
     place noisy               = shell;
     noisy.shell               = "sh -c \"echo QUJD; cd box && sh -s; r=$?; echo QUJD; exit $r\"";
+    // a wrapper whose first line is empty
+    place blank               = shell;
+    blank.shell               = "sh -c \"echo; cd box && sh -s\"";
     std::vector<place> places = { host };
     if (!job_find(shell.shell).empty()) {
         // names only a frame of NUL tells apart, a POSIX machine holding them
@@ -117,6 +122,7 @@ int main() {
         fs::create_symlink("x -> y", box / "odd/lnk -> z", ec);
         places.push_back(shell);
         places.push_back(noisy);
+        places.push_back(blank);
     } else {
         printf("[Laws] place_test: no POSIX shell here, the laws of the server alone\n");
     }
@@ -124,6 +130,7 @@ int main() {
     for (const place & at : places) {
         const std::string where = at.shell.empty()        ? "the server: " :
                                   at.shell == shell.shell ? "a shell: " :
+                                  at.shell == blank.shell ? "a shell after an empty line: " :
                                                             "a wrapped shell: ";
         law(stat(at, "a.txt") == "f 6" && stat(at, "deep") == "d 0" && stat(at, "nothing") == "n 0",
             where + "a path names a file with its size, a directory, or nothing");
@@ -144,6 +151,8 @@ int main() {
             where + "a file is written over, empty, telling it was there");
         law(!place_write(at, "deep", "x", existed, ALIVE).empty(), where + "a directory is not written over");
         fs::remove_all(box / "new");
+        const std::vector<std::string> file = walked(at, "a.txt");
+        law(file.size() == 1 && file[0].rfind("! ", 0) == 0, where + "a file is no directory to walk");
     }
 
     const std::vector<std::string> server = walked(host, ".");
@@ -155,7 +164,18 @@ int main() {
     }
     if (places.size() > 1) {
         law(walked(shell, ".") == server, "a shell walks the entries the server walks, whatever their names");
-        law(walked(noisy, ".") == server, "a wrapped shell walks them the same");
+        law(walked(noisy, ".") == server && walked(blank, ".") == server, "a wrapped shell walks them the same");
+        // a far side with wc and no find, then with neither
+        const fs::path bin = root / "bin";
+        fs::create_directories(bin);
+        fs::create_symlink(job_find("wc"), bin / "wc", ec);
+        place bare = shell;
+        bare.shell = "sh -c \"PATH=" + bin.u8string() + "; cd box && exec " + job_find("sh") + " -s\"";
+        law(walked(bare, ".") == std::vector<std::string>{ "! find lists nothing here, missing or without -mindepth" },
+            "a far side without find lists nothing and says so");
+        fs::remove(bin / "wc");
+        law(walked(bare, ".") == std::vector<std::string>{ "! wc is found nowhere on the far side" },
+            "a far side without wc lists nothing and says so");
         place mute = shell;
         mute.shell = "sh -c \"cat > /dev/null; echo QUJD\"";
         std::string bytes;

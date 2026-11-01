@@ -28,6 +28,9 @@ static const size_t SLACK       = 4096;
 static const char * const BEGIN = "KISS-BEGIN\n";
 static const char * const END   = "\nKISS-END";
 
+// the shell function a script fails with, why framed as its answer
+static const char * const FAIL = "fail() { printf 'KISS-BEGIN\\n%s\\nKISS-END\\n' \"$1\"; exit 1; }\n";
+
 place place_of(const engine_reader & config) {
     place p;
     p.cwd            = config.get("server working-directory").value_or("");
@@ -82,12 +85,16 @@ static std::string run(const place &                 p,
     }
     // the first line KISS-BEGIN, as a wrapper prints before the script, and
     // the last line KISS-END, as a name in a listing may hold one
-    const std::string & out    = r.output;
-    const size_t        line   = out.compare(0, strlen(BEGIN), BEGIN) == 0 ? 0 : out.find(std::string("\n") + BEGIN);
-    const size_t        from   = line == std::string::npos ? line : line + (line ? 1 : 0) + strlen(BEGIN);
-    const size_t        to     = out.rfind(END);
-    const bool          framed = from != std::string::npos && to != std::string::npos && to + 1 >= from;
-    answer                     = framed && to >= from ? out.substr(from, to - from) : "";
+    const std::string & out  = r.output;
+    size_t              from = std::string::npos;
+    if (out.compare(0, strlen(BEGIN), BEGIN) == 0) {
+        from = strlen(BEGIN);
+    } else if (const size_t line = out.find(std::string("\n") + BEGIN); line != std::string::npos) {
+        from = line + 1 + strlen(BEGIN);
+    }
+    const size_t to     = out.rfind(END);
+    const bool   framed = from != std::string::npos && to != std::string::npos && to + 1 >= from;
+    answer              = framed && to >= from ? out.substr(from, to - from) : "";
     // a script that fails frames why, a shell that fails tells it its own way
     if (r.exit_code != 0) {
         const std::string why = trimmed(framed ? answer : out);
@@ -196,9 +203,7 @@ std::string place_read(const place &                 p,
         return failed ? "Cannot read the file" : "";
     }
     const std::string n      = std::to_string(limit);
-    const std::string script = "p=" + quoted(given) +
-                               "\n"
-                               "fail() { printf 'KISS-BEGIN\\n%s\\nKISS-END\\n' \"$1\"; exit 1; }\n"
+    const std::string script = "p=" + quoted(given) + "\n" + FAIL +
                                "[ -e \"$p\" ] || fail \"No such file or directory: $p\"\n"
                                "[ -f \"$p\" ] || fail \"Not a regular file: $p\"\n"
                                "n=$(wc -c < \"$p\") || exit 1\n"
@@ -269,12 +274,15 @@ std::string place_write(const place &                 p,
     return "";
 }
 
-// every entry below the directory the shell starts in, one record each,
+// every entry below the directory the shell starts in, once wc and find
+// with -mindepth are there and find lists it, one record each,
 // type, size and path apart by spaces, records apart by NUL: what is no
 // regular file told by test alone, the regular files counted by one wc a
 // batch, which tells a file it could not read by a line less, the batch then
 // counted file by file, and a name with a line break counted alone
 static const char * const WALK =
+    "command -v wc > /dev/null 2>&1 || fail 'wc is found nowhere on the far side'\n"
+    "find . -mindepth 1 -prune > /dev/null 2>&1 || fail 'find lists nothing here, missing or without -mindepth'\n"
     "nl='\n'\n"
     "echo KISS-BEGIN\n"
     "find . -mindepth 1 ! -type f -exec sh -c 'for f do if [ -L \"$f\" ]; then t=l; elif [ -d \"$f\" ]; then t=d; "
@@ -297,10 +305,13 @@ std::string place_walk(const place &                                    p,
         return p.broken;
     }
     if (p.shell.empty()) {
-        const fs::path  root = file_path(p.cwd, given);
-        std::error_code ec;
-        for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end;
-             !ec && it != end; it.increment(ec)) {
+        const fs::path                   root = file_path(p.cwd, given);
+        std::error_code                  ec;
+        fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec);
+        if (ec) {
+            return "Cannot list the directory: " + ec.message();
+        }
+        for (const fs::recursive_directory_iterator end; !ec && it != end; it.increment(ec)) {
             if (!tick()) {
                 return "Cancelled";
             }
@@ -321,7 +332,7 @@ std::string place_walk(const place &                                    p,
         return "";
     }
     std::string       answer;
-    const std::string why = run(p, "cd " + quoted(given) + " || exit 1\n" + WALK, limit, answer, tick);
+    const std::string why = run(p, FAIL + ("cd " + quoted(given) + " || exit 1\n") + WALK, limit, answer, tick);
     if (!why.empty()) {
         return why;
     }

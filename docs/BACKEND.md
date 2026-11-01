@@ -849,10 +849,11 @@ it scripts of a POSIX shell. Each script answers between a line `KISS-BEGIN` and
 so what a wrapper prints around it, a banner, a host key warning, a container warning on the merged
 output, stays out. A file reads and writes through `base64`, decoded strictly, its count of bytes
 checked against what the far side counts, so a line slipped into the answer fails the call rather
-than adds a byte. A directory lists through `find`, one record of type, size and path per entry,
-the records apart by NUL, the one byte no name holds, so a name with a line break or an arrow reads
-as it is; one `wc -c` counts a batch of files. The far side needs `sh`, `base64` with `-d`, `find`
-with `-mindepth`, `wc`, `dirname` and `mkdir`, as every Linux, macOS, WSL and container image has; a
+than adds a byte. A directory lists through `find`, one record of type, size and path per entry, the
+records apart by NUL, the one byte no name holds, so a name with a line break or an arrow reads as
+it is; one `wc -c` counts a batch of files. The far side needs `sh`, `base64` with `-d`, `find` with
+`-mindepth`, `wc`, `dirname` and `mkdir`, as every Linux, macOS, WSL and container image has, and a
+listing where `find` or `wc` is missing fails saying so rather than shows an empty directory; a
 PowerShell item is no `files shell`. A path is read on the far side, relative to the directory its
 shell starts in, and a message names it as given.
 
