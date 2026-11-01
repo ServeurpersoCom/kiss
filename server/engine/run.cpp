@@ -229,7 +229,8 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // it opens, or a yes a command of an MCP client waits for, stops it once every
 // line ran, before the rules:
 // what the user answers decides them. A batch of an MCP client moves no
-// secret and changes no key of the administrator. A save writes the draft as the batch leaves it, an erase removes
+// secret and changes no key of the administrator, in the configuration that
+// runs nor in the one the next start runs. A save writes the draft as the batch leaves it, an erase removes
 // server.conf, and the conversations erased go, once the rules hold and
 // before it replaces the target
 static engine_result batch(layer &              target,
@@ -271,7 +272,12 @@ static engine_result batch(layer &              target,
         }
     }
     if (role == ENGINE_MCP) {
-        const auto held = administered(target, draft);
+        // the configuration that runs, then the one the next start runs: a
+        // save writes the draft, an erase brings the factory configuration
+        auto held = administered(target, draft);
+        if (!held && (ctx.save || ctx.erase)) {
+            held = administered(startup_layer(), ctx.erase ? layer() : draft);
+        }
         if (held) {
             return failed(std::nullopt, alone, *held + " is the administrator's -> server.conf or the console");
         }

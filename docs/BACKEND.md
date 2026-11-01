@@ -229,11 +229,13 @@ client wait for the user's yes, whatever the client lets the tool do.
 Where commands run is the administrator's alone: `shells command`, which shell exists and what it
 starts, the host or a container, a VM, a machine it reaches, `files shell`, the machine the tools on
 files act on, and `server working-directory`, which a relative path of such a command line reads on
-the host, a volume it mounts, a key it names. A batch
-of an MCP client that changes one of them, whatever line changes it, a `set`, a `no`, a `copy` or an
-`erase`, is refused whole: `shells command bash is the administrator's -> server.conf or the
-console`. So neither a model nor anyone holding the key of the server brings a shell back to the
-host; a page attached to the server types its lines as an MCP client does.
+the host, a volume it mounts, a key it names. A batch of an MCP client that changes one of them,
+whatever line changes it, a `set`, a `no`, a `copy` or an `erase`, is refused whole: `shells command
+bash is the administrator's -> server.conf or the console`. The configuration the next start runs is
+held the same way: a `write`, a `copy` to the startup-config or an `erase startup-config` that would
+change one of them there is refused. So neither a model nor anyone holding the key of the server
+brings a shell back to the host; a page attached to the server types its lines as an MCP client
+does.
 
 A module registers itself by existing, with its keys, its rules and what it applies: `server`
 rebinds its socket, `shells` rebuilds the tool list, `files` bounds what its tools return. The

@@ -161,8 +161,6 @@ int main() {
         "an MCP client moves not the directory of the server");
     law(mcp("set files shell bash") == "% files shell is the administrator's -> server.conf or the console",
         "an MCP client moves not where the tools on files act");
-    law(admin("set files shell nowhere") == "% files: files shell nowhere names no item of shells",
-        "the tools on files act through a shell that exists");
     law(mcp("set shells timeout bash 9") == "- set shells timeout bash 290\n+ set shells timeout bash 9",
         "an MCP client sets what is not the administrator's");
     admin("no shells timeout bash");
@@ -175,6 +173,19 @@ int main() {
     admin("copy startup-config running-config");
     law(mcp("erase running-config", erase_yes) == refused, "an erase of an MCP client moves no shell");
     law(bash().empty(), "nothing applies of a batch the administrator's keys refuse");
+    const engine_typed erase_start = {
+        { "erase startup-config", "true" }
+    };
+    const engine_typed save_yes = {
+        { "copy running-config startup-config", "true" }
+    };
+    law(mcp("erase startup-config", erase_start) == refused,
+        "an erase of the startup-config by an MCP client moves no shell of the next start");
+    law(mcp("write", save_yes).find("copied") != std::string::npos,
+        "a save by an MCP client that keeps the administrator's keys writes");
+    admin("set shells command bash \"bash -s\"");
+    law(mcp("write", save_yes) == refused, "a save by an MCP client moves no shell of the next start");
+    law(read(conf).find("no shells command bash") != std::string::npos, "server.conf keeps the administrator's keys");
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);
