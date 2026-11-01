@@ -15,12 +15,12 @@
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
+#include "factory.h"
 #include "httplib.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
 #include "lib/sync.h"
 #include "lib/tools.h"
-#include "server/server.conf.hpp"
 #include "yyjson.h"
 
 #include <algorithm>
@@ -190,7 +190,7 @@ int main() {
                                         << "set models compaction-preserve-steps e/m 2\n"
                                         << "set mcp url down " << at << "/down\n"
                                         << "set mcp url twin " << at << "/twin\n";
-    engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
+    laws_factory();
     engine_start((root / "server.conf").u8string(), "test");
     library_open((root / "conversations").u8string());
 

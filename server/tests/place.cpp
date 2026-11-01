@@ -18,9 +18,9 @@
 #include "lib/place.h"
 
 #include "engine/engine.h"
+#include "factory.h"
 #include "lib/base64.h"
 #include "lib/job.h"
-#include "server/server.conf.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -224,7 +224,7 @@ int main() {
     law(!base64_decode("QUJD\nWARN: late", decoded), "base64 refuses a byte outside its alphabet");
 
     std::ofstream(root / "server.conf") << "set shells command box \"sh -s\"\nset shells timeout box 7\n";
-    engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
+    laws_factory();
     engine_start((root / "server.conf").u8string(), "test");
     const auto given = [] {
         place p;

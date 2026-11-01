@@ -12,7 +12,7 @@
 #include "engine/engine.h"
 
 #include "engine/text.h"
-#include "server/server.conf.hpp"
+#include "factory.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -61,7 +61,7 @@ int main() {
     fs::create_directories(root);
     const fs::path conf = root / "server.conf";
     std::ofstream(conf) << "set shells command zsh \"bash -s\"\n";
-    engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
+    laws_factory();
     engine_start(conf.u8string(), "test");
 
     law(admin("no shells command zsh") == "- set shells command zsh \"bash -s\"\n+ set shells command zsh \"zsh -s\"",

@@ -5,9 +5,9 @@
 // on every route behind the key
 
 #include "engine/engine.h"
+#include "factory.h"
 #include "httplib.h"
 #include "lib/listener.h"
-#include "server/server.conf.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -31,21 +31,9 @@ static void law(bool kept, const std::string & what) {
 static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})";
 
 int main() {
-    // a free port: httplib closes a bound socket only once it listens
-    int port = 0;
-    {
-        httplib::Server probe;
-        port = probe.bind_to_any_port("127.0.0.1");
-        std::thread probing([&] { probe.listen_after_bind(); });
-        probe.wait_until_ready();
-        probe.stop();
-        probing.join();
-    }
-
     const fs::path root = fs::temp_directory_path() / ("http_test." + std::to_string(std::random_device{}()));
     fs::create_directories(root);
-    std::ofstream(root / "server.conf") << "set server listen-port " << port << "\n";
-    engine_factory(std::string(reinterpret_cast<const char *>(server_server_conf), server_server_conf_len));
+    const int port = laws_factory();
     engine_start((root / "server.conf").u8string(), "test");
     if (engine_get("server listen-port") != std::to_string(port)) {
         fs::remove_all(root);
