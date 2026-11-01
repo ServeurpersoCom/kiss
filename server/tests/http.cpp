@@ -152,19 +152,20 @@ int main() {
             "set endpoints url e http://127.0.0.1:9/v1\n! server key is set\nset server listen-address 0.0.0.0",
         "the startup-config reads whole while the server listens on its port");
 
-    // a move to an address another process holds goes back to the one it
-    // left, a machine without IPv6 loopback leaving the law out
-    engine_run("no server key", ENGINE_ADMIN);
+    // a move to an address another process holds is refused whole, the
+    // server listening and keeping its key, a machine without IPv6 loopback
+    // leaving the law out
+    engine_run("set server key sesame", ENGINE_ADMIN);
     const long long held = hold(port);
     if (held >= 0) {
-        law(engine_run("set server listen-address ::1", ENGINE_ADMIN).ok, "the move passes the rules");
-        for (int i = 0; i < 200 && engine_get("server listen-address") != std::optional<std::string>("127.0.0.1");
-             i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        law(engine_get("server listen-address") == std::optional<std::string>("127.0.0.1") && status("/mcp", {}) == 200,
-            "a move to an address another process holds goes back, the server still answering");
+        const engine_result moved = engine_run("set server listen-address ::1\nno server key", ENGINE_ADMIN);
+        law(!moved.ok && moved.text.find("cannot listen on ::1 port") != std::string::npos,
+            "a move to an address another process holds is refused: " + moved.text);
+        law(engine_get("server key") && status("/mcp",
+                                               {
+                                                   { "Authorization", "Bearer sesame" }
+        }) == 200,
+            "the server listens on with its key");
         release(held);
     }
 

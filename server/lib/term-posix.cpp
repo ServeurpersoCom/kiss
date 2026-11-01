@@ -8,12 +8,14 @@
 #    include <termios.h>
 #    include <unistd.h>
 
-#    include <cstdlib>
-
 static termios g_saved;
+static bool    g_raw = false;
 
-static void restore() {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_saved);
+void term_restore() {
+    if (g_raw) {
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_saved);
+        g_raw = false;
+    }
 }
 
 // bytes as typed, no echo and no line discipline; Ctrl-C reaches the console
@@ -32,7 +34,7 @@ bool term_raw() {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) {
         return false;
     }
-    atexit(restore);
+    g_raw = true;
     return true;
 }
 

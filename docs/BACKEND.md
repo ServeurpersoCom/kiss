@@ -762,9 +762,11 @@ description lists every module with its keys and what it sets, from the modules 
 `prompts.json`, so the model knows the server before it reads a line of it. KiSS configures every
 backend from the page through it, under the consent firewall when the model calls it, and any other
 MCP client gets the same CLI. A change of `server listen-address` or `server listen-port` moves the
-listener at once, once the address is checked free; on the port it listens on, only the address is
-checked, and a move to an address another process holds there goes back to the one it left, logged,
-the configuration with it, so the server never stops on a move.
+listener at once, once the address is checked free on the port it goes to, so a batch that moves to
+an address another process holds is refused whole. On the port the server listens on, an address
+that overlaps its own, a wildcard on either side, is held by the server itself until the move, so
+only the address is tried there; when such a move then cannot bind, the listener goes back to the
+address it left, logged, the configuration with it.
 
 A secret never crosses the context of the model. The administrator writes it in `server.conf` or on
 the console. An MCP client writes `set server key` alone: the batch applies nothing, and the call

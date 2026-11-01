@@ -6,7 +6,6 @@
 #    include "term.h"
 #    include "utf8.h"
 
-#    include <cstdlib>
 #    include <string>
 
 static HANDLE g_in;
@@ -17,9 +16,14 @@ static DWORD  g_out_saved;
 // the UTF-8 bytes of the last character typed not read yet
 static std::string g_pending;
 
-static void restore() {
-    SetConsoleMode(g_in, g_in_saved);
-    SetConsoleMode(g_out, g_out_saved);
+static bool g_raw = false;
+
+void term_restore() {
+    if (g_raw) {
+        SetConsoleMode(g_in, g_in_saved);
+        SetConsoleMode(g_out, g_out_saved);
+        g_raw = false;
+    }
 }
 
 // keys as escape sequences, no echo and no line editing; Ctrl-C reaches the
@@ -38,7 +42,7 @@ bool term_raw() {
         SetConsoleMode(g_in, g_in_saved);
         return false;
     }
-    atexit(restore);
+    g_raw = true;
     return true;
 }
 

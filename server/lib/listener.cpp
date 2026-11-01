@@ -41,24 +41,37 @@ bool listener_loopback(const std::string & host) {
     return inet_pton(AF_INET6, host.c_str(), &v6) == 1 && memcmp(&v6, &in6addr_loopback, sizeof(v6)) == 0;
 }
 
+// whether an address takes every address of the machine
+static bool wildcard(const std::string & host) {
+    return host.empty() || host == "0.0.0.0" || host == "::";
+}
+
+// whether host binds on port now
+static bool binds(const std::string & host, int port, std::string & why);
+
 bool listener_bindable(const std::string & host, int port, std::string & why) {
-    // the port this server listens on is its own: a move stops the listener
-    // before it binds again, so on that port only the address is tried, on a
-    // port the system picks
-    bool own = false;
+    // on the port this server listens on, an address apart from its own binds
+    // as it will once the listener moves; one that overlaps it, a wildcard on
+    // either side, is held by this server alone until the move, so only the
+    // address is tried there, on a port the system picks
+    bool overlaps = false;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         if (g_server && host == g_host && port == g_port) {
             return true;
         }
-        own = g_server && port == g_port;
+        overlaps = g_server && port == g_port && (wildcard(host) || wildcard(g_host));
     }
+    return binds(host, overlaps ? 0 : port, why);
+}
+
+static bool binds(const std::string & host, int port, std::string & why) {
     addrinfo hints            = {};
     hints.ai_family           = AF_UNSPEC;
     hints.ai_socktype         = SOCK_STREAM;
     hints.ai_flags            = AI_PASSIVE;
     addrinfo *        found   = nullptr;
-    const std::string service = std::to_string(own ? 0 : port);
+    const std::string service = std::to_string(port);
     if (getaddrinfo(host.c_str(), service.c_str(), &hints, &found) != 0 || !found) {
         why = "no such address";
         return false;
@@ -122,8 +135,10 @@ bool listener_run() {
         http_routes(server);
         if (!server.bind_to_port(host, port)) {
             log_error("Server", "Cannot listen on %s port %d", host.c_str(), port);
-            // a move another process took the address of goes back to the
-            // address the server listened on, the configuration with it
+            // a move to a wildcard another process held part of, the one move
+            // the rules let through untried, goes back to the address the
+            // server listened on, the configuration with it, valid as the
+            // wildcard needed every key the address it left needs
             std::string back_host;
             int         back_port = 0;
             listener_address(back_host, back_port);

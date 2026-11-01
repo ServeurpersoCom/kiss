@@ -14,6 +14,7 @@
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/prompts.h"
+#include "lib/term.h"
 #include "lib/utf8.h"
 #include "server/server.conf.hpp"
 #include "version.h"
@@ -93,5 +94,7 @@ int main(int argc, char ** argv) {
 #endif
 
     console_start();
-    engine_exit(listener_run() ? 0 : 1);
+    const bool listened = listener_run();
+    term_restore();
+    engine_exit(listened ? 0 : 1);
 }
