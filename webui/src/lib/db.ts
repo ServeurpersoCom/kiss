@@ -1,5 +1,5 @@
 import type { Conversation } from './types.js';
-import { DB_NAME, DB_STORE, DB_VERSION } from './config.js';
+import { DB_NAME, DB_STORE, DB_VERSION, storeName } from './config.js';
 import { secrets } from '../engine/keychain.js';
 import { seal } from '../engine/seal.js';
 
@@ -10,7 +10,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 function open(): Promise<IDBDatabase> {
 	if (dbPromise) return dbPromise;
 	dbPromise = new Promise((resolve, reject) => {
-		const req = indexedDB.open(DB_NAME, DB_VERSION);
+		const req = indexedDB.open(storeName(DB_NAME), DB_VERSION);
 		req.onupgradeneeded = () => {
 			if (!req.result.objectStoreNames.contains(DB_STORE)) {
 				req.result.createObjectStore(DB_STORE, { keyPath: 'id' });

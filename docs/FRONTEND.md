@@ -764,9 +764,11 @@ left edge of the page to the scrollbar, and a title too long fades out rather th
 an ellipsis. A conversation dates from its last answer: a command, a version shown, a pin or a title
 dates nothing.
 
-The browser keeps the conversations in IndexedDB, as they settled, the saves in `localStorage`
-under `kiss.saves`, the startup-config under `kiss.startup`, and the width of the sidebar under
-`kiss.sidebar`.
+The browser keeps the conversations in IndexedDB, as they settled, and in `localStorage` the saves,
+the startup-config, the width of the sidebar, the drafts and whether the page is attached. Every
+store is named after the directory the page is served from, `kiss:/chat/:startup`, the library
+`kiss:/chat/:library`, since one origin holds every page of a site: two pages of KiSS on one site
+keep their configurations, their keys and their conversations apart.
 
 ## Rendering
 

@@ -1,4 +1,4 @@
-import { DRAFTS_STORAGE_KEY } from './config.js';
+import { DRAFTS_STORAGE_KEY, storeName } from './config.js';
 
 // the text being typed in each conversation, by conversation id, as the
 // browser keeps it across a reload; the conversation not created yet keys as
@@ -8,12 +8,12 @@ export const NEW_DRAFT = '';
 type Drafts = Record<string, string>;
 
 function read(): Drafts {
-	const kept = localStorage.getItem(DRAFTS_STORAGE_KEY);
+	const kept = localStorage.getItem(storeName(DRAFTS_STORAGE_KEY));
 	return kept ? JSON.parse(kept) : {};
 }
 
 function write(drafts: Drafts): void {
-	localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
+	localStorage.setItem(storeName(DRAFTS_STORAGE_KEY), JSON.stringify(drafts));
 }
 
 export const draftOf = (id: string): string => read()[id] ?? '';

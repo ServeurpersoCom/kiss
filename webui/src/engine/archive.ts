@@ -1,5 +1,5 @@
 import type { Archive, Held, Save } from './engine.js';
-import { ARCHIVE_STORAGE_KEY, STARTUP_STORAGE_KEY } from '../lib/config.js';
+import { ARCHIVE_STORAGE_KEY, STARTUP_STORAGE_KEY, storeName } from '../lib/config.js';
 
 // what the browser keeps under a key, none when it keeps nothing readable
 function read(key: string): unknown {
@@ -22,7 +22,7 @@ function write(key: string, value: unknown): void {
 
 // the saves the browser keeps, oldest first
 function saved(): Save[] {
-	const saves = read(ARCHIVE_STORAGE_KEY);
+	const saves = read(storeName(ARCHIVE_STORAGE_KEY));
 	return Array.isArray(saves) ? saves : [];
 }
 
@@ -31,7 +31,8 @@ function saved(): Save[] {
 // one in memory once the browser stores it
 export class SaveArchive implements Archive {
 	private saves = saved();
-	private start = (read(STARTUP_STORAGE_KEY) as Record<string, Held> | null) ?? undefined;
+	private start =
+		(read(storeName(STARTUP_STORAGE_KEY)) as Record<string, Held> | null) ?? undefined;
 
 	list(): readonly Save[] {
 		return this.saves;
@@ -57,12 +58,12 @@ export class SaveArchive implements Archive {
 	}
 
 	boot(values: Record<string, Held> | undefined): void {
-		write(STARTUP_STORAGE_KEY, values);
+		write(storeName(STARTUP_STORAGE_KEY), values);
 		this.start = values;
 	}
 
 	private keep(saves: Save[]): void {
-		write(ARCHIVE_STORAGE_KEY, saves);
+		write(storeName(ARCHIVE_STORAGE_KEY), saves);
 		this.saves = saves;
 	}
 }

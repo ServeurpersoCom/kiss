@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigReader } from '../src/engine/engine.js';
 import { learn } from '../src/engine/keychain.js';
-import { ATTACHED_STORAGE_KEY } from '../src/lib/config.js';
+import { ATTACHED_STORAGE_KEY, storeName } from '../src/lib/config.js';
 import { app } from '../src/lib/app.svelte.js';
 import { restore } from '../src/lib/state.svelte.js';
 import {
@@ -359,7 +359,7 @@ describe('the conversations of a KiSS server', () => {
 		app.replies = { m: {} as never };
 		expect(() => attach(config(true), true)).toThrow('a turn answers on the page -> stop it first');
 		expect(attached()).toBe(false);
-		localStorage.removeItem(ATTACHED_STORAGE_KEY);
+		localStorage.removeItem(storeName(ATTACHED_STORAGE_KEY));
 		follow(config(true));
 		expect(attached()).toBe(false);
 		app.replies = {};

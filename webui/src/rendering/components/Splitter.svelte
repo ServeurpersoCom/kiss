@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SIDEBAR_STORAGE_KEY } from '../../lib/config.js';
+	import { SIDEBAR_STORAGE_KEY, storeName } from '../../lib/config.js';
 
 	// the edge of the sidebar: the sidebar follows the pointer for the whole
 	// drag, within the bounds of the page style; it closes once the pointer
@@ -12,7 +12,7 @@
 	let dragging = $state(false);
 
 	try {
-		const kept = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+		const kept = localStorage.getItem(storeName(SIDEBAR_STORAGE_KEY));
 		width = kept === null ? null : Number(kept);
 	} catch {
 		width = null;
@@ -41,7 +41,7 @@
 		dragging = false;
 		if (width !== 0) width = left(zone.getBoundingClientRect().left);
 		try {
-			localStorage.setItem(SIDEBAR_STORAGE_KEY, String(width));
+			localStorage.setItem(storeName(SIDEBAR_STORAGE_KEY), String(width));
 		} catch {
 			// the browser keeps nothing: the sidebar lasts as long as the page
 		}

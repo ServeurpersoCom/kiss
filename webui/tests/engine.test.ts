@@ -3,7 +3,7 @@ import { Server, createMcpHandler } from '@modelcontextprotocol/server';
 import type { Conversation } from '../src/lib/types.js';
 import type { Grant, Library, Verdict } from '../src/engine/engine.js';
 import { append, fresh, named, parse, serialize } from '../src/lib/conversation.js';
-import { localTime } from '../src/lib/config.js';
+import { localTime, storeName } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/engine/engine.js';
 
 type Engine = typeof import('../src/engine/run.js');
@@ -693,7 +693,7 @@ describe('a title', () => {
 		expect((await k.run('title ""', 'llm', { conversation: c })).text).toContain('a word at least');
 		expect((await k.run('title x', 'llm')).text).toContain('no conversation here');
 		await k.run('copy running-config a', 'user');
-		expect(localStorage.getItem('kiss.saves')).not.toContain('Bonjour');
+		expect(localStorage.getItem(storeName('saves'))).not.toContain('Bonjour');
 	});
 });
 
@@ -1422,8 +1422,8 @@ describe('erase and copy', () => {
 			'endpoints url a': 'http://a/v1',
 			'endpoints protocol a': 'zz'
 		};
-		localStorage.setItem('kiss.saves', JSON.stringify([{ name: 'old', date: '', values }]));
-		localStorage.setItem('kiss.startup', JSON.stringify(values));
+		localStorage.setItem(storeName('saves'), JSON.stringify([{ name: 'old', date: '', values }]));
+		localStorage.setItem(storeName('startup'), JSON.stringify(values));
 		const later = await page();
 		expect((await later.run('show running-config', 'user')).text).toBe(
 			'set chat system-prompt old\nset endpoints url a http://a/v1'
@@ -1506,7 +1506,7 @@ describe('no over the layers below', () => {
 
 	it('leaves out at start a no that nothing below holds anymore', async () => {
 		localStorage.setItem(
-			'kiss.startup',
+			storeName('startup'),
 			JSON.stringify({ 'chat system-prompt': null, 'tools use config': null })
 		);
 		vi.resetModules();
@@ -1514,6 +1514,23 @@ describe('no over the layers below', () => {
 		k.defaults('');
 		expect(k.start()).toEqual(['chat system-prompt: no key takes it']);
 		expect(k.settings.get('tools use', 'config')).toBe('consent');
+	});
+});
+
+describe('the stores of a page', () => {
+	it('keeps the configuration of a page to the directory it is served from', async () => {
+		history.replaceState(null, '', '/one/');
+		const pod = await page();
+		await pod.run('set chat system-prompt pod', 'user');
+		expect((await pod.run('copy running-config startup-config', 'user')).ok).toBe(true);
+		expect(storeName('startup')).toBe('kiss:/one/:startup');
+		history.replaceState(null, '', '/two/index.html');
+		const kiss = await page();
+		expect(kiss.settings.get('chat system-prompt')).toBe('');
+		history.replaceState(null, '', '/one/');
+		const again = await page();
+		expect(again.settings.get('chat system-prompt')).toBe('pod');
+		history.replaceState(null, '', '/');
 	});
 });
 

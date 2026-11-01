@@ -7,9 +7,14 @@ export const SYSTEM = `${NAME} Operating System`;
 // one component by the selector it reads there
 export const scope = ({ name }: { name: string }): string => `svelte-${name.toLowerCase()}`;
 
+// a store of the page in the browser, named after the directory the page is
+// served from, as one origin holds every page of a site: kiss:/chat/:saves
+export const storeName = (name: string): string =>
+	`kiss:${location.pathname.replace(/[^/]*$/, '')}:${name}`;
+
 // engine
-export const ARCHIVE_STORAGE_KEY = 'kiss.saves';
-export const STARTUP_STORAGE_KEY = 'kiss.startup';
+export const ARCHIVE_STORAGE_KEY = 'saves';
+export const STARTUP_STORAGE_KEY = 'startup';
 // a name of an item or of a save: a word of its own, typed by the user, as a
 // server writes the name of a tool or of a model among them
 export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
@@ -120,13 +125,13 @@ export const fileName = (title: string, extension: string): string =>
 	title.replace(UNSAFE_NAME, '-') + extension;
 
 // storage
-export const DB_NAME = 'kiss';
+export const DB_NAME = 'library';
 export const DB_VERSION = 1;
 export const DB_STORE = 'conversations';
 // the width of the sidebar as the user last dragged it, in pixels, 0 when closed
-export const SIDEBAR_STORAGE_KEY = 'kiss.sidebar';
+export const SIDEBAR_STORAGE_KEY = 'sidebar';
 // the text being typed in each conversation, as the composer left it
-export const DRAFTS_STORAGE_KEY = 'kiss.drafts';
+export const DRAFTS_STORAGE_KEY = 'drafts';
 // whether the page is attached to its server, on or off, as attach or detach
 // left it; none while neither ran
-export const ATTACHED_STORAGE_KEY = 'kiss.attached';
+export const ATTACHED_STORAGE_KEY = 'attached';

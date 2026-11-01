@@ -1,6 +1,6 @@
 import type { Assistant, Conversation, Form, Outcome, Run, Turn } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
-import { ATTACHED_STORAGE_KEY } from './config.js';
+import { ATTACHED_STORAGE_KEY, storeName } from './config.js';
 import { remotes, type Remote } from './remote.js';
 import type { Grant, Verdict } from '../engine/engine.js';
 import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
@@ -285,7 +285,7 @@ const answering = (): boolean => !attached() && Object.keys(app.replies).length 
 // it, the configuration it follows by
 export function attach(config: ConfigReader, on: boolean): void {
 	if (on && answering()) throw new Error('a turn answers on the page -> stop it first');
-	localStorage.setItem(ATTACHED_STORAGE_KEY, on ? ON : OFF);
+	localStorage.setItem(storeName(ATTACHED_STORAGE_KEY), on ? ON : OFF);
 	follow(config);
 }
 
@@ -297,7 +297,7 @@ export function attach(config: ConfigReader, on: boolean): void {
 // turns end, so nothing they write goes unseen
 export function follow(config: ConfigReader): void {
 	const backend = remotes(config, 'mcp').find((r) => r.name === BACKEND);
-	const kept = localStorage.getItem(ATTACHED_STORAGE_KEY);
+	const kept = localStorage.getItem(storeName(ATTACHED_STORAGE_KEY));
 	const server = kept === null || kept === ON ? backend : undefined;
 	const key = server ? JSON.stringify([server.url, server.headers, server.sign()]) : '';
 	if ((followed?.key ?? '') === key || (server && answering())) return;
