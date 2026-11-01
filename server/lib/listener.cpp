@@ -3,6 +3,7 @@
 #include "lib/listener.h"
 
 #include "engine/engine.h"
+#include "engine/parse.h"
 #include "lib/http.h"
 #include "lib/log.h"
 
@@ -121,7 +122,20 @@ bool listener_run() {
         http_routes(server);
         if (!server.bind_to_port(host, port)) {
             log_error("Server", "Cannot listen on %s port %d", host.c_str(), port);
-            return false;
+            // a move another process took the address of goes back to the
+            // address the server listened on, the configuration with it
+            std::string back_host;
+            int         back_port = 0;
+            listener_address(back_host, back_port);
+            if (back_port == 0 || (back_host == host && back_port == port) ||
+                !engine_run("set server listen-address " + quote(back_host) + "\nset server listen-port " +
+                                std::to_string(back_port),
+                            ENGINE_ADMIN)
+                     .ok) {
+                return false;
+            }
+            log_info("Server", "Back on %s port %d", back_host.c_str(), back_port);
+            continue;
         }
         {
             std::lock_guard<std::mutex> lock(g_mutex);

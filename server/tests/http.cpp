@@ -9,6 +9,7 @@
 #include "httplib.h"
 #include "lib/listener.h"
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -109,10 +110,29 @@ int main() {
             "set endpoints url e http://127.0.0.1:9/v1\n! server key is set\nset server listen-address 0.0.0.0",
         "the startup-config reads whole while the server listens on its port");
 
+    // a move to an address another process holds goes back to the one it
+    // left, a machine without IPv6 loopback leaving the law out
+    engine_run("no server key", ENGINE_ADMIN);
+    httplib::Server holder;
+    if (holder.bind_to_port("::1", port)) {
+        std::thread holding([&] { holder.listen_after_bind(); });
+        holder.wait_until_ready();
+        law(engine_run("set server listen-address ::1", ENGINE_ADMIN).ok, "the move passes the rules");
+        for (int i = 0; i < 200 && engine_get("server listen-address") != std::optional<std::string>("127.0.0.1");
+             i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        law(engine_get("server listen-address") == std::optional<std::string>("127.0.0.1") && status("/mcp", {}) == 200,
+            "a move to an address another process holds goes back, the server still answering");
+        holder.stop();
+        holding.join();
+    }
+
     listener_stop();
     listening.join();
     fs::remove_all(root);
 
     printf("[Laws] http_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    engine_exit(g_fails ? 1 : 0);
 }

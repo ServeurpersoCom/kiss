@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -477,8 +479,6 @@ void engine_start(const std::string & path, const std::string & version) {
     }
 }
 
-// a batch that changes the running configuration says who changed it, as IOS
-// logs a configuration from the console
 // the items the sources of a module serve, asked for the running
 // configuration as it is, outside the lock, as they ask over the network, and
 // kept a few seconds for that configuration, as completion asks them on every
@@ -523,12 +523,20 @@ static std::vector<engine_group> sourced(const engine_module & m) {
             return it->second.groups;
         }
     }
-    const std::vector<engine_group> groups = m.items(reader(now));
-    std::lock_guard<std::mutex>     lock(sourced_mutex());
-    sourced_t &                     k = sourced_cache()[m.name];
-    k.at                              = now;
-    k.when                            = std::chrono::steady_clock::now();
-    k.groups                          = groups;
+    std::vector<engine_group> groups;
+    try {
+        groups = m.items(reader(now));
+    } catch (const std::exception & e) {
+        // a source that throws fails its module, so an item stays refused
+        groups = {
+            { m.name, {}, e.what() }
+        };
+    }
+    std::lock_guard<std::mutex> lock(sourced_mutex());
+    sourced_t &                 k = sourced_cache()[m.name];
+    k.at                          = now;
+    k.when                        = std::chrono::steady_clock::now();
+    k.groups                      = groups;
     return groups;
 }
 
@@ -546,12 +554,14 @@ static std::vector<engine_group> sourced_now(const engine_module & m) {
             std::vector<engine_group> groups;
             try {
                 groups = items(reader(now));
-            } catch (...) {
-                // a source that throws serves nothing this time
+            } catch (const std::exception & e) {
+                // a source that throws fails its module
+                groups = {
+                    { name, {}, e.what() }
+                };
             }
-            std::lock_guard<std::mutex> lock(sourced_mutex());
-            sourced_t &                 k = sourced_cache()[name];
-            k                             = { now, std::chrono::steady_clock::now(), groups, false };
+            std::lock_guard<std::mutex> held(sourced_mutex());
+            sourced_cache()[name] = { now, std::chrono::steady_clock::now(), groups, false };
         }).detach();
     }
     return k.groups;
@@ -578,11 +588,18 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
         try {
             const auto [line, spec] = split_filter(raw);
             const auto [c, args]    = resolve(tokenize(line));
-            // show <module> lists its module, set <module> admits its item
-            // against it, show running-config all lists every one
+            // show <module> lists its module, set admits an item the running
+            // configuration does not hold against its module, show
+            // running-config all lists every one
             std::vector<const engine_module *> listed;
-            if ((c->path == words_t{ "show" } || c->path == words_t{ "set" }) && !args.empty()) {
+            if (c->path == words_t{ "show" } && !args.empty()) {
                 listed.push_back(find_module(schema_module(args[0])));
+            } else if (c->path == words_t{ "set" }) {
+                const key_words kw  = schema_read(args);
+                const words_t   set = reader(running_now()).names(kw.module);
+                if (!kw.item.empty() && std::find(set.begin(), set.end(), kw.item) == set.end()) {
+                    listed.push_back(find_module(kw.module));
+                }
             } else if (c->path == words_t{ "show", RUNNING_CONFIG } && !args.empty()) {
                 for (const engine_module & m : schema_modules()) {
                     listed.push_back(&m);
@@ -600,6 +617,14 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
     return out;
 }
 
+void engine_exit(int code) {
+    fflush(stdout);
+    fflush(stderr);
+    std::_Exit(code);
+}
+
+// a batch that changes the running configuration says who changed it, as IOS
+// logs a configuration from the console
 engine_result engine_run(const std::string &  text,
                          engine_role          role,
                          const engine_typed & typed,

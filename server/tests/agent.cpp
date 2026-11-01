@@ -576,7 +576,8 @@ int main() {
             "! endpoints e\nset models compaction-trigger-tokens e/m 100\nset models compaction-preserve-steps e/m 2",
         "show models lists the models every endpoint serves, by endpoint");
     const std::string tools = engine_run("show tools", ENGINE_ADMIN).text;
-    law(tools.find("! KiSS\nset tools use config on") != std::string::npos &&
+    const size_t      kiss  = tools.find("! KiSS\n");
+    law(kiss != std::string::npos && tools.find("set tools use config on", kiss) < tools.find("! pages", kiss) &&
             tools.find("! pages\nset tools use client_config consent") != std::string::npos &&
             tools.find("! mcp twin\nset tools use config on") != std::string::npos &&
             tools.find("! mcp down http://") != std::string::npos,
@@ -586,7 +587,7 @@ int main() {
         "show names a model an endpoint serves by a prefix");
     law(has(engine_suggest("set chat model "), "e/m"), "chat model completes with the models the endpoints serve");
     const words_t use = engine_suggest("set tools use ");
-    law(has(use, "bash") && has(use, "client_config") && has(use, "config"),
+    law(has(use, "view") && has(use, "client_config") && has(use, "config"),
         "tools use completes with the tools served");
     law(has(engine_suggest("set files shell "), "bash"), "files shell completes with the shells");
 
@@ -597,6 +598,10 @@ int main() {
     engine_suggest("set chat model ");
     law(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(500),
         "completion answers at once while a source is slow");
+    const auto setting = std::chrono::steady_clock::now();
+    engine_run("set models seed e/m 1\nset tools max-rounds 10", ENGINE_ADMIN);
+    law(std::chrono::steady_clock::now() - setting < std::chrono::milliseconds(500),
+        "a set of an item held or of a key without one asks no source");
     bool late = false;
     for (int i = 0; i < 100 && !late; i++) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -608,5 +613,5 @@ int main() {
     listening.join();
     fs::remove_all(root);
     printf("[Laws] agent_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    engine_exit(g_fails ? 1 : 0);
 }

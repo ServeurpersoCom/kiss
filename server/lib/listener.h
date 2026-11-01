@@ -22,7 +22,8 @@ void listener_address(std::string & host, int & port);
 unsigned listener_epoch();
 
 // listens on the address of the running configuration, moved when it changes,
-// until listener_stop; false when an address cannot be listened on
+// until listener_stop; a move to an address another process holds goes back
+// to the one it left; false when the first address cannot be listened on
 bool listener_run();
 
 void listener_stop();

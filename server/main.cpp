@@ -93,5 +93,5 @@ int main(int argc, char ** argv) {
 #endif
 
     console_start();
-    return listener_run() ? 0 : 1;
+    engine_exit(listener_run() ? 0 : 1);
 }

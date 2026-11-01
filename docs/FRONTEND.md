@@ -768,7 +768,9 @@ The browser keeps the conversations in IndexedDB, as they settled, and in `local
 the startup-config, the width of the sidebar, the drafts and whether the page is attached. Every
 store is named after the directory the page is served from, `kiss:/chat/:startup`, the library
 `kiss:/chat/:library`, since one origin holds every page of a site: two pages of KiSS on one site
-keep their configurations, their keys and their conversations apart.
+keep their configurations, their keys and their conversations apart. The page reads no store named
+otherwise, so what an earlier page kept under `kiss.startup` or in the library `kiss` stays in the
+browser, unread.
 
 ## Rendering
 

@@ -233,5 +233,5 @@ int main() {
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    engine_exit(g_fails ? 1 : 0);
 }

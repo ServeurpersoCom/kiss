@@ -533,20 +533,20 @@ forge# copy run start
 
 Two modules know items beyond those set, as their twins of the page do: `models`, the models every
 endpoint serves, asked in the protocol of each, and `tools`, the tools of this server, the one the
-pages serve, and those of every MCP server. `show models` and `show tools` list them by source,
-`! endpoints hf`, `! KiSS`, `! mcp exa`, an item that has a setting by its lines, another by its
-name, those set that no source serves under `! unavailable`, a source that fails by why on its
-header; `show models hf/` names one by a prefix, and `show running-config all` lists them the same
-way. A `set` names an item its module holds or its sources serve, as on the page:
-`set tools use nowhere on` answers `unknown tools "nowhere"`, a name near one served telling it, a
-source that fails telling why; at the start the engine asks no source, so `server.conf` sets any
-name. The sources answer over the network, so the engine
-asks them before it holds the configuration and keeps their answer ten seconds for the same
-configuration, the time a line takes to type. A `show` waits for them; completion never does: it
-offers what they served last and asks them again in the background, so a source slow or down never
-holds a Tab, and its answer completes the words typed next, as the page completes with what its
-modules listed last. A page attached completes and shows from this server as a page alone does from
-itself.
+pages serve, and those of every MCP server. `show models` and `show tools` list them by source, `!
+endpoints hf`, `! KiSS`, `! mcp exa`, an item that has a setting by its lines, another by its name,
+those set that no source serves under `! unavailable`, a source that fails by why on its header;
+`show models hf/` names one by a prefix, and `show running-config all` lists them the same way. A
+`set` names an item its module holds or its sources serve, as on the page, the sources asked only
+for an item the running configuration does not hold, read from the running configuration: `set tools
+use nowhere on` answers `unknown tools "nowhere"`, a name near one served telling it, a source that
+fails telling why; at the start the engine asks no source, so `server.conf` sets any name. The
+sources answer over the network, so the engine asks them before it holds the configuration and keeps
+their answer ten seconds for the same configuration, the time a line takes to type. A `show` waits
+for them; completion never does: it offers what they served last and asks them again in the
+background, so a source slow or down never holds a Tab, and its answer completes the words typed
+next, as the page completes with what its modules listed last. A page attached completes and shows
+from this server as a page alone does from itself.
 
 The line is edited as in a shell, and completes as IOS does, from the words the engine reads:
 
@@ -762,7 +762,9 @@ description lists every module with its keys and what it sets, from the modules 
 `prompts.json`, so the model knows the server before it reads a line of it. KiSS configures every
 backend from the page through it, under the consent firewall when the model calls it, and any other
 MCP client gets the same CLI. A change of `server listen-address` or `server listen-port` moves the
-listener at once, once the address is checked free.
+listener at once, once the address is checked free; on the port it listens on, only the address is
+checked, and a move to an address another process holds there goes back to the one it left, logged,
+the configuration with it, so the server never stops on a move.
 
 A secret never crosses the context of the model. The administrator writes it in `server.conf` or on
 the console. An MCP client writes `set server key` alone: the batch applies nothing, and the call
@@ -965,6 +967,8 @@ speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL else
   embeds, which names the backend by a relative URL, `set mcp url backend mcp`, so the page reaches
   the server that serves it on any port and behind any proxy or path prefix.
 - On a loopback address, `Host` must name loopback and the port, against DNS rebinding.
+- `GET /` and `GET /client.conf` answer anyone, as the page loads before it knows a key, and so do
+  the preflights a browser sends; everything else needs the key once it is set.
 - Once `server key` is set, every request needs it as `Authorization: Bearer <key>`, whatever the
   address the server listens on, the address it comes from and its `Origin`: a reverse proxy on the
   same machine, another user of the machine and a CLI client are all asked for it. The page sends it
