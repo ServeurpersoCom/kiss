@@ -41,18 +41,23 @@ bool listener_loopback(const std::string & host) {
 }
 
 bool listener_bindable(const std::string & host, int port, std::string & why) {
+    // the port this server listens on is its own: a move stops the listener
+    // before it binds again, so on that port only the address is tried, on a
+    // port the system picks
+    bool own = false;
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         if (g_server && host == g_host && port == g_port) {
             return true;
         }
+        own = g_server && port == g_port;
     }
     addrinfo hints            = {};
     hints.ai_family           = AF_UNSPEC;
     hints.ai_socktype         = SOCK_STREAM;
     hints.ai_flags            = AI_PASSIVE;
     addrinfo *        found   = nullptr;
-    const std::string service = std::to_string(port);
+    const std::string service = std::to_string(own ? 0 : port);
     if (getaddrinfo(host.c_str(), service.c_str(), &hints, &found) != 0 || !found) {
         why = "no such address";
         return false;

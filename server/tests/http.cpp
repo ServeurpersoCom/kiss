@@ -101,6 +101,14 @@ int main() {
     law(status("/conversations/pin", {}) == 401, "with a key, the conversations need it");
     law(status("/proxy/any", {}) == 401, "with a key, the proxied servers need it");
 
+    // the startup-config reads whole while the server listens on its port,
+    // another address on that port being the server's own
+    std::ofstream(root / "server.conf") << "set endpoints url e http://127.0.0.1:9/v1\nset server key sesame\n"
+                                        << "set server listen-address 0.0.0.0\n";
+    law(engine_run("show startup-config", ENGINE_ADMIN).text ==
+            "set endpoints url e http://127.0.0.1:9/v1\n! server key is set\nset server listen-address 0.0.0.0",
+        "the startup-config reads whole while the server listens on its port");
+
     listener_stop();
     listening.join();
     fs::remove_all(root);
