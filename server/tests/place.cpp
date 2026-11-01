@@ -71,6 +71,15 @@ static std::vector<std::string> walked(const place & at, const std::string & giv
     return out;
 }
 
+// a word a POSIX shell reads back as it is
+static std::string sh_quoted(const std::string & s) {
+    std::string out = "'";
+    for (char c : s) {
+        out += c == '\'' ? std::string("'\\''") : std::string(1, c);
+    }
+    return out + "'";
+}
+
 // what a place tells of a path, as one line
 static std::string stat(const place & at, const std::string & given) {
     uintmax_t        size = 0;
@@ -165,15 +174,20 @@ int main() {
     if (places.size() > 1) {
         law(walked(shell, ".") == server, "a shell walks the entries the server walks, whatever their names");
         law(walked(noisy, ".") == server && walked(blank, ".") == server, "a wrapped shell walks them the same");
-        // a far side with wc and no find, then with neither
+        // a far side with wc and no find, then with neither: a copy of wc in a
+        // directory of its own, the paths quoted for the shell
         const fs::path bin = root / "bin";
         fs::create_directories(bin);
-        fs::create_symlink(job_find("wc"), bin / "wc", ec);
-        place bare = shell;
-        bare.shell = "sh -c \"PATH=" + bin.u8string() + "; cd box && exec " + job_find("sh") + " -s\"";
-        law(walked(bare, ".") == std::vector<std::string>{ "! find lists nothing here, missing or without -mindepth" },
-            "a far side without find lists nothing and says so");
-        fs::remove(bin / "wc");
+        const bool copied = fs::copy_file(job_find("wc"), bin / "wc", ec) && !ec;
+        place      bare   = shell;
+        bare.shell =
+            "sh -c \"PATH=" + sh_quoted(bin.u8string()) + "; cd box && exec " + sh_quoted(job_find("sh")) + " -s\"";
+        if (copied) {
+            law(walked(bare, ".") ==
+                    std::vector<std::string>{ "! find lists nothing here, missing or without -mindepth" },
+                "a far side without find lists nothing and says so");
+        }
+        fs::remove(bin / "wc", ec);
         law(walked(bare, ".") == std::vector<std::string>{ "! wc is found nowhere on the far side" },
             "a far side without wc lists nothing and says so");
         place mute = shell;
