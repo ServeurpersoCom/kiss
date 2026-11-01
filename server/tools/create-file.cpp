@@ -1,18 +1,17 @@
 // create-file.cpp: the create_file tool: a file written whole with the text
 // given, empty or not, its parent directories made, a file already there
-// written over
+// written over, on the place of the tools on files
 
 #include "lib/file.h"
 #include "lib/output.h"
+#include "lib/place.h"
 #include "lib/prompts.h"
 #include "lib/tools.h"
 #include "yyjson.h"
 
 #include <algorithm>
 
-namespace fs = std::filesystem;
-
-static tool_outcome create_file(const std::string & cwd, yyjson_val * args) {
+static tool_outcome create_file(const place & at, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *      named = yyjson_obj_get(args, "path");
     yyjson_val *      body  = yyjson_obj_get(args, "file_text");
     const std::string given(yyjson_get_str(named), yyjson_get_len(named));
@@ -21,10 +20,8 @@ static tool_outcome create_file(const std::string & cwd, yyjson_val * args) {
         return { false, file_refused(given) };
     }
 
-    const fs::path    path = file_path(cwd, given);
-    std::error_code   ec;
-    const bool        there  = fs::exists(path, ec);
-    const std::string failed = file_write(path, text);
+    bool              there  = false;
+    const std::string failed = place_write(at, given, text, there, tick);
     if (!failed.empty()) {
         return { false, failed };
     }
@@ -35,7 +32,7 @@ static tool_outcome create_file(const std::string & cwd, yyjson_val * args) {
 }
 
 static std::vector<tool> create_file_tool(const engine_reader & config) {
-    const std::string cwd = config.get("server working-directory").value_or("");
+    const place at = place_of(config);
 
     tool t;
     t.suffix = "create_file";
@@ -44,8 +41,8 @@ static std::vector<tool> create_file_tool(const engine_reader & config) {
                                                { "hostname", config.get("server hostname").value_or("") }
     });
     t.input = prompts_input("create_file");
-    t.run   = [cwd](yyjson_val * args, const engine_typed &, const tool_tick &) {
-        return create_file(cwd, args);
+    t.run   = [at](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+        return create_file(at, args, tick);
     };
     return { t };
 }

@@ -6,8 +6,8 @@
 // factory configuration back whole, and a no line that takes back nothing
 // stays out at boot; an MCP client opens a guarded register only once the user
 // lets it, whatever line opens it, while the administrator opens it at once;
-// a key of the administrator moves by no line of an MCP client, the
-// administrator moving it at once
+// a key of the administrator, where commands and the tools on files run, moves
+// by no line of an MCP client, the administrator moving it at once
 
 #include "engine/engine.h"
 
@@ -159,6 +159,10 @@ int main() {
     law(mcp("set server working-directory /") ==
             "% server working-directory is the administrator's -> server.conf or the console",
         "an MCP client moves not the directory of the server");
+    law(mcp("set files shell bash") == "% files shell is the administrator's -> server.conf or the console",
+        "an MCP client moves not where the tools on files act");
+    law(admin("set files shell nowhere") == "% files: files shell nowhere names no item of shells",
+        "the tools on files act through a shell that exists");
     law(mcp("set shells timeout bash 9") == "- set shells timeout bash 290\n+ set shells timeout bash 9",
         "an MCP client sets what is not the administrator's");
     admin("no shells timeout bash");

@@ -1,22 +1,23 @@
 // str-replace.cpp: the str_replace tool: the one place a text file holds a
-// string, replaced by another, the file written in place
+// string, replaced by another, the file written in place, on the place of the
+// tools on files
 
 #include "lib/file.h"
+#include "lib/place.h"
 #include "lib/prompts.h"
 #include "lib/tools.h"
 #include "yyjson.h"
 
 #include <algorithm>
-
-namespace fs = std::filesystem;
+#include <cstring>
 
 struct replacer {
-    std::string cwd;
+    place  at;
     // the bytes of a file loaded whole
-    size_t      load;
+    size_t load;
 };
 
-static tool_outcome str_replace(const replacer & r, yyjson_val * args) {
+static tool_outcome str_replace(const replacer & r, yyjson_val * args, const tool_tick & tick) {
     const auto text_of = [args](const char * name) {
         yyjson_val * v = yyjson_obj_get(args, name);
         return std::string(yyjson_get_str(v), yyjson_get_len(v));
@@ -28,11 +29,13 @@ static tool_outcome str_replace(const replacer & r, yyjson_val * args) {
         return { false, file_refused(given) };
     }
 
-    const fs::path    path = file_path(r.cwd, given);
     std::string       text;
-    const std::string why = file_load(path, r.load, text);
+    const std::string why = place_read(r.at, given, r.load, text, tick);
     if (!why.empty()) {
         return { false, why };
+    }
+    if (memchr(text.data(), '\0', std::min(text.size(), FILE_CHUNK))) {
+        return { false, "Binary file" };
     }
     const file_found found = file_find(text, old);
     if (found.count == 0) {
@@ -43,7 +46,8 @@ static tool_outcome str_replace(const replacer & r, yyjson_val * args) {
     }
     const long long line = std::count(text.begin(), text.begin() + (long) found.at, '\n') + 1;
     text.replace(found.at, old.size(), fresh);
-    const std::string failed = file_write(path, text);
+    bool              there  = false;
+    const std::string failed = place_write(r.at, given, text, there, tick);
     if (!failed.empty()) {
         return { false, failed };
     }
@@ -53,7 +57,7 @@ static tool_outcome str_replace(const replacer & r, yyjson_val * args) {
 
 static std::vector<tool> str_replace_tool(const engine_reader & config) {
     replacer r;
-    r.cwd  = config.get("server working-directory").value_or("");
+    r.at   = place_of(config);
     r.load = (size_t) std::stoull(config.get("files max-load").value_or("0"));
 
     tool t;
@@ -63,8 +67,8 @@ static std::vector<tool> str_replace_tool(const engine_reader & config) {
                                                { "hostname", config.get("server hostname").value_or("") }
     });
     t.input = prompts_input("str_replace");
-    t.run   = [r](yyjson_val * args, const engine_typed &, const tool_tick &) {
-        return str_replace(r, args);
+    t.run   = [r](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+        return str_replace(r, args, tick);
     };
     return { t };
 }

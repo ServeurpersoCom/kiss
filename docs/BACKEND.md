@@ -43,6 +43,7 @@ modules
     timeout <item> <seconds>        290
     max-output <item> <bytes>       65536
   files
+    shell <item>                    none, the tools on files on this machine
     max-output <bytes>              65536, the text view returns
     max-load <bytes>                52428800, a file loaded whole
     max-megapixels <count>          100, decoded at most
@@ -226,8 +227,9 @@ erases a configuration, a `copy` or a `write` to the startup-config and an `eras
 client wait for the user's yes, whatever the client lets the tool do.
 
 Where commands run is the administrator's alone: `shells command`, which shell exists and what it
-starts, the host or a container, a VM, a machine it reaches, and `server working-directory`, which a
-relative path of such a command line reads on the host, a volume it mounts, a key it names. A batch
+starts, the host or a container, a VM, a machine it reaches, `files shell`, the machine the tools on
+files act on, and `server working-directory`, which a relative path of such a command line reads on
+the host, a volume it mounts, a key it names. A batch
 of an MCP client that changes one of them, whatever line changes it, a `set`, a `no`, a `copy` or an
 `erase`, is refused whole: `shells command bash is the administrator's -> server.conf or the
 console`. So neither a model nor anyone holding the key of the server brings a shell back to the
@@ -297,6 +299,7 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `shells command <item>`    | string | command line that runs a script read on stdin                   |
 | `shells timeout <item>`    | number | seconds a call may run                                          |
 | `shells max-output <item>` | number | bytes of output a call returns                                  |
+| `files shell`              | string | the shell whose machine the tools on files act on, none here    |
 | `files max-output`         | number | bytes of text `view` returns, its head and its tail             |
 | `files max-load`           | number | bytes of a file a tool loads whole, an image or a text to edit  |
 | `files max-megapixels`     | number | megapixels an image may declare before it is decoded            |
@@ -696,8 +699,9 @@ every other tool off in KiSS, a machine is open to the model for reading only.
   inflates holds the memory of the machine. A photo of 50 MB reaches the model in a few hundred KB,
   well within the 5 MiB a request may weigh on the Hugging Face router.
 - A text file comes back with numbered lines, `N<tab>line`, then `300 lines`, or `Lines 10-20 of
-  300` for a range. Past `files max-output`, the head and the tail stay, as for a shell. The file
-  streams through, so its size costs time and never memory.
+  300` for a range. Past `files max-output`, the head and the tail stay, as for a shell. On the
+  machine of the server the file streams through, so its size costs time and never memory; through
+  `files shell` it loads whole, up to `files max-load` bytes.
 - Another binary file, one with a NUL byte near its start, is refused with `Binary file`.
 
 ### The str_replace and create_file tools
@@ -830,13 +834,34 @@ configuration:
 
 ```
 set shells command gpu ssh -T -o BatchMode=yes root@forge bash -s
-set shells command box podman exec -i sandbox bash -s
+set shells command box podman exec -i sandbox timeout 290 bash -s
 ```
 
-The OpenSSH client ships with Linux, macOS and Windows 10 and later. Two limits hold: the tools on
-files work on the machine that runs `server`, and ending a local ssh without a terminal does not end
-the remote process, so a remote item wraps its shell in `timeout` on the remote side. A machine that
-needs the tools on files or a reliable tree kill runs its own `server`.
+The OpenSSH client ships with Linux, macOS and Windows 10 and later. Ending a local ssh or container
+client does not end the process on the far side, so a remote item wraps its shell in `timeout`
+there.
+
+`files shell` names the shell whose machine `view`, `str_replace` and `create_file` act on; unset,
+they act on the machine of the server. Through a shell they keep their logic in the server and send
+it scripts of a POSIX shell: a file read and written through `base64`, so every byte goes through
+the merged output of the shell contract, and a directory listed by `ls -lnRA` in the C.UTF-8 locale.
+The far side needs `sh`, `base64` with `-d`, `ls`, `wc`, `dirname` and `mkdir`, as every Linux,
+macOS, WSL and container image has; a PowerShell item is no `files shell`. A path is read on the far
+side, relative to the directory its shell starts in, and a message names it as given. A machine
+whose commands and files all live elsewhere takes back every shell of the factory configuration:
+
+```
+! every command and every file in a VM, nothing on the machine of the server
+set shells command vm ssh -T -o BatchMode=yes kiss@vm bash -s
+no shells command bash
+no shells command zsh
+no shells command powershell
+no shells command pwsh
+set files shell vm
+```
+
+`shells command`, `files shell` and `server working-directory` are the administrator's, so no model
+brings a command or a file back to the machine of the server.
 
 ## MCP
 

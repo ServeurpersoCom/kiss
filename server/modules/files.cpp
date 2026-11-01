@@ -1,12 +1,32 @@
 // files.cpp: the files module: the tools on files, view, str_replace and
-// create_file: the bytes of text view returns at most, its head and its
-// tail; the bytes of a file a tool loads whole, an image view reads or a text
-// str_replace rewrites; the megapixels view decodes at most, and the longest
-// side and the JPEG quality of an image it makes again
+// create_file: the shell whose machine they act on, none for the machine of
+// the server; the bytes of text view returns at most, its head and its tail;
+// the bytes of a file a tool loads whole, an image view reads, a text
+// str_replace rewrites or a listing through a shell; the megapixels view
+// decodes at most, and the longest side and the JPEG quality of an image it
+// makes again
 
 #include "engine/engine.h"
+#include "engine/text.h"
+
+#include <algorithm>
+
+// the shell names an item of shells
+static std::string validate(const engine_reader & config) {
+    const auto    shell = config.get("files shell");
+    const words_t names = config.names("shells");
+    if (shell && std::find(names.begin(), names.end(), *shell) == names.end()) {
+        return "files shell " + *shell + " names no item of shells";
+    }
+    return "";
+}
 
 static engine_module make_files() {
+    // where the tools on files act is the administrator's, as where the
+    // shells run is
+    engine_key shell("shell", ENGINE_STRING);
+    shell.admin = true;
+
     engine_key output("max-output", ENGINE_NUMBER);
     output.min     = 2;
     output.integer = true;
@@ -34,7 +54,9 @@ static engine_module make_files() {
     quality.reset   = "85";
 
     engine_module m;
-    m.name = "files";
+    m.name     = "files";
+    m.validate = validate;
+    m.keys.push_back(shell);
     m.keys.push_back(output);
     m.keys.push_back(load);
     m.keys.push_back(megapixels);
