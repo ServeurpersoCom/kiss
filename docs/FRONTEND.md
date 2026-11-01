@@ -40,9 +40,9 @@ modules
     model <model>                   the one model of the one endpoint
     system-prompt <text>            none
   display
-    thinking closed|open|inference  closed
+    thinking closed|open|inference  inference
     tool-calls closed|open|inference
-                                    closed
+                                    inference
     rendering thinking|reply markdown|plain
                                     markdown
     preview-argument <argument>     description, the argument every folded call shows

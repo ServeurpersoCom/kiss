@@ -246,7 +246,7 @@ describe('a turn', () => {
 			{ id: 'a', ok: true },
 			{ id: 'b', args: '{"lines":"show display thinking"}', ok: false, result: STOPPED }
 		]);
-		expect(p.engine.settings.get('display thinking')).toBe('closed');
+		expect(p.engine.settings.get('display thinking')).toBe('inference');
 	});
 
 	it('stores no secret the model writes, from before its call is sent, even in arguments that read as no object', async () => {
@@ -281,7 +281,7 @@ describe('a turn', () => {
 		const p = await page([stream([calls(['a', 'set display thinking open'])], 'cut')]);
 		await expect(p.go()).rejects.toThrow('ended before [DONE]');
 		expect(p.reply.rounds).toEqual([]);
-		expect(p.engine.settings.get('display thinking')).toBe('closed');
+		expect(p.engine.settings.get('display thinking')).toBe('inference');
 	});
 
 	it('names the endpoint and the event of a stream that does not read', async () => {

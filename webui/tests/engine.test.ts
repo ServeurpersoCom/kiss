@@ -87,7 +87,7 @@ describe('a batch', () => {
 		const r = await k.run('set display tool-calls open\nset display tool-calls wide', 'user');
 		expect(r.ok).toBe(false);
 		expect(r.text).toContain('nothing applied');
-		expect(k.settings.get('display tool-calls')).toBe('closed');
+		expect(k.settings.get('display tool-calls')).toBe('inference');
 	});
 
 	it('compiles every line before the first one runs', async () => {
@@ -423,7 +423,7 @@ describe('show running-config', () => {
 		const each = await Promise.all(modules.map((m) => k.run(`show ${m.name}`, 'user')));
 		expect(all).toBe(each.map((r) => r.text).join('\n'));
 		expect(all).toContain('set display tool-calls open\n');
-		expect(all).toContain('set display thinking closed\n');
+		expect(all).toContain('set display thinking inference\n');
 		expect((await k.run('show running-config x', 'user')).text).toBe(
 			'% nothing goes after show running-config: x'
 		);
@@ -433,8 +433,8 @@ describe('show running-config', () => {
 describe('the display', () => {
 	it('folds by default and opens on demand', async () => {
 		const k = await page();
-		expect(k.settings.get('display thinking')).toBe('closed');
-		expect(k.settings.get('display tool-calls')).toBe('closed');
+		expect(k.settings.get('display thinking')).toBe('inference');
+		expect(k.settings.get('display tool-calls')).toBe('inference');
 		expect((await k.run('set display tool-calls ajar', 'user')).text).toContain(
 			'not one of closed open'
 		);
@@ -702,7 +702,7 @@ describe('a word after set, no or show', () => {
 		const k = await page();
 		expect((await k.run('show d', 'user')).text).toBe('% ambiguous word "d": diff display');
 		expect((await k.run('show t', 'user')).text).toBe('% ambiguous word "t": title tools');
-		expect((await k.run('show dis', 'user')).text).toContain('set display thinking closed');
+		expect((await k.run('show dis', 'user')).text).toContain('set display thinking inference');
 		expect((await k.run('show tool', 'user')).ok).toBe(true);
 		expect((await k.run('show ti', 'user')).text).toContain('no conversation here');
 	});

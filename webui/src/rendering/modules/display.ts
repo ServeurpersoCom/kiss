@@ -1,7 +1,7 @@
 import type { Module } from '../../engine/engine.js';
 import {
 	BLOCKS,
-	CLOSED,
+	INFERENCE,
 	FOLDS,
 	MARKDOWN,
 	RENDERS,
@@ -16,8 +16,8 @@ import {
 export default {
 	name: 'display',
 	keys: {
-		thinking: { kind: 'enum', values: FOLDS, default: CLOSED },
-		'tool-calls': { kind: 'enum', values: FOLDS, default: CLOSED },
+		thinking: { kind: 'enum', values: FOLDS, default: INFERENCE },
+		'tool-calls': { kind: 'enum', values: FOLDS, default: INFERENCE },
 		rendering: {
 			kind: 'enum',
 			values: RENDERS,

@@ -17,8 +17,8 @@ type Block = (typeof BLOCKS)[number];
 // the display module, and the argument a tool shows instead, by tool name,
 // from the tools module
 export const display = $state({
-	thinking: CLOSED as Fold,
-	tools: CLOSED as Fold,
+	thinking: INFERENCE as Fold,
+	tools: INFERENCE as Fold,
 	rendering: Object.fromEntries(BLOCKS.map((b) => [b, MARKDOWN])) as Record<Block, Render>,
 	argument: '',
 	preview: {} as Record<string, string>
