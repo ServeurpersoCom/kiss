@@ -21,9 +21,10 @@ export function complete(ctx: Context, words: string[], partial: string): string
 		.sort((a, b) => Number(hint(a)) - Number(hint(b)) || a.localeCompare(b));
 }
 
-// the word a line ends on, empty after a blank
+// the word a line ends on, after its last blank or pipe, as the console of
+// the server reads it
 export function partialWord(text: string): string {
-	return /\s$/.test(text) || !text ? '' : (text.split(/\s+/).pop() ?? '');
+	return text.slice(Math.max(text.lastIndexOf(' '), text.lastIndexOf('|')) + 1);
 }
 
 // the line completed as far as the candidates agree: the whole word and a

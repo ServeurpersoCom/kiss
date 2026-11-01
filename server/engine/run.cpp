@@ -38,10 +38,6 @@ static layer       g_running;
 static std::string g_version;
 static std::mutex  g_mutex;
 
-const layer & running_layer() {
-    return g_running;
-}
-
 const std::string & engine_version() {
     return g_version;
 }
@@ -53,8 +49,8 @@ struct step {
 
 // a line as the schema alone reads it: the command and its arguments checked,
 // one that runs alone refused among others, its filter compiled; a lone line
-// that stops short lists what may follow it
-static step compile(const std::string & text, bool alone) {
+// that stops short lists what may follow it in the configuration given
+static step compile(const std::string & text, bool alone, const layer & target) {
     const auto [head, spec]       = split_filter(text);
     const words_t           words = tokenize(head);
     std::optional<filter_t> filter;
@@ -68,7 +64,7 @@ static step compile(const std::string & text, bool alone) {
         }
         return { cmd->compile(args), filter };
     } catch (const incomplete &) {
-        const std::string next = join(complete(words, "", {}), " ");
+        const std::string next = join(complete(words, "", reader(target), {}), " ");
         if (!alone) {
             fail("\"" + head + "\" misses words, it may go on with: " + next);
         }
@@ -250,7 +246,7 @@ static engine_result batch(layer &                                              
     std::vector<step> steps;
     for (size_t i = 0; i < lines.size(); i++) {
         try {
-            steps.push_back(compile(lines[i], alone));
+            steps.push_back(compile(lines[i], alone, target));
         } catch (const std::runtime_error & e) {
             return failed(i, alone, e.what());
         }
@@ -372,7 +368,7 @@ static words_t enter(layer & target, const std::string & text) {
             continue;
         }
         try {
-            compile(line, false);
+            compile(line, false, target);
         } catch (const std::runtime_error & e) {
             out.push_back("line " + std::to_string(i + 1) + ": " + e.what());
             continue;
@@ -582,12 +578,19 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
         try {
             const auto [line, spec] = split_filter(raw);
             const auto [c, args]    = resolve(tokenize(line));
-            if (c->path != words_t{ "show" } || args.empty()) {
-                continue;
+            // show <module> lists its module, show running-config all every one
+            std::vector<const engine_module *> listed;
+            if (c->path == words_t{ "show" } && !args.empty()) {
+                listed.push_back(find_module(schema_module(args[0])));
+            } else if (c->path == words_t{ "show", RUNNING_CONFIG } && !args.empty()) {
+                for (const engine_module & m : schema_modules()) {
+                    listed.push_back(&m);
+                }
             }
-            const engine_module * m = find_module(schema_module(args[0]));
-            if (m && m->items && !out.count(m->name)) {
-                out[m->name] = sourced(*m);
+            for (const engine_module * m : listed) {
+                if (m && m->items && !out.count(m->name)) {
+                    out[m->name] = sourced(*m);
+                }
             }
         } catch (...) {
             // a line that does not read yet lists nothing; the batch tells why
@@ -634,7 +637,7 @@ std::vector<std::string> engine_suggest(const std::string & text) {
             }
             return names;
         }
-        return complete(tokenize(line), partial, known);
+        return complete(tokenize(line), partial, reader(g_running), known);
     } catch (...) {
         // a line still being typed may not read yet: nothing follows it
         return {};

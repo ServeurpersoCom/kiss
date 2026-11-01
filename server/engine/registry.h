@@ -42,6 +42,15 @@ bool engine_save(context & ctx);
 
 using step_t = std::function<std::string(context &)>;
 
+// what a command completes from, as the page completes from its context: the
+// words after its path, the configuration they are typed against, and the
+// items the sources of the modules know
+struct completing {
+    const words_t &       args;
+    const engine_reader & config;
+    const engine_known &  known;
+};
+
 struct command {
     words_t path;
     // its first argument names a module, so after its path the name of a
@@ -49,9 +58,8 @@ struct command {
     bool    module;
     // the step the arguments spell, checked before any line runs
     step_t (*compile)(const words_t & args);
-    // candidates for the next argument, the items the sources of the modules
-    // know besides; a candidate in <> names what to type
-    words_t (*complete)(const words_t & args, const engine_known & known);
+    // candidates for the next argument; a candidate in <> names what to type
+    words_t (*complete)(const completing & c);
     // it writes or erases server.conf, so it runs on a line of its own
     bool alone = false;
 };

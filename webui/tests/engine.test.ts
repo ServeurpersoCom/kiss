@@ -1166,6 +1166,7 @@ describe('completion and abbreviation', () => {
 	it('offers the current value of a key, never the one of a secret', async () => {
 		const k = await page('set endpoints url prod http://p/v1\nset chat system-prompt "Be brief"');
 		expect(k.suggest('set endpoints timeout prod ', 'user')).toEqual(['120', '<number>']);
+		expect(k.suggest('show chat |inc', 'user')).toEqual(['include']);
 		expect(k.suggest('set chat system-prompt ', 'user')).toEqual(['"Be brief"', '<string>']);
 		await k.run('set endpoints key prod K', 'user');
 		expect(k.suggest('set endpoints key prod ', 'user')).toEqual(['<secret>']);

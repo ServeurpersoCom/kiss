@@ -7,8 +7,9 @@
 
 #include <set>
 
-static words_t next_key_or_item(const words_t & args, const engine_known & known) {
-    return schema_next(reader(running_layer()), args, false, true, known);
+// the items set alone, as no takes back nothing else
+static words_t next_key_or_item(const completing & c) {
+    return schema_next(c.config, c.args, false, true, {});
 }
 
 // the value the draft sets for a key leaves it, the factory configuration

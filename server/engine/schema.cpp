@@ -83,6 +83,12 @@ bool collection(const std::string & module) {
 std::string schema_module(const std::string & word) {
     const words_t     names  = module_names();
     const std::string module = pick(word, names, "key");
+    // a key written with dots, chat.model, is the key with blanks
+    if (word.find('.') != std::string::npos) {
+        std::string spaced = word;
+        std::replace(spaced.begin(), spaced.end(), '.', ' ');
+        fail("unknown key \"" + word + "\", did you mean " + spaced);
+    }
     if (module.empty()) {
         fail("unknown key \"" + word + "\"" + did_you_mean(word, names));
     }

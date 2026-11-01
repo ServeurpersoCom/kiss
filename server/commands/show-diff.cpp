@@ -25,8 +25,8 @@ static step_t compile_show_diff(const words_t & args) {
     };
 }
 
-static words_t next_show_diff(const words_t & args, const engine_known &) {
-    return args.size() < 2 ? words_t{ RUNNING_CONFIG, STARTUP_CONFIG } : words_t{};
+static words_t next_show_diff(const completing & c) {
+    return c.args.size() < 2 ? words_t{ RUNNING_CONFIG, STARTUP_CONFIG } : words_t{};
 }
 
 static command make_show_diff() {

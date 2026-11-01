@@ -8,19 +8,23 @@
 // lets it, whatever line opens it, while the administrator opens it at once;
 // a key of the administrator, where commands and the tools on files run, moves
 // by no line of an MCP client, the administrator moving it at once; the mask of
-// a secret is no value
+// a secret is no value; a dotted key, no, and show running-config all answer as
+// on the page
 
 #include "engine/engine.h"
 
 #include "engine/text.h"
 #include "factory.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -199,6 +203,23 @@ int main() {
             engine_run("show running-config | include key", ENGINE_ADMIN).text.find("server key is set") !=
                 std::string::npos,
         "the secret the mask hides stays set");
+
+    // the words of the page, twins of its laws
+    law(admin("set chat.model x") == "% unknown key \"chat.model\", did you mean chat model",
+        "a key written with dots names the key with blanks");
+    const auto offers = [](const std::string & line, const std::string & word) {
+        const words_t all = engine_suggest(line);
+        return std::find(all.begin(), all.end(), word) != all.end();
+    };
+    bool served = false;
+    for (int i = 0; i < 100 && !served; i++) {
+        served = offers("set tools use ", "client_config");
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    law(served && !offers("no tools use ", "client_config"),
+        "no completes with the items set, set with the items served too");
+    law(admin("show running-config all").find("! KiSS") != std::string::npos,
+        "show running-config all lists the items of a module by source, as show <module> does");
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);

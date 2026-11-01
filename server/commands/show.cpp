@@ -108,8 +108,8 @@ std::string show_module(const reader &                    config,
     return out.empty() ? comment("no " + module + " yet") : join(out, "\n");
 }
 
-static words_t next_key_or_item(const words_t & args, const engine_known & known) {
-    return schema_next(reader(running_layer()), args, false, true, known);
+static words_t next_key_or_item(const completing & c) {
+    return schema_next(c.config, c.args, false, true, c.known);
 }
 
 // show server, show server listen-port: the word after a collection names a key as

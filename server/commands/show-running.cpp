@@ -8,7 +8,7 @@
 
 // IOS show running-config: every line the running configuration holds, as the
 // line that sets it, which copy writes to server.conf; all, every key of every
-// module with the value in force
+// module with the value in force, as show <module> lists it, by source
 static step_t compile_show_running(const words_t & args) {
     if (!args.empty() && pick(args[0], { ALL }, "word").empty()) {
         fail(beyond({ "show", RUNNING_CONFIG }, args));
@@ -21,7 +21,9 @@ static step_t compile_show_running(const words_t & args) {
         if (every) {
             words_t shown;
             for (const std::string & m : module_names()) {
-                shown.push_back(show_module(reader(ctx.draft), m, "", "", nullptr));
+                const auto it = ctx.sourced.find(m);
+                shown.push_back(
+                    show_module(reader(ctx.draft), m, "", "", it == ctx.sourced.end() ? nullptr : &it->second));
             }
             return join(shown, "\n");
         }
@@ -30,8 +32,8 @@ static step_t compile_show_running(const words_t & args) {
     };
 }
 
-static words_t next_show_running(const words_t & args, const engine_known &) {
-    return args.empty() ? words_t{ ALL } : words_t{};
+static words_t next_show_running(const completing & c) {
+    return c.args.empty() ? words_t{ ALL } : words_t{};
 }
 
 static command make_show_running() {

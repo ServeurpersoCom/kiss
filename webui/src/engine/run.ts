@@ -331,7 +331,7 @@ async function batch(
 				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
 			}
 			signal?.throwIfAborted();
-			if (step.filter) text = step.filter(text);
+			if (step.filter) text = step.filter(text) || comment('no line matches');
 			if (text) out.push(text);
 		}
 		return out.join('\n');
