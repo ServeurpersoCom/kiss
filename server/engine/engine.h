@@ -91,6 +91,10 @@ struct engine_module {
     // the rule across keys, checked on every change: why the configuration
     // breaks it, empty when it holds
     std::function<std::string(const engine_reader &)>                                   validate;
+    // readies the server for the running configuration a batch is about to
+    // apply, the last step that may refuse it: why it cannot, empty when it
+    // can, and then the server already works on it
+    std::function<std::string(const engine_reader &)>                                   prepare;
     // mirrors the running configuration into the server after a change
     std::function<void(const engine_reader &)>                                          apply;
     // what an item does, as notes show <module> writes after its lines

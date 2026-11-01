@@ -72,10 +72,6 @@ static std::string validate(const engine_reader & config) {
     if (!listener_loopback(*host) && !config.get("server key")) {
         return "listening on " + *host + " needs a key -> set server key";
     }
-    std::string why;
-    if (!listener_bindable(*host, std::stoi(*port), why)) {
-        return "cannot listen on " + *host + " port " + *port + ": " + why;
-    }
     const std::string cwd = config.get("server working-directory").value_or("");
     std::error_code   ec;
     if (!std::filesystem::is_directory(std::filesystem::u8path(cwd), ec)) {
@@ -92,7 +88,12 @@ static void apply(const engine_reader & config) {
         }
     }
     log_buffer_set((size_t) std::stoull(config.get("server log-buffer").value_or("0")));
-    listener_move(*config.get("server listen-address"), std::stoi(*config.get("server listen-port")));
+}
+
+// the listener moves to the address before the batch applies, or the batch
+// stays out
+static std::string prepare(const engine_reader & config) {
+    return listener_prepare(*config.get("server listen-address"), std::stoi(*config.get("server listen-port")));
 }
 
 static engine_module make_server() {
@@ -134,6 +135,7 @@ static engine_module make_server() {
     m.keys.push_back(level);
     m.keys.push_back(buffer);
     m.validate = validate;
+    m.prepare  = prepare;
     m.apply    = apply;
     return m;
 }

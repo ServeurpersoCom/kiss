@@ -153,19 +153,28 @@ int main() {
         "the startup-config reads whole while the server listens on its port");
 
     // a move to an address another process holds is refused whole, the
-    // server listening and keeping its key, a machine without IPv6 loopback
-    // leaving the law out
+    // server listening where it did with its key, from an address of its own
+    // and from a wildcard; a machine without IPv6 loopback leaves the laws out
     engine_run("set server key sesame", ENGINE_ADMIN);
+    const httplib::Headers key = {
+        { "Authorization", "Bearer sesame" }
+    };
     const long long held = hold(port);
     if (held >= 0) {
-        const engine_result moved = engine_run("set server listen-address ::1\nno server key", ENGINE_ADMIN);
-        law(!moved.ok && moved.text.find("cannot listen on ::1 port") != std::string::npos,
-            "a move to an address another process holds is refused: " + moved.text);
-        law(engine_get("server key") && status("/mcp",
-                                               {
-                                                   { "Authorization", "Bearer sesame" }
-        }) == 200,
-            "the server listens on with its key");
+        for (const std::string from : { "127.0.0.1", "0.0.0.0" }) {
+            law(engine_run("set server listen-address " + from, ENGINE_ADMIN).ok && status("/mcp", key) == 200,
+                "the server moves to " + from);
+            const engine_result moved = engine_run("set server listen-address ::1\nno server key", ENGINE_ADMIN);
+            law(!moved.ok && moved.text.find("cannot listen on ::1 port") != std::string::npos,
+                "a move from " + from + " to an address another process holds is refused: " + moved.text);
+            for (int i = 0; i < 100 && status("/mcp", key) != 200; i++) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            law(engine_get("server listen-address") == std::optional<std::string>(from) && engine_get("server key") &&
+                    status("/mcp", key) == 200,
+                "the server listens on " + from + " with its key");
+        }
+        engine_run("set server listen-address 127.0.0.1", ENGINE_ADMIN);
         release(held);
     }
 

@@ -126,7 +126,7 @@ server/commands/           one file per command, registered by existing
 server/modules/            one file per module: its keys, rules, how it applies to the server
 server/tools/              one file per tool source, registered by existing
 server/mcp/                the MCP: the entry of both eras, the JSON-RPC answers, the methods
-server/lib/listener.cpp|h  the socket, moved when server listen-address or listen-port changes
+server/lib/listener.cpp|h  the socket, moved by the batch that changes its address or port
 server/lib/http.cpp|h      the routes and the checks of Host, Origin and the key
 server/lib/proxy.cpp|h     the proxy of the servers the proxies module names
 server/lib/console.cpp|h   the console of the interactive mode, opened on a terminal in the
@@ -237,9 +237,10 @@ change one of them there is refused. So neither a model nor anyone holding the k
 brings a shell back to the host; a page attached to the server types its lines as an MCP client
 does.
 
-A module registers itself by existing, with its keys, its rules and what it applies: `server`
-rebinds its socket, `shells` rebuilds the tool list, `files` bounds what its tools return. The
-engine knows no module by name, so a module joins without a change to the engine.
+A module registers itself by existing, with its keys, its rules, what it readies and what it
+applies: `server` binds its socket before a batch applies, the last step that may refuse it,
+`shells` rebuilds the tool list, `files` bounds what its tools return. The engine knows no module by
+name, so a module joins without a change to the engine.
 
 ### server.conf
 
@@ -762,11 +763,10 @@ description lists every module with its keys and what it sets, from the modules 
 `prompts.json`, so the model knows the server before it reads a line of it. KiSS configures every
 backend from the page through it, under the consent firewall when the model calls it, and any other
 MCP client gets the same CLI. A change of `server listen-address` or `server listen-port` moves the
-listener at once, once the address is checked free on the port it goes to, so a batch that moves to
-an address another process holds is refused whole. On the port the server listens on, an address
-that overlaps its own, a wildcard on either side, is held by the server itself until the move, so
-only the address is tried there; when such a move then cannot bind, the listener goes back to the
-address it left, logged, the configuration with it.
+listener within the batch: the new address binds beside the one served, or, when the two overlap, a
+wildcard on either side, once the one served let the port go. An address that does not bind, another
+process holding it, refuses the batch whole, the server listening where it did, its configuration
+unchanged; the configuration never names an address the server does not listen on.
 
 A secret never crosses the context of the model. The administrator writes it in `server.conf` or on
 the console. An MCP client writes `set server key` alone: the batch applies nothing, and the call

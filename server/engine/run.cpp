@@ -316,13 +316,24 @@ static engine_result batch(layer &                                              
     } catch (const std::runtime_error & e) {
         return failed(std::nullopt, alone, e.what());
     }
-    const words_t               change = diff(target, draft);
-    const std::set<std::string> keys   = changed(target, draft);
-    target                             = draft;
+    const words_t               change  = diff(target, draft);
+    const std::set<std::string> keys    = changed(target, draft);
+    const auto                  touched = [&](const engine_module & m) {
+        return running && std::any_of(keys.begin(), keys.end(),
+                                                       [&](const std::string & k) { return starts_with(k, m.name + " "); });
+    };
+    // a module whose keys changed readies the server last, nothing applied
+    // when it cannot; a batch that saves or erases runs alone and changes no
+    // key a module readies, so nothing it wrote waits on this
     for (const engine_module & m : schema_modules()) {
-        const bool touched =
-            std::any_of(keys.begin(), keys.end(), [&](const std::string & k) { return starts_with(k, m.name + " "); });
-        if (running && touched && m.apply) {
+        const std::string why = touched(m) && m.prepare ? m.prepare(reader(draft)) : "";
+        if (!why.empty()) {
+            return failed(std::nullopt, alone, m.name + ": " + why);
+        }
+    }
+    target = draft;
+    for (const engine_module & m : schema_modules()) {
+        if (touched(m) && m.apply) {
             m.apply(reader(target));
         }
     }

@@ -7,12 +7,11 @@
 // whether an address names this machine only: 127.0.0.0/8, ::1, localhost
 bool listener_loopback(const std::string & host);
 
-// whether the server can listen on host and port, true where it listens now;
-// why it cannot otherwise
-bool listener_bindable(const std::string & host, int port, std::string & why);
-
-// the address to listen on: a change moves the listener
-void listener_move(const std::string & host, int port);
+// moves the listener to host and port, bound before the batch that moves it
+// applies: the address served until the new one binds, or the port let go
+// first when the two overlap; why it cannot, the listener then on the address
+// it served
+std::string listener_prepare(const std::string & host, int port);
 
 // the address the server listens on now
 void listener_address(std::string & host, int & port);
@@ -21,9 +20,10 @@ void listener_address(std::string & host, int & port);
 // outlives no listener ends once this changes
 unsigned listener_epoch();
 
-// listens on the address of the running configuration, moved when it changes,
-// until listener_stop; a move to an address another process holds goes back
-// to the one it left; false when the first address cannot be listened on
+// listens on the address of the running configuration, then on each one a
+// batch moves it to, until listener_stop; false when the first address cannot
+// be listened on
 bool listener_run();
 
+// stops the listener, from a signal handler as well
 void listener_stop();
