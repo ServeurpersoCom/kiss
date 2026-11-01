@@ -25,9 +25,10 @@ struct context {
     // the groups of items the sources of a module serve, listed before the
     // batch holds the configuration, by module
     std::map<std::string, std::vector<engine_group>> sourced      = {};
-    // the batch runs in a conversation, which compact asks to compact its
-    // history once the batch holds
-    bool                                             conversation = false;
+    // the id of the conversation the batch runs in, empty outside one: compact
+    // asks to compact its history once the batch holds, show conversations
+    // marks it
+    std::string                                      conversation = {};
     bool                                             compact      = false;
 };
 

@@ -13,7 +13,7 @@ static step_t compile_compact(const words_t & args) {
         fail(beyond({ "compact" }, args));
     }
     return [](context & ctx) {
-        if (!ctx.conversation) {
+        if (ctx.conversation.empty()) {
             fail("no conversation here");
         }
         ctx.compact = true;

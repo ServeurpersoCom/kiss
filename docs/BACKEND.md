@@ -343,8 +343,9 @@ The conversations of a server live in `conversations/` of the directory it start
 directory `--conversations` names, a file each, `<id>.json`, in the format the page exports: that
 conversation alone, named by its id. The server reads them all as it starts; a file that does not
 read as the page reads it is logged and left out. Copying a file out exports a conversation, copying
-one in imports it at the next start. `show conversations` lists them, the newest first, and `erase`
-removes a conversation with its file.
+one in imports it at the next start. `show conversations` lists them, the newest first, the one a
+batch runs in marked `* `, and `erase` removes a conversation with its file, an MCP client asking
+the user first as the page does, `Erase "title"`, else `Erase this conversation`.
 
 The pages that show them follow them, as many as are open, and never write one: the server alone
 changes a conversation, its file written whole again through a file beside it renamed over it, then
@@ -535,7 +536,11 @@ endpoint serves, asked in the protocol of each, and `tools`, the tools of this s
 pages serve, and those of every MCP server. `show models` and `show tools` list them by source,
 `! endpoints hf`, `! KiSS`, `! mcp exa`, an item that has a setting by its lines, another by its
 name, those set that no source serves under `! unavailable`, a source that fails by why on its
-header; `show models hf/` names one by a prefix. The sources answer over the network, so the engine
+header; `show models hf/` names one by a prefix, and `show running-config all` lists them the same
+way. A `set` names an item its module holds or its sources serve, as on the page:
+`set tools use nowhere on` answers `unknown tools "nowhere"`, a name near one served telling it, a
+source that fails telling why; at the start the engine asks no source, so `server.conf` sets any
+name. The sources answer over the network, so the engine
 asks them before it holds the configuration and keeps their answer ten seconds for the same
 configuration, the time a line takes to type. A `show` waits for them; completion never does: it
 offers what they served last and asks them again in the background, so a source slow or down never

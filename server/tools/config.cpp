@@ -12,7 +12,7 @@
 // to let it, the item reached at <module>/<item> of this server, and one that
 // writes or erases a configuration asks their yes; it runs again with what
 // they answered
-tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, bool conversation) {
+tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const std::string & conversation) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
     const engine_result r =
         engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP, typed, conversation);
@@ -62,7 +62,7 @@ static std::vector<tool> config_tool(const engine_reader & config) {
     });
     t.input       = prompts_input("config");
     t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick &) {
-        return tools_config(args, typed, false);
+        return tools_config(args, typed, "");
     };
     return { t };
 }

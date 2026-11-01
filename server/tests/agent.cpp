@@ -10,7 +10,9 @@
 // pages, the first answer winning, the last page that leaves answering that
 // none is attached; a conversation erased once its round streamed, before its
 // calls run, stops its turn; show and completion list the models and the tools
-// their sources serve, completion never waiting on a slow one
+// their sources serve, completion never waiting on a slow one; show
+// conversations marks the one a batch runs in, and an erase asks for a
+// conversation as the page asks
 
 #include "lib/agent.h"
 
@@ -395,9 +397,21 @@ int main() {
     const engine_result               console = engine_run("compact", ENGINE_ADMIN);
     const std::shared_ptr<yyjson_doc> lines(yyjson_read("{\"lines\":\"compact\"}", 19, 0), yyjson_doc_free);
     law(!console.ok && console.text == "% no conversation here" && !console.compact &&
-            tools_config(yyjson_doc_get_root(lines.get()), {}, true).compact &&
-            !tools_config(yyjson_doc_get_root(lines.get()), {}, false).compact,
+            tools_config(yyjson_doc_get_root(lines.get()), {}, c.id).compact &&
+            !tools_config(yyjson_doc_get_root(lines.get()), {}, "").compact,
         "compact runs only in a conversation: " + console.text);
+    // show conversations marks the one the batch runs in, and an erase asks
+    // the user as the page asks it
+    const std::shared_ptr<yyjson_doc> listing(yyjson_read("{\"lines\":\"show conversations\"}", 30, 0),
+                                              yyjson_doc_free);
+    law(tools_config(yyjson_doc_get_root(listing.get()), {}, c.id).text.find("! * " + c.id.substr(0, 8)) !=
+                std::string::npos &&
+            engine_run("show conversations", ENGINE_ADMIN).text.find("! * ") == std::string::npos,
+        "show conversations marks the conversation the batch runs in");
+    const engine_result erase = engine_run("erase " + c.id.substr(0, 8), ENGINE_MCP);
+    law(erase.asks.size() == 1 && erase.asks[0].question == "erase this conversation",
+        "an erase asks for a conversation as the page asks: " +
+            (erase.asks.empty() ? std::string() : erase.asks[0].question));
     engine_run("set models compaction-preserve-steps e/m 1", ENGINE_ADMIN);
     // the entries of a conversation once its turn ended
     const auto waited = [&](const std::string & id) {

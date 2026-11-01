@@ -236,7 +236,7 @@ static engine_result batch(layer &                                              
                            engine_role                                              role,
                            bool                                                     running,
                            const engine_typed &                                     typed,
-                           bool                                                     conversation,
+                           const std::string &                                      conversation,
                            const std::map<std::string, std::vector<engine_group>> & sourced) {
     words_t lines = split_lines(text);
     if (lines.empty()) {
@@ -385,7 +385,7 @@ static words_t enter(layer & target, const std::string & text) {
     for (bool moved = true; moved;) {
         moved = false;
         for (auto it = blocks.begin(); it != blocks.end();) {
-            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {}, false, {});
+            const engine_result r = batch(target, join(it->second, "\n"), ENGINE_ADMIN, false, {}, "", {});
             if (r.ok) {
                 it    = blocks.erase(it);
                 moved = true;
@@ -570,7 +570,7 @@ static engine_known known_items() {
     return out;
 }
 
-// the groups of the modules the show lines of a batch list from their
+// the groups of the modules the show and set lines of a batch read from their
 // sources, asked before the batch holds the configuration
 static std::map<std::string, std::vector<engine_group>> shown(const std::string & text) {
     std::map<std::string, std::vector<engine_group>> out;
@@ -578,9 +578,10 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
         try {
             const auto [line, spec] = split_filter(raw);
             const auto [c, args]    = resolve(tokenize(line));
-            // show <module> lists its module, show running-config all every one
+            // show <module> lists its module, set <module> admits its item
+            // against it, show running-config all lists every one
             std::vector<const engine_module *> listed;
-            if (c->path == words_t{ "show" } && !args.empty()) {
+            if ((c->path == words_t{ "show" } || c->path == words_t{ "set" }) && !args.empty()) {
                 listed.push_back(find_module(schema_module(args[0])));
             } else if (c->path == words_t{ "show", RUNNING_CONFIG } && !args.empty()) {
                 for (const engine_module & m : schema_modules()) {
@@ -599,7 +600,10 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
     return out;
 }
 
-engine_result engine_run(const std::string & text, engine_role role, const engine_typed & typed, bool conversation) {
+engine_result engine_run(const std::string &  text,
+                         engine_role          role,
+                         const engine_typed & typed,
+                         const std::string &  conversation) {
     const auto                  groups = shown(text);
     std::lock_guard<std::mutex> lock(g_mutex);
     const layer                 before = g_running;

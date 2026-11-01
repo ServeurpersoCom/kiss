@@ -47,9 +47,10 @@ static step_t compile_erase(const words_t & args) {
         if (gone.empty()) {
             fail("no conversation to erase");
         }
-        const std::string question =
-            gone.size() == 1 ? "erase " + gone[0].id.substr(0, ID_SHOWN) + conversation_titled(gone[0].title) :
-                               "erase " + std::to_string(gone.size()) + " conversations";
+        // asked as the page asks it: the title, else this conversation
+        const std::string titled   = gone.size() == 1 ? conversation_titled(gone[0].title) : "";
+        const std::string question = gone.size() == 1 ? "erase" + (titled.empty() ? " this conversation" : titled) :
+                                                        "erase " + std::to_string(gone.size()) + " conversations";
         if (!engine_confirmed(ctx, "erase " + name, question)) {
             return std::string();
         }

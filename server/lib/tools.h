@@ -44,9 +44,9 @@ using tool_tick = std::function<bool()>;
 // the tool the CLI of this server is reached by
 constexpr const char * TOOL_CONFIG = "config";
 
-// a call of the config tool, in a conversation of the agent of this server or
-// for a client that has none
-tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, bool conversation);
+// a call of the config tool, in a conversation of the agent of this server, by
+// its id, or for a client that has none, the id empty
+tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const std::string & conversation);
 
 struct tool {
     std::string                                                                                        suffix;

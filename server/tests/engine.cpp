@@ -119,30 +119,35 @@ int main() {
     const auto use = [](const std::string & tool) {
         return engine_get("tools use", tool).value_or("");
     };
-    law(asks(engine_run("set tools use probe on", ENGINE_MCP)) == "tools use probe yes: set tools use probe on",
+    law(asks(engine_run("set tools use client_config on", ENGINE_MCP)) ==
+            "tools use client_config yes: set tools use client_config on",
         "an MCP client that opens a tool asks the user");
-    law(use("probe") == "consent", "a tool the user has not let stays closed");
-    law(engine_run("set tools use probe on", ENGINE_MCP,
+    law(use("client_config") == "consent", "a tool the user has not let stays closed");
+    law(engine_run("set tools use client_config on", ENGINE_MCP,
                    engine_typed{
-                       { "tools use probe", "true" }
+                       { "tools use client_config", "true" }
     })
-                .text == "+ set tools use probe on",
+                .text == "+ set tools use client_config on",
         "a tool the user lets opens");
-    law(engine_run("set tools use probe off", ENGINE_MCP).text == "- set tools use probe on\n+ set tools use probe off",
+    law(engine_run("set tools use client_config off", ENGINE_MCP).text ==
+            "- set tools use client_config on\n+ set tools use client_config off",
         "an MCP client closes a tool without asking");
-    law(admin("set tools use probe on") == "- set tools use probe off\n+ set tools use probe on",
+    law(admin("set tools use client_config on") ==
+            "- set tools use client_config off\n+ set tools use client_config on",
         "the administrator opens a tool at once");
     admin("write");
-    admin("set tools use probe off");
+    admin("set tools use client_config off");
     law(asks(engine_run("copy startup-config running-config", ENGINE_MCP)) ==
-            "tools use probe yes: set tools use probe on",
+            "tools use client_config yes: set tools use client_config on",
         "a copy that opens a tool asks the user");
-    law(asks(engine_run("no tools use probe", ENGINE_MCP)) == "tools use probe yes: set tools use probe consent",
+    law(asks(engine_run("no tools use client_config", ENGINE_MCP)) ==
+            "tools use client_config yes: set tools use client_config consent",
         "a no that opens a tool asks the user");
-    law(use("probe") == "off", "nothing applies while the user has not let it");
+    law(use("client_config") == "off", "nothing applies while the user has not let it");
     admin("set tools use bash consent");
     law(asks(engine_run("erase running-config", ENGINE_MCP, erase_yes)) ==
-            "tools use bash yes: set tools use bash on\ntools use probe yes: set tools use probe consent",
+            "tools use bash yes: set tools use bash on\ntools use client_config yes: set tools use client_config "
+            "consent",
         "an erase the user says yes to asks the user for each tool it opens, the factory turning them on");
     law(use("bash") == "consent", "the erase applies nothing while the user has not let the tool");
 
@@ -207,10 +212,15 @@ int main() {
     // the words of the page, twins of its laws
     law(admin("set chat.model x") == "% unknown key \"chat.model\", did you mean chat model",
         "a key written with dots names the key with blanks");
+    law(admin("set tools use nowhere on") == "% unknown tools \"nowhere\"",
+        "a set names no item its sources do not serve, as on the page");
+    law(admin("set tools use client_confi on") == "% unknown tools \"client_confi\", did you mean client_config",
+        "a set near an item served names it");
     const auto offers = [](const std::string & line, const std::string & word) {
         const words_t all = engine_suggest(line);
         return std::find(all.begin(), all.end(), word) != all.end();
     };
+    admin("no tools use client_config");
     bool served = false;
     for (int i = 0; i < 100 && !served; i++) {
         served = offers("set tools use ", "client_config");

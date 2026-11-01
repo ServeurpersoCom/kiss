@@ -462,7 +462,7 @@ static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val *
     engine_typed typed;
     // the config tool of this server runs its batch in the conversation
     const auto   go = [&] {
-        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, true) : t.run(args, typed, tick);
+        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, id) : t.run(args, typed, tick);
     };
     tool_outcome out = go();
     while (!out.asks.empty() && !stop.stopped) {

@@ -164,12 +164,12 @@ std::string engine_factory(const std::string & text);
 void engine_start(const std::string & path, const std::string & version);
 
 // one batch at a time, whoever sends it; typed fills the set lines of secrets
-// written without their value; conversation tells it runs in one, the only
-// place compact takes
+// written without their value; conversation names the one it runs in, the
+// only place compact takes, empty outside one
 engine_result engine_run(const std::string &  text,
                          engine_role          role,
                          const engine_typed & typed        = {},
-                         bool                 conversation = false);
+                         const std::string &  conversation = "");
 
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");
