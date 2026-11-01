@@ -7,7 +7,8 @@
 // stays out at boot; an MCP client opens a guarded register only once the user
 // lets it, whatever line opens it, while the administrator opens it at once;
 // a key of the administrator, where commands and the tools on files run, moves
-// by no line of an MCP client, the administrator moving it at once
+// by no line of an MCP client, the administrator moving it at once; the mask of
+// a secret is no value
 
 #include "engine/engine.h"
 
@@ -186,6 +187,18 @@ int main() {
     admin("set shells command bash \"bash -s\"");
     law(mcp("write", save_yes) == refused, "a save by an MCP client moves no shell of the next start");
     law(read(conf).find("no shells command bash") != std::string::npos, "server.conf keeps the administrator's keys");
+
+    // the mask of a secret is no value, as on the page: a line pasted back from
+    // show running-config keeps the secret it masks
+    admin("set server key sesame");
+    law(admin("set server key <removed>") ==
+            "% server key: \"<removed>\" masks a secret, it is not a value -> the line without a value asks the "
+            "user",
+        "the mask of a secret is no value");
+    law(engine_get("server key") == std::optional<std::string>("<removed>") &&
+            engine_run("show running-config | include key", ENGINE_ADMIN).text.find("server key is set") !=
+                std::string::npos,
+        "the secret the mask hides stays set");
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);

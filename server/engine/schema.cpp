@@ -127,6 +127,10 @@ static std::string check(const engine_key & def, const std::string & raw) {
             if (raw.empty()) {
                 fail("a secret is never empty");
             }
+            if (raw == REMOVED) {
+                fail("\"" + std::string(REMOVED) +
+                     "\" masks a secret, it is not a value -> the line without a value asks the user");
+            }
             return raw;
         case ENGINE_NUMBER:
             {

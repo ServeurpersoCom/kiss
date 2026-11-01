@@ -778,7 +778,9 @@ one at once. A line that writes the value of a secret is refused, and a client t
 every client of the 2025 era, is told the secret goes in `server.conf` or on the console. The text
 every tool answers goes through the keychain of the server and reads `<removed>` where the value of
 a secret of the server stood, so a shell, `view` or `show logging` never hands a key on; a value the
-server never read, a line it refused, is no secret it knows. A module reads a secret `<removed>`:
+server never read, a line it refused, is no secret it knows. `<removed>` is never a value: a line
+that sets a secret to it is refused, as on the page, so a line pasted back from
+`show running-config` keeps the secret it masks. A module reads a secret `<removed>`:
 the keychain alone reads its value beside the engine, as a route sends its key and as the key of a
 client is checked. A line `server.conf` refuses is logged by its number, never by its text:
 `server.conf skips line 4: unterminated "`.
