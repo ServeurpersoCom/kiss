@@ -16,6 +16,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,11 +63,25 @@ posix_fopen(const char *path, const char *mode)
 	return fopen(path, mode);
 }
 
+FILE *
+posix_fdopen(int fd, const char *mode)
+{
+	return fdopen(get_real_fd(fd), mode);
+}
+
 int
 libressl_fstat(int fd, struct stat *statbuf)
 {
 	return fstat(get_real_fd(fd), statbuf);
 }
+
+#ifndef HAVE_FTRUNCATE
+int
+ftruncate(int fd, off_t length)
+{
+	return _chsize(get_real_fd(fd), length);
+}
+#endif
 
 int
 posix_open(const char *path, ...)
@@ -178,6 +193,9 @@ wsa_errno(int err)
 	case WSAETIMEDOUT:
 		errno = EPIPE;
 		break;
+	default:
+		errno = EIO;
+		break;
 	}
 	return -1;
 }
@@ -186,8 +204,21 @@ int
 posix_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	int rc = connect(sockfd, addr, addrlen);
-	if (rc == SOCKET_ERROR)
-		return wsa_errno(WSAGetLastError());
+	if (rc == SOCKET_ERROR) {
+		int err = WSAGetLastError();
+		/*
+		 * Winsock reports an in-progress non-blocking connect as
+		 * WSAEWOULDBLOCK. POSIX callers expect EINPROGRESS here; the
+		 * generic mapping returns EAGAIN, which on Windows is a
+		 * distinct value from both EINPROGRESS and EWOULDBLOCK, so the
+		 * connect looks like a hard failure instead.
+		 */
+		if (err == WSAEWOULDBLOCK) {
+			errno = EINPROGRESS;
+			return -1;
+		}
+		return wsa_errno(err);
+	}
 	return rc;
 }
 
@@ -210,6 +241,8 @@ ssize_t
 posix_read(int fd, void *buf, size_t count)
 {
 	ssize_t rc;
+	if (count > INT_MAX)
+		count = INT_MAX;
 	if (is_socket(fd)) {
 		if ((rc = recv(fd, buf, count, 0)) == SOCKET_ERROR) {
 			int err = WSAGetLastError();
@@ -225,6 +258,8 @@ ssize_t
 posix_write(int fd, const void *buf, size_t count)
 {
 	ssize_t rc;
+	if (count > INT_MAX)
+		count = INT_MAX;
 	if (is_socket(fd)) {
 		if ((rc = send(fd, buf, count, 0)) == SOCKET_ERROR) {
 			rc = wsa_errno(WSAGetLastError());
@@ -292,7 +327,7 @@ int gettimeofday(struct timeval *tp, void *tzp)
 	time = ((uint64_t)file_time.dwLowDateTime);
 	time += ((uint64_t)file_time.dwHighDateTime) << 32;
 
-	tp->tv_sec = (long long)((time - EPOCH) / 10000000L);
+	tp->tv_sec = (long)((time - EPOCH) / 10000000L);
 	tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
 	return 0;
 }

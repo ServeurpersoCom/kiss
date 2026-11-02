@@ -1,4 +1,4 @@
-/*	$OpenBSD: tls_ocsp.c,v 1.29 2026/04/16 07:35:25 tb Exp $ */
+/*	$OpenBSD: tls_ocsp.c,v 1.31 2026/09/19 16:56:13 tb Exp $ */
 /*
  * Copyright (c) 2015 Marko Kreen <markokr@gmail.com>
  * Copyright (c) 2016 Bob Beck <beck@openbsd.org>
@@ -29,6 +29,7 @@
 #include <openssl/x509.h>
 
 #include <tls.h>
+
 #include "tls_internal.h"
 
 #define MAXAGE_SEC (14*24*60*60)
@@ -217,22 +218,14 @@ tls_ocsp_verify_response(struct tls *ctx, OCSP_RESPONSE *resp)
 	STACK_OF(X509) *combined = NULL;
 	int response_status=0, cert_status=0, crl_reason=0;
 	int ret = -1;
-	unsigned long flags;
 
 	if ((br = OCSP_response_get1_basic(resp)) == NULL) {
 		tls_set_errorx(ctx, TLS_ERROR_UNKNOWN, "cannot load ocsp reply");
 		goto err;
 	}
 
-	/*
-	 * Skip validation of 'extra_certs' as this should be done
-	 * already as part of main handshake.
-	 */
-	flags = OCSP_TRUSTOTHER;
-
-	/* now verify */
 	if (OCSP_basic_verify(br, ctx->ocsp->extra_certs,
-		SSL_CTX_get_cert_store(ctx->ssl_ctx), flags) != 1) {
+	    SSL_CTX_get_cert_store(ctx->ssl_ctx), 0) != 1) {
 		tls_set_errorx(ctx, TLS_ERROR_UNKNOWN, "ocsp verify failed");
 		goto err;
 	}

@@ -1,4 +1,4 @@
-/* $OpenBSD: d1_lib.c,v 1.65 2024/07/23 14:40:53 jsing Exp $ */
+/* $OpenBSD: d1_lib.c,v 1.70 2026/09/21 23:16:29 jsing Exp $ */
 /*
  * DTLS implementation written by Nagendra Modadugu
  * (nagendra@cs.stanford.edu) for the OpenSSL project 2005.
@@ -84,13 +84,7 @@ dtls1_new(SSL *s)
 	if ((s->d1 = calloc(1, sizeof(*s->d1))) == NULL)
 		goto err;
 
-	if ((s->d1->unprocessed_rcds.q = pqueue_new()) == NULL)
-		goto err;
 	if ((s->d1->buffered_messages = pqueue_new()) == NULL)
-		goto err;
-	if ((s->d1->sent_messages = pqueue_new()) == NULL)
-		goto err;
-	if ((s->d1->buffered_app_data.q = pqueue_new()) == NULL)
 		goto err;
 
 	if (s->server)
@@ -102,40 +96,6 @@ dtls1_new(SSL *s)
  err:
 	dtls1_free(s);
 	return (0);
-}
-
-static void
-dtls1_drain_rcontents(pqueue queue)
-{
-	DTLS1_RCONTENT_DATA_INTERNAL *rdata;
-	pitem *item;
-
-	if (queue == NULL)
-		return;
-
-	while ((item = pqueue_pop(queue)) != NULL) {
-		rdata = (DTLS1_RCONTENT_DATA_INTERNAL *)item->data;
-		tls_content_free(rdata->rcontent);
-		free(item->data);
-		pitem_free(item);
-	}
-}
-
-static void
-dtls1_drain_records(pqueue queue)
-{
-	pitem *item;
-	DTLS1_RECORD_DATA_INTERNAL *rdata;
-
-	if (queue == NULL)
-		return;
-
-	while ((item = pqueue_pop(queue)) != NULL) {
-		rdata = (DTLS1_RECORD_DATA_INTERNAL *)item->data;
-		ssl3_release_buffer(&rdata->rbuf);
-		free(item->data);
-		pitem_free(item);
-	}
 }
 
 static void
@@ -155,10 +115,7 @@ dtls1_drain_fragments(pqueue queue)
 static void
 dtls1_clear_queues(SSL *s)
 {
-	dtls1_drain_records(s->d1->unprocessed_rcds.q);
 	dtls1_drain_fragments(s->d1->buffered_messages);
-	dtls1_drain_fragments(s->d1->sent_messages);
-	dtls1_drain_rcontents(s->d1->buffered_app_data.q);
 }
 
 void
@@ -173,11 +130,11 @@ dtls1_free(SSL *s)
 		return;
 
 	dtls1_clear_queues(s);
+	dtls1_clear_flight(s);
 
-	pqueue_free(s->d1->unprocessed_rcds.q);
 	pqueue_free(s->d1->buffered_messages);
-	pqueue_free(s->d1->sent_messages);
-	pqueue_free(s->d1->buffered_app_data.q);
+
+	dtls12_handshake_msg_free(s->d1->hs_msg);
 
 	freezero(s->d1, sizeof(*s->d1));
 	s->d1 = NULL;
@@ -186,25 +143,20 @@ dtls1_free(SSL *s)
 void
 dtls1_clear(SSL *s)
 {
-	pqueue unprocessed_rcds;
 	pqueue buffered_messages;
-	pqueue sent_messages;
-	pqueue buffered_app_data;
 	unsigned int mtu;
 
 	if (s->d1) {
-		unprocessed_rcds = s->d1->unprocessed_rcds.q;
 		buffered_messages = s->d1->buffered_messages;
-		sent_messages = s->d1->sent_messages;
-		buffered_app_data = s->d1->buffered_app_data.q;
 		mtu = s->d1->mtu;
 
+		dtls12_handshake_msg_free(s->d1->hs_msg);
+		s->d1->hs_msg = NULL;
+
 		dtls1_clear_queues(s);
+		dtls1_clear_flight(s);
 
 		memset(s->d1, 0, sizeof(*s->d1));
-
-		s->d1->unprocessed_rcds.epoch =
-		    tls12_record_layer_read_epoch(s->rl) + 1;
 
 		if (s->server) {
 			s->d1->cookie_len = sizeof(s->d1->cookie);
@@ -214,10 +166,7 @@ dtls1_clear(SSL *s)
 			s->d1->mtu = mtu;
 		}
 
-		s->d1->unprocessed_rcds.q = unprocessed_rcds;
 		s->d1->buffered_messages = buffered_messages;
-		s->d1->sent_messages = sent_messages;
-		s->d1->buffered_app_data.q = buffered_app_data;
 	}
 
 	ssl3_clear(s);
@@ -228,7 +177,7 @@ dtls1_clear(SSL *s)
 long
 dtls1_ctrl(SSL *s, int cmd, long larg, void *parg)
 {
-	int ret = 0;
+	long ret = 0;
 
 	switch (cmd) {
 	case DTLS_CTRL_GET_TIMEOUT:
@@ -347,8 +296,7 @@ dtls1_stop_timer(SSL *s)
 	s->d1->timeout_duration = 1;
 	BIO_ctrl(SSL_get_rbio(s), BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT, 0,
 	    &(s->d1->next_timeout));
-	/* Clear retransmission buffer */
-	dtls1_clear_record_buffer(s);
+	dtls1_clear_flight(s);
 }
 
 int

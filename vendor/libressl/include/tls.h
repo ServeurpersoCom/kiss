@@ -1,4 +1,4 @@
-/* $OpenBSD: tls.h,v 1.68 2024/12/10 08:40:30 tb Exp $ */
+/* $OpenBSD: tls.h,v 1.70 2026/09/20 17:47:15 beck Exp $ */
 /*
  * Copyright (c) 2014 Joel Sing <jsing@openbsd.org>
  *
@@ -34,7 +34,7 @@ typedef SSIZE_T ssize_t;
 #include <stddef.h>
 #include <stdint.h>
 
-#define TLS_API	20200120
+#define TLS_API	20260917
 
 /*
  * Deprecated versions of TLS. Using these effectively selects
@@ -89,6 +89,14 @@ typedef SSIZE_T ssize_t;
 #define TLS_ERROR_OUT_OF_MEMORY			0x1000
 #define TLS_ERROR_INVALID_CONTEXT		0x2000
 #define TLS_ERROR_INVALID_ARGUMENT		0x2001
+#endif
+
+#define TLS_DEPRECATED
+#if defined(__has_attribute)
+#if __has_attribute(deprecated)
+#undef TLS_DEPRECATED
+#define TLS_DEPRECATED __attribute__((deprecated))
+#endif
 #endif
 
 struct tls;
@@ -214,6 +222,9 @@ const char *tls_peer_cert_subject(struct tls *_ctx);
 time_t	tls_peer_cert_notbefore(struct tls *_ctx);
 time_t	tls_peer_cert_notafter(struct tls *_ctx);
 const uint8_t *tls_peer_cert_chain_pem(struct tls *_ctx, size_t *_len);
+const uint8_t *tls_peer_cert_unverified_bundle_pem(struct tls *_ctx,
+    size_t *_len);
+const uint8_t *tls_peer_cert_verified_chain_pem(struct tls *_ctx, size_t *_len);
 
 const char *tls_conn_alpn_selected(struct tls *_ctx);
 const char *tls_conn_cipher(struct tls *_ctx);

@@ -20,6 +20,7 @@ set(
 	d1_lib.c
 	d1_pkt.c
 	d1_srtp.c
+	dtls12_handshake_msg.c
 	pqueue.c
 	s3_cbc.c
 	s3_lib.c
@@ -52,7 +53,9 @@ set(
 	tls_key_share.c
 	tls_lib.c
 	tls12_key_schedule.c
+	tls12_legacy.c
 	tls12_lib.c
+	tls12_record.c
 	tls12_record_layer.c
 	tls13_client.c
 	tls13_error.c

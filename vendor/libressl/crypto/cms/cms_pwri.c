@@ -1,4 +1,4 @@
-/* $OpenBSD: cms_pwri.c,v 1.35 2025/09/30 12:51:16 tb Exp $ */
+/* $OpenBSD: cms_pwri.c,v 1.37 2026/06/09 12:20:34 tb Exp $ */
 /*
  * Written by Dr Stephen N Henson (steve@openssl.org) for the OpenSSL
  * project.
@@ -232,6 +232,10 @@ kek_unwrap_key(unsigned char *out, size_t *outlen, const unsigned char *in,
 	unsigned char *tmp;
 	int outl, rv = 0;
 
+	/* Ensure inlen is large enough that tmp[6] is in bounds. */
+	if (blocklen < 4)
+		return 0;
+
 	if (inlen < 2 * blocklen) {
 		/* too small */
 		return 0;
@@ -386,6 +390,10 @@ cms_RecipientInfo_pwri_crypt(CMS_ContentInfo *cms, CMS_RecipientInfo *ri,
 	}
 
 	algtmp = pwri->keyDerivationAlgorithm;
+	if (algtmp == NULL) {
+		CMSerror(CMS_R_INVALID_KEY_ENCRYPTION_PARAMETER);
+		goto err;
+	}
 
 	/* Finish password based key derivation to setup key in "ctx" */
 

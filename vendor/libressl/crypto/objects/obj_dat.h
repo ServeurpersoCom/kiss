@@ -62,12 +62,12 @@
  * [including the GNU Public Licence.]
  */
 
-#define NUM_NID 1057
-#define NUM_SN 1050
-#define NUM_LN 1050
-#define NUM_OBJ 977
+#define NUM_NID 1063
+#define NUM_SN 1056
+#define NUM_LN 1056
+#define NUM_OBJ 983
 
-static const unsigned char lvalues[6968]={
+static const unsigned char lvalues[7031]={
 0x2A,0x86,0x48,0x86,0xF7,0x0D,               /* [  0] OBJ_rsadsi */
 0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,          /* [  6] OBJ_pkcs */
 0x2A,0x86,0x48,0x86,0xF7,0x0D,0x02,0x02,     /* [ 13] OBJ_md2 */
@@ -1039,6 +1039,12 @@ static const unsigned char lvalues[6968]={
 0x60,0x86,0x48,0x01,0x65,0x03,0x04,0x03,0x10,/* [6939] OBJ_RSA_SHA3_512 */
 0x2B,0x06,0x01,0x05,0x05,0x07,0x01,0x1F,     /* [6948] OBJ_acmeIdentifier */
 0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x09,0x10,0x01,0x33,/* [6956] OBJ_id_ct_rpkiSignedPrefixList */
+0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x09,0x10,0x01,0x36,/* [6967] OBJ_id_ct_rpkiCanonicalCacheRepresentation */
+0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x09,0x10,0x01,0x37,/* [6978] OBJ_id_ct_rpkiErikIndex */
+0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x09,0x10,0x01,0x38,/* [6989] OBJ_id_ct_rpkiErikPartition */
+0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x09,0x10,0x01,0x3A,/* [7000] OBJ_id_ct_CDR */
+0x2B,0x06,0x01,0x05,0x05,0x07,0x30,0x0F,     /* [7011] OBJ_communityDefinition */
+0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x09,0x10,0x01,0x3B,/* [7019] OBJ_id_ct_rpkiErikSegmentIndex */
 };
 
 static const ASN1_OBJECT nid_objs[NUM_NID]={
@@ -2763,6 +2769,18 @@ static const ASN1_OBJECT nid_objs[NUM_NID]={
 	NID_id_ct_rpkiSignedPrefixList,11,&(lvalues[6956]),0},
 {"TLS1-PRF","tls1-prf",NID_tls1_prf,0,NULL,0},
 {"X25519MLKEM768","X25519MLKEM768",NID_X25519MLKEM768,0,NULL,0},
+{"id-ct-rpkiCanonicalCacheRepresentation",
+	"id-ct-rpkiCanonicalCacheRepresentation",
+	NID_id_ct_rpkiCanonicalCacheRepresentation,11,&(lvalues[6967]),0},
+{"id-ct-rpkiErikIndex","id-ct-rpkiErikIndex",NID_id_ct_rpkiErikIndex,
+	11,&(lvalues[6978]),0},
+{"id-ct-rpkiErikPartition","id-ct-rpkiErikPartition",
+	NID_id_ct_rpkiErikPartition,11,&(lvalues[6989]),0},
+{"id-ct-CDR","id-ct-CDR",NID_id_ct_CDR,11,&(lvalues[7000]),0},
+{"communityDefinition","Community Definition Reference",
+	NID_communityDefinition,8,&(lvalues[7011]),0},
+{"id-ct-rpkiErikSegmentIndex","id-ct-rpkiErikSegmentIndex",
+	NID_id_ct_rpkiErikSegmentIndex,11,&(lvalues[7019]),0},
 };
 
 static const unsigned int sn_objs[NUM_SN]={
@@ -3069,6 +3087,7 @@ static const unsigned int sn_objs[NUM_SN]={
 395,	/* "clearance" */
 130,	/* "clientAuth" */
 131,	/* "codeSigning" */
+1061,	/* "communityDefinition" */
 50,	/* "contentType" */
 53,	/* "countersignature" */
 153,	/* "crlBag" */
@@ -3265,10 +3284,15 @@ static const unsigned int sn_objs[NUM_SN]={
 331,	/* "id-cmc-transactionId" */
 1005,	/* "id-cp" */
 1017,	/* "id-ct-ASPA" */
+1060,	/* "id-ct-CDR" */
 787,	/* "id-ct-asciiTextWithCRLF" */
 1013,	/* "id-ct-geofeedCSVwithCRLF" */
 1004,	/* "id-ct-resourceTaggedAttest" */
 1001,	/* "id-ct-routeOriginAuthz" */
+1057,	/* "id-ct-rpkiCanonicalCacheRepresentation" */
+1058,	/* "id-ct-rpkiErikIndex" */
+1059,	/* "id-ct-rpkiErikPartition" */
+1062,	/* "id-ct-rpkiErikSegmentIndex" */
 1003,	/* "id-ct-rpkiGhostbusters" */
 1002,	/* "id-ct-rpkiManifest" */
 1054,	/* "id-ct-rpkiSignedPrefixList" */
@@ -3836,6 +3860,7 @@ static const unsigned int ln_objs[NUM_LN]={
 1018,	/* "CT Precertificate SCTs" */
 1020,	/* "CT Precertificate Signer" */
 131,	/* "Code Signing" */
+1061,	/* "Community Definition Reference" */
 783,	/* "Diffie-Hellman based MAC" */
 382,	/* "Directory" */
 392,	/* "Domain" */
@@ -4328,10 +4353,15 @@ static const unsigned int ln_objs[NUM_LN]={
 331,	/* "id-cmc-transactionId" */
 1005,	/* "id-cp" */
 1017,	/* "id-ct-ASPA" */
+1060,	/* "id-ct-CDR" */
 787,	/* "id-ct-asciiTextWithCRLF" */
 1013,	/* "id-ct-geofeedCSVwithCRLF" */
 1004,	/* "id-ct-resourceTaggedAttest" */
 1001,	/* "id-ct-routeOriginAuthz" */
+1057,	/* "id-ct-rpkiCanonicalCacheRepresentation" */
+1058,	/* "id-ct-rpkiErikIndex" */
+1059,	/* "id-ct-rpkiErikPartition" */
+1062,	/* "id-ct-rpkiErikSegmentIndex" */
 1003,	/* "id-ct-rpkiGhostbusters" */
 1002,	/* "id-ct-rpkiManifest" */
 1054,	/* "id-ct-rpkiSignedPrefixList" */
@@ -5493,6 +5523,7 @@ static const unsigned int obj_objs[NUM_OBJ]={
 1010,	/* OBJ_rpkiManifest                 1 3 6 1 5 5 7 48 10 */
 1011,	/* OBJ_signedObject                 1 3 6 1 5 5 7 48 11 */
 1012,	/* OBJ_rpkiNotify                   1 3 6 1 5 5 7 48 13 */
+1061,	/* OBJ_communityDefinition          1 3 6 1 5 5 7 48 15 */
 780,	/* OBJ_hmac_md5                     1 3 6 1 5 5 8 1 1 */
 781,	/* OBJ_hmac_sha1                    1 3 6 1 5 5 8 1 2 */
 58,	/* OBJ_netscape_cert_extension      2 16 840 1 113730 1 */
@@ -5791,6 +5822,11 @@ static const unsigned int obj_objs[NUM_OBJ]={
 1017,	/* OBJ_id_ct_ASPA                   1 2 840 113549 1 9 16 1 49 */
 1024,	/* OBJ_id_ct_signedTAL              1 2 840 113549 1 9 16 1 50 */
 1054,	/* OBJ_id_ct_rpkiSignedPrefixList   1 2 840 113549 1 9 16 1 51 */
+1057,	/* OBJ_id_ct_rpkiCanonicalCacheRepresentation 1 2 840 113549 1 9 16 1 54 */
+1058,	/* OBJ_id_ct_rpkiErikIndex          1 2 840 113549 1 9 16 1 55 */
+1059,	/* OBJ_id_ct_rpkiErikPartition      1 2 840 113549 1 9 16 1 56 */
+1060,	/* OBJ_id_ct_CDR                    1 2 840 113549 1 9 16 1 58 */
+1062,	/* OBJ_id_ct_rpkiErikSegmentIndex   1 2 840 113549 1 9 16 1 59 */
 212,	/* OBJ_id_smime_aa_receiptRequest   1 2 840 113549 1 9 16 2 1 */
 213,	/* OBJ_id_smime_aa_securityLabel    1 2 840 113549 1 9 16 2 2 */
 214,	/* OBJ_id_smime_aa_mlExpandHistory  1 2 840 113549 1 9 16 2 3 */

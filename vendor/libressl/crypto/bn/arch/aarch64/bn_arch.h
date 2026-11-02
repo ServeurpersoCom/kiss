@@ -19,6 +19,21 @@
 
 #ifndef HEADER_BN_ARCH_H
 #define HEADER_BN_ARCH_H
+/* See pull/1355. */
+#if defined(_MSC_VER) && defined(_M_ARM64) && \
+    !defined(MSVC_ARM64_BN_CT_NE_ZERO_WORKS)
+
+#include <intrin.h>
+
+#define HAVE_BN_CT_NE_ZERO
+
+static inline int
+bn_ct_ne_zero(BN_ULONG w)
+{
+	return 1U ^ (_CountLeadingZeros64((unsigned __int64)w) >> 6);
+}
+
+#endif
 
 #ifndef OPENSSL_NO_ASM
 

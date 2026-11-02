@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl_lib.c,v 1.333 2025/06/09 10:14:38 tb Exp $ */
+/* $OpenBSD: ssl_lib.c,v 1.337 2026/09/21 23:37:20 jsing Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -752,7 +752,6 @@ SSL_set_rfd(SSL *s, int fd)
 }
 LSSL_ALIAS(SSL_set_rfd);
 
-
 /* return length of latest Finished message we sent, copy to 'buf' */
 size_t
 SSL_get_finished(const SSL *s, void *buf, size_t count)
@@ -780,7 +779,6 @@ SSL_get_peer_finished(const SSL *s, void *buf, size_t count)
 	return (ret);
 }
 LSSL_ALIAS(SSL_get_peer_finished);
-
 
 int
 SSL_get_verify_mode(const SSL *s)
@@ -1396,7 +1394,7 @@ SSL_ctrl(SSL *s, int cmd, long larg, void *parg)
 		return (1);
 	case SSL_CTRL_GET_RI_SUPPORT:
 		if (s->s3)
-			return (s->s3->send_connection_binding);
+			return (s->s3->secure_renegotiation);
 		else return (0);
 	default:
 		if (SSL_is_dtls(s))
@@ -2169,7 +2167,7 @@ SSL_CTX_new(const SSL_METHOD *meth)
 
 	ret->max_send_fragment = SSL3_RT_MAX_PLAIN_LENGTH;
 
-	ret->tlsext_servername_callback = 0;
+	ret->tlsext_servername_callback = NULL;
 	ret->tlsext_servername_arg = NULL;
 
 	/* Setup RFC4507 ticket keys */
@@ -2177,14 +2175,10 @@ SSL_CTX_new(const SSL_METHOD *meth)
 	arc4random_buf(ret->tlsext_tick_hmac_key, 16);
 	arc4random_buf(ret->tlsext_tick_aes_key, 16);
 
-	ret->tlsext_status_cb = 0;
+	ret->tlsext_status_cb = NULL;
 	ret->tlsext_status_arg = NULL;
 
-	/*
-	 * Default is to connect to non-RI servers. When RI is more widely
-	 * deployed might change this.
-	 */
-	ret->options |= SSL_OP_LEGACY_SERVER_CONNECT;
+	ret->options = 0;
 
 	return (ret);
  err:
@@ -3498,7 +3492,6 @@ SSL_set_tmp_ecdh_callback(SSL *ssl, EC_KEY *(*ecdh)(SSL *ssl, int is_export,
 }
 LSSL_ALIAS(SSL_set_tmp_ecdh_callback);
 
-
 void
 SSL_CTX_set_msg_callback(SSL_CTX *ctx, void (*cb)(int write_p, int version,
     int content_type, const void *buf, size_t len, SSL *ssl, void *arg))
@@ -3570,6 +3563,7 @@ SSL_set_min_proto_version(SSL *ssl, uint16_t version)
 	    &ssl->min_proto_version);
 }
 LSSL_ALIAS(SSL_set_min_proto_version);
+
 int
 SSL_get_max_proto_version(SSL *ssl)
 {

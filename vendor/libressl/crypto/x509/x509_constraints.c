@@ -1,4 +1,4 @@
-/* $OpenBSD: x509_constraints.c,v 1.33 2026/04/13 17:04:23 beck Exp $ */
+/* $OpenBSD: x509_constraints.c,v 1.36 2026/09/18 18:21:50 beck Exp $ */
 /*
  * Copyright (c) 2020 Bob Beck <beck@openbsd.org>
  *
@@ -38,26 +38,45 @@
 #define MAX_IP_ADDRESS_LENGTH (size_t)46
 
 static int
-cbs_is_ip_address(CBS *cbs, int *is_ip)
+host_is_ip_address(CBS *cbs, int *is_ip)
 {
 	struct sockaddr_in6 sin6;
 	struct sockaddr_in sin4;
+	uint8_t first, last;
 	char *name = NULL;
+	CBS ipv6_cbs;
 
 	*is_ip = 0;
+
 	if (CBS_len(cbs) > MAX_IP_ADDRESS_LENGTH)
 		return 1;
+
+	/* Must be an IPv6 literal. */
+	CBS_dup(cbs, &ipv6_cbs);
+	if (!CBS_get_u8(&ipv6_cbs, &first))
+		return 1;
+	if (!CBS_get_last_u8(&ipv6_cbs, &last))
+		return 1;
+	if (first == '[' && last == ']') {
+		if (!CBS_strdup(&ipv6_cbs, &name))
+			return 0;
+		if (inet_pton(AF_INET6, name, &sin6) == 1)
+			*is_ip = 1;
+		goto done;
+	}
+
+	/* Or an IPv4 address. */
 	if (!CBS_strdup(cbs, &name))
 		return 0;
-	if (inet_pton(AF_INET, name, &sin4) == 1 ||
-	    inet_pton(AF_INET6, name, &sin6) == 1)
+	if (inet_pton(AF_INET, name, &sin4) == 1)
 		*is_ip = 1;
 
+ done:
 	free(name);
 	return 1;
 }
 
-struct x509_constraints_name *
+static struct x509_constraints_name *
 x509_constraints_name_new(void)
 {
 	return (calloc(1, sizeof(struct x509_constraints_name)));
@@ -81,7 +100,7 @@ x509_constraints_name_free(struct x509_constraints_name *name)
 	free(name);
 }
 
-struct x509_constraints_name *
+static struct x509_constraints_name *
 x509_constraints_name_dup(struct x509_constraints_name *name)
 {
 	struct x509_constraints_name *new;
@@ -273,13 +292,13 @@ x509_constraints_valid_host(CBS *cbs, int permit_ip)
 		return 0;
 	if (first == '.')
 		return 0; /* leading . not allowed in a host name or IP */
-	if (!permit_ip) {
-		if (!cbs_is_ip_address(cbs, &is_ip))
-			return 0;
-		if (is_ip)
-			return 0;
+	if (!host_is_ip_address(cbs, &is_ip))
+		return 0;
+	if (is_ip) {
+		if (permit_ip)
+			return 1;
+		return 0;
 	}
-
 	return x509_constraints_valid_domain_internal(cbs, 0);
 }
 
@@ -508,10 +527,11 @@ x509_constraints_valid_domain_constraint(CBS *cbs)
 int
 x509_constraints_uri_host(uint8_t *uri, size_t len, char **hostpart)
 {
-	size_t i, hostlen = 0;
 	uint8_t *authority = NULL;
-	char *host = NULL;
+	uint8_t *host = NULL;
+	size_t hostlen = 0;
 	CBS host_cbs;
+	size_t i;
 
 	/*
 	 * Find first '//'. there must be at least a '//' and
@@ -542,31 +562,55 @@ x509_constraints_uri_host(uint8_t *uri, size_t len, char **hostpart)
 	for (i = authority - uri; i < len; i++) {
 		if (!isascii(uri[i]))
 			return 0;
-		/* it has a userinfo part */
-		if (uri[i] == '@') {
-			hostlen = 0;
-			/* it can only have one */
-			if (host != NULL)
-				break;
-			/* start after the userinfo part */
-			host = uri + i + 1;
-			continue;
-		}
-		/* did we find the end? */
-		if (uri[i] == ':' || uri[i] == '/' || uri[i] == '?' ||
-		    uri[i] == '#')
+		/*
+		 * Per RFC 3986 section 3.2, authority is terminated
+		 * by a slash (/), question mark (?), hash (#) or by
+		 * the end of the URI.
+		 */
+		if (uri[i] == '/' || uri[i] == '?' || uri[i] == '#')
 			break;
+
 		hostlen++;
 	}
+
+	host = authority;
+
+	/* Remove any leading userinfo part. */
+	for (i = 0; i < hostlen; i++) {
+		if (authority[i] != '@')
+			continue;
+
+		/* Only one at-sign (@) is permitted. */
+		if (host != authority)
+			return 0;
+
+		/* Start after the userinfo part. */
+		host = authority + i + 1;
+	}
+	hostlen = hostlen - (host - authority);
+
 	if (hostlen == 0)
 		return 0;
-	if (host == NULL)
-		host = authority;
+
+	/* Remove any port part, respecting IPv6 literals. */
+	for (i = hostlen - 1; i > 0; i--) {
+		if (host[i] == ']')
+			break;
+		if (host[i] == ':') {
+			hostlen = i;
+			break;
+		}
+	}
+
+	if (hostlen == 0)
+		return 0;
+
 	CBS_init(&host_cbs, host, hostlen);
 	if (!x509_constraints_valid_host(&host_cbs, 1))
 		return 0;
 	if (hostpart != NULL && !CBS_strdup(&host_cbs, hostpart))
 		return 0;
+
 	return 1;
 }
 
@@ -647,8 +691,7 @@ x509_constraints_domain(char *domain, size_t dlen, char *constraint, size_t len)
 
 int
 x509_constraints_uri(uint8_t *uri, size_t ulen, uint8_t *constraint,
-    size_t len,
-    int *error)
+    size_t len, int *error)
 {
 	int ret = 0;
 	char *hostpart = NULL;
@@ -681,7 +724,7 @@ x509_constraints_uri(uint8_t *uri, size_t ulen, uint8_t *constraint,
  * respectively for ipv4 addresses and constraints, and a length of
  * 16 and 32 respectively for ipv6 address constraints by the caller.
  */
-int
+static int
 x509_constraints_ipaddr(uint8_t *address, size_t alen, uint8_t *constraint,
     size_t len)
 {
@@ -703,7 +746,7 @@ x509_constraints_ipaddr(uint8_t *address, size_t alen, uint8_t *constraint,
  * Verify a canonicalized der encoded constraint dirname
  * a canonicalized der encoded constraint.
  */
-int
+static int
 x509_constraints_dirname(uint8_t *dirname, size_t dlen,
     uint8_t *constraint, size_t len)
 {
@@ -783,6 +826,7 @@ x509_constraints_extract_names(struct x509_constraints_names *names,
 	X509_NAME *subject_name;
 	GENERAL_NAME *name;
 	ssize_t i = 0;
+	int idx;
 	int name_type, include_cn = is_leaf, include_email = is_leaf;
 
 	/* first grab the altnames */
@@ -905,12 +949,13 @@ x509_constraints_extract_names(struct x509_constraints_names *names,
 		 * add them as mbox names to be compared against any
 		 * email constraints
 		 */
+		idx = -1;
 		while (include_email &&
-		    (i = X509_NAME_get_index_by_NID(subject_name,
-		     NID_pkcs9_emailAddress, i)) >= 0) {
+		    (idx = X509_NAME_get_index_by_NID(subject_name,
+		     NID_pkcs9_emailAddress, idx)) >= 0) {
 			ASN1_STRING *aname;
 			CBS cbs;
-			if ((email = X509_NAME_get_entry(subject_name, i)) ==
+			if ((email = X509_NAME_get_entry(subject_name, idx)) ==
 			    NULL ||
 			    (aname = X509_NAME_ENTRY_get_data(email)) == NULL) {
 				*error = X509_V_ERR_OUT_OF_MEM;
@@ -936,12 +981,13 @@ x509_constraints_extract_names(struct x509_constraints_names *names,
 		 * Include the CN as a hostname to be checked against
 		 * name constraints if it looks like a hostname.
 		 */
+		idx = -1;
 		while (include_cn &&
-		    (i = X509_NAME_get_index_by_NID(subject_name,
-		     NID_commonName, i)) >= 0) {
+		    (idx = X509_NAME_get_index_by_NID(subject_name,
+		     NID_commonName, idx)) >= 0) {
 			CBS cbs;
 			ASN1_STRING *aname;
-			if ((cn = X509_NAME_get_entry(subject_name, i)) ==
+			if ((cn = X509_NAME_get_entry(subject_name, idx)) ==
 			    NULL ||
 			    (aname = X509_NAME_ENTRY_get_data(cn)) == NULL) {
 				*error = X509_V_ERR_OUT_OF_MEM;
@@ -1151,7 +1197,7 @@ x509_constraints_extract_constraints(X509 *cert,
  * Match a validated name in "name" against a validated constraint in
  * "constraint" return 1 if then name matches, 0 otherwise.
  */
-int
+static int
 x509_constraints_match(struct x509_constraints_name *name,
     struct x509_constraints_name *constraint)
 {

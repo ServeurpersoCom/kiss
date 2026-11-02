@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl_clnt.c,v 1.171 2026/04/03 12:58:19 jsing Exp $ */
+/* $OpenBSD: ssl_clnt.c,v 1.180 2026/09/21 23:43:25 jsing Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -546,10 +546,8 @@ ssl3_connect(SSL *s)
 
 		case SSL3_ST_CR_FINISHED_A:
 		case SSL3_ST_CR_FINISHED_B:
-			if (SSL_is_dtls(s))
-				s->d1->change_cipher_spec_ok = 1;
-			else
-				s->s3->flags |= SSL3_FLAGS_CCS_OK;
+			s->s3->flags |= SSL3_FLAGS_CCS_OK;
+
 			ret = ssl3_get_server_finished(s);
 			if (ret <= 0)
 				goto end;
@@ -893,7 +891,7 @@ ssl3_get_server_hello(SSL *s)
 	if (s->s3->hs.our_max_tls_version >= TLS1_2_VERSION &&
 	    s->s3->hs.negotiated_tls_version < s->s3->hs.our_max_tls_version) {
 		/*
-		 * RFC 8446 section 4.1.3. We must not downgrade if the server
+		 * RFC 9846 section 4.2.3. We must not downgrade if the server
 		 * random value contains the TLS 1.2 or TLS 1.1 magical value.
 		 */
 		if (!CBS_skip(&server_random,
@@ -1003,16 +1001,17 @@ ssl3_get_server_hello(SSL *s)
 		goto fatal_err;
 	}
 
-	/* TLS v1.2 only ciphersuites require v1.2 or later. */
-	if ((cipher->algorithm_ssl & SSL_TLSV1_2) &&
-	    s->s3->hs.negotiated_tls_version < TLS1_2_VERSION) {
+	if (!ssl_cipher_in_list(SSL_get_ciphers(s), cipher)) {
+		/* we did not say we would use this cipher */
 		al = SSL_AD_ILLEGAL_PARAMETER;
 		SSLerror(s, SSL_R_WRONG_CIPHER_RETURNED);
 		goto fatal_err;
 	}
 
-	if (!ssl_cipher_in_list(SSL_get_ciphers(s), cipher)) {
-		/* we did not say we would use this cipher */
+	/* Require a ciphersuite that can be used with TLSv1.2. */
+	if (cipher->algorithm_ssl != SSL_SSLV3 &&
+	    cipher->algorithm_ssl != SSL_TLSV1 &&
+	    cipher->algorithm_ssl != SSL_TLSV1_2) {
 		al = SSL_AD_ILLEGAL_PARAMETER;
 		SSLerror(s, SSL_R_WRONG_CIPHER_RETURNED);
 		goto fatal_err;
@@ -1033,13 +1032,6 @@ ssl3_get_server_hello(SSL *s)
 
 	if (!tls1_transcript_hash_init(s))
 		goto err;
-
-	/*
-	 * Don't digest cached records if no sigalgs: we may need them for
-	 * client authentication.
-	 */
-	if (!SSL_USE_SIGALGS(s))
-		tls1_transcript_free(s);
 
 	if (!CBS_get_u8(&cbs, &compression_method))
 		goto decode_err;
@@ -1066,7 +1058,7 @@ ssl3_get_server_hello(SSL *s)
 	 * which doesn't support RI so for the immediate future tolerate RI
 	 * absence on initial connect only.
 	 */
-	if (!s->s3->renegotiate_seen &&
+	if (!tlsext_extension_seen(s, TLSEXT_TYPE_renegotiate) &&
 	    !(s->options & SSL_OP_LEGACY_SERVER_CONNECT)) {
 		al = SSL_AD_HANDSHAKE_FAILURE;
 		SSLerror(s, SSL_R_UNSAFE_LEGACY_RENEGOTIATION_DISABLED);
@@ -1225,7 +1217,7 @@ ssl3_get_server_kex_dhe(SSL *s, CBS *cbs)
 	if (!tls_key_share_peer_security(s, s->s3->hs.key_share)) {
 		SSLerror(s, SSL_R_DH_KEY_TOO_SMALL);
 		ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);
-		return 0;
+		goto err;
 	}
 
 	return 1;
@@ -1384,10 +1376,9 @@ ssl3_get_server_key_exchange(SSL *s)
 			goto fatal_err;
 		}
 
-		if (SSL_USE_SIGALGS(s)) {
-			if (!CBS_get_u16(&cbs, &sigalg_value))
-				goto decode_err;
-		}
+		if (!CBS_get_u16(&cbs, &sigalg_value))
+			goto decode_err;
+
 		if (!CBS_get_u16_length_prefixed(&cbs, &signature))
 			goto decode_err;
 		if (CBS_len(&signature) > EVP_PKEY_size(pkey)) {
@@ -1448,7 +1439,7 @@ ssl3_get_server_key_exchange(SSL *s)
 static int
 ssl3_get_certificate_request(SSL *s)
 {
-	CBS cert_request, cert_types, rdn_list;
+	CBS cert_request, cert_types, rdn_list, sigalgs;
 	X509_NAME *xn = NULL;
 	const unsigned char *q;
 	STACK_OF(X509_NAME) *ca_sk = NULL;
@@ -1497,27 +1488,23 @@ ssl3_get_certificate_request(SSL *s)
 	if (!CBS_get_u8_length_prefixed(&cert_request, &cert_types))
 		goto decode_err;
 
-	if (SSL_USE_SIGALGS(s)) {
-		CBS sigalgs;
-
-		if (CBS_len(&cert_request) < 2) {
-			SSLerror(s, SSL_R_DATA_LENGTH_TOO_LONG);
-			goto err;
-		}
-		if (!CBS_get_u16_length_prefixed(&cert_request, &sigalgs)) {
-			ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
-			SSLerror(s, SSL_R_DATA_LENGTH_TOO_LONG);
-			goto err;
-		}
-		if (CBS_len(&sigalgs) % 2 != 0 || CBS_len(&sigalgs) > 64) {
-			ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
-			SSLerror(s, SSL_R_SIGNATURE_ALGORITHMS_ERROR);
-			goto err;
-		}
-		if (!CBS_stow(&sigalgs, &s->s3->hs.sigalgs,
-		    &s->s3->hs.sigalgs_len))
-			goto err;
+	if (CBS_len(&cert_request) < 2) {
+		SSLerror(s, SSL_R_DATA_LENGTH_TOO_LONG);
+		goto err;
 	}
+	if (!CBS_get_u16_length_prefixed(&cert_request, &sigalgs)) {
+		ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
+		SSLerror(s, SSL_R_DATA_LENGTH_TOO_LONG);
+		goto err;
+	}
+	if (CBS_len(&sigalgs) % 2 != 0 || CBS_len(&sigalgs) > 64) {
+		ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_DECODE_ERROR);
+		SSLerror(s, SSL_R_SIGNATURE_ALGORITHMS_ERROR);
+		goto err;
+	}
+	if (!CBS_stow(&sigalgs, &s->s3->hs.sigalgs,
+	    &s->s3->hs.sigalgs_len))
+		goto err;
 
 	/* get the CA RDNs */
 	if (CBS_len(&cert_request) < 2) {
@@ -1876,7 +1863,7 @@ ssl3_send_client_kex_dhe(SSL *s, CBB *cbb)
 	if (!tls_key_share_peer_security(s, s->s3->hs.key_share)) {
 		SSLerror(s, SSL_R_DH_KEY_TOO_SMALL);
 		ssl3_send_alert(s, SSL3_AL_FATAL, SSL_AD_HANDSHAKE_FAILURE);
-		return 0;
+		goto err;
 	}
 
 	if (!tls12_derive_master_secret(s, key, key_len))
@@ -2035,77 +2022,6 @@ ssl3_send_client_verify_sigalgs(SSL *s, EVP_PKEY *pkey,
 }
 
 static int
-ssl3_send_client_verify_rsa(SSL *s, EVP_PKEY *pkey, CBB *cert_verify)
-{
-	CBB cbb_signature;
-	RSA *rsa;
-	unsigned char data[EVP_MAX_MD_SIZE];
-	unsigned char *signature = NULL;
-	unsigned int signature_len;
-	size_t data_len;
-	int ret = 0;
-
-	if (!tls1_transcript_hash_value(s, data, sizeof(data), &data_len))
-		goto err;
-	if ((signature = calloc(1, EVP_PKEY_size(pkey))) == NULL)
-		goto err;
-	if ((rsa = EVP_PKEY_get0_RSA(pkey)) == NULL)
-		goto err;
-	if (RSA_sign(NID_md5_sha1, data, data_len, signature, &signature_len,
-	    rsa) <= 0 ) {
-		SSLerror(s, ERR_R_RSA_LIB);
-		goto err;
-	}
-
-	if (!CBB_add_u16_length_prefixed(cert_verify, &cbb_signature))
-		goto err;
-	if (!CBB_add_bytes(&cbb_signature, signature, signature_len))
-		goto err;
-	if (!CBB_flush(cert_verify))
-		goto err;
-
-	ret = 1;
- err:
-	free(signature);
-	return ret;
-}
-
-static int
-ssl3_send_client_verify_ec(SSL *s, EVP_PKEY *pkey, CBB *cert_verify)
-{
-	CBB cbb_signature;
-	EC_KEY *eckey;
-	unsigned char data[EVP_MAX_MD_SIZE];
-	unsigned char *signature = NULL;
-	unsigned int signature_len;
-	int ret = 0;
-
-	if (!tls1_transcript_hash_value(s, data, sizeof(data), NULL))
-		goto err;
-	if ((signature = calloc(1, EVP_PKEY_size(pkey))) == NULL)
-		goto err;
-	if ((eckey = EVP_PKEY_get0_EC_KEY(pkey)) == NULL)
-		goto err;
-	if (!ECDSA_sign(0, &data[MD5_DIGEST_LENGTH], SHA_DIGEST_LENGTH,
-	    signature, &signature_len, eckey)) {
-		SSLerror(s, ERR_R_ECDSA_LIB);
-		goto err;
-	}
-
-	if (!CBB_add_u16_length_prefixed(cert_verify, &cbb_signature))
-		goto err;
-	if (!CBB_add_bytes(&cbb_signature, signature, signature_len))
-		goto err;
-	if (!CBB_flush(cert_verify))
-		goto err;
-
-	ret = 1;
- err:
-	free(signature);
-	return ret;
-}
-
-static int
 ssl3_send_client_verify(SSL *s)
 {
 	const struct ssl_sigalg *sigalg;
@@ -2130,20 +2046,9 @@ ssl3_send_client_verify(SSL *s)
 		 * For TLS v1.2 send signature algorithm and signature using
 		 * agreed digest and cached handshake records.
 		 */
-		if (SSL_USE_SIGALGS(s)) {
-			if (!ssl3_send_client_verify_sigalgs(s, pkey, sigalg,
-			    &cert_verify))
-				goto err;
-		} else if (EVP_PKEY_id(pkey) == EVP_PKEY_RSA) {
-			if (!ssl3_send_client_verify_rsa(s, pkey, &cert_verify))
-				goto err;
-		} else if (EVP_PKEY_id(pkey) == EVP_PKEY_EC) {
-			if (!ssl3_send_client_verify_ec(s, pkey, &cert_verify))
-				goto err;
-		} else {
-			SSLerror(s, ERR_R_INTERNAL_ERROR);
+		if (!ssl3_send_client_verify_sigalgs(s, pkey, sigalg,
+		    &cert_verify))
 			goto err;
-		}
 
 		tls1_transcript_free(s);
 
@@ -2352,11 +2257,8 @@ ssl3_send_client_change_cipher_spec(SSL *s)
 		s->init_off = 0;
 
 		if (SSL_is_dtls(s)) {
-			s->d1->handshake_write_seq =
-			    s->d1->next_handshake_write_seq;
-			dtls1_set_message_header_int(s, SSL3_MT_CCS, 0,
-			    s->d1->handshake_write_seq, 0, 0);
-			dtls1_buffer_message(s, 1);
+			if (!dtls12_ccs_built(s))
+				goto err;
 		}
 
 		s->s3->hs.state = SSL3_ST_CW_CHANGE_B;
@@ -2444,7 +2346,8 @@ ssl3_get_server_finished(SSL *s)
 		goto fatal_err;
 	}
 
-	if (!CBS_mem_equal(&cbs, s->s3->hs.peer_finished, CBS_len(&cbs))) {
+	if (!CBS_mem_equal(&cbs,
+	    s->s3->hs.peer_finished, s->s3->hs.peer_finished_len)) {
 		al = SSL_AD_DECRYPT_ERROR;
 		SSLerror(s, SSL_R_DIGEST_CHECK_FAILED);
 		goto fatal_err;

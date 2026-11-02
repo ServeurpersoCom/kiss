@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl_sigalgs.h,v 1.27 2024/02/03 15:58:34 beck Exp $ */
+/* $OpenBSD: ssl_sigalgs.h,v 1.29 2026/08/21 17:15:22 tb Exp $ */
 /*
  * Copyright (c) 2018-2019 Bob Beck <beck@openbsd.org>
  *
@@ -23,8 +23,8 @@ __BEGIN_HIDDEN_DECLS
 #define SIGALG_NONE			0x0000
 
 /*
- * RFC 8446 Section 4.2.3
- * RFC 5246 Section 7.4.1.4.1
+ * RFC 9846 section 4.3.3
+ * RFC 5246 section 7.4.1.4.1
  */
 #define SIGALG_RSA_PKCS1_SHA224		0x0301
 #define SIGALG_RSA_PKCS1_SHA256		0x0401
@@ -46,9 +46,6 @@ __BEGIN_HIDDEN_DECLS
 #define SIGALG_ECDSA_SHA1		0x0203
 #define SIGALG_PRIVATE_START		0xFE00
 #define SIGALG_PRIVATE_END		0xFFFF
-
-/* Legacy sigalg for < TLSv1.2 same value as BoringSSL uses. */
-#define SIGALG_RSA_PKCS1_MD5_SHA1	0xFF01
 
 #define SIGALG_FLAG_RSA_PSS	0x00000001
 

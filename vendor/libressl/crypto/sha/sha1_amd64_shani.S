@@ -1,4 +1,4 @@
-/* $OpenBSD: sha1_amd64_shani.S,v 1.4 2026/03/28 13:11:28 jsing Exp $ */
+/* $OpenBSD: sha1_amd64_shani.S,v 1.9 2026/05/12 15:07:30 jsing Exp $ */
 /*
  * Copyright (c) 2024 Joel Sing <jsing@openbsd.org>
  *
@@ -16,6 +16,8 @@
  */
 
 #include "crypto_assembly.h"
+
+#define	_SEP	CRYPTO_ASSEMBLY_SEPARATOR
 
 /*
  * SHA-1 implementation using the Intel SHA extensions:
@@ -45,39 +47,37 @@
 
 
 #define sha1_message_schedule_load(idx, m, xmsg) \
-	movdqu	(idx*16)(m), xmsg;					\
+	movdqu	(idx*16)(m), xmsg					_SEP \
 	pshufb	xshufmask, xmsg
 
 #define sha1_message_schedule_update(xm0, xm1, xm2, xm3) \
-	sha1msg1 xm1, xm0;						\
-	pxor	xm2, xm0;						\
+	sha1msg1 xm1, xm0						_SEP \
+	pxor	xm2, xm0						_SEP \
 	sha1msg2 xm3, xm0
 
 #define sha1_shani_round(fn, xmsg, xe, xe_next) \
-	sha1nexte xmsg, xe;						\
-	movdqa	xabcd, xe_next;						\
+	sha1nexte xmsg, xe						_SEP \
+	movdqa	xabcd, xe_next						_SEP \
 	sha1rnds4 fn, xe, xabcd
 
 #define sha1_shani_round_load(fn, idx, m, xmsg, xe, xe_next) \
-	sha1_message_schedule_load(idx, m, xmsg);			\
+	sha1_message_schedule_load(idx, m, xmsg)			_SEP \
 	sha1_shani_round(fn, xmsg, xe, xe_next)
 
 #define sha1_shani_round_update(fn, xm0, xm1, xm2, xm3, xe, xe_next) \
-	sha1_message_schedule_update(xm0, xm1, xm2, xm3);		\
+	sha1_message_schedule_update(xm0, xm1, xm2, xm3)		_SEP \
 	sha1_shani_round(fn, xm0, xe, xe_next)
 
 
-.section .text
+.section CRYPTO_ASSEMBLY_SECTION_TEXT
 
 /*
- * void sha1_block_shani(SHA256_CTX *ctx, const void *in, size_t num);
+ * void sha1_block_shani(SHA_CTX *ctx, const void *in, size_t num);
  *
  * Standard x86-64 ABI: rdi = ctx, rsi = in, rdx = num
  */
 .align 16
-.globl	sha1_block_shani
-.type	sha1_block_shani,@function
-sha1_block_shani:
+CRYPTO_ASSEMBLY_GLOBAL_FUNCTION(sha1_block_shani):
 	_CET_ENDBR
 
 	/* Save callee save registers. */
@@ -153,17 +153,16 @@ sha1_block_shani:
 
 	ret
 
-.section .rodata
+.section CRYPTO_ASSEMBLY_SECTION_RODATA
 
 /*
  * Shuffle mask - byte reversal for little endian to big endian word conversion,
  * and reordering to abcd.
  */
 .align	16
-.type	shufmask,@object
-shufmask:
+CRYPTO_ASSEMBLY_OBJECT_START(shufmask):
 .octa	0x000102030405060708090a0b0c0d0e0f
-.size	shufmask,.-shufmask
+CRYPTO_ASSEMBLY_OBJECT_END(shufmask)
 
 #if defined(__linux__) && defined(__ELF__)
 .section .note.GNU-stack,"",%progbits

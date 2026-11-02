@@ -8,24 +8,25 @@
 .globl	sha512_block_data_order
 .ent	sha512_block_data_order
 sha512_block_data_order:
-	.frame	$29,192,$31
-	.mask	3237937152,-4
+	.frame	$29,256,$31
+	.mask	3237937152,-8
 	.set	noreorder
-	.cpload	$25
-	sub $29,192
-	sw	$31,192-1*4($29)
-	sw	$30,192-2*4($29)
-	sw	$23,192-3*4($29)
-	sw	$22,192-4*4($29)
-	sw	$21,192-5*4($29)
-	sw	$20,192-6*4($29)
-	sw	$19,192-7*4($29)
-	sw	$18,192-8*4($29)
-	sw	$17,192-9*4($29)
-	sw	$16,192-10*4($29)
-	sll $23,$6,7
+	dsub $29,256
+	sd	$31,256-1*8($29)
+	sd	$30,256-2*8($29)
+	sd	$23,256-3*8($29)
+	sd	$22,256-4*8($29)
+	sd	$21,256-5*8($29)
+	sd	$20,256-6*8($29)
+	sd	$19,256-7*8($29)
+	sd	$18,256-8*8($29)
+	sd	$17,256-9*8($29)
+	sd	$16,256-10*8($29)
+	dsll $23,$6,7
+	.cplocal	$6
+	.cpsetup	$25,$0,sha512_block_data_order
 	.set	reorder
-	la	$6,K512		# PIC-ified 'load address'
+	dla	$6,K512		# PIC-ified 'load address'
 
 	ld	$1,0*8($4)		# load context
 	ld	$2,1*8($4)
@@ -36,8 +37,8 @@ sha512_block_data_order:
 	ld	$30,6*8($4)
 	ld	$31,7*8($4)
 
-	add $23,$5		# pointer to the end of input
-	sw	$23,16*8($29)
+	dadd $23,$5		# pointer to the end of input
+	sd	$23,16*8($29)
 	b	.Loop
 
 .align	5
@@ -2068,13 +2069,13 @@ sha512_block_data_order:
 	li	$15,2071
 	.set	noreorder
 	bne	$14,$15,.L16_xx
-	add $6,16*8		# Ktbl+=16
+	dadd $6,16*8		# Ktbl+=16
 
-	lw	$23,16*8($29)	# restore pointer to the end of input
+	ld	$23,16*8($29)	# restore pointer to the end of input
 	ld	$8,0*8($4)
 	ld	$9,1*8($4)
 	ld	$10,2*8($4)
-	add $5,16*8
+	dadd $5,16*8
 	ld	$11,3*8($4)
 	daddu	$1,$8
 	ld	$12,4*8($4)
@@ -2098,20 +2099,20 @@ sha512_block_data_order:
 	sd	$31,7*8($4)
 
 	bne	$5,$23,.Loop
-	sub $6,512	# rewind $6
+	dsub $6,512	# rewind $6
 
-	lw	$31,192-1*4($29)
-	lw	$30,192-2*4($29)
-	lw	$23,192-3*4($29)
-	lw	$22,192-4*4($29)
-	lw	$21,192-5*4($29)
-	lw	$20,192-6*4($29)
-	lw	$19,192-7*4($29)
-	lw	$18,192-8*4($29)
-	lw	$17,192-9*4($29)
-	lw	$16,192-10*4($29)
+	ld	$31,256-1*8($29)
+	ld	$30,256-2*8($29)
+	ld	$23,256-3*8($29)
+	ld	$22,256-4*8($29)
+	ld	$21,256-5*8($29)
+	ld	$20,256-6*8($29)
+	ld	$19,256-7*8($29)
+	ld	$18,256-8*8($29)
+	ld	$17,256-9*8($29)
+	ld	$16,256-10*8($29)
 	jr	$31
-	add $29,192
+	dadd $29,256
 .end	sha512_block_data_order
 
 .rdata

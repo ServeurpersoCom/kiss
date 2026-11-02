@@ -1,4 +1,4 @@
-/* $OpenBSD: tls_internal.h,v 1.86 2024/12/10 08:40:30 tb Exp $ */
+/* $OpenBSD: tls_internal.h,v 1.88 2026/09/20 17:26:14 beck Exp $ */
 /*
  * Copyright (c) 2014 Jeremie Courreges-Anglas <jca@openbsd.org>
  * Copyright (c) 2014 Joel Sing <jsing@openbsd.org>
@@ -37,7 +37,7 @@ __BEGIN_HIDDEN_DECLS
 #define TLS_CIPHERS_LEGACY	"HIGH:MEDIUM:!aNULL"
 #define TLS_CIPHERS_ALL		"ALL:!aNULL:!eNULL"
 
-#define TLS_ECDHE_CURVES	"X25519,P-256,P-384"
+#define TLS_ECDHE_CURVES	"X25519MLKEM768,X25519,P-256,P-384"
 
 union tls_addr {
 	struct in_addr ip4;
@@ -134,8 +134,10 @@ struct tls_conninfo {
 	char *issuer;
 	char *subject;
 
-	uint8_t *peer_cert;
-	size_t peer_cert_len;
+	uint8_t *peer_unverified_bundle;
+	size_t peer_unverified_bundle_len;
+	uint8_t *peer_verified_chain;
+	size_t peer_verified_chain_len;
 
 	time_t notbefore;
 	time_t notafter;
@@ -198,7 +200,8 @@ struct tls {
 	struct tls_sni_ctx *sni_ctx;
 
 	X509 *ssl_peer_cert;
-	STACK_OF(X509) *ssl_peer_chain;
+	STACK_OF(X509) *ssl_peer_unverified_bundle;
+	STACK_OF(X509) *ssl_peer_verified_chain;
 
 	struct tls_conninfo *conninfo;
 

@@ -21,6 +21,8 @@ endif()
 
 project(LibreSSL LANGUAGES C ASM)
 
+include(CheckCSourceCompiles)
+include(CheckCSourceRuns)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
 include(CheckLibraryExists)
@@ -32,6 +34,16 @@ include(cmake_export_symbol)
 include(GNUInstallDirs)
 
 enable_testing()
+find_program(PERL_EXECUTABLE perl perl5)
+set(HAVE_PERL_IO_SOCKET_SSL_UTILS FALSE)
+if(PERL_EXECUTABLE)
+	execute_process(COMMAND ${PERL_EXECUTABLE} -MIO::Socket::SSL::Utils -e 1
+	    RESULT_VARIABLE PERL_IO_SOCKET_SSL_UTILS_RESULT
+	    OUTPUT_QUIET ERROR_QUIET)
+	if(PERL_IO_SOCKET_SSL_UTILS_RESULT EQUAL 0)
+		set(HAVE_PERL_IO_SOCKET_SSL_UTILS TRUE)
+	endif()
+endif()
 
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/ssl/VERSION SSL_VERSION)
 string(STRIP ${SSL_VERSION} SSL_VERSION)
@@ -55,6 +67,7 @@ option(ENABLE_ASM "Enable assembly" ON)
 option(ENABLE_EXTRATESTS "Enable extra tests that may be unreliable on some platforms" OFF)
 option(ENABLE_NC "Enable installing TLS-enabled nc(1)" OFF)
 set(OPENSSLDIR ${OPENSSLDIR} CACHE PATH "Set the default openssl directory" FORCE)
+set(TLS_DEFAULT_CA_FILE ${TLS_DEFAULT_CA_FILE} CACHE PATH "Set the default CA file for libtls" FORCE)
 set(LIBRESSL_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/LibreSSL" CACHE STRING "Installation directory for the CMake targets")
 
 option(USE_STATIC_MSVC_RUNTIMES "Use /MT instead of /MD in MSVC" OFF)
@@ -127,6 +140,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "HP-UX")
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "SunOS")
+	set(SOLARIS TRUE)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fno-strict-aliasing")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D__EXTENSIONS__")
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_XOPEN_SOURCE=600")
@@ -144,6 +158,107 @@ set(CMAKE_POSITION_INDEPENDENT_CODE true)
 
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
 	add_compile_options($<$<COMPILE_LANGUAGE:C>:-Wno-pointer-sign>)
+endif()
+
+# Exploit-mitigation flags, matching the default-on hardening the autotools
+# build applies (m4/check-hardening-options.m4). The CMake build shipped none
+# of these, so a cmake-built libcrypto/libssl/libtls and openssl(1) had no
+# stack protector, no _FORTIFY_SOURCE, no RELRO/BIND_NOW and no CET, and the
+# mingw DLLs missed the DEP/ASLR opt-ins. MSVC is left to its own toolchain
+# defaults, exactly as that m4 (which only drives gcc/clang/mingw flags) does.
+# Every flag is probed before use so unsupported targets simply skip it.
+option(ENABLE_HARDENING
+	"Enable options to frustrate memory corruption exploits" ON)
+option(ENABLE_WINDOWS_SSP
+	"Build stack smashing protection on Windows (requires libssp)" OFF)
+
+if(ENABLE_HARDENING AND NOT MSVC AND
+    (CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang"))
+	include(CheckCCompilerFlag)
+
+	macro(add_harden_cflag _flag _var)
+		check_c_compiler_flag("${_flag}" ${_var})
+		if(${_var})
+			add_compile_options($<$<COMPILE_LANGUAGE:C>:${_flag}>)
+		endif()
+	endmacro()
+
+	# CMake 3.16 predates check_linker_flag, so probe link flags by linking.
+	macro(add_harden_ldflag _flag _var)
+		set(_saved_link_options "${CMAKE_REQUIRED_LINK_OPTIONS}")
+		set(CMAKE_REQUIRED_LINK_OPTIONS "${_flag}")
+		check_c_source_compiles("int main(void){return 0;}" ${_var})
+		set(CMAKE_REQUIRED_LINK_OPTIONS "${_saved_link_options}")
+		if(${_var})
+			add_link_options("${_flag}")
+		endif()
+	endmacro()
+
+	# Do not optimize based on signed arithmetic overflow.
+	add_harden_cflag(-fno-strict-overflow HAVE_CFLAG_FNO_STRICT_OVERFLOW)
+
+	if(NOT WIN32)
+		# _FORTIFY_SOURCE needs an optimizing build and warns without one,
+		# so probe it at -O2 and only apply it to non-Debug C compiles.
+		set(_saved_req_flags "${CMAKE_REQUIRED_FLAGS}")
+		set(CMAKE_REQUIRED_FLAGS
+			"-O2 -Werror -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2")
+		check_c_source_compiles("#include <string.h>
+int main(void){char b[8];const char *s=\"x\";strcpy(b,s);return b[0];}"
+			HAVE_CFLAG_FORTIFY_SOURCE)
+		set(CMAKE_REQUIRED_FLAGS "${_saved_req_flags}")
+		if(HAVE_CFLAG_FORTIFY_SOURCE)
+			add_compile_options(
+			    "$<$<AND:$<COMPILE_LANGUAGE:C>,$<NOT:$<CONFIG:Debug>>>:-U_FORTIFY_SOURCE>"
+			    "$<$<AND:$<COMPILE_LANGUAGE:C>,$<NOT:$<CONFIG:Debug>>>:-D_FORTIFY_SOURCE=2>")
+		endif()
+
+		# Read-only relocations, resolved at load time. wasm has no
+		# ELF loader and wasm-ld only warns about unknown -z values,
+		# so the probe false-positives on Emscripten; skip it there.
+		if(NOT EMSCRIPTEN)
+			add_harden_ldflag(-Wl,-z,relro HAVE_LDFLAG_Z_RELRO)
+			add_harden_ldflag(-Wl,-z,now HAVE_LDFLAG_Z_NOW)
+		endif()
+	else()
+		# Windows (mingw) DEP, ASLR and high-entropy ASLR opt-ins.
+		add_harden_ldflag(-Wl,--nxcompat HAVE_LDFLAG_NXCOMPAT)
+		add_harden_ldflag(-Wl,--dynamicbase HAVE_LDFLAG_DYNAMICBASE)
+		add_harden_ldflag(-Wl,--high-entropy-va HAVE_LDFLAG_HIGH_ENTROPY_VA)
+	endif()
+
+	# Stack smashing protection. On Windows this pulls in libssp, so it is
+	# opt-in there, mirroring --enable-windows-ssp. Emscripten accepts the
+	# flag (and the frameless probe links), but its libc has no
+	# __stack_chk_guard/__stack_chk_fail, so any protected frame fails to
+	# link; it provides its own stack checks (-sSTACK_OVERFLOW_CHECK).
+	if(NOT EMSCRIPTEN AND (NOT WIN32 OR ENABLE_WINDOWS_SSP))
+		check_c_compiler_flag(-fstack-protector-strong
+			HAVE_CFLAG_STACK_PROTECTOR_STRONG)
+		if(HAVE_CFLAG_STACK_PROTECTOR_STRONG)
+			add_compile_options(
+				$<$<COMPILE_LANGUAGE:C>:-fstack-protector-strong>)
+		else()
+			add_harden_cflag(-fstack-protector-all
+				HAVE_CFLAG_STACK_PROTECTOR_ALL)
+		endif()
+		if(WIN32)
+			set(PLATFORM_LIBS ${PLATFORM_LIBS} ssp)
+		endif()
+	endif()
+
+	# Control-flow integrity (Intel CET); unsupported on Darwin. The amd64
+	# assembly only includes <cet.h> (the IBT/SHSTK property note and the
+	# endbr64 landing pads) when the compiler defines __CET__, so the flag
+	# has to reach the assembler too, as it does through CCASFLAGS in the
+	# autotools build.
+	if(NOT APPLE)
+		check_c_compiler_flag(-fcf-protection=full HAVE_CFLAG_CF_PROTECTION)
+		if(HAVE_CFLAG_CF_PROTECTION)
+			add_compile_options(
+			    $<$<COMPILE_LANGUAGE:C,ASM>:-fcf-protection=full>)
+		endif()
+	endif()
 endif()
 
 if(WIN32)
@@ -295,7 +410,60 @@ if(HAVE_STRTONUM)
 	add_definitions(-DHAVE_STRTONUM)
 endif()
 
+#
+# arc4random on these platform versions falls back to a weak seed when it
+# cannot open /dev/random, so the builtin one is used there instead. Same
+# versions as the USE_BUILTIN_ARC4RANDOM checks in m4/check-os-options.m4.
+#
+set(USE_BUILTIN_ARC4RANDOM FALSE)
+if(APPLE)
+	# getentropy(2) arrived in 10.12 but is not tagged as introduced
+	# there, so the deployment target has to be tested directly.
+	check_c_source_compiles("
+		#include <AvailabilityMacros.h>
+		#include <unistd.h>
+		#include <sys/random.h>
+		#ifndef MAC_OS_X_VERSION_10_12
+		#define MAC_OS_X_VERSION_10_12 101200
+		#endif
+		#if defined(MAC_OS_X_VERSION_MIN_REQUIRED)
+		#if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_12
+		#error \"Targeting Mac OS X 10.11 or earlier\"
+		#endif
+		#endif
+		int main(void) { char buf[1]; return getentropy(buf, 1); }"
+		HAVE_MACOS_GETENTROPY)
+	if(NOT HAVE_MACOS_GETENTROPY)
+		set(USE_BUILTIN_ARC4RANDOM TRUE)
+	endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+	check_c_source_compiles("
+		#include <sys/param.h>
+		#if __FreeBSD_version < 1200000
+		#error \"FreeBSD 11 or earlier\"
+		#endif
+		int main(void) { return 0; }"
+		HAVE_FREEBSD_ARC4RANDOM)
+	if(NOT HAVE_FREEBSD_ARC4RANDOM)
+		set(USE_BUILTIN_ARC4RANDOM TRUE)
+	endif()
+elseif(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+	check_c_source_compiles("
+		#include <sys/param.h>
+		#if __NetBSD_Version__ < 700000001
+		#error \"NetBSD 6 or earlier\"
+		#endif
+		int main(void) { return 0; }"
+		HAVE_NETBSD_ARC4RANDOM)
+	if(NOT HAVE_NETBSD_ARC4RANDOM)
+		set(USE_BUILTIN_ARC4RANDOM TRUE)
+	endif()
+endif()
+
 check_symbol_exists(arc4random_buf "stdlib.h" HAVE_ARC4RANDOM_BUF)
+if(USE_BUILTIN_ARC4RANDOM)
+	set(HAVE_ARC4RANDOM_BUF FALSE)
+endif()
 if(HAVE_ARC4RANDOM_BUF)
 	add_definitions(-DHAVE_ARC4RANDOM_BUF)
 endif()
@@ -317,6 +485,10 @@ endif()
 
 # XXX macos fails to find getentropy with check_symbol_exists()
 check_function_exists(getentropy HAVE_GETENTROPY)
+if(APPLE AND NOT HAVE_MACOS_GETENTROPY)
+	# Weakly linked against the SDK, but absent at runtime before 10.12.
+	set(HAVE_GETENTROPY FALSE)
+endif()
 if(HAVE_GETENTROPY)
 	add_definitions(-DHAVE_GETENTROPY)
 endif()
@@ -331,6 +503,16 @@ if(HAVE_GETPROGNAME)
 	add_definitions(-DHAVE_GETPROGNAME)
 endif()
 
+check_symbol_exists(pledge "unistd.h" HAVE_PLEDGE)
+if(HAVE_PLEDGE)
+	add_definitions(-DHAVE_PLEDGE)
+endif()
+
+check_symbol_exists(unveil "unistd.h" HAVE_UNVEIL)
+if(HAVE_UNVEIL)
+	add_definitions(-DHAVE_UNVEIL)
+endif()
+
 check_symbol_exists(syslog_r "syslog.h;stdarg.h" HAVE_SYSLOG_R)
 if(HAVE_SYSLOG_R)
 	add_definitions(-DHAVE_SYSLOG_R)
@@ -340,6 +522,11 @@ endif()
 check_function_exists(syslog HAVE_SYSLOG)
 if(HAVE_SYSLOG)
 	add_definitions(-DHAVE_SYSLOG)
+endif()
+
+check_function_exists(vsyslog HAVE_VSYSLOG)
+if(HAVE_VSYSLOG)
+	add_definitions(-DHAVE_VSYSLOG)
 endif()
 
 check_symbol_exists(timespecsub sys/time.h HAVE_TIMESPECSUB)
@@ -417,7 +604,7 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
 	if(APPLE)
 		set(ENABLE_ASM false)
 	endif()
-elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS" AND CMAKE_SYSTEM_PROCESSOR MATCHES "i386")
+elseif(SOLARIS AND CMAKE_SYSTEM_PROCESSOR MATCHES "i386")
 	set(HOST_X86_64 true)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|x64|amd64|AMD64)")
 	set(HOST_X86_64 true)
@@ -442,17 +629,110 @@ else()
 	set(ENABLE_ASM false)
 endif()
 
+if(MSVC AND HOST_AARCH64 AND NOT CMAKE_CROSSCOMPILING AND
+    CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+	set(BN_CT_TEST_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/bn_ct_test.c")
+	file(WRITE "${BN_CT_TEST_SOURCE}" [=[
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdio.h>
+
+typedef uint64_t BN_ULONG;
+
+#define BN_BITS2 64
+
+static __inline int
+bn_ct_ne_zero(BN_ULONG w)
+{
+	return (w | ~(w - 1)) >> (BN_BITS2 - 1);
+}
+
+static __inline void
+bn_addw(BN_ULONG a, BN_ULONG b, BN_ULONG *out_r1, BN_ULONG *out_r0)
+{
+	BN_ULONG c1, c2, r1, r0;
+
+	c1 = a | b;
+	c2 = a & b;
+	r0 = a + b;
+	r1 = ((c1 & ~r0) | c2) >> (BN_BITS2 - 1);
+
+	*out_r1 = r1;
+	*out_r0 = r0;
+}
+
+static __inline void
+bn_addw_addw(BN_ULONG a, BN_ULONG b, BN_ULONG c, BN_ULONG *out_r1,
+    BN_ULONG *out_r0)
+{
+	BN_ULONG carry, r1, r0;
+
+	bn_addw(a, b, &r1, &r0);
+	bn_addw(r0, c, &carry, &r0);
+	r1 += carry;
+
+	*out_r1 = r1;
+	*out_r0 = r0;
+}
+
+static BN_ULONG
+make_mask(BN_ULONG a, BN_ULONG b, BN_ULONG c, BN_ULONG borrow)
+{
+	BN_ULONG carry, ignored;
+
+	bn_addw_addw(a, b, c, &carry, &ignored);
+
+	return bn_ct_ne_zero(carry) - borrow;
+}
+
+static volatile BN_ULONG input_a = UINT64_MAX;
+static volatile BN_ULONG input_b = 1;
+static volatile BN_ULONG input_c = 0;
+static volatile BN_ULONG input_borrow = 0;
+
+int
+main(void)
+{
+	BN_ULONG actual, expected = 1;
+
+	actual = make_mask(input_a, input_b, input_c, input_borrow);
+	if (actual != expected) {
+		printf("FAIL: expected 0x%016" PRIx64 ", got 0x%016" PRIx64 "\n",
+		    expected, actual);
+		return 1;
+	}
+
+	return 0;
+}
+]=])
+	set(BN_CT_SAVED_CONFIGURATION "${CMAKE_TRY_COMPILE_CONFIGURATION}")
+	set(CMAKE_TRY_COMPILE_CONFIGURATION Release)
+	try_run(BN_CT_RUN_RESULT BN_CT_COMPILED
+	    "${CMAKE_CURRENT_BINARY_DIR}"
+	    "${BN_CT_TEST_SOURCE}")
+	set(CMAKE_TRY_COMPILE_CONFIGURATION "${BN_CT_SAVED_CONFIGURATION}")
+	if(BN_CT_COMPILED AND BN_CT_RUN_RESULT EQUAL 0)
+		message(STATUS "MSVC ARM64 optimizer check passed; workaround disabled")
+		add_definitions(-DMSVC_ARM64_BN_CT_NE_ZERO_WORKS)
+	else()
+		message(STATUS "MSVC ARM64 optimizer check failed; workaround enabled "
+		    "(compiled=${BN_CT_COMPILED}, result=${BN_CT_RUN_RESULT})")
+	endif()
+endif()
+
 if(ENABLE_ASM)
 	if(CMAKE_C_COMPILER_ABI STREQUAL "ELF")
-		if(HOST_X86_64)
+		if(HOST_AARCH64)
+			set(HOST_ASM_ELF_AARCH64 true)
+		elseif(HOST_X86_64)
 			set(HOST_ASM_ELF_X86_64 true)
-		elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS" AND HOST_I386)
+		elseif(SOLARIS AND HOST_I386)
 			set(HOST_ASM_ELF_X86_64 true)
 		endif()
 		add_definitions(-DHAVE_GNU_STACK)
 	elseif(APPLE AND HOST_X86_64)
 		set(HOST_ASM_MACOSX_X86_64 true)
-	elseif(MSVC AND (CMAKE_GENERATOR MATCHES "Win64" OR CMAKE_GENERATOR_PLATFORM STREQUAL "x64"))
+	elseif(MSVC AND HOST_X86_64)
 		set(HOST_ASM_MASM_X86_64 true)
 		ENABLE_LANGUAGE(ASM_MASM)
 	elseif(MINGW AND HOST_X86_64)
@@ -498,12 +778,16 @@ if(OPENSSLDIR STREQUAL "")
 	if(WIN32)
 		set(OPENSSLDIR "C:/Windows/libressl/ssl")
 	else()
-		set(OPENSSLDIR "${CMAKE_INSTALL_SYSCONFDIR}/ssl")
+		set(OPENSSLDIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/ssl")
 	endif()
 
 	set(CONF_DIR "${CMAKE_INSTALL_SYSCONFDIR}/ssl")
 else()
 	set(CONF_DIR "${OPENSSLDIR}")
+endif()
+
+if(TLS_DEFAULT_CA_FILE STREQUAL "")
+	set(TLS_DEFAULT_CA_FILE "${OPENSSLDIR}/cert.pem")
 endif()
 
 add_subdirectory(include)
@@ -592,7 +876,22 @@ if(ENABLE_LIBRESSL_INSTALL)
 			DESTINATION ${CMAKE_INSTALL_LIBDIR})
 	endif()
 
-	install(FILES cert.pem openssl.cnf x509v3.cnf DESTINATION ${CONF_DIR})
+	# Like the autotools install hook, leave configuration files and trust
+	# anchors that already exist alone, so local changes survive a reinstall.
+	if(IS_ABSOLUTE "${CONF_DIR}")
+		set(CONF_INSTALL_DIR "${CONF_DIR}")
+	else()
+		set(CONF_INSTALL_DIR "\${CMAKE_INSTALL_PREFIX}/${CONF_DIR}")
+	endif()
+	foreach(CONF_FILE cert.pem openssl.cnf x509v3.cnf)
+		install(CODE "
+			if(EXISTS \"\$ENV{DESTDIR}${CONF_INSTALL_DIR}/${CONF_FILE}\")
+				message(STATUS \"\$ENV{DESTDIR}${CONF_INSTALL_DIR}/${CONF_FILE} already exists, install will not overwrite\")
+			else()
+				file(INSTALL \"${CMAKE_CURRENT_SOURCE_DIR}/${CONF_FILE}\"
+					DESTINATION \"${CONF_INSTALL_DIR}\")
+			endif()")
+	endforeach()
 	install(DIRECTORY DESTINATION ${CONF_DIR}/certs)
 
  	if(NOT TARGET uninstall)

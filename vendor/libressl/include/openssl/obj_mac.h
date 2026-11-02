@@ -903,6 +903,26 @@
 #define NID_id_ct_rpkiSignedPrefixList		1054
 #define OBJ_id_ct_rpkiSignedPrefixList		OBJ_id_smime_ct,51L
 
+#define SN_id_ct_rpkiCanonicalCacheRepresentation		"id-ct-rpkiCanonicalCacheRepresentation"
+#define NID_id_ct_rpkiCanonicalCacheRepresentation		1057
+#define OBJ_id_ct_rpkiCanonicalCacheRepresentation		OBJ_id_smime_ct,54L
+
+#define SN_id_ct_rpkiErikIndex		"id-ct-rpkiErikIndex"
+#define NID_id_ct_rpkiErikIndex		1058
+#define OBJ_id_ct_rpkiErikIndex		OBJ_id_smime_ct,55L
+
+#define SN_id_ct_rpkiErikPartition		"id-ct-rpkiErikPartition"
+#define NID_id_ct_rpkiErikPartition		1059
+#define OBJ_id_ct_rpkiErikPartition		OBJ_id_smime_ct,56L
+
+#define SN_id_ct_CDR		"id-ct-CDR"
+#define NID_id_ct_CDR		1060
+#define OBJ_id_ct_CDR		OBJ_id_smime_ct,58L
+
+#define SN_id_ct_rpkiErikSegmentIndex		"id-ct-rpkiErikSegmentIndex"
+#define NID_id_ct_rpkiErikSegmentIndex		1062
+#define OBJ_id_ct_rpkiErikSegmentIndex		OBJ_id_smime_ct,59L
+
 #define SN_id_smime_aa_receiptRequest		"id-smime-aa-receiptRequest"
 #define NID_id_smime_aa_receiptRequest		212
 #define OBJ_id_smime_aa_receiptRequest		OBJ_id_smime_aa,1L
@@ -1970,6 +1990,11 @@
 #define LN_rpkiNotify		"RPKI Notify"
 #define NID_rpkiNotify		1012
 #define OBJ_rpkiNotify		OBJ_id_ad,13L
+
+#define SN_communityDefinition		"communityDefinition"
+#define LN_communityDefinition		"Community Definition Reference"
+#define NID_communityDefinition		1061
+#define OBJ_communityDefinition		OBJ_id_ad,15L
 
 #define OBJ_id_pkix_OCSP		OBJ_ad_OCSP
 

@@ -22,8 +22,9 @@ if(HOST_ASM_ELF_AARCH64)
 		ASM_AARCH64_ELF_SRC
 		sha/sha1_aarch64_ce.S
 		sha/sha256_aarch64_ce.S
-		sha/sha256_aarch64_ce.S
+		sha/sha512_aarch64_ce.S
 	)
+	add_definitions(-DLIBRESSL_USE_SHA_ASSEMBLY)
 	set(CRYPTO_SRC ${CRYPTO_SRC} ${ASM_AARCH64_ELF_SRC})
 endif()
 
@@ -636,10 +637,6 @@ if(NOT HAVE_FREEZERO)
 	set(COMPAT_SRC ${COMPAT_SRC} compat/freezero.c)
 endif()
 
-if(NOT HAVE_FTRUNCATE)
-	set(COMPAT_SRC ${COMPAT_SRC} compat/ftruncate.c)
-endif()
-
 if(NOT HAVE_GETDELIM)
 	set(COMPAT_SRC ${COMPAT_SRC} compat/getdelim.c)
 endif()
@@ -751,8 +748,7 @@ if(NOT ENABLE_ASM)
 	add_definitions(-DOPENSSL_NO_ASM)
 else()
 	if(MSVC)
-		if((NOT "${CMAKE_GENERATOR}" MATCHES "Win64") AND
-		   (NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "x64"))
+		if(NOT HOST_ASM_MASM_X86_64)
 			add_definitions(-DOPENSSL_NO_ASM)
 		endif()
 	elseif(WIN32 AND NOT MINGW)

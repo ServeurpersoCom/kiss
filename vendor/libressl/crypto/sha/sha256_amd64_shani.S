@@ -1,4 +1,4 @@
-/* $OpenBSD: sha256_amd64_shani.S,v 1.4 2026/03/28 13:11:28 jsing Exp $ */
+/* $OpenBSD: sha256_amd64_shani.S,v 1.8 2026/05/12 15:07:30 jsing Exp $ */
 /*
  * Copyright (c) 2024 Joel Sing <jsing@openbsd.org>
  *
@@ -16,6 +16,8 @@
  */
 
 #include "crypto_assembly.h"
+
+#define	_SEP	CRYPTO_ASSEMBLY_SEPARATOR
 
 /*
  * SHA-256 implementation using the Intel SHA extensions:
@@ -50,33 +52,33 @@
 #define	xtmp0		%xmm12
 
 #define sha256_message_schedule_load(idx, m, xmsgtmp) \
-	movdqu	(idx*16)(m), xmsg;					\
-	pshufb	xshufmask, xmsg;					\
+	movdqu	(idx*16)(m), xmsg					_SEP \
+	pshufb	xshufmask, xmsg						_SEP \
 	movdqa	xmsg, xmsgtmp
 
 #define sha256_message_schedule_update(xmt0, xmt1, xmt2, xmt3) \
-	sha256msg1 xmt1, xmt0;						\
-	movdqa	xmt3, xmsgtmp4;						\
-	palignr	$4, xmt2, xmsgtmp4;					\
-	paddd	xmsgtmp4, xmt0;						\
+	sha256msg1 xmt1, xmt0						_SEP \
+	movdqa	xmt3, xmsgtmp4						_SEP \
+	palignr	$4, xmt2, xmsgtmp4					_SEP \
+	paddd	xmsgtmp4, xmt0						_SEP \
 	sha256msg2 xmt3, xmt0
 
 #define sha256_shani_round(idx) \
-	paddd	(idx*16)(k256), xmsg;					\
-	sha256rnds2 xmsg, xhs0, xhs1;					\
-	pshufd	$0x0e, xmsg, xmsg;					\
+	paddd	(idx*16)(k256), xmsg					_SEP \
+	sha256rnds2 xmsg, xhs0, xhs1					_SEP \
+	pshufd	$0x0e, xmsg, xmsg					_SEP \
 	sha256rnds2 xmsg, xhs1, xhs0
 
 #define sha256_shani_round_load(idx, m, xmsgtmp) \
-	sha256_message_schedule_load(idx, m, xmsgtmp);			\
+	sha256_message_schedule_load(idx, m, xmsgtmp)			_SEP \
 	sha256_shani_round(idx)
 
 #define sha256_shani_round_update(idx, xmt0, xmt1, xmt2, xmt3) \
-	sha256_message_schedule_update(xmt0, xmt1, xmt2, xmt3);		\
-	movdqa	xmt0, xmsg;						\
+	sha256_message_schedule_update(xmt0, xmt1, xmt2, xmt3)		_SEP \
+	movdqa	xmt0, xmsg						_SEP \
 	sha256_shani_round(idx)
 
-.section .text
+.section CRYPTO_ASSEMBLY_SECTION_TEXT
 
 /*
  * void sha256_block_shani(SHA256_CTX *ctx, const void *in, size_t num);
@@ -84,9 +86,7 @@
  * Standard x86-64 ABI: rdi = ctx, rsi = in, rdx = num
  */
 .align 16
-.globl	sha256_block_shani
-.type	sha256_block_shani,@function
-sha256_block_shani:
+CRYPTO_ASSEMBLY_GLOBAL_FUNCTION(sha256_block_shani):
 	_CET_ENDBR
 
 	/* Save callee save registers. */
@@ -169,23 +169,21 @@ sha256_block_shani:
 
 	ret
 
-.section .rodata
+.section CRYPTO_ASSEMBLY_SECTION_RODATA
 
 /*
  * Shuffle mask - little endian to big endian word conversion.
  */
 .align	16
-.type	shufmask,@object
-shufmask:
+CRYPTO_ASSEMBLY_OBJECT_START(shufmask):
 .octa	0x0c0d0e0f08090a0b0405060700010203
-.size	shufmask,.-shufmask
+CRYPTO_ASSEMBLY_OBJECT_END(shufmask)
 
 /*
  * SHA-256 constants - see FIPS 180-4 section 4.2.2.
  */
 .align	64
-.type	K256,@object
-K256:
+CRYPTO_ASSEMBLY_OBJECT_START(K256):
 .long	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5
 .long	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5
 .long	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3
@@ -202,7 +200,7 @@ K256:
 .long	0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3
 .long	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208
 .long	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-.size	K256,.-K256
+CRYPTO_ASSEMBLY_OBJECT_END(K256)
 
 #if defined(__linux__) && defined(__ELF__)
 .section .note.GNU-stack,"",%progbits

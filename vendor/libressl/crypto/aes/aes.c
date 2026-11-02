@@ -1,4 +1,4 @@
-/* $OpenBSD: aes.c,v 1.17 2025/09/15 07:36:12 tb Exp $ */
+/* $OpenBSD: aes.c,v 1.19 2026/07/31 03:59:50 kenjiro Exp $ */
 /* ====================================================================
  * Copyright (c) 2002-2006 The OpenSSL Project.  All rights reserved.
  *
@@ -55,6 +55,7 @@
 #include <openssl/crypto.h>
 #include <openssl/modes.h>
 
+#include "aes_local.h"
 #include "crypto_arch.h"
 #include "crypto_internal.h"
 #include "modes_local.h"
@@ -135,7 +136,7 @@ aes_encrypt_block128(const unsigned char *in, unsigned char *out, const void *ke
 	aes_encrypt_internal(in, out, key);
 }
 
-void
+static void
 aes_decrypt_block128(const unsigned char *in, unsigned char *out, const void *key)
 {
 	aes_decrypt_internal(in, out, key);

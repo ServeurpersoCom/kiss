@@ -1,4 +1,4 @@
-/* $OpenBSD: tls_verify.c,v 1.33 2026/03/28 11:33:33 tb Exp $ */
+/* $OpenBSD: tls_verify.c,v 1.37 2026/09/19 16:56:13 tb Exp $ */
 /*
  * Copyright (c) 2014 Jeremie Courreges-Anglas <jca@openbsd.org>
  *
@@ -25,6 +25,7 @@
 #include <openssl/x509v3.h>
 
 #include <tls.h>
+
 #include "tls_internal.h"
 
 static int
@@ -59,6 +60,9 @@ tls_match_name(const char *cert_name, const char *name)
 		/* Disallow "*.bar" */
 		if (next_dot == NULL)
 			return -1;
+		/* Disallow "*.bar." */
+		if (next_dot[1] == '\0')
+			return -1;
 		/* Disallow "*.bar.." */
 		if (next_dot[1] == '.')
 			return -1;
@@ -90,6 +94,7 @@ tls_check_subject_altname(struct tls *ctx, X509 *cert, const char *name,
 {
 	STACK_OF(GENERAL_NAME) *altname_stack = NULL;
 	union tls_addr addrbuf;
+	char *datastr = NULL;
 	int addrlen, type;
 	int count, i;
 	int critical = 0;
@@ -141,7 +146,8 @@ tls_check_subject_altname(struct tls *ctx, X509 *cert, const char *name,
 				data = ASN1_STRING_get0_data(altname->d.dNSName);
 				len = ASN1_STRING_length(altname->d.dNSName);
 
-				if (len < 0 || (size_t)len != strlen(data)) {
+				if (len < 0 ||
+				    (size_t)len != strnlen(data, len)) {
 					tls_set_errorx(ctx, TLS_ERROR_UNKNOWN,
 					    "error verifying name '%s': "
 					    "NUL byte in subjectAltName, "
@@ -150,12 +156,19 @@ tls_check_subject_altname(struct tls *ctx, X509 *cert, const char *name,
 					goto err;
 				}
 
+				if ((datastr = strndup(data, len)) == NULL) {
+					tls_set_errorx(ctx,
+					    TLS_ERROR_OUT_OF_MEMORY,
+					    "out of memory");
+					goto err;
+				}
+
 				/*
 				 * Per RFC 5280 section 4.2.1.6:
 				 * " " is a legal domain name, but that
 				 * dNSName must be rejected.
 				 */
-				if (strcmp(data, " ") == 0) {
+				if (strcmp(datastr, " ") == 0) {
 					tls_set_errorx(ctx, TLS_ERROR_UNKNOWN,
 					    "error verifying name '%s': "
 					    "a dNSName of \" \" must not be "
@@ -163,10 +176,13 @@ tls_check_subject_altname(struct tls *ctx, X509 *cert, const char *name,
 					goto err;
 				}
 
-				if (tls_match_name(data, name) == 0) {
+				if (tls_match_name(datastr, name) == 0) {
 					*alt_match = 1;
 					goto done;
 				}
+
+				free(datastr);
+				datastr = NULL;
 			} else {
 #ifdef DEBUG
 				fprintf(stdout, "%s: unhandled subjectAltName "
@@ -206,6 +222,7 @@ tls_check_subject_altname(struct tls *ctx, X509 *cert, const char *name,
 
  err:
 	sk_GENERAL_NAME_pop_free(altname_stack, GENERAL_NAME_free);
+	free(datastr);
 	return rv;
 }
 

@@ -1,4 +1,4 @@
-/* $OpenBSD: ssl_local.h,v 1.37 2026/04/03 13:11:00 jsing Exp $ */
+/* $OpenBSD: ssl_local.h,v 1.49 2026/09/22 03:45:18 jsing Exp $ */
 /* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
  * All rights reserved.
  *
@@ -162,6 +162,7 @@
 
 #include "bytestring.h"
 #include "tls_content.h"
+#include "tls12_internal.h"
 #include "tls13_internal.h"
 
 __BEGIN_HIDDEN_DECLS
@@ -262,10 +263,6 @@ __BEGIN_HIDDEN_DECLS
  * Cipher argument is so that this can be variable in the future.
  */
 #define SSL_C_PKEYLENGTH(c)	1024
-
-/* See if we use signature algorithms extension. */
-#define SSL_USE_SIGALGS(s) \
-	(s->method->enc_flags & SSL_ENC_FLAG_SIGALGS)
 
 /* Allow TLS 1.2 ciphersuites: applies to DTLS 1.2 as well as TLS 1.2. */
 #define SSL_USE_TLS1_2_CIPHERS(s) \
@@ -432,7 +429,7 @@ struct ssl_session_st {
 
 	char *tlsext_hostname;
 
-	/* Session resumption - RFC 5077 and RFC 8446. */
+	/* Session resumption - RFC 5077 and RFC 9846. */
 	unsigned char *tlsext_tick;		/* Session ticket */
 	size_t tlsext_ticklen;			/* Session ticket length */
 	uint32_t tlsext_tick_lifetime_hint;	/* Session lifetime hint in seconds */
@@ -616,42 +613,6 @@ int tls12_key_block_generate(struct tls12_key_block *kb, SSL *s,
     const EVP_AEAD *aead, const EVP_CIPHER *cipher, const EVP_MD *mac_hash);
 
 struct tls12_record_layer;
-
-struct tls12_record_layer *tls12_record_layer_new(void);
-void tls12_record_layer_free(struct tls12_record_layer *rl);
-void tls12_record_layer_alert(struct tls12_record_layer *rl,
-    uint8_t *alert_desc);
-int tls12_record_layer_write_overhead(struct tls12_record_layer *rl,
-    size_t *overhead);
-int tls12_record_layer_read_protected(struct tls12_record_layer *rl);
-int tls12_record_layer_write_protected(struct tls12_record_layer *rl);
-void tls12_record_layer_set_aead(struct tls12_record_layer *rl,
-    const EVP_AEAD *aead);
-void tls12_record_layer_set_cipher_hash(struct tls12_record_layer *rl,
-    const EVP_CIPHER *cipher, const EVP_MD *handshake_hash,
-    const EVP_MD *mac_hash);
-void tls12_record_layer_set_version(struct tls12_record_layer *rl,
-    uint16_t version);
-void tls12_record_layer_set_initial_epoch(struct tls12_record_layer *rl,
-    uint16_t epoch);
-uint16_t tls12_record_layer_read_epoch(struct tls12_record_layer *rl);
-uint16_t tls12_record_layer_write_epoch(struct tls12_record_layer *rl);
-int tls12_record_layer_use_write_epoch(struct tls12_record_layer *rl,
-    uint16_t epoch);
-void tls12_record_layer_write_epoch_done(struct tls12_record_layer *rl,
-    uint16_t epoch);
-void tls12_record_layer_clear_read_state(struct tls12_record_layer *rl);
-void tls12_record_layer_clear_write_state(struct tls12_record_layer *rl);
-void tls12_record_layer_reflect_seq_num(struct tls12_record_layer *rl);
-int tls12_record_layer_change_read_cipher_state(struct tls12_record_layer *rl,
-    CBS *mac_key, CBS *key, CBS *iv);
-int tls12_record_layer_change_write_cipher_state(struct tls12_record_layer *rl,
-    CBS *mac_key, CBS *key, CBS *iv);
-int tls12_record_layer_open_record(struct tls12_record_layer *rl,
-    uint8_t *buf, size_t buf_len, struct tls_content *out);
-int tls12_record_layer_seal_record(struct tls12_record_layer *rl,
-    uint8_t content_type, const uint8_t *content, size_t content_len,
-    CBB *out);
 
 typedef void (ssl_info_callback_fn)(const SSL *s, int type, int val);
 typedef void (ssl_msg_callback_fn)(int is_write, int version, int content_type,
@@ -1092,7 +1053,8 @@ typedef struct ssl3_state_st {
 
 	SSL3_RECORD_INTERNAL rrec;	/* each decoded record goes in here */
 
-	struct tls_content *rcontent;	/* Content from opened TLS records. */
+	struct tls12_record *tls_rrec;
+	struct tls12_record *tls_wrec;
 
 	/* we allow one fatal and one warning alert to be outstanding,
 	 * send close alert via the warning alert */
@@ -1133,15 +1095,12 @@ typedef struct ssl3_state_st {
 
 	SSL_HANDSHAKE hs;
 
-	/* Connection binding to prevent renegotiation attacks */
+	/* Renegotiation Indication (RI) - RFC 5746. */
+	int secure_renegotiation;
 	unsigned char previous_client_finished[EVP_MAX_MD_SIZE];
 	unsigned char previous_client_finished_len;
 	unsigned char previous_server_finished[EVP_MAX_MD_SIZE];
 	unsigned char previous_server_finished_len;
-	int send_connection_binding; /* TODOEKR */
-
-	/* Set if we saw a Renegotiation Indication extension from our peer. */
-	int renegotiate_seen;
 
 	/*
 	 * ALPN information.
@@ -1163,9 +1122,6 @@ typedef struct ssl3_state_st {
  * Flag values for enc_flags.
  */
 
-/* Uses signature algorithms extension. */
-#define SSL_ENC_FLAG_SIGALGS            (1 << 1)
-
 /* Allow TLS 1.2 ciphersuites: applies to DTLS 1.2 as well as TLS 1.2. */
 #define SSL_ENC_FLAG_TLS1_2_CIPHERS     (1 << 4)
 
@@ -1174,10 +1130,8 @@ typedef struct ssl3_state_st {
 
 #define TLSV1_ENC_FLAGS		0
 #define TLSV1_1_ENC_FLAGS	0
-#define TLSV1_2_ENC_FLAGS	(SSL_ENC_FLAG_SIGALGS		| \
-				 SSL_ENC_FLAG_TLS1_2_CIPHERS)
-#define TLSV1_3_ENC_FLAGS	(SSL_ENC_FLAG_SIGALGS		| \
-				 SSL_ENC_FLAG_TLS1_3_CIPHERS)
+#define TLSV1_2_ENC_FLAGS	SSL_ENC_FLAG_TLS1_2_CIPHERS
+#define TLSV1_3_ENC_FLAGS	SSL_ENC_FLAG_TLS1_3_CIPHERS
 
 extern const SSL_CIPHER ssl3_ciphers[];
 
@@ -1186,15 +1140,17 @@ int ssl_version_set_min(const SSL_METHOD *meth, uint16_t proto_ver,
     uint16_t max_tls_ver, uint16_t *out_tls_ver, uint16_t *out_proto_ver);
 int ssl_version_set_max(const SSL_METHOD *meth, uint16_t proto_ver,
     uint16_t min_tls_ver, uint16_t *out_tls_ver, uint16_t *out_proto_ver);
-int ssl_enabled_tls_version_range(SSL *s, uint16_t *min_ver, uint16_t *max_ver);
-int ssl_supported_tls_version_range(SSL *s, uint16_t *min_ver, uint16_t *max_ver);
+int ssl_enabled_tls_version_range(const SSL *s, uint16_t *min_ver,
+    uint16_t *max_ver);
+int ssl_supported_tls_version_range(const SSL *s, uint16_t *min_ver,
+    uint16_t *max_ver);
 uint16_t ssl_tls_version(uint16_t version);
-uint16_t ssl_effective_tls_version(SSL *s);
-int ssl_max_supported_version(SSL *s, uint16_t *max_ver);
-int ssl_max_legacy_version(SSL *s, uint16_t *max_ver);
-int ssl_max_shared_version(SSL *s, uint16_t peer_ver, uint16_t *max_ver);
-int ssl_check_version_from_server(SSL *s, uint16_t server_version);
-int ssl_legacy_stack_version(SSL *s, uint16_t version);
+uint16_t ssl_effective_tls_version(const SSL *s);
+int ssl_max_supported_version(const SSL *s, uint16_t *max_ver);
+int ssl_max_legacy_version(const SSL *s, uint16_t *max_ver);
+int ssl_max_shared_version(const SSL *s, uint16_t peer_ver, uint16_t *max_ver);
+int ssl_check_version_from_server(const SSL *s, uint16_t server_version);
+int ssl_legacy_stack_version(const SSL *s, uint16_t version);
 int ssl_cipher_in_list(STACK_OF(SSL_CIPHER) *ciphers, const SSL_CIPHER *cipher);
 int ssl_cipher_allowed_in_tls_version_range(const SSL_CIPHER *cipher,
     uint16_t min_ver, uint16_t max_ver);
@@ -1316,7 +1272,6 @@ long	ssl3_callback_ctrl(SSL *s, int cmd, void (*fp)(void));
 long	ssl3_ctx_callback_ctrl(SSL_CTX *s, int cmd, void (*fp)(void));
 int	ssl3_pending(const SSL *s);
 
-int ssl3_handshake_msg_hdr_len(SSL *s);
 int ssl3_handshake_msg_start(SSL *s, CBB *handshake, CBB *body,
     uint8_t msg_type);
 int ssl3_handshake_msg_finish(SSL *s, CBB *handshake);
@@ -1327,7 +1282,6 @@ int ssl3_do_change_cipher_spec(SSL *ssl);
 
 int ssl3_packet_read(SSL *s, int plen);
 int ssl3_packet_extend(SSL *s, int plen);
-int ssl_server_legacy_first_packet(SSL *s);
 int ssl3_write_pending(SSL *s, int type, const unsigned char *buf,
     unsigned int len);
 
@@ -1345,7 +1299,8 @@ int ssl_kex_derive_dhe(DH *dh, DH *dh_peer,
 int ssl_kex_dummy_ecdhe_x25519(EVP_PKEY *pkey);
 int ssl_kex_generate_ecdhe_ecp(EC_KEY *ecdh, int nid);
 int ssl_kex_public_ecdhe_ecp(EC_KEY *ecdh, CBB *cbb);
-int ssl_kex_peer_public_ecdhe_ecp(EC_KEY *ecdh, int nid, CBS *cbs);
+int ssl_kex_peer_public_ecdhe_ecp(EC_KEY *ecdh, int nid, CBS *cbs,
+    int *decode_error);
 int ssl_kex_derive_ecdhe_ecp(EC_KEY *ecdh, EC_KEY *ecdh_peer,
     uint8_t **shared_key, size_t *shared_key_len);
 

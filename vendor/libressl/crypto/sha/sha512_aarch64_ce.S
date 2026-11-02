@@ -1,4 +1,4 @@
-/* $OpenBSD: sha512_aarch64_ce.S,v 1.4 2026/01/25 08:22:17 jsing Exp $ */
+/* $OpenBSD: sha512_aarch64_ce.S,v 1.9 2026/05/12 15:07:30 jsing Exp $ */
 /*
  * Copyright (c) 2023,2025 Joel Sing <jsing@openbsd.org>
  *
@@ -14,6 +14,10 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
+#include "crypto_assembly.h"
+
+#define	_SEP	CRYPTO_ASSEMBLY_SEPARATOR
 
 /*
  * SHA-512 implementation using the ARM Cryptographic Extension (CE).
@@ -103,9 +107,9 @@
  *   W0 = sigma1(W14) + W9 + sigma0(W1) + W0
  */
 #define sha512_message_schedule_update(m0, m1, m4, m5, m7) \
-	sha512su0 m0.2d, m1.2d;			/* W0 += sigma0(W1) */	\
-	ext	tmp2.16b, m4.16b, m5.16b, #8;	/* W9:W10 */		\
-	sha512su1 m0.2d, m7.2d, tmp2.2d;	/* W0 += sigma1(W14) + W9 */
+	sha512su0 m0.2d, m1.2d			/* W0 += sigma0(W1) */	_SEP \
+	ext	tmp2.16b, m4.16b, m5.16b, #8	/* W9:W10 */		_SEP \
+	sha512su1 m0.2d, m7.2d, tmp2.2d		/* W0 += sigma1(W14) + W9 */
 
 /*
  * Compute two SHA-512 rounds by adding W0:W1 + K0:K1, then computing T1 for two
@@ -142,33 +146,32 @@
  * These values are then rotated by the caller to perform the next two rounds.
  */
 #define sha512_round(h0, h1, h2, h3, h4, h5, w, k) \
-	add	h4.2d, w.2d, k.2d;			/* W0:W1 += K0:K1 */	\
-	ext	h4.16b, h4.16b, h4.16b, #8;		/* W1:W0 (swap) */	\
-	add	h4.2d, h4.2d, h3.2d;			/* W1:W0 += g:h */	\
-	ext	tmp0.16b, h2.16b, h3.16b, #8;		/* f:g */		\
-	ext	tmp1.16b, h1.16b, h2.16b, #8;		/* d:e */		\
-	sha512h	h4##q, tmp0##q, tmp1.2d;		/* T1 */		\
-	add	h5.2d, h1.2d, h4.2d;			/* c:d + T1 */		\
-	sha512h2 h4##q, h1##q, h0.2d;			/* T1 + T2 */
+	add	h4.2d, w.2d, k.2d			/* W0:W1 += K0:K1 */	_SEP \
+	ext	h4.16b, h4.16b, h4.16b, #8		/* W1:W0 (swap) */	_SEP \
+	add	h4.2d, h4.2d, h3.2d			/* W1:W0 += g:h */	_SEP \
+	ext	tmp0.16b, h2.16b, h3.16b, #8		/* f:g */		_SEP \
+	ext	tmp1.16b, h1.16b, h2.16b, #8		/* d:e */		_SEP \
+	sha512h	h4##q, tmp0##q, tmp1.2d			/* T1 */		_SEP \
+	add	h5.2d, h1.2d, h4.2d			/* c:d + T1 */		_SEP \
+	sha512h2 h4##q, h1##q, h0.2d			/* T1 + T2 */
 
 #define sha512_round_initial(h0, h1, h2, h3, h4, h5, w, k) \
 	sha512_round(h0, h1, h2, h3, h4, h5, w, k)
 
 #define sha512_round_update(h0, h1, h2, h3, h4, h5, m0, m1, m2, m3, m4, k) \
-	sha512_message_schedule_update(m0, m1, m2, m3, m4) \
+	sha512_message_schedule_update(m0, m1, m2, m3, m4)			_SEP \
 	sha512_round(h0, h1, h2, h3, h4, h5, m0, k)
 
 .arch	armv8-a+sha3
 
-.section .text
+.section CRYPTO_ASSEMBLY_SECTION_TEXT
 
 /*
  * void sha512_block_ce(SHA512_CTX *ctx, const void *in, size_t num);
  *
  * Standard ARM ABI: x0 = ctx, x1 = in, x2 = num
  */
-.globl	sha512_block_ce
-sha512_block_ce:
+CRYPTO_ASSEMBLY_GLOBAL_FUNCTION(sha512_block_ce):
 
 	/* Save low 64 bits of v8 through v15 to the stack. */
 	sub	sp, sp, #32
@@ -177,8 +180,8 @@ sha512_block_ce:
 	st4	{v12.d, v13.d, v14.d, v15.d}[0], [sp]
 
 	/* Address of SHA-512 constants. */
-	adrp	k512_base, K512
-	add	k512_base, k512_base, :lo12:K512
+	adrp	k512_base, CRYPTO_ASSEMBLY_AARCH64_SYM_HI(K512)
+	add	k512_base, k512_base, CRYPTO_ASSEMBLY_AARCH64_SYM_LO(K512)
 
 	/*
 	 * Load current hash state from context.
@@ -291,14 +294,13 @@ sha512_block_ce:
 
 	ret
 
-.section .rodata
+.section CRYPTO_ASSEMBLY_SECTION_RODATA
 
 /*
  * SHA-512 constants - see FIPS 180-4 section 4.2.3.
  */
 .align	4
-.type	K512,@object
-K512:
+CRYPTO_ASSEMBLY_OBJECT_START(K512):
 .quad	0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc
 .quad	0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118
 .quad	0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2
@@ -319,7 +321,7 @@ K512:
 .quad	0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b
 .quad	0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c
 .quad	0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817
-.size	K512,.-K512
+CRYPTO_ASSEMBLY_OBJECT_END(K512)
 
 #if defined(__linux__) && defined(__ELF__)
 .section .note.GNU-stack,"",%progbits

@@ -1,4 +1,4 @@
-/* $OpenBSD: x509_purp.c,v 1.44 2025/05/10 05:54:39 tb Exp $ */
+/* $OpenBSD: x509_purp.c,v 1.47 2026/09/29 14:03:40 tb Exp $ */
 /* Written by Dr Stephen N Henson (steve@openssl.org) for the OpenSSL
  * project 2001.
  */
@@ -301,9 +301,6 @@ LCRYPTO_ALIAS(X509_supported_extension);
 static void
 setup_dp(X509 *x, DIST_POINT *dp)
 {
-	X509_NAME *iname = NULL;
-	int i;
-
 	if (dp->reasons) {
 		if (dp->reasons->length > 0)
 			dp->dp_reasons = dp->reasons->data[0];
@@ -312,19 +309,6 @@ setup_dp(X509 *x, DIST_POINT *dp)
 		dp->dp_reasons &= CRLDP_ALL_REASONS;
 	} else
 		dp->dp_reasons = CRLDP_ALL_REASONS;
-	if (!dp->distpoint || (dp->distpoint->type != 1))
-		return;
-	for (i = 0; i < sk_GENERAL_NAME_num(dp->CRLissuer); i++) {
-		GENERAL_NAME *gen = sk_GENERAL_NAME_value(dp->CRLissuer, i);
-		if (gen->type == GEN_DIRNAME) {
-			iname = gen->d.directoryName;
-			break;
-		}
-	}
-	if (!iname)
-		iname = X509_get_issuer_name(x);
-
-	DIST_POINT_set_dpname(dp->distpoint, iname);
 }
 
 static void
@@ -580,13 +564,17 @@ x509v3_cache_extensions(X509 *x)
 	return (x->ex_flags & EXFLAG_INVALID) == 0;
 }
 
-/* CA checks common to all purposes
+/*
+ * CA checks common to all purposes
  * return codes:
  * 0 not a CA
- * 1 is a CA
+ * 1 is a CA per RFC 5280.
  * 2 basicConstraints absent so "maybe" a CA
+ *   "I don't know..." fallback removed in 2004 (OpenSSL commit 8f284faa)
  * 3 basicConstraints absent but self signed V1.
  * 4 basicConstraints absent but keyUsage present and keyCertSign asserted.
+ * 5 basicConstraints absent but outdated Netscape Certificate Type extension
+ *   indicates that it is a CA certificate
  */
 
 static int
@@ -620,7 +608,8 @@ check_ca(const X509 *x)
 int
 X509_check_ca(X509 *x)
 {
-	x509v3_cache_extensions(x);
+	if (!x509v3_cache_extensions(x))
+		return 0;
 
 	return check_ca(x);
 }

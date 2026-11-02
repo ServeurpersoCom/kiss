@@ -1,4 +1,4 @@
-/* $OpenBSD: x509_verify.c,v 1.76 2026/05/04 13:55:20 tb Exp $ */
+/* $OpenBSD: x509_verify.c,v 1.82 2026/09/28 23:17:08 kenjiro Exp $ */
 /*
  * Copyright (c) 2020-2021 Bob Beck <beck@openbsd.org>
  *
@@ -83,7 +83,7 @@ x509_verify_asn1_time_to_time_t(const ASN1_TIME *atime, int notAfter,
 	return asn1_time_tm_to_time_t(&tm, out);
 }
 
-struct x509_verify_chain *
+static struct x509_verify_chain *
 x509_verify_chain_new(void)
 {
 	struct x509_verify_chain *chain;
@@ -199,7 +199,7 @@ x509_verify_chain_last(struct x509_verify_chain *chain)
 	return sk_X509_value(chain->certs, last);
 }
 
-X509 *
+static X509 *
 x509_verify_chain_leaf(struct x509_verify_chain *chain)
 {
 	if (chain->certs == NULL)
@@ -760,8 +760,11 @@ x509_verify_cert_hostname(struct x509_verify_ctx *ctx, X509 *cert, char *name)
 		if (ctx->xsc != NULL) {
 			int ret;
 
-			if ((ret = x509_vfy_check_id(ctx->xsc)) == 0)
+			ret = x509_vfy_check_id(ctx->xsc);
+			if (ctx->xsc->error != X509_V_OK) {
 				ctx->error = ctx->xsc->error;
+				ctx->error_depth = ctx->xsc->error_depth;
+			}
 			return ret;
 		}
 		return 1;
@@ -909,7 +912,8 @@ x509_verify_cert_extensions(struct x509_verify_ctx *ctx, X509 *cert, int need_ca
 		ctx->error = X509_V_ERR_INVALID_CA;
 		return 0;
 	}
-	if (ctx->purpose > 0 && X509_check_purpose(cert, ctx->purpose, need_ca)) {
+	if (ctx->purpose > 0 &&
+	    X509_check_purpose(cert, ctx->purpose, need_ca) != 1) {
 		ctx->error = X509_V_ERR_INVALID_PURPOSE;
 		return 0;
 	}
@@ -1145,6 +1149,12 @@ x509_verify(struct x509_verify_ctx *ctx, X509 *leaf, char *name)
 		ctx->error = X509_V_ERR_OUT_OF_MEM;
 		goto err;
 	}
+
+        if (!x509_verify_cert_cache_extensions(leaf)) {
+		ctx->error = X509_V_ERR_OUT_OF_MEM;	/* XXX */
+		x509_verify_chain_free(current_chain);
+		goto err;
+        }
 
 	/*
 	 * Add the leaf to the chain and try to build chains from it.

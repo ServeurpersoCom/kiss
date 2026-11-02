@@ -1,4 +1,4 @@
-/* $OpenBSD: asn1_gen.c,v 1.28 2025/05/10 05:54:38 tb Exp $ */
+/* $OpenBSD: asn1_gen.c,v 1.35 2026/09/02 07:15:01 tb Exp $ */
 /* Written by Dr Stephen N Henson (steve@openssl.org) for the OpenSSL
  * project 2002.
  */
@@ -436,57 +436,63 @@ parse_tagging(const char *vstart, int vlen, int *ptag, int *pclass)
 static ASN1_TYPE *
 asn1_multi(int utype, const char *section, X509V3_CTX *cnf)
 {
-	ASN1_TYPE *ret = NULL;
 	STACK_OF(ASN1_TYPE) *sk = NULL;
 	STACK_OF(CONF_VALUE) *sect = NULL;
+	ASN1_TYPE *ret = NULL, *typ = NULL;
+	ASN1_STRING *astr = NULL;
 	unsigned char *der = NULL;
 	int derlen;
 	int i;
-	sk = sk_ASN1_TYPE_new_null();
-	if (!sk)
-		goto bad;
-	if (section) {
-		if (!cnf)
-			goto bad;
-		sect = X509V3_get0_section(cnf, section);
-		if (!sect)
-			goto bad;
+
+	if ((sk = sk_ASN1_TYPE_new_null()) == NULL)
+		goto err;
+
+	if (section != NULL) {
+		if (cnf == NULL)
+			goto err;
+
+		if ((sect = X509V3_get0_section(cnf, section)) == NULL)
+			goto err;
+
 		for (i = 0; i < sk_CONF_VALUE_num(sect); i++) {
-			ASN1_TYPE *typ = ASN1_generate_v3(
-			    sk_CONF_VALUE_value(sect, i)->value, cnf);
-			if (!typ)
-				goto bad;
-			if (!sk_ASN1_TYPE_push(sk, typ))
-				goto bad;
+			CONF_VALUE *val = sk_CONF_VALUE_value(sect, i);
+
+			if ((typ = ASN1_generate_v3(val->value, cnf)) == NULL)
+				goto err;
+			if (sk_ASN1_TYPE_push(sk, typ) <= 0)
+				goto err;
+			typ = NULL;
 		}
 	}
 
-	/* Now we has a STACK of the components, convert to the correct form */
-
+	/* DER encode the stack as a SET or a SEQUENCE per utype. */
 	if (utype == V_ASN1_SET)
 		derlen = i2d_ASN1_SET_ANY(sk, &der);
 	else
 		derlen = i2d_ASN1_SEQUENCE_ANY(sk, &der);
 
 	if (derlen < 0)
-		goto bad;
+		goto err;
 
-	if (!(ret = ASN1_TYPE_new()))
-		goto bad;
-
-	if (!(ret->value.asn1_string = ASN1_STRING_type_new(utype)))
-		goto bad;
-
-	ret->type = utype;
-
-	ret->value.asn1_string->data = der;
-	ret->value.asn1_string->length = derlen;
-
+	if ((astr = ASN1_STRING_type_new(utype)) == NULL)
+		goto err;
+	ASN1_STRING_set0(astr, der, derlen);
 	der = NULL;
+	derlen = 0;
 
- bad:
-	free(der);
+	if ((typ = ASN1_TYPE_new()) == NULL)
+		goto err;
+	ASN1_TYPE_set(typ, utype, astr);
+	astr = NULL;
+
+	ret = typ;
+	typ = NULL;
+
+ err:
 	sk_ASN1_TYPE_pop_free(sk, ASN1_TYPE_free);
+	ASN1_TYPE_free(typ);
+	ASN1_STRING_free(astr);
+	free(der);
 
 	return ret;
 }

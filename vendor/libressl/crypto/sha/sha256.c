@@ -1,4 +1,4 @@
-/* $OpenBSD: sha256.c,v 1.33 2025/02/14 12:01:58 jsing Exp $ */
+/* $OpenBSD: sha256.c,v 1.38 2026/05/09 07:14:42 jsing Exp $ */
 /* ====================================================================
  * Copyright (c) 1998-2011 The OpenSSL Project.  All rights reserved.
  *
@@ -72,7 +72,10 @@ void sha256_block_data_order(SHA256_CTX *ctx, const void *_in, size_t num);
 void sha256_block_generic(SHA256_CTX *ctx, const void *_in, size_t num);
 
 #ifndef HAVE_SHA256_BLOCK_GENERIC
-static const SHA_LONG K256[64] = {
+/*
+ * SHA-256 constants - see FIPS 180-4 section 4.2.2.
+ */
+static const uint32_t K256[64] = {
 	0x428a2f98UL, 0x71374491UL, 0xb5c0fbcfUL, 0xe9b5dba5UL,
 	0x3956c25bUL, 0x59f111f1UL, 0x923f82a4UL, 0xab1c5ed5UL,
 	0xd807aa98UL, 0x12835b01UL, 0x243185beUL, 0x550c7dc3UL,
@@ -91,55 +94,55 @@ static const SHA_LONG K256[64] = {
 	0x90befffaUL, 0xa4506cebUL, 0xbef9a3f7UL, 0xc67178f2UL,
 };
 
-static inline SHA_LONG
-Sigma0(SHA_LONG x)
+static inline uint32_t
+Sigma0(uint32_t x)
 {
 	return crypto_ror_u32(x, 2) ^ crypto_ror_u32(x, 13) ^
 	    crypto_ror_u32(x, 22);
 }
 
-static inline SHA_LONG
-Sigma1(SHA_LONG x)
+static inline uint32_t
+Sigma1(uint32_t x)
 {
 	return crypto_ror_u32(x, 6) ^ crypto_ror_u32(x, 11) ^
 	    crypto_ror_u32(x, 25);
 }
 
-static inline SHA_LONG
-sigma0(SHA_LONG x)
+static inline uint32_t
+sigma0(uint32_t x)
 {
 	return crypto_ror_u32(x, 7) ^ crypto_ror_u32(x, 18) ^ (x >> 3);
 }
 
-static inline SHA_LONG
-sigma1(SHA_LONG x)
+static inline uint32_t
+sigma1(uint32_t x)
 {
 	return crypto_ror_u32(x, 17) ^ crypto_ror_u32(x, 19) ^ (x >> 10);
 }
 
-static inline SHA_LONG
-Ch(SHA_LONG x, SHA_LONG y, SHA_LONG z)
+static inline uint32_t
+Ch(uint32_t x, uint32_t y, uint32_t z)
 {
 	return (x & y) ^ (~x & z);
 }
 
-static inline SHA_LONG
-Maj(SHA_LONG x, SHA_LONG y, SHA_LONG z)
+static inline uint32_t
+Maj(uint32_t x, uint32_t y, uint32_t z)
 {
 	return (x & y) ^ (x & z) ^ (y & z);
 }
 
 static inline void
-sha256_msg_schedule_update(SHA_LONG *W0, SHA_LONG W1, SHA_LONG W9, SHA_LONG W14)
+sha256_msg_schedule_update(uint32_t *W0, uint32_t W1, uint32_t W9, uint32_t W14)
 {
 	*W0 = sigma1(W14) + W9 + sigma0(W1) + *W0;
 }
 
 static inline void
-sha256_round(SHA_LONG *a, SHA_LONG *b, SHA_LONG *c, SHA_LONG *d, SHA_LONG *e,
-    SHA_LONG *f, SHA_LONG *g, SHA_LONG *h, SHA_LONG Kt, SHA_LONG Wt)
+sha256_round(uint32_t *a, uint32_t *b, uint32_t *c, uint32_t *d, uint32_t *e,
+    uint32_t *f, uint32_t *g, uint32_t *h, uint32_t Kt, uint32_t Wt)
 {
-	SHA_LONG T1, T2;
+	uint32_t T1, T2;
 
 	T1 = *h + Sigma1(*e) + Ch(*e, *f, *g) + Kt + Wt;
 	T2 = Sigma0(*a) + Maj(*a, *b, *c);
@@ -158,9 +161,9 @@ void
 sha256_block_generic(SHA256_CTX *ctx, const void *_in, size_t num)
 {
 	const uint8_t *in = _in;
-	const SHA_LONG *in32;
-	SHA_LONG a, b, c, d, e, f, g, h;
-	SHA_LONG X[16];
+	const uint32_t *in32;
+	uint32_t a, b, c, d, e, f, g, h;
+	uint32_t W[16];
 	int i;
 
 	while (num--) {
@@ -175,95 +178,95 @@ sha256_block_generic(SHA256_CTX *ctx, const void *_in, size_t num)
 
 		if ((size_t)in % 4 == 0) {
 			/* Input is 32 bit aligned. */
-			in32 = (const SHA_LONG *)in;
-			X[0] = be32toh(in32[0]);
-			X[1] = be32toh(in32[1]);
-			X[2] = be32toh(in32[2]);
-			X[3] = be32toh(in32[3]);
-			X[4] = be32toh(in32[4]);
-			X[5] = be32toh(in32[5]);
-			X[6] = be32toh(in32[6]);
-			X[7] = be32toh(in32[7]);
-			X[8] = be32toh(in32[8]);
-			X[9] = be32toh(in32[9]);
-			X[10] = be32toh(in32[10]);
-			X[11] = be32toh(in32[11]);
-			X[12] = be32toh(in32[12]);
-			X[13] = be32toh(in32[13]);
-			X[14] = be32toh(in32[14]);
-			X[15] = be32toh(in32[15]);
+			in32 = (const uint32_t *)in;
+			W[0] = be32toh(in32[0]);
+			W[1] = be32toh(in32[1]);
+			W[2] = be32toh(in32[2]);
+			W[3] = be32toh(in32[3]);
+			W[4] = be32toh(in32[4]);
+			W[5] = be32toh(in32[5]);
+			W[6] = be32toh(in32[6]);
+			W[7] = be32toh(in32[7]);
+			W[8] = be32toh(in32[8]);
+			W[9] = be32toh(in32[9]);
+			W[10] = be32toh(in32[10]);
+			W[11] = be32toh(in32[11]);
+			W[12] = be32toh(in32[12]);
+			W[13] = be32toh(in32[13]);
+			W[14] = be32toh(in32[14]);
+			W[15] = be32toh(in32[15]);
 		} else {
 			/* Input is not 32 bit aligned. */
-			X[0] = crypto_load_be32toh(&in[0 * 4]);
-			X[1] = crypto_load_be32toh(&in[1 * 4]);
-			X[2] = crypto_load_be32toh(&in[2 * 4]);
-			X[3] = crypto_load_be32toh(&in[3 * 4]);
-			X[4] = crypto_load_be32toh(&in[4 * 4]);
-			X[5] = crypto_load_be32toh(&in[5 * 4]);
-			X[6] = crypto_load_be32toh(&in[6 * 4]);
-			X[7] = crypto_load_be32toh(&in[7 * 4]);
-			X[8] = crypto_load_be32toh(&in[8 * 4]);
-			X[9] = crypto_load_be32toh(&in[9 * 4]);
-			X[10] = crypto_load_be32toh(&in[10 * 4]);
-			X[11] = crypto_load_be32toh(&in[11 * 4]);
-			X[12] = crypto_load_be32toh(&in[12 * 4]);
-			X[13] = crypto_load_be32toh(&in[13 * 4]);
-			X[14] = crypto_load_be32toh(&in[14 * 4]);
-			X[15] = crypto_load_be32toh(&in[15 * 4]);
+			W[0] = crypto_load_be32toh(&in[0 * 4]);
+			W[1] = crypto_load_be32toh(&in[1 * 4]);
+			W[2] = crypto_load_be32toh(&in[2 * 4]);
+			W[3] = crypto_load_be32toh(&in[3 * 4]);
+			W[4] = crypto_load_be32toh(&in[4 * 4]);
+			W[5] = crypto_load_be32toh(&in[5 * 4]);
+			W[6] = crypto_load_be32toh(&in[6 * 4]);
+			W[7] = crypto_load_be32toh(&in[7 * 4]);
+			W[8] = crypto_load_be32toh(&in[8 * 4]);
+			W[9] = crypto_load_be32toh(&in[9 * 4]);
+			W[10] = crypto_load_be32toh(&in[10 * 4]);
+			W[11] = crypto_load_be32toh(&in[11 * 4]);
+			W[12] = crypto_load_be32toh(&in[12 * 4]);
+			W[13] = crypto_load_be32toh(&in[13 * 4]);
+			W[14] = crypto_load_be32toh(&in[14 * 4]);
+			W[15] = crypto_load_be32toh(&in[15 * 4]);
 		}
 		in += SHA256_CBLOCK;
 
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[0], X[0]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[1], X[1]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[2], X[2]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[3], X[3]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[4], X[4]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[5], X[5]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[6], X[6]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[7], X[7]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[8], X[8]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[9], X[9]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[10], X[10]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[11], X[11]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[12], X[12]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[13], X[13]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[14], X[14]);
-		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[15], X[15]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[0], W[0]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[1], W[1]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[2], W[2]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[3], W[3]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[4], W[4]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[5], W[5]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[6], W[6]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[7], W[7]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[8], W[8]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[9], W[9]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[10], W[10]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[11], W[11]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[12], W[12]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[13], W[13]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[14], W[14]);
+		sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[15], W[15]);
 
 		for (i = 16; i < 64; i += 16) {
-			sha256_msg_schedule_update(&X[0], X[1], X[9], X[14]);
-			sha256_msg_schedule_update(&X[1], X[2], X[10], X[15]);
-			sha256_msg_schedule_update(&X[2], X[3], X[11], X[0]);
-			sha256_msg_schedule_update(&X[3], X[4], X[12], X[1]);
-			sha256_msg_schedule_update(&X[4], X[5], X[13], X[2]);
-			sha256_msg_schedule_update(&X[5], X[6], X[14], X[3]);
-			sha256_msg_schedule_update(&X[6], X[7], X[15], X[4]);
-			sha256_msg_schedule_update(&X[7], X[8], X[0], X[5]);
-			sha256_msg_schedule_update(&X[8], X[9], X[1], X[6]);
-			sha256_msg_schedule_update(&X[9], X[10], X[2], X[7]);
-			sha256_msg_schedule_update(&X[10], X[11], X[3], X[8]);
-			sha256_msg_schedule_update(&X[11], X[12], X[4], X[9]);
-			sha256_msg_schedule_update(&X[12], X[13], X[5], X[10]);
-			sha256_msg_schedule_update(&X[13], X[14], X[6], X[11]);
-			sha256_msg_schedule_update(&X[14], X[15], X[7], X[12]);
-			sha256_msg_schedule_update(&X[15], X[0], X[8], X[13]);
+			sha256_msg_schedule_update(&W[0], W[1], W[9], W[14]);
+			sha256_msg_schedule_update(&W[1], W[2], W[10], W[15]);
+			sha256_msg_schedule_update(&W[2], W[3], W[11], W[0]);
+			sha256_msg_schedule_update(&W[3], W[4], W[12], W[1]);
+			sha256_msg_schedule_update(&W[4], W[5], W[13], W[2]);
+			sha256_msg_schedule_update(&W[5], W[6], W[14], W[3]);
+			sha256_msg_schedule_update(&W[6], W[7], W[15], W[4]);
+			sha256_msg_schedule_update(&W[7], W[8], W[0], W[5]);
+			sha256_msg_schedule_update(&W[8], W[9], W[1], W[6]);
+			sha256_msg_schedule_update(&W[9], W[10], W[2], W[7]);
+			sha256_msg_schedule_update(&W[10], W[11], W[3], W[8]);
+			sha256_msg_schedule_update(&W[11], W[12], W[4], W[9]);
+			sha256_msg_schedule_update(&W[12], W[13], W[5], W[10]);
+			sha256_msg_schedule_update(&W[13], W[14], W[6], W[11]);
+			sha256_msg_schedule_update(&W[14], W[15], W[7], W[12]);
+			sha256_msg_schedule_update(&W[15], W[0], W[8], W[13]);
 
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 0], X[0]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 1], X[1]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 2], X[2]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 3], X[3]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 4], X[4]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 5], X[5]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 6], X[6]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 7], X[7]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 8], X[8]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 9], X[9]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 10], X[10]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 11], X[11]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 12], X[12]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 13], X[13]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 14], X[14]);
-			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 15], X[15]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 0], W[0]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 1], W[1]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 2], W[2]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 3], W[3]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 4], W[4]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 5], W[5]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 6], W[6]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 7], W[7]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 8], W[8]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 9], W[9]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 10], W[10]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 11], W[11]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 12], W[12]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 13], W[13]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 14], W[14]);
+			sha256_round(&a, &b, &c, &d, &e, &f, &g, &h, K256[i + 15], W[15]);
 		}
 
 		ctx->h[0] += a;
@@ -287,123 +290,119 @@ sha256_block_data_order(SHA256_CTX *ctx, const void *_in, size_t num)
 #endif
 
 int
-SHA224_Init(SHA256_CTX *c)
+SHA224_Init(SHA256_CTX *ctx)
 {
-	memset(c, 0, sizeof(*c));
+	memset(ctx, 0, sizeof(*ctx));
 
-	c->h[0] = 0xc1059ed8UL;
-	c->h[1] = 0x367cd507UL;
-	c->h[2] = 0x3070dd17UL;
-	c->h[3] = 0xf70e5939UL;
-	c->h[4] = 0xffc00b31UL;
-	c->h[5] = 0x68581511UL;
-	c->h[6] = 0x64f98fa7UL;
-	c->h[7] = 0xbefa4fa4UL;
+	/* FIPS 180-4 section 5.3.2. */
+	ctx->h[0] = 0xc1059ed8UL;
+	ctx->h[1] = 0x367cd507UL;
+	ctx->h[2] = 0x3070dd17UL;
+	ctx->h[3] = 0xf70e5939UL;
+	ctx->h[4] = 0xffc00b31UL;
+	ctx->h[5] = 0x68581511UL;
+	ctx->h[6] = 0x64f98fa7UL;
+	ctx->h[7] = 0xbefa4fa4UL;
 
-	c->md_len = SHA224_DIGEST_LENGTH;
+	ctx->md_len = SHA224_DIGEST_LENGTH;
 
 	return 1;
 }
 LCRYPTO_ALIAS(SHA224_Init);
 
 int
-SHA224_Update(SHA256_CTX *c, const void *data, size_t len)
+SHA224_Update(SHA256_CTX *ctx, const void *data, size_t len)
 {
-	return SHA256_Update(c, data, len);
+	return SHA256_Update(ctx, data, len);
 }
 LCRYPTO_ALIAS(SHA224_Update);
 
 int
-SHA224_Final(unsigned char *md, SHA256_CTX *c)
+SHA224_Final(unsigned char *md, SHA256_CTX *ctx)
 {
-	return SHA256_Final(md, c);
+	return SHA256_Final(md, ctx);
 }
 LCRYPTO_ALIAS(SHA224_Final);
 
 unsigned char *
-SHA224(const unsigned char *d, size_t n, unsigned char *md)
+SHA224(const unsigned char *data, size_t len, unsigned char *md)
 {
-	SHA256_CTX c;
+	SHA256_CTX ctx;
 
-	SHA224_Init(&c);
-	SHA256_Update(&c, d, n);
-	SHA256_Final(md, &c);
+	SHA224_Init(&ctx);
+	SHA256_Update(&ctx, data, len);
+	SHA256_Final(md, &ctx);
 
-	explicit_bzero(&c, sizeof(c));
+	explicit_bzero(&ctx, sizeof(ctx));
 
 	return (md);
 }
 LCRYPTO_ALIAS(SHA224);
 
 int
-SHA256_Init(SHA256_CTX *c)
+SHA256_Init(SHA256_CTX *ctx)
 {
-	memset(c, 0, sizeof(*c));
+	memset(ctx, 0, sizeof(*ctx));
 
-	c->h[0] = 0x6a09e667UL;
-	c->h[1] = 0xbb67ae85UL;
-	c->h[2] = 0x3c6ef372UL;
-	c->h[3] = 0xa54ff53aUL;
-	c->h[4] = 0x510e527fUL;
-	c->h[5] = 0x9b05688cUL;
-	c->h[6] = 0x1f83d9abUL;
-	c->h[7] = 0x5be0cd19UL;
+	/* FIPS 180-4 section 5.3.3. */
+	ctx->h[0] = 0x6a09e667UL;
+	ctx->h[1] = 0xbb67ae85UL;
+	ctx->h[2] = 0x3c6ef372UL;
+	ctx->h[3] = 0xa54ff53aUL;
+	ctx->h[4] = 0x510e527fUL;
+	ctx->h[5] = 0x9b05688cUL;
+	ctx->h[6] = 0x1f83d9abUL;
+	ctx->h[7] = 0x5be0cd19UL;
 
-	c->md_len = SHA256_DIGEST_LENGTH;
+	ctx->md_len = SHA256_DIGEST_LENGTH;
 
 	return 1;
 }
 LCRYPTO_ALIAS(SHA256_Init);
 
 int
-SHA256_Update(SHA256_CTX *c, const void *data_, size_t len)
+SHA256_Update(SHA256_CTX *ctx, const void *data_, size_t len)
 {
 	const unsigned char *data = data_;
 	unsigned char *p;
-	SHA_LONG l;
 	size_t n;
 
 	if (len == 0)
 		return 1;
 
-	l = (c->Nl + (((SHA_LONG)len) << 3)) & 0xffffffffUL;
-	/* 95-05-24 eay Fixed a bug with the overflow handling, thanks to
-	 * Wei Dai <weidai@eskimo.com> for pointing it out. */
-	if (l < c->Nl) /* overflow */
-		c->Nh++;
-	c->Nh += (SHA_LONG)(len >> 29);	/* might cause compiler warning on 16-bit */
-	c->Nl = l;
+	/* Update message bit counter. */
+        crypto_add_u32dw_u64(&ctx->Nh, &ctx->Nl, (uint64_t)len << 3);
 
-	n = c->num;
+	n = ctx->num;
 	if (n != 0) {
-		p = (unsigned char *)c->data;
+		p = (unsigned char *)ctx->data;
 
 		if (len >= SHA_CBLOCK || len + n >= SHA_CBLOCK) {
 			memcpy(p + n, data, SHA_CBLOCK - n);
-			sha256_block_data_order(c, p, 1);
+			sha256_block_data_order(ctx, p, 1);
 			n = SHA_CBLOCK - n;
 			data += n;
 			len -= n;
-			c->num = 0;
+			ctx->num = 0;
 			memset(p, 0, SHA_CBLOCK);	/* keep it zeroed */
 		} else {
 			memcpy(p + n, data, len);
-			c->num += (unsigned int)len;
+			ctx->num += (unsigned int)len;
 			return 1;
 		}
 	}
 
 	n = len/SHA_CBLOCK;
 	if (n > 0) {
-		sha256_block_data_order(c, data, n);
+		sha256_block_data_order(ctx, data, n);
 		n *= SHA_CBLOCK;
 		data += n;
 		len -= n;
 	}
 
 	if (len != 0) {
-		p = (unsigned char *)c->data;
-		c->num = (unsigned int)len;
+		p = (unsigned char *)ctx->data;
+		ctx->num = (unsigned int)len;
 		memcpy(p, data, len);
 	}
 	return 1;
@@ -411,17 +410,17 @@ SHA256_Update(SHA256_CTX *c, const void *data_, size_t len)
 LCRYPTO_ALIAS(SHA256_Update);
 
 void
-SHA256_Transform(SHA256_CTX *c, const unsigned char *data)
+SHA256_Transform(SHA256_CTX *ctx, const unsigned char *data)
 {
-	sha256_block_data_order(c, data, 1);
+	sha256_block_data_order(ctx, data, 1);
 }
 LCRYPTO_ALIAS(SHA256_Transform);
 
 int
-SHA256_Final(unsigned char *md, SHA256_CTX *c)
+SHA256_Final(unsigned char *md, SHA256_CTX *ctx)
 {
-	unsigned char *p = (unsigned char *)c->data;
-	size_t n = c->num;
+	unsigned char *p = (unsigned char *)ctx->data;
+	size_t n = ctx->num;
 	unsigned int nn;
 
 	p[n] = 0x80; /* there is always room for one */
@@ -430,15 +429,15 @@ SHA256_Final(unsigned char *md, SHA256_CTX *c)
 	if (n > (SHA_CBLOCK - 8)) {
 		memset(p + n, 0, SHA_CBLOCK - n);
 		n = 0;
-		sha256_block_data_order(c, p, 1);
+		sha256_block_data_order(ctx, p, 1);
 	}
 
 	memset(p + n, 0, SHA_CBLOCK - 8 - n);
-	c->data[SHA_LBLOCK - 2] = htobe32(c->Nh);
-	c->data[SHA_LBLOCK - 1] = htobe32(c->Nl);
+	ctx->data[SHA_LBLOCK - 2] = htobe32(ctx->Nh);
+	ctx->data[SHA_LBLOCK - 1] = htobe32(ctx->Nl);
 
-	sha256_block_data_order(c, p, 1);
-	c->num = 0;
+	sha256_block_data_order(ctx, p, 1);
+	ctx->num = 0;
 	memset(p, 0, SHA_CBLOCK);
 
 	/*
@@ -449,26 +448,26 @@ SHA256_Final(unsigned char *md, SHA256_CTX *c)
 	 * Idea behind separate cases for pre-defined lengths is to let the
 	 * compiler decide if it's appropriate to unroll small loops.
 	 */
-	switch (c->md_len) {
+	switch (ctx->md_len) {
 	case SHA224_DIGEST_LENGTH:
 		for (nn = 0; nn < SHA224_DIGEST_LENGTH / 4; nn++) {
-			crypto_store_htobe32(md, c->h[nn]);
+			crypto_store_htobe32(md, ctx->h[nn]);
 			md += 4;
 		}
 		break;
 
 	case SHA256_DIGEST_LENGTH:
 		for (nn = 0; nn < SHA256_DIGEST_LENGTH / 4; nn++) {
-			crypto_store_htobe32(md, c->h[nn]);
+			crypto_store_htobe32(md, ctx->h[nn]);
 			md += 4;
 		}
 		break;
 
 	default:
-		if (c->md_len > SHA256_DIGEST_LENGTH)
+		if (ctx->md_len > SHA256_DIGEST_LENGTH)
 			return 0;
-		for (nn = 0; nn < c->md_len / 4; nn++) {
-			crypto_store_htobe32(md, c->h[nn]);
+		for (nn = 0; nn < ctx->md_len / 4; nn++) {
+			crypto_store_htobe32(md, ctx->h[nn]);
 			md += 4;
 		}
 		break;
@@ -479,15 +478,15 @@ SHA256_Final(unsigned char *md, SHA256_CTX *c)
 LCRYPTO_ALIAS(SHA256_Final);
 
 unsigned char *
-SHA256(const unsigned char *d, size_t n, unsigned char *md)
+SHA256(const unsigned char *data, size_t len, unsigned char *md)
 {
-	SHA256_CTX c;
+	SHA256_CTX ctx;
 
-	SHA256_Init(&c);
-	SHA256_Update(&c, d, n);
-	SHA256_Final(md, &c);
+	SHA256_Init(&ctx);
+	SHA256_Update(&ctx, data, len);
+	SHA256_Final(md, &ctx);
 
-	explicit_bzero(&c, sizeof(c));
+	explicit_bzero(&ctx, sizeof(ctx));
 
 	return (md);
 }

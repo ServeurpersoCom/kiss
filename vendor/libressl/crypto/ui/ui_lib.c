@@ -1,4 +1,4 @@
-/* $OpenBSD: ui_lib.c,v 1.52 2025/05/10 05:54:39 tb Exp $ */
+/* $OpenBSD: ui_lib.c,v 1.55 2026/07/25 07:33:43 tb Exp $ */
 /* Written by Richard Levitte (richard@levitte.org) for the OpenSSL
  * project 2001.
  */
@@ -68,6 +68,39 @@
 
 static const UI_METHOD *default_UI_meth = NULL;
 
+struct ui_string_st {
+	enum UI_string_types type; /* Input */
+	const char *out_string;	/* Input */
+	int input_flags;	/* Flags from the user */
+
+	/* The following parameters are completely irrelevant for UIT_INFO,
+	   and can therefore be set to 0 or NULL */
+	char *result_buf;	/* Input and Output: If not NULL, user-defined
+				   with size in result_maxsize.  Otherwise, it
+				   may be allocated by the UI routine, meaning
+				   result_minsize is going to be overwritten.*/
+	union {
+		struct {
+			int result_minsize;	/* Input: minimum required
+						   size of the result.
+						*/
+			int result_maxsize;	/* Input: maximum permitted
+						   size of the result */
+
+			const char *test_buf;	/* Input: test string to verify
+						   against */
+		} string_data;
+		struct {
+			const char *action_desc; /* Input */
+			const char *ok_chars; /* Input */
+			const char *cancel_chars; /* Input */
+		} boolean_data;
+	} u;
+
+#define OUT_STRING_FREEABLE 0x01
+	int flags;		/* flags for internal use */
+};
+
 UI *
 UI_new(void)
 {
@@ -101,9 +134,9 @@ free_string(UI_STRING *uis)
 		free((char *) uis->out_string);
 		switch (uis->type) {
 		case UIT_BOOLEAN:
-			free((char *)uis->_.boolean_data.action_desc);
-			free((char *)uis->_.boolean_data.ok_chars);
-			free((char *)uis->_.boolean_data.cancel_chars);
+			free((char *)uis->u.boolean_data.action_desc);
+			free((char *)uis->u.boolean_data.ok_chars);
+			free((char *)uis->u.boolean_data.cancel_chars);
 			break;
 		default:
 			break;
@@ -186,9 +219,9 @@ general_allocate_string(UI *ui, const char *prompt, int dup_prompt,
 	if ((s = general_allocate_prompt(prompt, dup_prompt, type, input_flags,
 	    result_buf)) == NULL)
 		goto err;
-	s->_.string_data.result_minsize = minsize;
-	s->_.string_data.result_maxsize = maxsize;
-	s->_.string_data.test_buf = test_buf;
+	s->u.string_data.result_minsize = minsize;
+	s->u.string_data.result_maxsize = maxsize;
+	s->u.string_data.test_buf = test_buf;
 
 	if (allocate_string_stack(ui) < 0)
 		goto err;
@@ -225,25 +258,25 @@ general_allocate_boolean(UI *ui, const char *prompt, const char *action_desc,
 
 	if (dup_strings) {
 		if (action_desc != NULL) {
-			if ((s->_.boolean_data.action_desc =
+			if ((s->u.boolean_data.action_desc =
 			    strdup(action_desc)) == NULL) {
 				UIerror(ERR_R_MALLOC_FAILURE);
 				goto err;
 			}
 		}
-		if ((s->_.boolean_data.ok_chars = strdup(ok_chars)) == NULL) {
+		if ((s->u.boolean_data.ok_chars = strdup(ok_chars)) == NULL) {
 			UIerror(ERR_R_MALLOC_FAILURE);
 			goto err;
 		}
-		if ((s->_.boolean_data.cancel_chars = strdup(cancel_chars)) ==
+		if ((s->u.boolean_data.cancel_chars = strdup(cancel_chars)) ==
 		    NULL) {
 			UIerror(ERR_R_MALLOC_FAILURE);
 			goto err;
 		}
 	} else {
-		s->_.boolean_data.action_desc = action_desc;
-		s->_.boolean_data.ok_chars = ok_chars;
-		s->_.boolean_data.cancel_chars = cancel_chars;
+		s->u.boolean_data.action_desc = action_desc;
+		s->u.boolean_data.ok_chars = ok_chars;
+		s->u.boolean_data.cancel_chars = cancel_chars;
 	}
 
 	if (allocate_string_stack(ui) < 0)
@@ -428,8 +461,10 @@ UI_process(UI *ui)
 {
 	int i, ok = 0;
 
-	if (ui->meth->ui_open_session && !ui->meth->ui_open_session(ui))
-		return -1;
+	if (ui->meth->ui_open_session && !ui->meth->ui_open_session(ui)) {
+		ok = -1;
+		goto err;
+	}
 
 	if (ui->flags & UI_FLAG_PRINT_ERRORS)
 		ERR_print_errors_cb(print_error, ui);
@@ -772,7 +807,7 @@ UI_get0_action_string(UI_STRING *uis)
 	switch (uis->type) {
 	case UIT_PROMPT:
 	case UIT_BOOLEAN:
-		return uis->_.boolean_data.action_desc;
+		return uis->u.boolean_data.action_desc;
 	default:
 		return NULL;
 	}
@@ -803,7 +838,7 @@ UI_get0_test_string(UI_STRING *uis)
 
 	switch (uis->type) {
 	case UIT_VERIFY:
-		return uis->_.string_data.test_buf;
+		return uis->u.string_data.test_buf;
 	default:
 		return NULL;
 	}
@@ -819,7 +854,7 @@ UI_get_result_minsize(UI_STRING *uis)
 	switch (uis->type) {
 	case UIT_PROMPT:
 	case UIT_VERIFY:
-		return uis->_.string_data.result_minsize;
+		return uis->u.string_data.result_minsize;
 	default:
 		return -1;
 	}
@@ -835,7 +870,7 @@ UI_get_result_maxsize(UI_STRING *uis)
 	switch (uis->type) {
 	case UIT_PROMPT:
 	case UIT_VERIFY:
-		return uis->_.string_data.result_maxsize;
+		return uis->u.string_data.result_maxsize;
 	default:
 		return -1;
 	}
@@ -856,22 +891,22 @@ UI_set_result(UI *ui, UI_STRING *uis, const char *result)
 	switch (uis->type) {
 	case UIT_PROMPT:
 	case UIT_VERIFY:
-		if (l < uis->_.string_data.result_minsize) {
+		if (l < uis->u.string_data.result_minsize) {
 			ui->flags |= UI_FLAG_REDOABLE;
 			UIerror(UI_R_RESULT_TOO_SMALL);
 			ERR_asprintf_error_data
 			    ("You must type in %d to %d characters",
-				uis->_.string_data.result_minsize,
-				uis->_.string_data.result_maxsize);
+				uis->u.string_data.result_minsize,
+				uis->u.string_data.result_maxsize);
 			return -1;
 		}
-		if (l > uis->_.string_data.result_maxsize) {
+		if (l > uis->u.string_data.result_maxsize) {
 			ui->flags |= UI_FLAG_REDOABLE;
 			UIerror(UI_R_RESULT_TOO_LARGE);
 			ERR_asprintf_error_data
 			    ("You must type in %d to %d characters",
-				uis->_.string_data.result_minsize,
-				uis->_.string_data.result_maxsize);
+				uis->u.string_data.result_minsize,
+				uis->u.string_data.result_maxsize);
 			return -1;
 		}
 		if (!uis->result_buf) {
@@ -879,7 +914,7 @@ UI_set_result(UI *ui, UI_STRING *uis, const char *result)
 			return -1;
 		}
 		strlcpy(uis->result_buf, result,
-		    uis->_.string_data.result_maxsize + 1);
+		    uis->u.string_data.result_maxsize + 1);
 		break;
 	case UIT_BOOLEAN:
 		if (!uis->result_buf) {
@@ -888,14 +923,14 @@ UI_set_result(UI *ui, UI_STRING *uis, const char *result)
 		}
 		uis->result_buf[0] = '\0';
 		for (p = result; *p; p++) {
-			if (strchr(uis->_.boolean_data.ok_chars, *p)) {
+			if (strchr(uis->u.boolean_data.ok_chars, *p)) {
 				uis->result_buf[0] =
-				    uis->_.boolean_data.ok_chars[0];
+				    uis->u.boolean_data.ok_chars[0];
 				break;
 			}
-			if (strchr(uis->_.boolean_data.cancel_chars, *p)) {
+			if (strchr(uis->u.boolean_data.cancel_chars, *p)) {
 				uis->result_buf[0] =
-				    uis->_.boolean_data.cancel_chars[0];
+				    uis->u.boolean_data.cancel_chars[0];
 				break;
 			}
 		}

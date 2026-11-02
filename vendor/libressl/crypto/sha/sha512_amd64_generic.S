@@ -1,4 +1,4 @@
-/* $OpenBSD: sha512_amd64_generic.S,v 1.4 2026/03/28 13:11:28 jsing Exp $ */
+/* $OpenBSD: sha512_amd64_generic.S,v 1.8 2026/05/12 15:07:30 jsing Exp $ */
 /*
  * Copyright (c) 2024 Joel Sing <jsing@openbsd.org>
  *
@@ -16,6 +16,8 @@
  */
 
 #include "crypto_assembly.h"
+
+#define	_SEP	CRYPTO_ASSEMBLY_SEPARATOR
 
 #define	ctx		%rdi
 #define	in		%rsi
@@ -45,8 +47,8 @@
  *  Wt = Mt
  */
 #define sha512_message_schedule_load(idx, m, w, wt) \
-	movq	(m, round, 8), wt;				\
-	bswapq	wt;						\
+	movq	(m, round, 8), wt				_SEP \
+	bswapq	wt						_SEP \
 	movq	wt, ((idx&0xf)*8)(w)
 
 /*
@@ -59,25 +61,25 @@
  *
  */
 #define sha512_message_schedule_update(idx, w, wt) \
-	movq	(((idx-2)&0xf)*8)(w), wt;	/* sigma1 */	\
-	movq	wt, tmp1;			/* sigma1 */	\
-	rorq	$(61-19), tmp1;			/* sigma1 */	\
-	xorq	wt, tmp1;			/* sigma1 */	\
-	rorq	$19, tmp1;			/* sigma1 */	\
-	shrq	$6, wt;				/* sigma1 */	\
-	xorq	tmp1, wt;			/* sigma1 */	\
+	movq	(((idx-2)&0xf)*8)(w), wt	/* sigma1 */	_SEP \
+	movq	wt, tmp1			/* sigma1 */	_SEP \
+	rorq	$(61-19), tmp1			/* sigma1 */	_SEP \
+	xorq	wt, tmp1			/* sigma1 */	_SEP \
+	rorq	$19, tmp1			/* sigma1 */	_SEP \
+	shrq	$6, wt				/* sigma1 */	_SEP \
+	xorq	tmp1, wt			/* sigma1 */	_SEP \
 	\
-	addq	(((idx-7)&0xf)*8)(w), wt;	/* Wt-7 */	\
-	addq	(((idx-16)&0xf)*8)(w), wt;	/* Wt-16 */	\
+	addq	(((idx-7)&0xf)*8)(w), wt	/* Wt-7 */	_SEP \
+	addq	(((idx-16)&0xf)*8)(w), wt	/* Wt-16 */	_SEP \
 	\
-	movq	(((idx-15)&0xf)*8)(w), tmp2;	/* sigma0 */	\
-	movq	tmp2, tmp3;			/* sigma0 */	\
-	rorq	$(8-1), tmp2;			/* sigma0 */	\
-	xorq	tmp3, tmp2;			/* sigma0 */	\
-	rorq	$1, tmp2;			/* sigma0 */	\
-	shrq	$7, tmp3;			/* sigma0 */	\
-	xorq	tmp3, tmp2;			/* sigma0 */	\
-	addq	tmp2, wt;			/* sigma0 */	\
+	movq	(((idx-15)&0xf)*8)(w), tmp2	/* sigma0 */	_SEP \
+	movq	tmp2, tmp3			/* sigma0 */	_SEP \
+	rorq	$(8-1), tmp2			/* sigma0 */	_SEP \
+	xorq	tmp3, tmp2			/* sigma0 */	_SEP \
+	rorq	$1, tmp2			/* sigma0 */	_SEP \
+	shrq	$7, tmp3			/* sigma0 */	_SEP \
+	xorq	tmp3, tmp2			/* sigma0 */	_SEP \
+	addq	tmp2, wt			/* sigma0 */	_SEP \
 	\
 	movq	wt, ((idx&0xf)*8)(w)
 
@@ -95,52 +97,52 @@
  * Upon completion d = d + T1, h = T1 + T2, pending rotation.
  */
 #define sha512_round(idx, a, b, c, d, e, f, g, h, k, w, wt) \
-	addq	wt, h;				/* T1 Wt */	\
-	addq	(k512, round, 8), h;		/* T1 Kt */	\
+	addq	wt, h				/* T1 Wt */	_SEP \
+	addq	(k512, round, 8), h		/* T1 Kt */	_SEP \
 	\
-	movq	e, tmp1;			/* T1 Sigma1 */	\
-	rorq	$(41-18), tmp1;			/* T1 Sigma1 */	\
-	xorq	e, tmp1;			/* T1 Sigma1 */ \
-	rorq	$(18-14), tmp1;			/* T1 Sigma1 */	\
-	xorq	e, tmp1;			/* T1 Sigma1 */ \
-	rorq	$14, tmp1;			/* T1 Sigma1 */	\
-	addq	tmp1, h;			/* T1 Sigma1 */	\
+	movq	e, tmp1				/* T1 Sigma1 */	_SEP \
+	rorq	$(41-18), tmp1			/* T1 Sigma1 */	_SEP \
+	xorq	e, tmp1				/* T1 Sigma1 */ _SEP \
+	rorq	$(18-14), tmp1			/* T1 Sigma1 */	_SEP \
+	xorq	e, tmp1				/* T1 Sigma1 */ _SEP \
+	rorq	$14, tmp1			/* T1 Sigma1 */	_SEP \
+	addq	tmp1, h				/* T1 Sigma1 */	_SEP \
 	\
-	movq	f, tmp2;			/* T1 Ch */	\
-	xorq	g, tmp2;			/* T1 Ch */	\
-	andq	e, tmp2;			/* T1 Ch */	\
-	xorq	g, tmp2;			/* T1 Ch */	\
-	addq	tmp2, h;			/* T1 Ch */	\
+	movq	f, tmp2				/* T1 Ch */	_SEP \
+	xorq	g, tmp2				/* T1 Ch */	_SEP \
+	andq	e, tmp2				/* T1 Ch */	_SEP \
+	xorq	g, tmp2				/* T1 Ch */	_SEP \
+	addq	tmp2, h				/* T1 Ch */	_SEP \
 	\
-	addq	h, d;				/* d += T1 */	\
+	addq	h, d				/* d += T1 */	_SEP \
 	\
-	movq	a, tmp1;			/* T2 Sigma0 */	\
-	rorq	$(39-34), tmp1;			/* T2 Sigma0 */	\
-	xorq	a, tmp1;			/* T2 Sigma0 */	\
-	rorq	$(34-28), tmp1;			/* T2 Sigma0 */	\
-	xorq	a, tmp1;			/* T2 Sigma0 */	\
-	rorq	$28, tmp1;			/* T2 Sigma0 */	\
-	addq	tmp1, h;			/* T2 Sigma0 */	\
+	movq	a, tmp1				/* T2 Sigma0 */	_SEP \
+	rorq	$(39-34), tmp1			/* T2 Sigma0 */	_SEP \
+	xorq	a, tmp1				/* T2 Sigma0 */	_SEP \
+	rorq	$(34-28), tmp1			/* T2 Sigma0 */	_SEP \
+	xorq	a, tmp1				/* T2 Sigma0 */	_SEP \
+	rorq	$28, tmp1			/* T2 Sigma0 */	_SEP \
+	addq	tmp1, h				/* T2 Sigma0 */	_SEP \
 	\
-	movq	b, tmp2;			/* T2 Maj */	\
-	xorq	c, tmp2;			/* T2 Maj */	\
-	andq	a, tmp2;			/* T2 Maj */	\
-	movq	b, tmp3;			/* T2 Maj */	\
-	andq	c, tmp3;			/* T2 Maj */	\
-	xorq	tmp2, tmp3;			/* T2 Maj */	\
-	addq	tmp3, h;			/* T2 Maj */	\
+	movq	b, tmp2				/* T2 Maj */	_SEP \
+	xorq	c, tmp2				/* T2 Maj */	_SEP \
+	andq	a, tmp2				/* T2 Maj */	_SEP \
+	movq	b, tmp3				/* T2 Maj */	_SEP \
+	andq	c, tmp3				/* T2 Maj */	_SEP \
+	xorq	tmp2, tmp3			/* T2 Maj */	_SEP \
+	addq	tmp3, h				/* T2 Maj */	_SEP \
 	\
 	addq	$1, round
 
 #define sha512_round_load(idx, a, b, c, d, e, f, g, h) \
-	sha512_message_schedule_load(idx, in, %rsp, tmp0); \
+	sha512_message_schedule_load(idx, in, %rsp, tmp0) 	_SEP \
 	sha512_round(idx, a, b, c, d, e, f, g, h, k512, %rsp, tmp0)
 
 #define sha512_round_update(idx, a, b, c, d, e, f, g, h) \
-	sha512_message_schedule_update(idx, %rsp, tmp0); \
+	sha512_message_schedule_update(idx, %rsp, tmp0) 	_SEP \
 	sha512_round(idx, a, b, c, d, e, f, g, h, k512, %rsp, tmp0)
 
-.section .text
+.section CRYPTO_ASSEMBLY_SECTION_TEXT
 
 /*
  * void sha512_block_generic(SHA512_CTX *ctx, const void *in, size_t num);
@@ -148,9 +150,7 @@
  * Standard x86-64 ABI: rdi = ctx, rsi = in, rdx = num
  */
 .align 16
-.globl	sha512_block_generic
-.type	sha512_block_generic,@function
-sha512_block_generic:
+CRYPTO_ASSEMBLY_GLOBAL_FUNCTION(sha512_block_generic):
 	_CET_ENDBR
 
 	/* Save callee save registers. */
@@ -273,14 +273,13 @@ sha512_block_generic:
 
 	ret
 
-.section .rodata
+.section CRYPTO_ASSEMBLY_SECTION_RODATA
 
 /*
  * SHA-512 constants - see FIPS 180-4 section 4.2.3.
  */
 .align	64
-.type	K512,@object
-K512:
+CRYPTO_ASSEMBLY_OBJECT_START(K512):
 .quad	0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc
 .quad	0x3956c25bf348b538, 0x59f111f1b605d019, 0x923f82a4af194f9b, 0xab1c5ed5da6d8118
 .quad	0xd807aa98a3030242, 0x12835b0145706fbe, 0x243185be4ee4b28c, 0x550c7dc3d5ffb4e2
@@ -301,7 +300,7 @@ K512:
 .quad	0x06f067aa72176fba, 0x0a637dc5a2c898a6, 0x113f9804bef90dae, 0x1b710b35131c471b
 .quad	0x28db77f523047d84, 0x32caab7b40c72493, 0x3c9ebe0a15c9bebc, 0x431d67c49c100d4c
 .quad	0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817
-.size	K512,.-K512
+CRYPTO_ASSEMBLY_OBJECT_END(K512)
 
 #if defined(__linux__) && defined(__ELF__)
 .section .note.GNU-stack,"",%progbits

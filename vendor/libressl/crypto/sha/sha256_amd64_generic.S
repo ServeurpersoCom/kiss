@@ -1,4 +1,4 @@
-/* $OpenBSD: sha256_amd64_generic.S,v 1.6 2026/03/28 13:11:28 jsing Exp $ */
+/* $OpenBSD: sha256_amd64_generic.S,v 1.10 2026/05/12 15:07:30 jsing Exp $ */
 /*
  * Copyright (c) 2024 Joel Sing <jsing@openbsd.org>
  *
@@ -16,6 +16,8 @@
  */
 
 #include "crypto_assembly.h"
+
+#define	_SEP	CRYPTO_ASSEMBLY_SEPARATOR
 
 #define	ctx		%rdi
 #define	in		%rsi
@@ -45,8 +47,8 @@
  *  Wt = Mt
  */
 #define sha256_message_schedule_load(idx, m, w, wt) \
-	movl	(m, round, 4), wt;				\
-	bswapl	wt;						\
+	movl	(m, round, 4), wt				_SEP \
+	bswapl	wt						_SEP \
 	movl	wt, ((idx&0xf)*4)(w)
 
 /*
@@ -58,25 +60,25 @@
  *  sigma1(x) = ror(x, 17) ^ ror(x, 19) ^ (x >> 10)
  */
 #define sha256_message_schedule_update(idx, w, wt) \
-	movl	(((idx-2)&0xf)*4)(w), wt;	/* sigma1 */	\
-	movl	wt, tmp1;			/* sigma1 */	\
-	rorl	$(19-17), tmp1;			/* sigma1 */	\
-	xorl	wt, tmp1;			/* sigma1 */	\
-	rorl	$17, tmp1;			/* sigma1 */	\
-	shrl	$10, wt;			/* sigma1 */	\
-	xorl	tmp1, wt;			/* sigma1 */	\
+	movl	(((idx-2)&0xf)*4)(w), wt	/* sigma1 */	_SEP \
+	movl	wt, tmp1			/* sigma1 */	_SEP \
+	rorl	$(19-17), tmp1			/* sigma1 */	_SEP \
+	xorl	wt, tmp1			/* sigma1 */	_SEP \
+	rorl	$17, tmp1			/* sigma1 */	_SEP \
+	shrl	$10, wt				/* sigma1 */	_SEP \
+	xorl	tmp1, wt			/* sigma1 */	_SEP \
 	\
-	addl	(((idx-7)&0xf)*4)(w), wt;	/* Wt-7 */	\
-	addl	(((idx-16)&0xf)*4)(w), wt;	/* Wt-16 */	\
+	addl	(((idx-7)&0xf)*4)(w), wt	/* Wt-7 */	_SEP \
+	addl	(((idx-16)&0xf)*4)(w), wt	/* Wt-16 */	_SEP \
 	\
-	movl	(((idx-15)&0xf)*4)(w), tmp2;	/* sigma0 */	\
-	movl	tmp2, tmp3;			/* sigma0 */	\
-	rorl	$(18-7), tmp2;			/* sigma0 */	\
-	xorl	tmp3, tmp2;			/* sigma0 */	\
-	rorl	$7, tmp2;			/* sigma0 */	\
-	shrl	$3, tmp3;			/* sigma0 */	\
-	xorl	tmp3, tmp2;			/* sigma0 */	\
-	addl	tmp2, wt;			/* sigma0 */	\
+	movl	(((idx-15)&0xf)*4)(w), tmp2	/* sigma0 */	_SEP \
+	movl	tmp2, tmp3			/* sigma0 */	_SEP \
+	rorl	$(18-7), tmp2			/* sigma0 */	_SEP \
+	xorl	tmp3, tmp2			/* sigma0 */	_SEP \
+	rorl	$7, tmp2			/* sigma0 */	_SEP \
+	shrl	$3, tmp3			/* sigma0 */	_SEP \
+	xorl	tmp3, tmp2			/* sigma0 */	_SEP \
+	addl	tmp2, wt			/* sigma0 */	_SEP \
 	\
 	movl	wt, ((idx&0xf)*4)(w)
 
@@ -94,52 +96,52 @@
  * Upon completion d = d + T1, h = T1 + T2, pending rotation.
  */
 #define sha256_round(idx, a, b, c, d, e, f, g, h, k, w, wt) \
-	addl	wt, h;				/* T1 Wt */	\
-	addl	(k256, round, 4), h;		/* T1 Kt */	\
+	addl	wt, h				/* T1 Wt */	_SEP \
+	addl	(k256, round, 4), h		/* T1 Kt */	_SEP \
 	\
-	movl	e, tmp1;			/* T1 Sigma1 */	\
-	rorl	$(25-11), tmp1;			/* T1 Sigma1 */	\
-	xorl	e, tmp1;			/* T1 Sigma1 */ \
-	rorl	$(11-6), tmp1;			/* T1 Sigma1 */	\
-	xorl	e, tmp1;			/* T1 Sigma1 */ \
-	rorl	$6, tmp1;			/* T1 Sigma1 */	\
-	addl	tmp1, h;			/* T1 Sigma1 */	\
+	movl	e, tmp1				/* T1 Sigma1 */	_SEP \
+	rorl	$(25-11), tmp1			/* T1 Sigma1 */	_SEP \
+	xorl	e, tmp1				/* T1 Sigma1 */ _SEP \
+	rorl	$(11-6), tmp1			/* T1 Sigma1 */	_SEP \
+	xorl	e, tmp1				/* T1 Sigma1 */ _SEP \
+	rorl	$6, tmp1			/* T1 Sigma1 */	_SEP \
+	addl	tmp1, h				/* T1 Sigma1 */	_SEP \
 	\
-	movl	f, tmp2;			/* T1 Ch */	\
-	xorl	g, tmp2;			/* T1 Ch */	\
-	andl	e, tmp2;			/* T1 Ch */	\
-	xorl	g, tmp2;			/* T1 Ch */	\
-	addl	tmp2, h;			/* T1 Ch */	\
+	movl	f, tmp2				/* T1 Ch */	_SEP \
+	xorl	g, tmp2				/* T1 Ch */	_SEP \
+	andl	e, tmp2				/* T1 Ch */	_SEP \
+	xorl	g, tmp2				/* T1 Ch */	_SEP \
+	addl	tmp2, h				/* T1 Ch */	_SEP \
 	\
-	addl	h, d;				/* d += T1 */	\
+	addl	h, d				/* d += T1 */	_SEP \
 	\
-	movl	a, tmp1;			/* T2 Sigma0 */	\
-	rorl	$(22-13), tmp1;			/* T2 Sigma0 */	\
-	xorl	a, tmp1;			/* T2 Sigma0 */	\
-	rorl	$(13-2), tmp1;			/* T2 Sigma0 */	\
-	xorl	a, tmp1;			/* T2 Sigma0 */	\
-	rorl	$2, tmp1;			/* T2 Sigma0 */	\
-	addl	tmp1, h;			/* T2 Sigma0 */	\
+	movl	a, tmp1				/* T2 Sigma0 */	_SEP \
+	rorl	$(22-13), tmp1			/* T2 Sigma0 */	_SEP \
+	xorl	a, tmp1				/* T2 Sigma0 */	_SEP \
+	rorl	$(13-2), tmp1			/* T2 Sigma0 */	_SEP \
+	xorl	a, tmp1				/* T2 Sigma0 */	_SEP \
+	rorl	$2, tmp1			/* T2 Sigma0 */	_SEP \
+	addl	tmp1, h				/* T2 Sigma0 */	_SEP \
 	\
-	movl	b, tmp2;			/* T2 Maj */	\
-	xorl	c, tmp2;			/* T2 Maj */	\
-	andl	a, tmp2;			/* T2 Maj */	\
-	movl	b, tmp3;			/* T2 Maj */	\
-	andl	c, tmp3;			/* T2 Maj */	\
-	xorl	tmp2, tmp3;			/* T2 Maj */	\
-	addl	tmp3, h;			/* T2 Maj */	\
+	movl	b, tmp2				/* T2 Maj */	_SEP \
+	xorl	c, tmp2				/* T2 Maj */	_SEP \
+	andl	a, tmp2				/* T2 Maj */	_SEP \
+	movl	b, tmp3				/* T2 Maj */	_SEP \
+	andl	c, tmp3				/* T2 Maj */	_SEP \
+	xorl	tmp2, tmp3			/* T2 Maj */	_SEP \
+	addl	tmp3, h				/* T2 Maj */	_SEP \
 	\
 	addq	$1, round
 
 #define sha256_round_load(idx, a, b, c, d, e, f, g, h) \
-	sha256_message_schedule_load(idx, in, %rsp, tmp0); \
+	sha256_message_schedule_load(idx, in, %rsp, tmp0)	_SEP \
 	sha256_round(idx, a, b, c, d, e, f, g, h, k256, %rsp, tmp0)
 
 #define sha256_round_update(idx, a, b, c, d, e, f, g, h) \
-	sha256_message_schedule_update(idx, %rsp, tmp0); \
+	sha256_message_schedule_update(idx, %rsp, tmp0)		_SEP \
 	sha256_round(idx, a, b, c, d, e, f, g, h, k256, %rsp, tmp0)
 
-.section .text
+.section CRYPTO_ASSEMBLY_SECTION_TEXT
 
 /*
  * void sha256_block_generic(SHA256_CTX *ctx, const void *in, size_t num);
@@ -147,9 +149,7 @@
  * Standard x86-64 ABI: rdi = ctx, rsi = in, rdx = num
  */
 .align 16
-.globl	sha256_block_generic
-.type	sha256_block_generic,@function
-sha256_block_generic:
+CRYPTO_ASSEMBLY_GLOBAL_FUNCTION(sha256_block_generic):
 	_CET_ENDBR
 
 	/* Save callee save registers. */
@@ -272,14 +272,13 @@ sha256_block_generic:
 
 	ret
 
-.section .rodata
+.section CRYPTO_ASSEMBLY_SECTION_RODATA
 
 /*
  * SHA-256 constants - see FIPS 180-4 section 4.2.2.
  */
 .align	64
-.type	K256,@object
-K256:
+CRYPTO_ASSEMBLY_OBJECT_START(K256):
 .long	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5
 .long	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5
 .long	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3
@@ -296,7 +295,7 @@ K256:
 .long	0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3
 .long	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208
 .long	0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-.size	K256,.-K256
+CRYPTO_ASSEMBLY_OBJECT_END(K256)
 
 #if defined(__linux__) && defined(__ELF__)
 .section .note.GNU-stack,"",%progbits
