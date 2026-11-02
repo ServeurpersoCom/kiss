@@ -60,14 +60,15 @@ void sync_events(const httplib::Request &                                req,
     const auto              open = [&] {
         return !gone && listener_epoch() == epoch && !quit_ending();
     };
-    std::string why;
+    bool said_first = false;
     {
         std::unique_lock<std::mutex> lock(mutex);
         while (!heard && open()) {
             said.wait_for(lock, std::chrono::milliseconds(TICK_MS));
         }
-        why = heard ? admit(first) : "the page sent no headers";
+        said_first = heard;
     }
+    const std::string why = said_first ? admit(first) : "the page sent no headers";
     if (!why.empty()) {
         log_error("HTTP", "Refused %s: %s", from.c_str(), why.c_str());
         ws.close(httplib::ws::CloseStatus::PolicyViolation, why);

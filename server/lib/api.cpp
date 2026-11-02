@@ -71,23 +71,40 @@ api_stop::~api_stop() {
     g_stops.erase(this);
 }
 
+// the clients of a stop it reaches, the stop marked stopped first, so a
+// waiting pause wakes and a request that goes out later sees it; they are
+// stopped outside every lock, as a stop waits for a client that connects
+static void reached(api_stop & s, std::vector<std::shared_ptr<httplib::Client>> & out) {
+    s.stopped = true;
+    std::lock_guard<std::mutex> lock(s.mutex);
+    for (const std::weak_ptr<httplib::Client> & c : s.clients) {
+        if (const auto client = c.lock()) {
+            out.push_back(client);
+        }
+    }
+    g_woken.notify_all();
+}
+
 void api_quit() {
-    std::lock_guard<std::mutex> lock(g_stops_mutex);
-    g_quit = true;
-    for (api_stop * s : g_stops) {
-        s->stop();
+    std::vector<std::shared_ptr<httplib::Client>> clients;
+    {
+        std::lock_guard<std::mutex> lock(g_stops_mutex);
+        g_quit = true;
+        for (api_stop * s : g_stops) {
+            reached(*s, clients);
+        }
+    }
+    for (const auto & client : clients) {
+        client->stop();
     }
 }
 
 void api_stop::stop() {
-    stopped = true;
-    std::lock_guard<std::mutex> lock(mutex);
-    for (const std::weak_ptr<httplib::Client> & c : clients) {
-        if (const auto client = c.lock()) {
-            client->stop();
-        }
+    std::vector<std::shared_ptr<httplib::Client>> held;
+    reached(*this, held);
+    for (const auto & client : held) {
+        client->stop();
     }
-    g_woken.notify_all();
 }
 
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path) {

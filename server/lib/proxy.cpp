@@ -16,7 +16,8 @@
 // reached answers 502. The proxy knows no protocol: MCP and LLM endpoints pass
 // alike. The request out is sent on a thread of its own, which hands the head
 // of its answer, then its body piece by piece as they come, to the answer of
-// this server; it ends once its client leaves or the process ends.
+// this server; it ends once its client leaves, seen within a second however
+// silent the server is, or the process ends.
 
 #include "lib/proxy.h"
 
@@ -28,24 +29,33 @@
 #include "lib/quit.h"
 #include "lib/remote.h"
 
+#include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 
 // a request out, which its thread fills and the answer of this server takes:
-// the head of its answer once it came, the body that came and is not taken
-// yet, whether it ended and why
+// the head of its answer once it came, whether it is a stream of events, the
+// body that came and is not taken yet, whether it ended, why, and whether it
+// was larger than a body this server holds
 struct relay_t {
     api_stop                stop;
     std::mutex              mutex;
     std::condition_variable moved;
     bool                    headed = false;
     httplib::Response       head;
+    bool                    streamed = false;
     std::string             body;
-    bool                    ended = false;
-    httplib::Error          error = httplib::Error::Success;
+    bool                    ended  = false;
+    httplib::Error          error  = httplib::Error::Success;
+    bool                    larger = false;
 };
+
+// what a stream of events holds that its client has not taken yet, at most:
+// past it, the request out waits for the client
+static const size_t RELAY_PENDING = 1 << 20;
 
 // the headers that stay on their side of the proxy, lowercase: those of the
 // connection, those that tell who each side is, the keys, and those the proxy
@@ -125,13 +135,27 @@ static void relayed(const std::shared_ptr<relay_t> &         relay,
     quit_thread([relay, client, out]() mutable {
         out.response_handler = [&relay](const httplib::Response & head) {
             std::lock_guard<std::mutex> lock(relay->mutex);
-            relay->head   = head;
-            relay->headed = true;
+            relay->head     = head;
+            relay->headed   = true;
+            relay->streamed = starts_with(lower(head.get_header_value("Content-Type")), "text/event-stream");
             relay->moved.notify_all();
             return true;
         };
+        // a stream waits while its client has not taken what came, looking
+        // every second at the stop, which nothing here wakes; a body stays
+        // within the payload httplib holds
         out.content_receiver = [&relay](const char * piece, size_t n, size_t, size_t) {
-            std::lock_guard<std::mutex> lock(relay->mutex);
+            std::unique_lock<std::mutex> lock(relay->mutex);
+            while (relay->streamed && relay->body.size() >= RELAY_PENDING && !relay->stop.stopped) {
+                relay->moved.wait_for(lock, std::chrono::seconds(1));
+            }
+            if (relay->stop.stopped) {
+                return false;
+            }
+            if (!relay->streamed && relay->body.size() + n > CPPHTTPLIB_PAYLOAD_MAX_LENGTH) {
+                relay->larger = true;
+                return false;
+            }
             relay->body.append(piece, n);
             relay->moved.notify_all();
             return true;
@@ -190,8 +214,21 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         out.headers.emplace(h.first, h.second);
     }
     relayed(relay, client, out);
+    // waits for the relay until moved holds, looking every second whether the
+    // client is still there; false once it left, the request out let go
     std::unique_lock<std::mutex> lock(relay->mutex);
-    relay->moved.wait(lock, [&] { return relay->headed || relay->ended; });
+    const auto                   waited = [&](const std::function<bool()> & moved) {
+        while (!relay->moved.wait_for(lock, std::chrono::seconds(1), moved)) {
+            if (req.is_connection_closed()) {
+                relay->stop.stop();
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!waited([&] { return relay->headed || relay->ended; })) {
+        return;
+    }
     if (!relay->headed) {
         refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
                r->server.url + " cannot be reached: " + httplib::to_string(relay->error));
@@ -213,6 +250,21 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
                    " -> set proxies url " + route);
         return;
     }
+    // a body is held whole before the answer goes, so one too large is
+    // refused as a server that cannot be reached
+    const std::string type     = answer.get_header_value("Content-Type");
+    const bool        streamed = relay->streamed;
+    if (!type.empty() && !streamed) {
+        if (!waited([&] { return relay->ended; })) {
+            return;
+        }
+        if (relay->larger) {
+            refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
+                   r->server.url + " answers a body larger than " + std::to_string(CPPHTTPLIB_PAYLOAD_MAX_LENGTH) +
+                       " bytes");
+            return;
+        }
+    }
     log_debug("Proxy", "Route proxy/%s: %s %s %d", route.c_str(), req.method.c_str(),
               (rest.empty() ? "/" : rest).c_str(), status);
     res.status            = status;
@@ -222,47 +274,60 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
             res.set_header(h.first, seal_text(h.second, secrets));
         }
     }
-    const std::string type = answer.get_header_value("Content-Type");
     if (type.empty()) {
         relay->stop.stop();
         return;
     }
-    if (!starts_with(lower(type), "text/event-stream")) {
-        relay->moved.wait(lock, [&] { return relay->ended; });
+    if (!streamed) {
         res.set_content(seal_body(relay->body, secrets), type);
         return;
     }
     lock.unlock();
     const auto events = std::make_shared<seal_events>(seal_events{ secrets, "" });
-    res.set_chunked_content_provider(type, [relay, events](size_t, httplib::DataSink & sink) {
-        std::string    piece;
-        bool           ended = false;
-        httplib::Error error = httplib::Error::Success;
-        {
-            std::unique_lock<std::mutex> held(relay->mutex);
-            relay->moved.wait(held, [&] { return !relay->body.empty() || relay->ended; });
-            piece.swap(relay->body);
-            ended = relay->ended;
-            error = relay->error;
-        }
-        // the events as they come, the client cut off as the server was when
-        // the stream breaks, and the request out let go once the client left
-        const std::string sent = piece.empty() ? "" : events->feed(piece.data(), piece.size());
-        if (!sent.empty() && !sink.write(sent.data(), sent.size())) {
-            relay->stop.stop();
-            return false;
-        }
-        if (!ended) {
+    res.set_chunked_content_provider(
+        type,
+        [relay, events](size_t, httplib::DataSink & sink) {
+            std::string    piece;
+            bool           ended = false;
+            httplib::Error error = httplib::Error::Success;
+            {
+                // a second at most, so a client that left while the server is
+                // silent lets the request out go
+                std::unique_lock<std::mutex> held(relay->mutex);
+                if (!relay->moved.wait_for(held, std::chrono::seconds(1),
+                                           [&] { return !relay->body.empty() || relay->ended; })) {
+                    if (sink.is_writable()) {
+                        return true;
+                    }
+                    relay->stop.stop();
+                    return false;
+                }
+                piece.swap(relay->body);
+                ended = relay->ended;
+                error = relay->error;
+                relay->moved.notify_all();
+            }
+            // the events as they come, the client cut off as the server was when
+            // the stream breaks, and the request out let go once the client left
+            const std::string sent = piece.empty() ? "" : events->feed(piece.data(), piece.size());
+            if (!sent.empty() && !sink.write(sent.data(), sent.size())) {
+                relay->stop.stop();
+                return false;
+            }
+            if (!ended) {
+                return true;
+            }
+            if (error != httplib::Error::Success) {
+                return false;
+            }
+            const std::string last = events->end();
+            if (!last.empty() && !sink.write(last.data(), last.size())) {
+                return false;
+            }
+            sink.done();
             return true;
-        }
-        if (error != httplib::Error::Success) {
-            return false;
-        }
-        const std::string last = events->end();
-        if (!last.empty() && !sink.write(last.data(), last.size())) {
-            return false;
-        }
-        sink.done();
-        return true;
-    });
+        },
+        // however the answer ends, httplib dropping a client it saw leave
+        // included, the request out goes with it
+        [relay](bool) { relay->stop.stop(); });
 }

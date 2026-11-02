@@ -97,6 +97,38 @@ static int bound_port(long long s) {
     return ntohs(at.sin_port);
 }
 
+// the connection s accepts next
+static long long accepted(long long s) {
+#if defined(_WIN32)
+    return (long long) accept((SOCKET) s, nullptr, nullptr);
+#else
+    return (long long) accept((int) s, nullptr, nullptr);
+#endif
+}
+
+// whether the peer of s ends the connection within three seconds, whatever
+// it sends first
+static bool ended(long long s) {
+#if defined(_WIN32)
+    const DWORD wait = 3000;
+    setsockopt((SOCKET) s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&wait), sizeof(wait));
+#else
+    const timeval wait{ 3, 0 };
+    setsockopt((int) s, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof(wait));
+#endif
+    for (;;) {
+        char buf[4096];
+#if defined(_WIN32)
+        const int n = recv((SOCKET) s, buf, sizeof(buf), 0);
+#else
+        const ssize_t n = recv((int) s, buf, sizeof(buf), 0);
+#endif
+        if (n <= 0) {
+            return n == 0;
+        }
+    }
+}
+
 // a connection to 127.0.0.1:port, -1 when it does not open
 static long long connected(int port) {
     const auto  s = socket(AF_INET, SOCK_STREAM, 0);
@@ -287,6 +319,81 @@ int main() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     law(status("/mcp", {}) == 200, "a request the loopback takes passes without the key");
+
+    // a proxied request whose client leaves while the server answers
+    // nothing lets the request out go: the server sees its connection end
+    const long long quiet = muted();
+    engine_run("set proxies url quiet http://127.0.0.1:" + std::to_string(bound_port(quiet)), ENGINE_ADMIN);
+    {
+        httplib::Client leaving("127.0.0.1", port);
+        leaving.set_read_timeout(0, 300000);
+        leaving.Get("/proxy/quiet/");
+    }
+    const long long upstream = accepted(quiet);
+    law(ended(upstream), "a proxied request whose client leaves while the server answers nothing lets it go");
+    release(upstream);
+    release(quiet);
+
+    // a stream of events relayed to a client that leaves lets the request out
+    // go: the server sees it end, however the answer of the client ends
+    std::atomic<bool> streaming{ false };
+    std::atomic<bool> stream_ended{ false };
+    httplib::Server   events_server;
+    events_server.Get("/events", [&](const httplib::Request &, httplib::Response & res) {
+        res.set_chunked_content_provider(
+            "text/event-stream",
+            [&](size_t, httplib::DataSink & sink) {
+                streaming               = true;
+                const std::string event = "data: x\n\n";
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                return sink.write(event.data(), event.size());
+            },
+            [&](bool) { stream_ended = true; });
+    });
+    std::atomic<size_t> flooded{ 0 };
+    std::atomic<bool>   flooding{ true };
+    events_server.Get("/flood", [&](const httplib::Request &, httplib::Response & res) {
+        res.set_chunked_content_provider("text/event-stream", [&](size_t, httplib::DataSink & sink) {
+            const std::string events = [] {
+                std::string all;
+                while (all.size() < 65536) {
+                    all += "data: " + std::string(250, 'x') + "\n\n";
+                }
+                return all;
+            }();
+            if (!flooding || !sink.write(events.data(), events.size())) {
+                return false;
+            }
+            flooded += events.size();
+            return true;
+        });
+    });
+    const int   events_port = events_server.bind_to_any_port("127.0.0.1");
+    std::thread events_listening([&] { events_server.listen_after_bind(); });
+    events_server.wait_until_ready();
+    engine_run("set proxies url sse http://127.0.0.1:" + std::to_string(events_port), ENGINE_ADMIN);
+    const long long reader = connected(port);
+    sent(reader, "GET /proxy/sse/events HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) + "\r\n\r\n");
+    heard(reader);
+    release(reader);
+    for (int i = 0; i < 300 && !stream_ended; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    law(streaming && stream_ended, "a stream of events relayed to a client that leaves lets the request out go");
+
+    // a stream of events relayed to a client that reads nothing holds a
+    // bounded part of it: the request out waits for the client
+    const long long idle = connected(port);
+    sent(idle, "GET /proxy/sse/flood HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) + "\r\n\r\n");
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    const size_t relayed = flooded;
+    law(relayed > 0 && relayed < (32u << 20),
+        "a stream relayed to a client that reads nothing holds a bounded part of it: " + std::to_string(relayed) +
+            " bytes");
+    flooding = false;
+    release(idle);
+    events_server.stop();
+    events_listening.join();
 
     // a page whose headers come in pieces far apart is heard whole: the
     // head of the frame, then its payload a while later
