@@ -4710,6 +4710,11 @@ private:
   std::atomic<bool> closed_{false};
   // Set when the peer stopped answering pings, to end a read() waiting on it
   std::atomic<bool> pong_timed_out_{false};
+  // Set by close(): the steady clock time past which no read, its own or
+  // another thread's, waits any longer for the peer's Close reply. 0 until
+  // then.
+  std::atomic<std::chrono::steady_clock::rep> close_deadline_{0};
+  bool close_expired() const;
   // Set once the caller has bounded read() through set_read_timeout(). Until
   // then the timeout in effect is the compile-time default, and elapsing it
   // is a failure that closes the connection, not a Timeout.

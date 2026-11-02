@@ -18744,6 +18744,10 @@ ReadResult WebSocket::read(std::string &msg) {
       // Handle fragmentation
       if (!fin) {
         while (true) {
+          // A peer that keeps sending fragments, which a read of buffered
+          // data hands over without waiting, still ends with the wait for
+          // its Close reply
+          if (close_expired()) { return Fail; }
           Opcode cont_opcode;
           std::string cont_payload;
           bool cont_fin;
@@ -18836,6 +18840,14 @@ void WebSocket::close(CloseStatus status, const std::string &reason) {
   // thread positioned to see the peer's reply, and reading here would take
   // bytes out of the message it is assembling. Bailing out also leaves the
   // stream, including its read timeout, entirely to that thread.
+  //
+  // Either way the wait ends CPPHTTPLIB_WEBSOCKET_CLOSE_TIMEOUT_SECOND from
+  // now, however long the peer keeps sending other frames.
+  close_deadline_ =
+      (std::chrono::steady_clock::now() +
+       std::chrono::seconds(CPPHTTPLIB_WEBSOCKET_CLOSE_TIMEOUT_SECOND))
+          .time_since_epoch()
+          .count();
   std::unique_lock<std::mutex> read_lock(read_mutex_, std::try_to_lock);
   if (!read_lock.owns_lock()) { return; }
 
@@ -18845,8 +18857,9 @@ void WebSocket::close(CloseStatus status, const std::string &reason) {
   Opcode op;
   std::string resp;
   bool fin;
-  while (impl::read_websocket_frame(strm_, op, resp, fin, is_server_, 125) ==
-         impl::FrameRead::Ok) {
+  while (!close_expired() &&
+         impl::read_websocket_frame(strm_, op, resp, fin, is_server_, 125) ==
+             impl::FrameRead::Ok) {
     if (op == Opcode::Close) { break; }
   }
 }
@@ -18862,12 +18875,19 @@ WebSocket::~WebSocket() {
   strm_.set_read_interrupt(nullptr);
 }
 
+bool WebSocket::close_expired() const {
+  auto deadline = close_deadline_.load();
+  return deadline != 0 &&
+         std::chrono::steady_clock::now().time_since_epoch().count() >=
+             deadline;
+}
+
 void WebSocket::start_heartbeat() {
+  // A pong timeout, or the end of the wait for the reply to a close(), ends a
+  // read() blocked on the silent peer
+  strm_.set_read_interrupt(
+      [this] { return pong_timed_out_.load() || close_expired(); });
   if (ping_interval_sec_ <= 0) { return; }
-  // A pong timeout ends a read() blocked on the silent peer
-  if (max_missed_pongs_ > 0) {
-    strm_.set_read_interrupt([this] { return pong_timed_out_.load(); });
-  }
   ping_thread_ = std::thread([this]() {
     std::unique_lock<std::mutex> lock(ping_mutex_);
     // The predicate keeps a spurious wakeup from sending a ping early
