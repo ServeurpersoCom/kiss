@@ -20,6 +20,7 @@
 #include "engine/keychain.h"
 #include "factory.h"
 #include "httplib.h"
+#include "lib/api.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
 #include "lib/quit.h"
@@ -654,6 +655,97 @@ int main() {
 #    endif
     engine_run("set chat model e/m\nno endpoints shy", ENGINE_ADMIN);
 #endif
+
+    // a request whose stop came before it goes out never connects: a socket
+    // that listens is asked for no connection
+    {
+        const auto  idle = socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in at{};
+        at.sin_family      = AF_INET;
+        at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t length   = sizeof(at);
+        bind(idle, reinterpret_cast<sockaddr *>(&at), sizeof(at));
+        listen(idle, 1);
+        getsockname(idle, reinterpret_cast<sockaddr *>(&at), &length);
+        remote r;
+        r.url     = "http://127.0.0.1:" + std::to_string(ntohs(at.sin_port)) + "/v1";
+        r.timeout = 30;
+        api_stop early;
+        early.stop();
+        std::string path;
+        const auto  client = api_client(r, early, path);
+        const auto  res    = client->Get(path);
+        fd_set      ready;
+        timeval     none{ 0, 0 };
+        FD_ZERO(&ready);
+        FD_SET(idle, &ready);
+        const bool asked = select((int) idle + 1, &ready, nullptr, nullptr, &none) > 0;
+        law(!res && res.error() == httplib::Error::Canceled && !asked,
+            "a request whose stop came before it goes out never connects");
+#if defined(_WIN32)
+        closesocket(idle);
+#else
+        close(idle);
+#endif
+    }
+
+    // a stop ends at once a request whose body an endpoint stops reading,
+    // its client blocked in a send: the endpoint reads the head and a part
+    // of the body, then nothing more
+    {
+        const auto  deaf = socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in at{};
+        at.sin_family      = AF_INET;
+        at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        socklen_t length   = sizeof(at);
+        bind(deaf, reinterpret_cast<sockaddr *>(&at), sizeof(at));
+        listen(deaf, 1);
+        getsockname(deaf, reinterpret_cast<sockaddr *>(&at), &length);
+        remote r;
+        r.url     = "http://127.0.0.1:" + std::to_string(ntohs(at.sin_port)) + "/v1";
+        r.timeout = 30;
+        api_stop          sending;
+        std::atomic<bool> sent_out{ false };
+        std::thread       uploading([&] {
+            std::string path;
+            const auto  client = api_client(r, sending, path);
+            client->Post(path, std::string(64u << 20, 'x'), "application/octet-stream");
+            sent_out = true;
+        });
+        const auto        peer = accept(deaf, nullptr, nullptr);
+#if defined(_WIN32)
+        const DWORD wait = 5000;
+        setsockopt(peer, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&wait), sizeof(wait));
+#else
+        const timeval wait{ 5, 0 };
+        setsockopt(peer, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof(wait));
+#endif
+        size_t heard = 0;
+        char   piece[65536];
+        while (heard < (1u << 20)) {
+            const auto n = recv(peer, piece, sizeof(piece), 0);
+            if (n <= 0) {
+                break;
+            }
+            heard += (size_t) n;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        const auto halting = std::chrono::steady_clock::now();
+        sending.stop();
+        for (int i = 0; i < 100 && !sent_out; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        law(heard >= (1u << 20) && sent_out && std::chrono::steady_clock::now() - halting < std::chrono::seconds(1),
+            "a stop ends at once a request whose body the endpoint stops reading");
+#if defined(_WIN32)
+        closesocket(peer);
+        closesocket(deaf);
+#else
+        close(peer);
+        close(deaf);
+#endif
+        uploading.join();
+    }
 
     // what the sources serve: the models of each endpoint, the tools of this
     // server, of the pages and of each MCP server, a source that fails

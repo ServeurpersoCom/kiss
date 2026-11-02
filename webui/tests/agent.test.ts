@@ -62,7 +62,8 @@ function events(list: object[]): Reply {
 async function page(replies: Reply[], lines = '', listed: object[] = [{ id: 'x' }, { id: 'y' }]) {
 	vi.resetModules();
 	const bodies: Body[] = [];
-	const requests: { url: string; headers: Record<string, string> }[] = [];
+	const requests: { url: string; headers: Record<string, string>; redirect?: RequestRedirect }[] =
+		[];
 	// the lists of models asked, by url
 	const lists: string[] = [];
 	vi.stubGlobal(
@@ -70,7 +71,11 @@ async function page(replies: Reply[], lines = '', listed: object[] = [{ id: 'x' 
 		vi.fn(async (url: string, init: RequestInit) => {
 			if (init.method !== 'POST') return (lists.push(url), Response.json({ data: listed }));
 			bodies.push(JSON.parse(String(init.body)));
-			requests.push({ url, headers: init.headers as Record<string, string> });
+			requests.push({
+				url,
+				headers: init.headers as Record<string, string>,
+				redirect: init.redirect
+			});
 			return replies.shift()!(init.signal!);
 		})
 	);
@@ -302,6 +307,35 @@ describe('a turn', () => {
 		await expect(p.go()).rejects.toThrow('ended before [DONE]');
 		expect(JSON.stringify(p.reply)).toContain('hi');
 		expect(JSON.stringify(p.reply)).not.toContain('sk-left-open');
+	});
+
+	it('reads lines that end in CR alone as those that end in LF', async () => {
+		const text =
+			['data: {"choices":[{"delta":{"content":"hi"}}]}', '', 'data: [DONE]', ''].join('\r') + '\r';
+		const cr = () => new Response(text, { headers: { 'content-type': 'text/event-stream' } });
+		const p = await page([cr]);
+		await p.go();
+		expect(JSON.stringify(p.reply)).toContain('hi');
+	});
+
+	it('follows no redirect, the key going to no address the configuration names', async () => {
+		const p = await page([stream([{ content: 'hi' }])], 'set endpoints key m sk-a');
+		await p.go();
+		expect(p.requests[0].redirect).toBe('error');
+	});
+
+	it('sends no key to the url of another configuration while a reply is asked again', async () => {
+		const busy = () => new Response('', { status: 503 });
+		const p = await page(
+			[busy, stream([{ content: 'hi' }])],
+			'set endpoints key m sk-old\nset endpoints max-retries m 1\nset endpoints retry-pause m 0.2'
+		);
+		const turn = p.go();
+		await vi.waitFor(() => expect(p.requests.length).toBe(1));
+		await p.engine.run('set endpoints url m http://n/v1\nset endpoints key m sk-new', 'user');
+		await expect(turn).rejects.toThrow('endpoints url m changed');
+		expect(p.requests).toHaveLength(1);
+		expect(JSON.stringify(p.requests)).not.toContain('sk-new');
 	});
 });
 

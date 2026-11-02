@@ -964,10 +964,11 @@ answers. A server that refuses the key of its route answers 424 with the fix,
 `set proxies key <name>`, so the page never takes it for a refusal of its own key nor for a server
 down for a while, which it asks again; one that redirects answers 424 naming where,
 `set proxies url <name>`, since a redirect followed would carry the key elsewhere; an url no client
-of the build reaches answers 424 too. A server that cannot be reached answers 502. A route the
-configuration does not name answers 404. The request out goes on a thread of its own, which hands
-the answer of this server the head of its answer, then its body as it comes; a client that leaves
-lets it go. A server that hides its own key some other way, deeper than the JSON a page decodes or
+of the build reaches answers 424 too. A server that cannot be reached, or that cuts a body short of
+the length it announced, answers 502; a request this server stops before its answer goes answers
+503. A route the configuration does not name answers 404. The request out goes on a thread of its
+own, which hands the answer of this server the head of its answer, then its body as it comes; a
+client that leaves lets it go. A server that hides its own key some other way, deeper than the JSON a page decodes or
 in pieces across events, betrays a key it holds, which no filter stops, so a key goes only to a
 server trusted with it. The client speaks HTTPS: LibreSSL built with the binary on Windows, the
 system OpenSSL elsewhere.

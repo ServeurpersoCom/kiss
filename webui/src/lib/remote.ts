@@ -7,7 +7,9 @@ import { BEARER, credential, placement } from '../engine/keychain.js';
 // has to answer: endpoints and mcp; proxied, it goes through the route of its
 // name on a KiSS server, the key and the headers those of that server, its own
 // url and key waiting until it goes direct again; sign reads the key through
-// the keychain as a request leaves, so no remote holds its value
+// the keychain as a request leaves, so no remote holds its value, and refuses
+// once the configuration names another url for the item, so a key never goes
+// to the url of another configuration
 export interface Remote {
 	name: string;
 	url: string;
@@ -22,6 +24,10 @@ const PROXY = 'proxy';
 
 // the module whose items name the KiSS servers a proxy takes, by their MCP
 const SERVERS = 'mcp';
+
+// a request that carries a key follows no redirect, as those of the server do
+// not: the key would go to an address the configuration does not name
+export const REDIRECT: RequestRedirect = 'error';
 
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
@@ -45,10 +51,15 @@ function pairs(text: string): [string, string][] {
 // fallback says, headers and seconds
 function own(config: ConfigReader, module: string, name: string, fallback: string): Remote {
 	const auth = String(config.get(`${module} auth-header`, name) ?? '') || fallback;
+	const url = String(config.get(`${module} url`, name));
 	return {
 		name,
-		url: String(config.get(`${module} url`, name)),
-		sign: () => credential(config, auth, module, name),
+		url,
+		sign: () => {
+			if (String(config.get(`${module} url`, name)) !== url)
+				throw new Error(`${module} url ${name} changed while its request was going to ${url}`);
+			return credential(config, auth, module, name);
+		},
 		headers: Object.fromEntries(pairs(String(config.get(`${module} headers`, name) ?? ''))),
 		timeout: Number(config.get(`${module} timeout`, name)),
 		proxied: false

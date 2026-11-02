@@ -12,7 +12,7 @@ import type {
 import type { Image, Outcome, Tool, ToolContext } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
-import { headers, remotes, type Remote } from './remote.js';
+import { REDIRECT, headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
 import { fill } from './form.js';
 
@@ -83,7 +83,7 @@ function connect(remote: Remote): Promise<Client> {
 		}
 	);
 	const transport = new StreamableHTTPClientTransport(new URL(remote.url, location.href), {
-		requestInit: { headers: headers(remote) }
+		requestInit: { headers: headers(remote), redirect: REDIRECT }
 	});
 	return client.connect(transport, { timeout: MCP_CONNECT_TIMEOUT_MS }).then(() => client);
 }

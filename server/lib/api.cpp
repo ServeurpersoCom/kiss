@@ -12,6 +12,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <map>
+#include <mutex>
 #include <set>
 
 const protocol & protocol_chat();
@@ -72,7 +73,7 @@ api_stop::~api_stop() {
 }
 
 // the clients of a stop it reaches, the stop marked stopped first, so a
-// waiting pause wakes and a request that goes out later sees it; they are
+// waiting pause wakes and a request that goes out later refuses to; they are
 // stopped outside every lock, as a stop waits for a client that connects
 static void reached(api_stop & s, std::vector<std::shared_ptr<httplib::Client>> & out) {
     s.stopped = true;
@@ -118,34 +119,13 @@ std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, s
     const long   micros  = (long) ((r.timeout - (double) seconds) * 1e6);
     client->set_connection_timeout(seconds, micros);
     client->set_read_timeout(seconds, micros);
+    client->set_interrupt([&stop] { return stop.stopped.load(); });
     std::lock_guard<std::mutex> lock(stop.mutex);
     stop.clients.erase(std::remove_if(stop.clients.begin(), stop.clients.end(),
                                       [](const std::weak_ptr<httplib::Client> & c) { return c.expired(); }),
                        stop.clients.end());
     stop.clients.push_back(client);
-    if (stop.stopped) {
-        throw api_error("Stopped");
-    }
     return client;
-}
-
-httplib::Result api_send(httplib::Client & client, httplib::Request & req, api_stop & stop) {
-    const auto going = [&stop](size_t, size_t) {
-        return !stop.stopped;
-    };
-    const auto handler    = std::move(req.response_handler);
-    const auto receiver   = std::move(req.content_receiver);
-    req.upload_progress   = going;
-    req.download_progress = going;
-    req.response_handler  = [&stop, handler](const httplib::Response & res) {
-        return !stop.stopped && (!handler || handler(res));
-    };
-    if (receiver) {
-        req.content_receiver = [&stop, receiver](const char * data, size_t n, size_t offset, size_t total) {
-            return !stop.stopped && receiver(data, n, offset, total);
-        };
-    }
-    return client.send(req);
 }
 
 bool api_events::feed(const char * piece, size_t n, const std::function<bool(const std::string &)> & event) {
@@ -218,7 +198,7 @@ static std::vector<std::pair<std::string, std::string>> api_list(const endpoint 
     req.method                = "GET";
     req.path                  = joined(base, e.speaks->models);
     req.headers               = sent(e);
-    const httplib::Result res = api_send(*client, req, stop);
+    const httplib::Result res = client->send(req);
     if (stop.stopped) {
         throw api_error("Stopped");
     }
@@ -361,7 +341,7 @@ void api_chat(const endpoint &                               e,
                 return false;
             }
         };
-        const httplib::Result res = api_send(*client, req, stop);
+        const httplib::Result res = client->send(req);
         if (stop.stopped) {
             throw api_error("Stopped");
         }

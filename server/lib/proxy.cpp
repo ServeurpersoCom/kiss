@@ -160,7 +160,7 @@ static void relayed(const std::shared_ptr<relay_t> &         relay,
             relay->moved.notify_all();
             return true;
         };
-        const httplib::Result       res = api_send(*client, out, relay->stop);
+        const httplib::Result       res = client->send(out);
         std::lock_guard<std::mutex> lock(relay->mutex);
         relay->ended = true;
         relay->error = res.error();
@@ -175,17 +175,17 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         res.set_content("no proxy route \"" + route + "\"\n", "text/plain");
         return;
     }
-    const auto                       relay = std::make_shared<relay_t>();
+    const auto relay = std::make_shared<relay_t>();
+    if (relay->stop.stopped) {
+        refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+        return;
+    }
     std::string                      base;
     std::shared_ptr<httplib::Client> client;
     try {
         client = api_client(r->server, relay->stop, base);
     } catch (const api_error & e) {
-        if (relay->stop.stopped) {
-            refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
-        } else {
-            refuse(res, *r, route, httplib::StatusCode::FailedDependency_424, e.what());
-        }
+        refuse(res, *r, route, httplib::StatusCode::FailedDependency_424, e.what());
         return;
     }
 
@@ -229,6 +229,10 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     if (!waited([&] { return relay->headed || relay->ended; })) {
         return;
     }
+    if (!relay->headed && relay->stop.stopped) {
+        refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+        return;
+    }
     if (!relay->headed) {
         refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
                r->server.url + " cannot be reached: " + httplib::to_string(relay->error));
@@ -250,8 +254,8 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
                    " -> set proxies url " + route);
         return;
     }
-    // a body is held whole before the answer goes, so one too large is
-    // refused as a server that cannot be reached
+    // a body is held whole before the answer goes, so one too large, or one
+    // the server cut short, is refused as a server that cannot be reached
     const std::string type     = answer.get_header_value("Content-Type");
     const bool        streamed = relay->streamed;
     if (!type.empty() && !streamed) {
@@ -262,6 +266,15 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
             refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
                    r->server.url + " answers a body larger than " + std::to_string(CPPHTTPLIB_PAYLOAD_MAX_LENGTH) +
                        " bytes");
+            return;
+        }
+        if (relay->error != httplib::Error::Success && relay->stop.stopped) {
+            refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+            return;
+        }
+        if (relay->error != httplib::Error::Success) {
+            refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
+                   r->server.url + " cut its answer short: " + httplib::to_string(relay->error));
             return;
         }
     }

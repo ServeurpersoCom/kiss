@@ -334,6 +334,24 @@ int main() {
     release(upstream);
     release(quiet);
 
+    // a proxied body the server cuts short of the length it announced is
+    // refused as a server that cannot be reached, never passed on as whole
+    const long long cutting = muted();
+    engine_run("set proxies url cut http://127.0.0.1:" + std::to_string(bound_port(cutting)), ENGINE_ADMIN);
+    int             cut_status = 0;
+    std::thread     cut_asking([&] {
+        httplib::Client asking("127.0.0.1", port);
+        const auto      res = asking.Get("/proxy/cut/");
+        cut_status          = res ? res->status : -1;
+    });
+    const long long cut = accepted(cutting);
+    answered(cut);
+    sent(cut, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{}");
+    release(cut);
+    cut_asking.join();
+    release(cutting);
+    law(cut_status == 502, "a proxied body the server cuts short is refused: " + std::to_string(cut_status));
+
     // a stream of events relayed to a client that leaves lets the request out
     // go: the server sees it end, however the answer of the client ends
     std::atomic<bool> streaming{ false };
@@ -449,7 +467,7 @@ int main() {
     chatting = false;
     chatter.join();
     asking.join();
-    law(proxied == 502, "the request it proxied answers 502: " + std::to_string(proxied));
+    law(proxied == 503, "the request it proxied answers 503: " + std::to_string(proxied));
     release(mute);
     fs::remove_all(root);
 

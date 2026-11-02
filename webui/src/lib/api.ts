@@ -3,7 +3,7 @@ import type { ConfigReader } from '../engine/engine.js';
 import { MODEL_SEPARATOR, SLASH } from './config.js';
 import { secrets } from '../engine/keychain.js';
 import { seal } from '../engine/seal.js';
-import { remotes, type Remote } from './remote.js';
+import { REDIRECT, remotes, type Remote } from './remote.js';
 import chatProtocol from '../protocols/chat.js';
 
 // the client of every endpoint: the model list, and a request streamed in the
@@ -18,6 +18,8 @@ const NOT_FOUND = 404;
 const KEY_FIX = `${SLASH}set endpoints key <name> <key>`;
 const URL_FIX = `${SLASH}set endpoints url <name> <url>`;
 const DATA = 'data:';
+const CR = '\r';
+const LF = '\n';
 
 // the protocols of KiSS: a file in protocols/ offers its protocol by existing
 const files = import.meta.glob<{ default: Protocol }>('../protocols/*.ts', { eager: true });
@@ -124,11 +126,13 @@ async function request<T>(
 		const res = await fetch(`${endpoint.url}${path}`, {
 			...init,
 			headers: { ...sent(endpoint), ...init.headers },
+			redirect: REDIRECT,
 			signal: signal ? AbortSignal.any([signal, start.signal]) : start.signal
 		}).catch((e: Error) => {
-			// a network or CORS failure: nothing answers at that URL
+			// a network or CORS failure, or a redirect, which no request with a
+			// key follows
 			throw e instanceof TypeError
-				? new EndpointError(`${endpoint.url} does not answer`, URL_FIX)
+				? new EndpointError(`${endpoint.url} does not answer, or answers a redirect`, URL_FIX)
 				: e;
 		});
 		return await read(res);
@@ -239,9 +243,10 @@ async function opened(
 
 // one delta per server sent event, read by the protocol of the endpoint from
 // the data of the event, its data lines joined by LF, once the blank line that
-// closes it came, up to the event that ends the stream, which may carry the
-// last count: a stream closed before it is cut short, never a finished answer,
-// and an event it leaves open is never read
+// closes it came, its lines ending in LF, CR LF or CR alike, up to the event
+// that ends the stream, which may carry the last count: a stream closed before
+// it is cut short, never a finished answer, and an event it leaves open is
+// never read
 export async function* chat(
 	endpoint: Endpoint,
 	req: Request,
@@ -258,19 +263,31 @@ export async function* chat(
 	const stream = await opened(endpoint, init, signal, retrying);
 	const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
 	const read = protocol.reader();
-	let buffer = '';
+	// the line being read, whether the last character ended one with a CR,
+	// which an LF right after belongs to, and the data lines of the event
+	let line = '';
+	let cr = false;
 	let data: string[] = [];
 	for (;;) {
 		const { value, done } = await reader.read();
 		if (done) throw new Error(`the stream ended before ${protocol.last}`);
-		buffer += value;
-		let nl: number;
-		while ((nl = buffer.indexOf('\n')) >= 0) {
-			const line = buffer.slice(0, nl).replace(/\r$/, '');
-			buffer = buffer.slice(nl + 1);
-			if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
-			if (line || !data.length) continue;
-			const event = data.join('\n').trim();
+		for (const c of value) {
+			if (cr && c === LF) {
+				cr = false;
+				continue;
+			}
+			cr = c === CR;
+			if (c !== CR && c !== LF) {
+				line += c;
+				continue;
+			}
+			if (line) {
+				if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
+				line = '';
+				continue;
+			}
+			if (!data.length) continue;
+			const event = data.join(LF).trim();
 			data = [];
 			let d: Delta | undefined;
 			try {

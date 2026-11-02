@@ -161,6 +161,8 @@ async function page(
 	vi.resetModules();
 	const bodies: Body[] = [];
 	const auth: (string | null)[] = [];
+	// how each request to a server takes a redirect
+	const redirects: RequestRedirect[] = [];
 	// the JSON-RPC methods each server received
 	const methods: Record<string, string[]> = {};
 	vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -178,6 +180,7 @@ async function page(
 		const route = routes[url.host];
 		if (!route) throw new TypeError(`fetch failed: ${url.host}`);
 		auth.push(req.headers.get('authorization'));
+		redirects.push(req.redirect);
 		const sent = req.method === 'POST' ? await req.clone().text() : '';
 		if (sent) (methods[url.host] ??= []).push(JSON.parse(sent).method);
 		return new Promise<Response>((resolve, reject) => {
@@ -224,6 +227,7 @@ async function page(
 		engine,
 		bodies,
 		auth,
+		redirects,
 		methods,
 		asked,
 		verdicts,
@@ -259,6 +263,14 @@ describe('an MCP server', () => {
 			'tools/list'
 		]);
 		expect(p.methods.b).toEqual(['server/discover', 'tools/list']);
+	});
+
+	it('follows no redirect, its key going to no address the configuration names', async () => {
+		const p = await page({ a: modern(SHELL) }, []);
+		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-a', 'user');
+		await p.engine.run('show tools', 'user');
+		expect(p.redirects.length).toBeGreaterThan(0);
+		expect(new Set(p.redirects)).toEqual(new Set(['error']));
 	});
 
 	it('serves its tools under their own names, after the own ones of KiSS', async () => {

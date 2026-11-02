@@ -102,10 +102,11 @@ struct endpoint {
 // every endpoint the configuration names, sorted by name
 std::vector<endpoint> api_endpoints(const engine_reader & config);
 
-// what stops a request: a flag, and the clients its requests go through,
-// each stopped at once, httplib ending the request it sends; every stop alive
-// is known, so api_quit stops them all, and one made once it did is stopped
-// from the start
+// what stops a request: a flag every wait of its clients polls, so httplib
+// refuses to send a request once it is set and ends one that waits, and the
+// clients themselves, each stopped at once, so a call blocked in the system
+// wakes; every stop alive is known, so api_quit stops them all, and one made
+// once it did is stopped from the start
 struct api_stop {
     std::atomic<bool>                           stopped{ false };
     std::mutex                                  mutex;
@@ -123,13 +124,8 @@ struct api_stop {
 void api_quit();
 
 // a client of a remote server, its seconds those of the item, which the stop
-// stops; path is the path of its url
+// stops, and which lives no longer than the stop; path is the path of its url
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path);
-
-// sends req through client, a client of the stop: each step of the request
-// looks at the stop, the body sent, the head of the answer, each piece of its
-// body, so a stop that comes before the client sends ends the request too
-httplib::Result api_send(httplib::Client & client, httplib::Request & req, api_stop & stop);
 
 // the events of a stream as its pieces come, its lines ending in LF, CR LF or
 // CR alike: the data lines of each, joined by LF, handed to event once a

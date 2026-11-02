@@ -1,7 +1,7 @@
 import type { Assistant, Conversation, Form, Outcome, Run, Turn } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { ATTACHED_STORAGE_KEY, storeName } from './config.js';
-import { remotes, type Remote } from './remote.js';
+import { REDIRECT, remotes, type Remote } from './remote.js';
 import type { Grant, Verdict } from '../engine/engine.js';
 import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
 import { fill } from './form.js';
@@ -336,7 +336,8 @@ export async function act(
 	const res = await fetch(new URL(ACTIONS + action, new URL(server.url, location.href)), {
 		method: 'POST',
 		headers: { ...headers(server), 'Content-Type': 'application/json' },
-		body: JSON.stringify(body)
+		body: JSON.stringify(body),
+		redirect: REDIRECT
 	});
 	if (!res.ok) throw new Error((await res.text()).trim() || `${server.url} answers ${res.status}`);
 	if (res.status === 204) return {};

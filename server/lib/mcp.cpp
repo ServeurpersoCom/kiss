@@ -100,7 +100,7 @@ static doc_t post(const remote &           r,
             return !found;
         });
     };
-    const httplib::Result res = api_send(*client, req, stop);
+    const httplib::Result res = client->send(req);
     if (stop.stopped) {
         throw api_error("Stopped");
     }

@@ -327,13 +327,14 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - A line kept in the conversation never holds a secret, not even a line that does not read.
 - The keychain of the page is the one reader of the value of a key beside the engine that holds it:
   a module reads a secret `<removed>`, and the key goes out at one place, the header its
-  `auth-header` names, `Header` or `Header: Scheme`, read as the request leaves. What leaves the
-  memory of the page is sealed: the request to the model, a conversation stored or exported, every
-  string in it and every name of a property read `<removed>` where a secret the page has known this
-  session stood, a value typed in the form of a server and a key replaced since included. A string
-  is sealed as decoded, so a key escaped or streamed in pieces is caught, and a conversation kept
-  before is sealed as it leaves again. The screen shows what came. The headers of an item never name
-  the header its `auth-header` writes.
+  `auth-header` names, `Header` or `Header: Scheme`, read as the request leaves, to the url the
+  configuration names with it: a request asked again once that url changed fails, and no request
+  that carries a key follows a redirect. What leaves the memory of the page is sealed: the request
+  to the model, a conversation stored or exported, every string in it and every name of a property
+  read `<removed>` where a secret the page has known this session stood, a value typed in the form
+  of a server and a key replaced since included. A string is sealed as decoded, so a key escaped or
+  streamed in pieces is caught, and a conversation kept before is sealed as it leaves again. The
+  screen shows what came. The headers of an item never name the header its `auth-header` writes.
 - The word after a collection names a key when it names one, else an item, for `no` and `show`
   alike.
 - The secrets of an item go with it to a url the model writes once the user lets it, the question
