@@ -44,11 +44,14 @@ if(WIN32)
     endif()
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../libressl ${CMAKE_BINARY_DIR}/libressl EXCLUDE_FROM_ALL)
 
-    # LibreSSL builds at -W4 with its own list of warnings off; the defensive
-    # returns of mlkem/mlkem_key.c add C4702, unreachable code, which it turns
-    # off the same way for pkcs7/pk7_doit.c alone
+    # LibreSSL builds at -W4 with its own list of warnings off; MSVC adds C4702,
+    # unreachable code, on the defensive returns of mlkem/mlkem_key.c, and
+    # C4701, potentially uninitialized variable, on variables read only on the
+    # paths that set them (x509/x509_addr.c, ssl/t1_lib.c); MASM takes no /wd,
+    # so these apply to the C sources alone
     if(MSVC)
-        target_compile_options(crypto_obj PRIVATE /wd4702)
+        target_compile_options(crypto_obj PRIVATE "$<$<COMPILE_LANGUAGE:C>:/wd4701;/wd4702>")
+        target_compile_options(ssl_obj PRIVATE $<$<COMPILE_LANGUAGE:C>:/wd4701>)
     endif()
 
     # httplib.h loads the Windows certificate store, links crypt32 and
