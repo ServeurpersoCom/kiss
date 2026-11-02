@@ -9,7 +9,6 @@
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/proxy.h"
-#include "lib/quit.h"
 #include "lib/sync.h"
 #include "mcp/mcp.h"
 #include "server/client.conf.hpp"
@@ -226,22 +225,15 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     server.set_websocket_ping_interval(PING_SECONDS);
     server.set_websocket_max_missed_pongs(2);
     server.WebSocket(EVENTS_PATH, [on](const httplib::Request & req, httplib::ws::WebSocket & ws) {
-        std::string headers;
-        if (!sync_read(ws, headers, [] { return !quit_ending(); })) {
-            return;
-        }
-        const std::shared_ptr<yyjson_doc> doc(yyjson_read(headers.data(), headers.size(), 0), yyjson_doc_free);
-        yyjson_val *                      key   = yyjson_obj_get(yyjson_doc_get_root(doc.get()), "Authorization");
-        httplib::Request                  keyed = req;
-        keyed.headers.erase("Authorization");
-        keyed.set_header("Authorization", yyjson_is_str(key) ? yyjson_get_str(key) : "");
-        std::string why;
-        if (!authorized(keyed, on, why)) {
-            log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
-            ws.close(httplib::ws::CloseStatus::PolicyViolation, why);
-            return;
-        }
-        sync_events(req, ws);
+        sync_events(req, ws, [&req, &on](const std::string & headers) {
+            const std::shared_ptr<yyjson_doc> doc(yyjson_read(headers.data(), headers.size(), 0), yyjson_doc_free);
+            yyjson_val *                      key   = yyjson_obj_get(yyjson_doc_get_root(doc.get()), "Authorization");
+            httplib::Request                  keyed = req;
+            keyed.headers.erase("Authorization");
+            keyed.set_header("Authorization", yyjson_is_str(key) ? yyjson_get_str(key) : "");
+            std::string why;
+            return authorized(keyed, on, why) ? "" : why;
+        });
     });
     server.Post(ACTION_PATH, [on](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);

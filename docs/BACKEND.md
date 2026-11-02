@@ -369,8 +369,9 @@ request would carry, the key among them, `{"Authorization":"Bearer <server key>"
 closes a stream it refuses with 1008, policy violation, and why. Every next message is the server's:
 events, one JSON object per line, an empty message after 15 seconds without one, so a page that
 hears nothing for 45 seconds knows its stream gone and opens another; the server pings every 15
-seconds and lets go of a page that answers neither of two pings in a row. A WebSocket counts in none of the six connections a
-browser opens to a site in HTTP/1.1, which all its tabs share, so no number of pages blocks another.
+seconds and lets go of a page that answers neither of two pings in a row. A WebSocket counts in
+none of the six connections a browser opens to a site in HTTP/1.1, which all its tabs share, so no
+number of pages blocks another.
 The server keeps no log of events: it holds, for each page, what that page has, and sends what it
 lacks, so a page that comes back gets every conversation as it stands. The first event sets every
 conversation, with the protocol of the events and the moment of the server on its clock, in
@@ -949,26 +950,27 @@ the route then `<rest>`, joined by one slash, its query kept, `proxy/hf/chat/com
 body and every header but those that stay on its side (`Host`, `Origin`, `Cookie`, `Authorization`,
 `x-api-key`, `Accept-Encoding`, the length and the connection), then the headers of the route, which
 replace those of the same name and never name the header of its key, then its key in the header
-`proxies auth-header` names, `Header` or `Header: Scheme`, a bearer token unless set, `set proxy
-auth-header claude x-api-key` for the Messages API of Anthropic; the key of this server never goes
-on. The answer comes back with its status and every header but those that stay on its side, each
-through the keychain, every secret of the configuration the route was read from read `<removed>`: a
-stream of events event by event as it arrives, its data lines joined as a client joins them, an
-event the stream leaves open dropped as a client drops it, any other body whole, uncompressed. JSON
-goes through yyjson: every string and every name of a property is sealed as decoded, whatever
-escapes wrote the key, and the JSON is written again, its numbers as they were written; any other
-text, a header and a refusal of the proxy are sealed as they are written. A page served elsewhere
-passes CORS: the server lets the headers it asks to send and shows every header it answers. A server
-that refuses the key of its route answers 424 with the fix, `set proxies key <name>`, so the page
-never takes it for a refusal of its own key nor for a server down for a while, which it asks again;
-one that redirects answers 424 naming where, `set proxies url <name>`, since a redirect followed would
-carry the key elsewhere; an url no client of the build reaches answers 424 too. A server that cannot
-be reached answers 502. A route the configuration does not name answers 404. The request out goes on
-a thread of its own, which hands the answer of this server the head of its answer, then its body as
-it comes; a client that leaves lets it go. A server that hides its
-own key some other way, deeper than the JSON a page decodes or in pieces across events, betrays a
-key it holds, which no filter stops, so a key goes only to a server trusted with it. The client
-speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
+`proxies auth-header` names, `Header` or `Header: Scheme`, a bearer token unless set,
+`set proxies auth-header claude x-api-key` for the Messages API of Anthropic; the key of this server
+never goes on. The answer comes back with its status and every header but those that stay on its
+side, each through the keychain, every secret of the configuration the route was read from read
+`<removed>`: a stream of events event by event as it arrives, its data lines joined as a client
+joins them, an event the stream leaves open dropped as a client drops it, any other body whole,
+uncompressed. JSON goes through yyjson: every string and every name of a property is sealed as
+decoded, whatever escapes wrote the key, and the JSON is written again, its numbers as they were
+written; any other text, a header and a refusal of the proxy are sealed as they are written. A page
+served elsewhere passes CORS: the server lets the headers it asks to send and shows every header it
+answers. A server that refuses the key of its route answers 424 with the fix,
+`set proxies key <name>`, so the page never takes it for a refusal of its own key nor for a server
+down for a while, which it asks again; one that redirects answers 424 naming where,
+`set proxies url <name>`, since a redirect followed would carry the key elsewhere; an url no client
+of the build reaches answers 424 too. A server that cannot be reached answers 502. A route the
+configuration does not name answers 404. The request out goes on a thread of its own, which hands
+the answer of this server the head of its answer, then its body as it comes; a client that leaves
+lets it go. A server that hides its own key some other way, deeper than the JSON a page decodes or
+in pieces across events, betrays a key it holds, which no filter stops, so a key goes only to a
+server trusted with it. The client speaks HTTPS: LibreSSL built with the binary on Windows, the
+system OpenSSL elsewhere.
 
 ## HTTP and security
 

@@ -10,6 +10,7 @@
 #include "lib/listener.h"
 #include "lib/quit.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -128,6 +129,35 @@ static std::string answered(long long s) {
 #endif
     const std::string text = buf;
     return text.substr(0, text.find("\r\n"));
+}
+
+// what s receives within three seconds, until it holds the head of an answer
+// and the first two bytes of a frame after it
+static std::string heard(long long s) {
+#if defined(_WIN32)
+    const DWORD wait = 3000;
+    setsockopt((SOCKET) s, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&wait), sizeof(wait));
+#else
+    const timeval wait{ 3, 0 };
+    setsockopt((int) s, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof(wait));
+#endif
+    std::string text;
+    for (;;) {
+        const size_t head = text.find("\r\n\r\n");
+        if (head != std::string::npos && text.size() >= head + 6) {
+            return text;
+        }
+        char buf[4096];
+#if defined(_WIN32)
+        const int n = recv((SOCKET) s, buf, sizeof(buf), 0);
+#else
+        const ssize_t n = recv((int) s, buf, sizeof(buf), 0);
+#endif
+        if (n <= 0) {
+            return text;
+        }
+        text.append(buf, (size_t) n);
+    }
 }
 
 static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})";
@@ -258,12 +288,43 @@ int main() {
     }
     law(status("/mcp", {}) == 200, "a request the loopback takes passes without the key");
 
-    // the process ends at once while a page opens the stream of the
-    // conversations and sends nothing, and while a proxied server takes the
-    // connection and never answers: a socket that listens and accepts none
-    httplib::ws::WebSocketClient silent("ws://127.0.0.1:" + std::to_string(port) + "/conversations/events");
+    // a page whose headers come in pieces far apart is heard whole: the
+    // head of the frame, then its payload a while later
+    const std::string events  = "ws://127.0.0.1:" + std::to_string(port) + "/conversations/events";
+    const std::string headers = R"({"Authorization":""})";
+    const long long   slow    = connected(port);
+    sent(slow, "GET /conversations/events HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
+                   "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                   "Sec-WebSocket-Key: AAAAAAAAAAAAAAAAAAAAAA==\r\nSec-WebSocket-Version: 13\r\n\r\n");
+    std::string frame = "\x81";
+    frame += (char) (0x80 | headers.size());
+    frame.append(4, '\0');
+    sent(slow, frame);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    sent(slow, headers);
+    const std::string got  = heard(slow);
+    const size_t      head = got.find("\r\n\r\n");
+    law(got.find(" 101 ") != std::string::npos && head != std::string::npos && got.size() > head + 4 &&
+            (unsigned char) got[head + 4] == 0x81,
+        "a page whose headers come in pieces far apart follows the conversations");
+    release(slow);
+
+    // the process ends within a tick of the streams and the wait for a Close
+    // that is never answered while a page opens the stream of the
+    // conversations and sends nothing, while another sends without end, and
+    // while a proxied server takes the connection and never answers: a
+    // socket that listens and accepts none
+    httplib::ws::WebSocketClient silent(events);
     law(silent.connect() && silent.is_open(), "a page opens the stream of the conversations");
-    const long long mute = muted();
+    httplib::ws::WebSocketClient chatty(events);
+    law(chatty.connect() && chatty.send(headers), "a page follows the conversations");
+    std::atomic<bool> chatting{ true };
+    std::thread       chatter([&] {
+        while (chatting && chatty.send(std::string("x"))) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    });
+    const long long   mute = muted();
     engine_run("set proxies url mute http://127.0.0.1:" + std::to_string(bound_port(mute)), ENGINE_ADMIN);
     int         proxied = 0;
     std::thread asking([&] {
@@ -276,8 +337,10 @@ int main() {
     listening.join();
     const auto ending = std::chrono::steady_clock::now();
     quit_all();
-    law(std::chrono::steady_clock::now() - ending < std::chrono::seconds(1),
-        "the process ends at once while a page sends nothing and a proxied server never answers");
+    law(std::chrono::steady_clock::now() - ending < std::chrono::seconds(3),
+        "the process ends while pages send nothing or without end and a proxied server never answers");
+    chatting = false;
+    chatter.join();
     asking.join();
     law(proxied == 502, "the request it proxied answers 502: " + std::to_string(proxied));
     release(mute);
