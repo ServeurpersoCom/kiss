@@ -611,6 +611,50 @@ int main() {
     law(g_silent && !agent_busy(mute.id) && std::chrono::steady_clock::now() - stopping < std::chrono::seconds(1),
         "a stop ends at once a turn whose endpoint answers nothing yet");
 
+#if defined(CPPHTTPLIB_OPENSSL_SUPPORT)
+    // a stop ends at once a turn whose endpoint takes the connection and
+    // never answers its TLS handshake: a socket that listens, its first
+    // byte of ClientHello read to know the turn is in the handshake
+    const auto  shy = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in where{};
+    where.sin_family      = AF_INET;
+    where.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t size        = sizeof(where);
+    bind(shy, reinterpret_cast<sockaddr *>(&where), sizeof(where));
+    listen(shy, 1);
+    getsockname(shy, reinterpret_cast<sockaddr *>(&where), &size);
+    engine_run("set endpoints url shy https://127.0.0.1:" + std::to_string(ntohs(where.sin_port)) +
+                   "/v1\nset chat model shy/x",
+               ENGINE_ADMIN);
+    conversation shaking;
+    shaking.id = conversation_uuid();
+    conversation_entry hello;
+    hello.text = "hello";
+    conversation_append(shaking, std::nullopt, hello);
+    library_create(shaking, {});
+    const std::string asked_shaking = shaking.entries[0].id;
+    law(agent_answer(shaking.id, [&](conversation &) { return asked_shaking; }).empty(),
+        "a turn sent to an endpoint that never answers its TLS handshake starts");
+    const auto peer      = accept(shy, nullptr, nullptr);
+    char       client[1] = {};
+    const bool shaken    = recv(peer, client, 1, 0) == 1;
+    const auto halting   = std::chrono::steady_clock::now();
+    agent_stop(shaking.id);
+    for (int i = 0; i < 300 && agent_busy(shaking.id); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    law(shaken && !agent_busy(shaking.id) && std::chrono::steady_clock::now() - halting < std::chrono::seconds(1),
+        "a stop ends at once a turn whose endpoint never answers its TLS handshake");
+#    if defined(_WIN32)
+    closesocket(peer);
+    closesocket(shy);
+#    else
+    close(peer);
+    close(shy);
+#    endif
+    engine_run("set chat model e/m\nno endpoints shy", ENGINE_ADMIN);
+#endif
+
     // what the sources serve: the models of each endpoint, the tools of this
     // server, of the pages and of each MCP server, a source that fails
     // telling why, shown and completed as on the page

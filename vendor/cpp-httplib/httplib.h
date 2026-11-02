@@ -3058,9 +3058,13 @@ protected:
   bool socket_should_be_closed_when_request_is_done_ = false;
   size_t socket_tls_settings_version_ = 0;
 
-  // Set by stop() while a request is in flight. The request's reads poll it,
-  // because shutting the socket down does not wake a read on Windows.
+  // Set by stop(). The waits of a connection being opened and the reads of
+  // the request in flight poll it, because a connection being opened holds
+  // socket_mutex_ until it is, and shutting the socket down does not wake a
+  // read on Windows.
   std::atomic<bool> stop_requested_{false};
+  // Whether send_() is opening the connection, holding socket_mutex_
+  std::atomic<bool> connecting_{false};
 
   std::atomic<size_t> tls_settings_version_{0};
 
@@ -3857,15 +3861,14 @@ bool process_client_socket(
     std::chrono::time_point<std::chrono::steady_clock> start_time,
     std::function<bool(Stream &)> callback);
 
-socket_t create_client_socket(const std::string &host, const std::string &ip,
-                              int port, int address_family, bool tcp_nodelay,
-                              bool ipv6_v6only, SocketOptions socket_options,
-                              time_t connection_timeout_sec,
-                              time_t connection_timeout_usec,
-                              time_t read_timeout_sec, time_t read_timeout_usec,
-                              time_t write_timeout_sec,
-                              time_t write_timeout_usec,
-                              const std::string &intf, Error &error);
+socket_t create_client_socket(
+    const std::string &host, const std::string &ip, int port,
+    int address_family, bool tcp_nodelay, bool ipv6_v6only,
+    SocketOptions socket_options, time_t connection_timeout_sec,
+    time_t connection_timeout_usec, time_t read_timeout_sec,
+    time_t read_timeout_usec, time_t write_timeout_sec,
+    time_t write_timeout_usec, const std::string &intf, Error &error,
+    const std::function<bool()> &interrupted = nullptr);
 
 const char *get_header_value(const Headers &headers, const std::string &key,
                              const char *def, size_t id);

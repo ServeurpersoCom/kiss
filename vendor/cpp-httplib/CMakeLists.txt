@@ -1,9 +1,9 @@
-# cpp-httplib: HTTP server and client, commit 02e4b49 of the branch
-# websocket-close-bound of ServeurpersoCom/cpp-httplib, its pull request to
-# yhirose/cpp-httplib pending: its master a18895f, 0.64.0 with the stop of a
-# client that ends a request waiting on Windows, and one deadline on every
-# wait for the reply to a WebSocket close(); split by its split.py into
-# httplib.h and httplib.cpp.
+# cpp-httplib: HTTP server and client, commit 98459f3 of the branch live of
+# ServeurpersoCom/cpp-httplib: its master a18895f, 0.64.0 with the stop of a
+# client that ends a request waiting on Windows, and the commits of its two
+# pull requests to yhirose/cpp-httplib, pending: one deadline on every wait
+# for the reply to a WebSocket close(), and a stop() that ends a connect or a
+# TLS handshake; split by its split.py into httplib.h and httplib.cpp.
 #
 # The server runs plain HTTP behind a reverse proxy, but the client side talks
 # to whatever endpoint the user configures, and that includes https: a cloud

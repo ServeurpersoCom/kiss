@@ -443,9 +443,11 @@ bool set_sni(session_t session, const char *hostname, bool verify_hostname);
 TlsError connect(session_t session);
 TlsError accept(session_t session);
 
-// Handshake with timeout (blocking until timeout)
+// Handshake with timeout (blocking until timeout, or until interrupted
+// returns true)
 bool connect_nonblocking(session_t session, socket_t sock, time_t timeout_sec,
-                         time_t timeout_usec, TlsError *err);
+                         time_t timeout_usec, TlsError *err,
+                         const std::function<bool()> &interrupted = nullptr);
 bool accept_nonblocking(session_t session, socket_t sock, time_t timeout_sec,
                         time_t timeout_usec, TlsError *err);
 
@@ -1892,18 +1894,29 @@ std::chrono::steady_clock::time_point deadline_after(time_t sec,
 }
 
 // Waits only for the time left until deadline, so that all the waits of one
-// TLS handshake come out of a single timeout.
-ssize_t select_until(socket_t sock, short events,
-                            std::chrono::steady_clock::time_point deadline) {
-  if (deadline == (std::chrono::steady_clock::time_point::max)()) {
-    return select_impl(sock, events, -1, 0);
+// TLS handshake come out of a single timeout. With interrupted, it waits in
+// slices and gives up, as a timeout does, once interrupted() returns true.
+ssize_t
+select_until(socket_t sock, short events,
+             std::chrono::steady_clock::time_point deadline,
+             const std::function<bool()> &interrupted = nullptr) {
+  const auto slice = std::chrono::microseconds(100000);
+  for (;;) {
+    if (interrupted && interrupted()) { return 0; }
+    if (deadline == (std::chrono::steady_clock::time_point::max)() &&
+        !interrupted) {
+      return select_impl(sock, events, -1, 0);
+    }
+    auto left = std::chrono::duration_cast<std::chrono::microseconds>(
+        deadline - std::chrono::steady_clock::now());
+    if (left.count() <= 0) { return 0; }
+    auto last = !interrupted || left <= slice;
+    auto wait = last ? left : slice;
+    auto ret =
+        select_impl(sock, events, static_cast<time_t>(wait.count() / 1000000),
+                    static_cast<time_t>(wait.count() % 1000000));
+    if (ret != 0 || last) { return ret; }
   }
-  auto left = std::chrono::duration_cast<std::chrono::microseconds>(
-                  deadline - std::chrono::steady_clock::now())
-                  .count();
-  if (left <= 0) { return 0; }
-  return select_impl(sock, events, static_cast<time_t>(left / 1000000),
-                     static_cast<time_t>(left % 1000000));
 }
 
 // select_read(), but waits in slices and gives up once interrupted() returns
@@ -1930,17 +1943,37 @@ select_read_interruptible(socket_t sock, time_t sec, time_t usec,
   return 0;
 }
 
-Error wait_until_socket_is_ready(socket_t sock, time_t sec,
-                                        time_t usec) {
+// Waits for a connect in progress, in slices when interrupted is given, which
+// ends the wait as Error::Canceled once it returns true.
+Error
+wait_until_socket_is_ready(socket_t sock, time_t sec, time_t usec,
+                           const std::function<bool()> &interrupted = nullptr) {
   struct pollfd pfd_read;
   pfd_read.fd = sock;
   pfd_read.events = POLLIN | POLLOUT;
   pfd_read.revents = 0;
 
   auto timeout = static_cast<int>(sec * 1000 + usec / 1000);
-
-  auto poll_res =
-      handle_EINTR([&]() { return poll_wrapper(&pfd_read, 1, timeout); });
+  ssize_t poll_res = 0;
+  if (!interrupted) {
+    poll_res =
+        handle_EINTR([&]() { return poll_wrapper(&pfd_read, 1, timeout); });
+  } else {
+    auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout);
+    for (;;) {
+      if (interrupted()) { return Error::Canceled; }
+      auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      deadline - std::chrono::steady_clock::now())
+                      .count();
+      auto wait = static_cast<int>(
+          (std::max)((std::min)(left, static_cast<decltype(left)>(100)),
+                     static_cast<decltype(left)>(0)));
+      poll_res =
+          handle_EINTR([&]() { return poll_wrapper(&pfd_read, 1, wait); });
+      if (poll_res != 0 || left <= 100) { break; }
+    }
+  }
 
   if (poll_res == 0) { return Error::ConnectionTimeout; }
 
@@ -2770,13 +2803,15 @@ std::string if2ip(int address_family, const std::string &ifn) {
 }
 #endif
 
-socket_t create_client_socket(
-    const std::string &host, const std::string &ip, int port,
-    int address_family, bool tcp_nodelay, bool ipv6_v6only,
-    SocketOptions socket_options, time_t connection_timeout_sec,
-    time_t connection_timeout_usec, time_t read_timeout_sec,
-    time_t read_timeout_usec, time_t write_timeout_sec,
-    time_t write_timeout_usec, const std::string &intf, Error &error) {
+socket_t
+create_client_socket(const std::string &host, const std::string &ip, int port,
+                     int address_family, bool tcp_nodelay, bool ipv6_v6only,
+                     SocketOptions socket_options,
+                     time_t connection_timeout_sec,
+                     time_t connection_timeout_usec, time_t read_timeout_sec,
+                     time_t read_timeout_usec, time_t write_timeout_sec,
+                     time_t write_timeout_usec, const std::string &intf,
+                     Error &error, const std::function<bool()> &interrupted) {
   auto sock = create_socket(
       host, ip, port, address_family, 0, tcp_nodelay, ipv6_v6only,
       std::move(socket_options),
@@ -2802,10 +2837,13 @@ socket_t create_client_socket(
             error = Error::Connection;
             return false;
           }
-          error = wait_until_socket_is_ready(sock2, connection_timeout_sec,
-                                             connection_timeout_usec);
+          error =
+              wait_until_socket_is_ready(sock2, connection_timeout_sec,
+                                         connection_timeout_usec, interrupted);
           if (error != Error::Success) {
-            if (error == Error::ConnectionTimeout) { quit = true; }
+            if (error == Error::ConnectionTimeout || error == Error::Canceled) {
+              quit = true;
+            }
             return false;
           }
         }
@@ -6474,6 +6512,8 @@ struct ClientTlsSessionOptions {
   // certificate verification.
   bool server_hostname_verification = true;
   std::function<SSLVerifierResponse(tls::session_t)> session_verifier;
+  // When set, ends the handshake as a timeout does once it returns true
+  std::function<bool()> interrupted;
   // When non-null, guards session creation against concurrent use of the
   // context. A WebSocketClient is not safe to use from several threads to
   // begin with, so it passes nothing.
@@ -6573,8 +6613,8 @@ bool setup_client_tls_session(
   }
 
   TlsError tls_err;
-  if (!connect_nonblocking(session, sock, timeout_sec, timeout_usec,
-                           &tls_err)) {
+  if (!connect_nonblocking(session, sock, timeout_sec, timeout_usec, &tls_err,
+                           options.interrupted)) {
     return fail_tls(tls_err.code, tls_err.backend_code);
   }
 
@@ -10712,7 +10752,8 @@ socket_t ClientImpl::create_client_socket(Error &error) const {
         proxy_host_, std::string(), proxy_port_, address_family_, tcp_nodelay_,
         ipv6_v6only_, socket_options_, connection_timeout_sec_,
         connection_timeout_usec_, read_timeout_sec_, read_timeout_usec_,
-        write_timeout_sec_, write_timeout_usec_, interface_, error);
+        write_timeout_sec_, write_timeout_usec_, interface_, error,
+        [this] { return stop_requested_.load(); });
   }
 
   // Check is custom IP or hostname specified for host_
@@ -10724,7 +10765,8 @@ socket_t ClientImpl::create_client_socket(Error &error) const {
       connect_host, ip, port_, address_family_, tcp_nodelay_, ipv6_v6only_,
       socket_options_, connection_timeout_sec_, connection_timeout_usec_,
       read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-      write_timeout_usec_, interface_, error);
+      write_timeout_usec_, interface_, error,
+      [this] { return stop_requested_.load(); });
 }
 
 bool ClientImpl::create_and_connect_socket(Socket &socket,
@@ -10889,7 +10931,13 @@ bool ClientImpl::send_(Request &req, Response &res, Error &error) {
     if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
     if (!socket_reusable()) {
-      if (!ensure_socket_connection(socket_, error)) { return false; }
+      connecting_ = true;
+      auto connected = detail::scope_exit([&] { connecting_ = false; });
+
+      if (!ensure_socket_connection(socket_, error)) {
+        if (stop_requested_) { error = Error::Canceled; }
+        return false;
+      }
 
       {
         auto success = true;
@@ -11051,6 +11099,9 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
 
   {
     std::lock_guard<std::mutex> guard(socket_mutex_);
+
+    // A stream opened after stop() clears it, as a request sent after it does
+    if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
     if (!socket_reusable()) {
       if (!ensure_socket_connection(socket_, handle.error)) {
@@ -13145,6 +13196,12 @@ Result ClientImpl::Options(const std::string &path,
 }
 
 void ClientImpl::stop() {
+  // A connection being opened holds socket_mutex_ until it is: its waits, and
+  // the reads of its request after them, give up on this flag instead, so
+  // stop() does not wait for the connection
+  stop_requested_ = true;
+  if (connecting_) { return; }
+
   std::lock_guard<std::mutex> guard(socket_mutex_);
 
   // If there is anything ongoing right now, the ONLY thread-safe thing we can
@@ -13153,10 +13210,9 @@ void ClientImpl::stop() {
   // (closing the socket, shutting ssl down) is unsafe because these actions
   // are not thread-safe.
   if (socket_requests_in_flight_ > 0) {
-    shutdown_socket(socket_);
     // shutdown() does not wake a read waiting in WSAPoll on Windows, so the
-    // request's reads also give up once they see this flag.
-    stop_requested_ = true;
+    // request's reads also give up once they see stop_requested_.
+    shutdown_socket(socket_);
 
     // Aside from that, we set a flag for the socket to be closed when we're
     // done.
@@ -14557,6 +14613,7 @@ bool SSLClient::initialize_ssl(Socket &socket, Error &error) {
   detail::ClientTlsSessionOptions options;
   options.server_hostname_verification = server_hostname_verification_;
   options.session_verifier = session_verifier_;
+  options.interrupted = [this] { return stop_requested_.load(); };
   options.ctx_mutex = &ctx_mutex_;
 #ifdef CPPHTTPLIB_WINDOWS_AUTOMATIC_ROOT_CERTIFICATES_UPDATE
   // Skip Schannel when a custom CA cert is specified, as the Windows
@@ -15503,7 +15560,8 @@ TlsError accept(session_t session) {
 
 bool connect_nonblocking(session_t session, socket_t sock,
                                 time_t timeout_sec, time_t timeout_usec,
-                                TlsError *err) {
+                                TlsError *err,
+                                const std::function<bool()> &interrupted) {
   if (!session) {
     if (err) { err->code = ErrorCode::Fatal; }
     return false;
@@ -15528,10 +15586,14 @@ bool connect_nonblocking(session_t session, socket_t sock,
     auto ssl_err = SSL_get_error(ssl, res);
     switch (ssl_err) {
     case SSL_ERROR_WANT_READ:
-      if (detail::select_until(sock, POLLIN, deadline) > 0) { continue; }
+      if (detail::select_until(sock, POLLIN, deadline, interrupted) > 0) {
+        continue;
+      }
       break;
     case SSL_ERROR_WANT_WRITE:
-      if (detail::select_until(sock, POLLOUT, deadline) > 0) { continue; }
+      if (detail::select_until(sock, POLLOUT, deadline, interrupted) > 0) {
+        continue;
+      }
       break;
     default: break;
     }
@@ -16858,7 +16920,8 @@ TlsError accept(session_t session) {
 
 bool connect_nonblocking(session_t session, socket_t sock,
                                 time_t timeout_sec, time_t timeout_usec,
-                                TlsError *err) {
+                                TlsError *err,
+                                const std::function<bool()> &interrupted) {
   if (!session) {
     if (err) { err->code = ErrorCode::Fatal; }
     return false;
@@ -16877,9 +16940,13 @@ bool connect_nonblocking(session_t session, socket_t sock,
     // Non-fatal TLS 1.3 ticket; retry immediately.
     if (impl::mbedtls_is_session_ticket(ret)) { continue; }
     if (ret == MBEDTLS_ERR_SSL_WANT_READ) {
-      if (detail::select_until(sock, POLLIN, deadline) > 0) { continue; }
+      if (detail::select_until(sock, POLLIN, deadline, interrupted) > 0) {
+        continue;
+      }
     } else if (ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
-      if (detail::select_until(sock, POLLOUT, deadline) > 0) { continue; }
+      if (detail::select_until(sock, POLLOUT, deadline, interrupted) > 0) {
+        continue;
+      }
     }
 
     // TlsError or timeout
@@ -18031,7 +18098,8 @@ TlsError accept(session_t session) {
 
 bool connect_nonblocking(session_t session, socket_t sock,
                                 time_t timeout_sec, time_t timeout_usec,
-                                TlsError *err) {
+                                TlsError *err,
+                                const std::function<bool()> &interrupted) {
   if (!session) {
     if (err) { err->code = ErrorCode::Fatal; }
     return false;
@@ -18049,9 +18117,13 @@ bool connect_nonblocking(session_t session, socket_t sock,
   while ((ret = wolfSSL_connect(wsession->ssl)) != SSL_SUCCESS) {
     int ssl_error = wolfSSL_get_error(wsession->ssl, ret);
     if (ssl_error == SSL_ERROR_WANT_READ) {
-      if (detail::select_until(sock, POLLIN, deadline) > 0) { continue; }
+      if (detail::select_until(sock, POLLIN, deadline, interrupted) > 0) {
+        continue;
+      }
     } else if (ssl_error == SSL_ERROR_WANT_WRITE) {
-      if (detail::select_until(sock, POLLOUT, deadline) > 0) { continue; }
+      if (detail::select_until(sock, POLLOUT, deadline, interrupted) > 0) {
+        continue;
+      }
     }
 
     // Error or timeout
