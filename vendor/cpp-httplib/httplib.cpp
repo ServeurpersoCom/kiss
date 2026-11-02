@@ -10943,6 +10943,7 @@ bool ClientImpl::send_(Request &req, Response &res, Error &error) {
         auto success = true;
         if (!setup_proxy_connection(socket_, req.start_time_, res, success,
                                     error)) {
+          if (stop_requested_) { error = Error::Canceled; }
           return success;
         }
       }
@@ -11104,7 +11105,11 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
     if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
     if (!socket_reusable()) {
+      connecting_ = true;
+      auto connected = detail::scope_exit([&] { connecting_ = false; });
+
       if (!ensure_socket_connection(socket_, handle.error)) {
+        if (stop_requested_) { handle.error = Error::Canceled; }
         handle.response.reset();
         return handle;
       }
@@ -11114,9 +11119,21 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
         auto start_time = std::chrono::steady_clock::now();
         if (!setup_proxy_connection(socket_, start_time, *handle.response,
                                     success, handle.error)) {
+          if (stop_requested_) { handle.error = Error::Canceled; }
           if (!success) { handle.response.reset(); }
           return handle;
         }
+      }
+
+      // A stop() that came as the connection opened ends the stream here,
+      // since nothing reads its flag once the stream holds the socket
+      if (stop_requested_) {
+        shutdown_ssl(socket_, false);
+        shutdown_socket(socket_);
+        close_socket(socket_);
+        handle.error = Error::Canceled;
+        handle.response.reset();
+        return handle;
       }
     }
 
@@ -13196,13 +13213,19 @@ Result ClientImpl::Options(const std::string &path,
 }
 
 void ClientImpl::stop() {
-  // A connection being opened holds socket_mutex_ until it is: its waits, and
-  // the reads of its request after them, give up on this flag instead, so
-  // stop() does not wait for the connection
-  stop_requested_ = true;
-  if (connecting_) { return; }
-
-  std::lock_guard<std::mutex> guard(socket_mutex_);
+  // send_() holds socket_mutex_ while it opens the connection, as long as the
+  // connection timeout. stop() does not wait for it: it sets the flag the
+  // waits of the connection, and the reads of the request after them, poll.
+  // send_() clears the flag for its request before it sets connecting_, so a
+  // flag set once connecting_ is seen is never cleared by that request.
+  std::unique_lock<std::mutex> guard(socket_mutex_, std::defer_lock);
+  while (!guard.try_lock()) {
+    if (connecting_) {
+      stop_requested_ = true;
+      return;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
 
   // If there is anything ongoing right now, the ONLY thread-safe thing we can
   // do is to shutdown_socket, so that threads using this socket suddenly
@@ -13213,6 +13236,7 @@ void ClientImpl::stop() {
     // shutdown() does not wake a read waiting in WSAPoll on Windows, so the
     // request's reads also give up once they see stop_requested_.
     shutdown_socket(socket_);
+    stop_requested_ = true;
 
     // Aside from that, we set a flag for the socket to be closed when we're
     // done.
@@ -14379,6 +14403,8 @@ bool SSLClient::connect_with_proxy(
           socket.sock, read_timeout_sec_, read_timeout_usec_,
           write_timeout_sec_, write_timeout_usec_, max_timeout_msec_,
           start_time, [&](Stream &strm) {
+            // A stop() while the tunnel opens ends the wait for the proxy
+            strm.set_read_interrupt([this] { return stop_requested_.load(); });
             Request req2;
             req2.method = "CONNECT";
             req2.path = connect_target;
@@ -14419,6 +14445,8 @@ bool SSLClient::connect_with_proxy(
                 socket.sock, read_timeout_sec_, read_timeout_usec_,
                 write_timeout_sec_, write_timeout_usec_, max_timeout_msec_,
                 start_time, [&](Stream &strm) {
+                  strm.set_read_interrupt(
+                      [this] { return stop_requested_.load(); });
                   Request req3;
                   req3.method = "CONNECT";
                   req3.path = connect_target;
