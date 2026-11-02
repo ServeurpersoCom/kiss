@@ -18744,9 +18744,9 @@ ReadResult WebSocket::read(std::string &msg) {
       // Handle fragmentation
       if (!fin) {
         while (true) {
-          // A peer that keeps sending fragments, which a read of buffered
-          // data hands over without waiting, still ends with the wait for
-          // its Close reply
+          // A wss:// read decrypts whatever the socket already holds before
+          // it ever waits, so a peer that keeps sending fragments would never
+          // reach the interrupt: the deadline is looked at on every fragment
           if (close_expired()) { return Fail; }
           Opcode cont_opcode;
           std::string cont_payload;
