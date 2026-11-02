@@ -10,15 +10,13 @@
 #include "engine/schema.h"
 #include "lib/library.h"
 #include "lib/log.h"
+#include "lib/quit.h"
 
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
-#include <cstdlib>
 #include <mutex>
 #include <set>
 #include <stdexcept>
-#include <thread>
 
 const char * engine_platform() {
 #if defined(_WIN32)
@@ -493,8 +491,7 @@ void engine_start(const std::string & path, const std::string & version) {
 // the items the sources of a module serve, asked for the running
 // configuration as it is, outside the lock, as they ask over the network, and
 // kept a few seconds for that configuration, as completion asks them on every
-// word typed; the cache lives as long as the process, a refresh in flight
-// outliving any scope
+// word typed
 static const auto SOURCED_KEPT = std::chrono::seconds(10);
 
 struct sourced_t {
@@ -504,15 +501,8 @@ struct sourced_t {
     bool                                  asking = false;
 };
 
-static std::mutex & sourced_mutex() {
-    static std::mutex * m = new std::mutex;
-    return *m;
-}
-
-static std::map<std::string, sourced_t> & sourced_cache() {
-    static auto * c = new std::map<std::string, sourced_t>;
-    return *c;
-}
+static std::mutex                       g_sourced_mutex;
+static std::map<std::string, sourced_t> g_sourced;
 
 static layer running_now() {
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -528,9 +518,9 @@ static bool fresh(const sourced_t & k, const layer & now) {
 static std::vector<engine_group> sourced(const engine_module & m) {
     const layer now = running_now();
     {
-        std::lock_guard<std::mutex> lock(sourced_mutex());
-        const auto                  it = sourced_cache().find(m.name);
-        if (it != sourced_cache().end() && fresh(it->second, now)) {
+        std::lock_guard<std::mutex> lock(g_sourced_mutex);
+        const auto                  it = g_sourced.find(m.name);
+        if (it != g_sourced.end() && fresh(it->second, now)) {
             return it->second.groups;
         }
     }
@@ -543,8 +533,8 @@ static std::vector<engine_group> sourced(const engine_module & m) {
             { m.name, {}, e.what() }
         };
     }
-    std::lock_guard<std::mutex> lock(sourced_mutex());
-    sourced_t &                 k = sourced_cache()[m.name];
+    std::lock_guard<std::mutex> lock(g_sourced_mutex);
+    sourced_t &                 k = g_sourced[m.name];
     k.at                          = now;
     k.when                        = std::chrono::steady_clock::now();
     k.groups                      = groups;
@@ -557,11 +547,11 @@ static std::vector<engine_group> sourced(const engine_module & m) {
 // its modules listed last
 static std::vector<engine_group> sourced_now(const engine_module & m) {
     const layer                 now = running_now();
-    std::lock_guard<std::mutex> lock(sourced_mutex());
-    sourced_t &                 k = sourced_cache()[m.name];
+    std::lock_guard<std::mutex> lock(g_sourced_mutex);
+    sourced_t &                 k = g_sourced[m.name];
     if (!fresh(k, now) && !k.asking) {
         k.asking = true;
-        std::thread([name = m.name, items = m.items, now] {
+        quit_thread([name = m.name, items = m.items, now] {
             std::vector<engine_group> groups;
             try {
                 groups = items(reader(now));
@@ -571,9 +561,9 @@ static std::vector<engine_group> sourced_now(const engine_module & m) {
                     { name, {}, e.what() }
                 };
             }
-            std::lock_guard<std::mutex> held(sourced_mutex());
-            sourced_cache()[name] = { now, std::chrono::steady_clock::now(), groups, false };
-        }).detach();
+            std::lock_guard<std::mutex> held(g_sourced_mutex);
+            g_sourced[name] = { now, std::chrono::steady_clock::now(), groups, false };
+        });
     }
     return k.groups;
 }
@@ -626,12 +616,6 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
         }
     }
     return out;
-}
-
-void engine_exit(int code) {
-    fflush(stdout);
-    fflush(stderr);
-    std::_Exit(code);
 }
 
 // a batch that changes the running configuration says who changed it, as IOS

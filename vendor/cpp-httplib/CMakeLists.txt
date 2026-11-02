@@ -9,9 +9,9 @@
 add_library(httplib STATIC httplib.cpp)
 target_include_directories(httplib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-# a WebSocket whose peer answers no ping, sent every 15 seconds, for 45
-# seconds is a peer gone, its read ending there
-target_compile_definitions(httplib PUBLIC CPPHTTPLIB_WEBSOCKET_READ_TIMEOUT_SECOND=45)
+# a WebSocket peer that does not answer a Close within a second is gone, so a
+# page that never answers holds no end of a stream, nor of the process
+target_compile_definitions(httplib PUBLIC CPPHTTPLIB_WEBSOCKET_CLOSE_TIMEOUT_SECOND=1)
 
 # suppress warnings in third-party code
 if(MSVC)

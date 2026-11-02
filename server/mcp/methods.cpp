@@ -5,6 +5,7 @@
 #include "engine/engine.h"
 #include "engine/keychain.h"
 #include "lib/log.h"
+#include "lib/quit.h"
 #include "lib/tools.h"
 #include "mcp/jsonrpc.h"
 
@@ -243,9 +244,10 @@ static bool answered(yyjson_val * params, engine_typed & typed) {
 
 // a client that takes SSE gets a comment every tick while the tool runs, then
 // the result as one event; the first write that fails ends the tool. Any other
-// client gets the result as JSON, the tool ending once its socket closes. The
-// stream outlives the handler, so it holds the request document. A call that
-// asks the user for secrets comes again with them in its inputResponses.
+// client gets the result as JSON, the tool ending once its socket closes.
+// Either ends as the process does. The stream outlives the handler, so it
+// holds the request document. A call that asks the user for secrets comes
+// again with them in its inputResponses.
 void method_tools_call(const httplib::Request &            req,
                        httplib::Response &                 res,
                        const std::shared_ptr<yyjson_doc> & body,
@@ -284,7 +286,7 @@ void method_tools_call(const httplib::Request &            req,
         const call_log log{ called };
         log.start(args);
         if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
-            const tool_outcome r = run([&req]() { return !req.is_connection_closed(); });
+            const tool_outcome r = run([&req]() { return !req.is_connection_closed() && !quit_ending(); });
             if (req.is_connection_closed()) {
                 log.gone();
                 return;
@@ -299,7 +301,7 @@ void method_tools_call(const httplib::Request &            req,
                 bool               gone = false;
                 const tool_outcome r    = run([&]() {
                     gone = gone || !sink.write(":\n\n", 3);
-                    return !gone;
+                    return !gone && !quit_ending();
                 });
                 if (gone) {
                     log.gone();

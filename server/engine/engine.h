@@ -175,11 +175,6 @@ engine_result engine_run(const std::string &  text,
                          const engine_typed & typed        = {},
                          const std::string &  conversation = "");
 
-// ends the process with code, its output flushed, without destroying its
-// statics: a refresh of the sources may still wait on one, and reads the
-// modules and the factory configuration as it answers
-[[noreturn]] void engine_exit(int code);
-
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");
 

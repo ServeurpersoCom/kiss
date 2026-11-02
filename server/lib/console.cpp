@@ -9,13 +9,13 @@
 #include "engine/engine.h"
 #include "engine/text.h"
 #include "lib/log.h"
+#include "lib/quit.h"
 #include "lib/term.h"
 
 #include <algorithm>
 #include <csignal>
 #include <iterator>
 #include <string>
-#include <thread>
 #include <vector>
 
 // the line being edited, written under the lock of the log since every log
@@ -167,21 +167,32 @@ static void show(const std::string & text) {
     });
 }
 
+// the next byte typed, -1 once stdin ends or the process does, each wait
+// short so that no byte awaited holds the process
+static int typed() {
+    while (!term_wait(100)) {
+        if (quit_ending()) {
+            return -1;
+        }
+    }
+    return term_read();
+}
+
 // the next key, its bytes read one at a time: an escape sequence names a key,
 // a UTF-8 sequence comes whole
 static int key(std::string & bytes) {
-    const int c = term_read();
+    const int c = typed();
     bytes       = c < 0 ? "" : std::string(1, (char) c);
     if (c == ESCAPE) {
-        const int open = term_read();
+        const int open = typed();
         if (open != '[' && open != 'O') {
             return ESCAPE;
         }
         std::string params;
-        int         last = term_read();
+        int         last = typed();
         while (last >= '0' && last <= '9') {
             params += (char) last;
-            last = term_read();
+            last = typed();
         }
         switch (last) {
             case 'A':
@@ -208,7 +219,7 @@ static int key(std::string & bytes) {
     if (c >= 0xC0) {
         const int more = c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : 1;
         for (int i = 0; i < more; i++) {
-            const int d = term_read();
+            const int d = typed();
             if (d < 0) {
                 return -1;
             }
@@ -266,8 +277,9 @@ static void help() {
     below(next.empty() ? std::string(ERROR_PREFIX) + "nothing may follow" : join(next, " "));
 }
 
-static void editor() {
-    log_attach({ clear, draw });
+// the lines typed until a line or a key stops the server, or stdin or the
+// process ends, which clears the line typed
+static void edited() {
     std::vector<std::string> history;
     size_t                   at = 0;
     std::string              draft;
@@ -276,6 +288,7 @@ static void editor() {
         std::string bytes;
         const int   c = key(bytes);
         if (c < 0) {
+            edit([]() { g_shown = false; });
             return;
         }
         if (c == ENTER || c == '\n') {
@@ -342,6 +355,7 @@ static void editor() {
         } else if (c == CTRL_V || (c >= ' ' && c != BACKSPACE && c < KEY_UP)) {
             // Ctrl-V types the next key as it is, a ? among them
             if (c == CTRL_V && key(bytes) < 0) {
+                edit([]() { g_shown = false; });
                 return;
             }
             edit([&]() {
@@ -352,8 +366,15 @@ static void editor() {
     }
 }
 
+// the console on its terminal, given back as it was found once done
+static void editor() {
+    log_attach({ clear, draw });
+    edited();
+    term_restore();
+}
+
 void console_start() {
     if (term_raw()) {
-        std::thread(editor).detach();
+        quit_thread(editor);
     }
 }

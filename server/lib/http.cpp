@@ -9,6 +9,7 @@
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/proxy.h"
+#include "lib/quit.h"
 #include "lib/sync.h"
 #include "mcp/mcp.h"
 #include "server/client.conf.hpp"
@@ -50,26 +51,30 @@ static void host_header(const std::string & value, std::string & name, std::stri
     port = colon == std::string::npos ? "" : value.substr(colon + 1);
 }
 
+// the address a server listens on, which the checks of its requests read, a
+// request it took before a move checked as the listener that took it
+struct bound_t {
+    std::string host;
+    int         port = 0;
+};
+
 // on a loopback address, Host must name loopback and the port: a page of
 // another site that resolves its own name to 127.0.0.1 never gets through
-static bool host_allowed(const httplib::Request & req) {
-    std::string bound_host;
-    int         bound_port = 0;
-    listener_address(bound_host, bound_port);
-    if (!listener_loopback(bound_host)) {
+static bool host_allowed(const httplib::Request & req, const bound_t & on) {
+    if (!listener_loopback(on.host)) {
         return true;
     }
     std::string name, port;
     host_header(req.get_header_value("Host"), name, port);
-    const std::string bound = std::to_string(bound_port);
-    return (listener_loopback(name) || name == bound_host) && (port == bound || (port.empty() && bound == "80"));
+    const std::string bound = std::to_string(on.port);
+    return (listener_loopback(name) || name == on.host) && (port == bound || (port.empty() && bound == "80"));
 }
 
 // who may call the server: once a key is set, whoever sends it as a bearer
 // token, whatever the address and the origin; with no key, on loopback, a
 // client without Origin, a command line, or the page this server serves, so
 // no page of another site runs a tool through fetch; why not, otherwise
-static bool authorized(const httplib::Request & req, std::string & why) {
+static bool authorized(const httplib::Request & req, const bound_t & on, std::string & why) {
     if (engine_get("server key")) {
         const std::string bearer = req.get_header_value("Authorization");
         if (bearer.compare(0, 7, "Bearer ") != 0 || !keychain_admits(bearer.substr(7))) {
@@ -78,12 +83,9 @@ static bool authorized(const httplib::Request & req, std::string & why) {
         }
         return true;
     }
-    std::string bound_host;
-    int         bound_port = 0;
-    listener_address(bound_host, bound_port);
     const std::string origin = req.get_header_value("Origin");
     const std::string self   = "http://" + req.get_header_value("Host");
-    if (listener_loopback(bound_host) && (origin.empty() || origin == self)) {
+    if (listener_loopback(on.host) && (origin.empty() || origin == self)) {
         return true;
     }
     why = "server key is not set, so another origin is refused";
@@ -92,9 +94,9 @@ static bool authorized(const httplib::Request & req, std::string & why) {
 
 // whether a request passes, else refused with why, the page told to send the
 // key
-static bool admitted(const httplib::Request & req, httplib::Response & res) {
+static bool admitted(const httplib::Request & req, const bound_t & on, httplib::Response & res) {
     std::string why;
-    if (authorized(req, why)) {
+    if (authorized(req, on, why)) {
         return true;
     }
     log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
@@ -118,7 +120,8 @@ void http_open(const std::string & site) {
     g_site = site;
 }
 
-void http_routes(httplib::Server & server) {
+void http_routes(httplib::Server & server, const std::string & host, int port) {
+    const bound_t on = { host, port };
     server.set_socket_options([](socket_t sock) {
         int one = 1;
 #if defined(_WIN32)
@@ -128,8 +131,8 @@ void http_routes(httplib::Server & server) {
 #endif
     });
 
-    server.set_pre_routing_handler([](const httplib::Request & req, httplib::Response & res) {
-        if (!host_allowed(req)) {
+    server.set_pre_routing_handler([on](const httplib::Request & req, httplib::Response & res) {
+        if (!host_allowed(req, on)) {
             log_error("HTTP", "Refused %s: Host %s names no loopback address of this server", req.remote_addr.c_str(),
                       req.get_header_value("Host").c_str());
             res.status = 403;
@@ -173,9 +176,9 @@ void http_routes(httplib::Server & server) {
                        "Authorization, Content-Type, Accept, MCP-Protocol-Version, Mcp-Method, Mcp-Name");
     });
 
-    server.Post("/mcp", [](const httplib::Request & req, httplib::Response & res) {
+    server.Post("/mcp", [on](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        if (admitted(req, res)) {
+        if (admitted(req, on, res)) {
             mcp_post(req, res, KISS_VERSION);
         }
     });
@@ -197,10 +200,10 @@ void http_routes(httplib::Server & server) {
         res.set_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", req.get_header_value("Access-Control-Request-Headers"));
     });
-    const auto forward = [](const httplib::Request & req, httplib::Response & res) {
+    const auto forward = [on](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
         res.set_header("Access-Control-Expose-Headers", "*");
-        if (admitted(req, res)) {
+        if (admitted(req, on, res)) {
             proxy(req, res, req.matches[1], req.matches[2]);
         }
     };
@@ -218,27 +221,31 @@ void http_routes(httplib::Server & server) {
     };
     server.Options(ACTION_PATH, preflight);
     // a browser sets no header on a WebSocket: its first message holds the
-    // headers a request would carry, the key among them, as JSON
+    // headers a request would carry, the key among them, as JSON; a page that
+    // answers neither of two pings in a row is gone
     server.set_websocket_ping_interval(PING_SECONDS);
-    server.WebSocket(EVENTS_PATH, [](const httplib::Request & req, httplib::ws::WebSocket & ws) {
+    server.set_websocket_max_missed_pongs(2);
+    server.WebSocket(EVENTS_PATH, [on](const httplib::Request & req, httplib::ws::WebSocket & ws) {
         std::string headers;
-        ws.read(headers);
+        if (!sync_read(ws, headers, [] { return !quit_ending(); })) {
+            return;
+        }
         const std::shared_ptr<yyjson_doc> doc(yyjson_read(headers.data(), headers.size(), 0), yyjson_doc_free);
         yyjson_val *                      key   = yyjson_obj_get(yyjson_doc_get_root(doc.get()), "Authorization");
         httplib::Request                  keyed = req;
         keyed.headers.erase("Authorization");
         keyed.set_header("Authorization", yyjson_is_str(key) ? yyjson_get_str(key) : "");
         std::string why;
-        if (!authorized(keyed, why)) {
+        if (!authorized(keyed, on, why)) {
             log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
             ws.close(httplib::ws::CloseStatus::PolicyViolation, why);
             return;
         }
         sync_events(req, ws);
     });
-    server.Post(ACTION_PATH, [](const httplib::Request & req, httplib::Response & res) {
+    server.Post(ACTION_PATH, [on](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        if (admitted(req, res)) {
+        if (admitted(req, on, res)) {
             sync_action(req, res, req.matches[1]);
         }
     });

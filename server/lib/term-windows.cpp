@@ -53,6 +53,32 @@ static wchar_t read_unit() {
     return ReadConsoleW(g_in, &c, 1, &got, NULL) && got == 1 ? c : 0;
 }
 
+// the console handle signals any input, a focus or a mouse event too, which
+// reads nothing: those are dropped, a key pressed that types a character
+// waits for term_read
+bool term_wait(int ms) {
+    if (!g_pending.empty()) {
+        return true;
+    }
+    if (WaitForSingleObject(g_in, (DWORD) ms) != WAIT_OBJECT_0) {
+        return false;
+    }
+    for (;;) {
+        INPUT_RECORD r;
+        DWORD        n = 0;
+        if (!PeekConsoleInputW(g_in, &r, 1, &n)) {
+            return true;
+        }
+        if (n == 0) {
+            return false;
+        }
+        if (r.EventType == KEY_EVENT && r.Event.KeyEvent.bKeyDown && r.Event.KeyEvent.uChar.UnicodeChar != 0) {
+            return true;
+        }
+        ReadConsoleInputW(g_in, &r, 1, &n);
+    }
+}
+
 int term_read() {
     if (g_pending.empty()) {
         wchar_t w[2] = { read_unit(), 0 };

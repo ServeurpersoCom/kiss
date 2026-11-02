@@ -14,6 +14,7 @@
 #include "lib/mcp.h"
 #include "lib/prompts.h"
 #include "lib/pulse.h"
+#include "lib/quit.h"
 #include "lib/tools.h"
 #include "yyjson.h"
 
@@ -23,7 +24,6 @@
 #include <memory>
 #include <mutex>
 #include <set>
-#include <thread>
 
 // what a call reads when no tool reads it, and why a call does not run
 static const char * const NO_ARGS = "{}";
@@ -210,6 +210,19 @@ void agent_stop(const std::string & id) {
     if (stop) {
         stop->stop();
         settle_question(id, "");
+    }
+}
+
+void agent_quit() {
+    std::vector<std::string> ids;
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        for (const auto & t : g_turns) {
+            ids.push_back(t.first);
+        }
+    }
+    for (const std::string & id : ids) {
+        agent_stop(id);
     }
 }
 
@@ -1034,7 +1047,7 @@ std::string agent_command(const std::string & id, const std::string & input) {
     pulse p = pulse_start(pulse_now());
     pulse_mark(p, PHASE_RUNNING, "config", pulse_now());
     beat(id, p);
-    std::thread(command, id, input, stop, p).detach();
+    quit_thread([id, input, stop, p] { command(id, input, stop, p); });
     return "";
 }
 
@@ -1059,6 +1072,6 @@ std::string agent_answer(const std::string &                                id,
     }
     const pulse p = pulse_start(pulse_now());
     beat(id, p);
-    std::thread(turn, id, entry, before, compact, stop, p).detach();
+    quit_thread([id, entry, before, compact, stop, p] { turn(id, entry, before, compact, stop, p); });
     return "";
 }

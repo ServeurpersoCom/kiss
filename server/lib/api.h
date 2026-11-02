@@ -102,18 +102,34 @@ struct endpoint {
 // every endpoint the configuration names, sorted by name
 std::vector<endpoint> api_endpoints(const engine_reader & config);
 
-// what stops a request: a flag, and the connection it waits on, closed at
-// once on a stop
+// what stops a request: a flag, and a duplicate of each socket the clients
+// it watches opened, shut down at once on a stop; every stop alive is known,
+// so api_quit stops them all, and one made once it did is stopped from the
+// start
 struct api_stop {
     std::atomic<bool>     stopped{ false };
     std::mutex            mutex;
-    std::function<void()> close;
+    std::vector<socket_t> sockets;
+
+    api_stop();
+    ~api_stop();
+    api_stop(const api_stop &)             = delete;
+    api_stop & operator=(const api_stop &) = delete;
 
     void stop();
 };
 
-// a client of a remote server, its seconds those of the item, closed by a
-// stop while it waits; path is the path of its url
+// stops every stop alive and every one made from now on
+void api_quit();
+
+// the requests of client end on a stop at every stage, from the connection
+// to the last byte: each socket it opens is duplicated into the stop, so a
+// socket the client let go is never one of another, and the duplicates go
+// with the client, which never outlives the stop
+void api_watch(httplib::Client & client, api_stop & stop);
+
+// a client of a remote server, its seconds those of the item, its requests
+// ended by the stop; path is the path of its url
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path);
 
 // the ids of the models an endpoint serves; throws why it lists none

@@ -152,6 +152,7 @@ server/lib/image.cpp|h     an image as a model is sent it: sized, turned, resize
 server/lib/tools.cpp|h     the tools the server serves, each source registered by its file
 server/lib/prompts.cpp|h   the texts of prompts.json and of the page, read once
 server/lib/utf8.h          the UTF-8 boundary of Windows: argv, fopen
+server/lib/quit.cpp|h      the end of the process: the work in flight stopped, its threads joined
 server/tests/seal.cpp      the laws of the seal, built and run with the server, a broken law failing
                            the build
 server/tests/files.cpp     the laws of lib/file.cpp, built and run the same way
@@ -561,6 +562,11 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
   Ctrl-U the line before the cursor, Ctrl-K the line after it; Up and Down walk the history.
 - `exit` and `quit`, Ctrl-C, and Ctrl-D on an empty line stop the server. They are words of the
   console, not of the CLI, so no MCP client can stop it.
+
+The server stops as SIGINT or SIGTERM does, through `main` like any program: the listener lets its
+port go, every request out closes, a turn stops as a page stops it, a call ends as its client
+leaves, the console clears its line and gives the terminal back as it found it, then every thread
+the server started is joined before its statics go.
 
 ## Tools
 

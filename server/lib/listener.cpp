@@ -5,6 +5,7 @@
 #include "engine/engine.h"
 #include "lib/http.h"
 #include "lib/log.h"
+#include "lib/quit.h"
 
 #include <atomic>
 #include <chrono>
@@ -12,7 +13,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-#include <vector>
 
 #if defined(_WIN32)
 #    include <ws2tcpip.h>
@@ -24,21 +24,18 @@
 #    include <unistd.h>
 #endif
 
-// a server listening on its own thread, and the address it listens on
+// a server listening on a thread of its own, and the address it listens on
 struct served {
     std::shared_ptr<httplib::Server> server;
-    std::thread                      thread;
     std::string                      host;
     int                              port = 0;
 };
 
-// the server listening now, and the threads of the ones a batch moved away
-// from, joined once the listener stops
-static std::mutex               g_mutex;
-static served                   g_served;
-static std::vector<std::thread> g_retired;
-static std::atomic<bool>        g_quit{ false };
-static std::atomic<unsigned>    g_epoch{ 0 };
+// the server listening now
+static std::mutex            g_mutex;
+static served                g_served;
+static std::atomic<bool>     g_quit{ false };
+static std::atomic<unsigned> g_epoch{ 0 };
 
 // localhost, or a loopback address as written: IPv4 in 127.0.0.0/8, or ::1
 bool listener_loopback(const std::string & host) {
@@ -53,30 +50,28 @@ bool listener_loopback(const std::string & host) {
     return inet_pton(AF_INET6, host.c_str(), &v6) == 1 && memcmp(&v6, &in6addr_loopback, sizeof(v6)) == 0;
 }
 
-// a server bound to host and port, its routes set, listening on a thread of
-// its own; none when the address does not bind
+// a server bound to host and port, its routes set, listening on a thread the
+// process joins as it ends; none when the address does not bind
 static served serve(const std::string & host, int port) {
     auto server = std::make_shared<httplib::Server>();
-    http_routes(*server);
+    http_routes(*server, host, port);
     if (!server->bind_to_port(host, port)) {
         return {};
     }
     log_info("Server", "Listening on http://%s:%d", host.c_str(), port);
-    std::thread thread([server] { server->listen_after_bind(); });
-    return { server, std::move(thread), host, port };
+    quit_thread([server] { server->listen_after_bind(); });
+    return { server, host, port };
 }
 
 // stops a server once its thread listens, its socket closed on return; the
 // thread ends with the requests it serves, among them maybe the batch that
-// stops it, so it is joined once the listener stops
+// stops it
 static void halt(served & s) {
-    if (!s.server) {
-        return;
+    if (s.server) {
+        s.server->wait_until_ready();
+        s.server->stop();
+        s = {};
     }
-    s.server->wait_until_ready();
-    s.server->stop();
-    g_retired.push_back(std::move(s.thread));
-    s = {};
 }
 
 std::string listener_prepare(const std::string & host, int port) {
@@ -140,14 +135,7 @@ bool listener_run() {
     while (!g_quit) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    std::vector<std::thread> threads;
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        halt(g_served);
-        threads.swap(g_retired);
-    }
-    for (std::thread & t : threads) {
-        t.join();
-    }
+    std::lock_guard<std::mutex> lock(g_mutex);
+    halt(g_served);
     return true;
 }

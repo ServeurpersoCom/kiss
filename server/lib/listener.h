@@ -22,7 +22,7 @@ unsigned listener_epoch();
 
 // listens on the address of the running configuration, then on each one a
 // batch moves it to, until listener_stop; false when the first address cannot
-// be listened on
+// be listened on. The requests in flight end with quit_all
 bool listener_run();
 
 // stops the listener, from a signal handler as well

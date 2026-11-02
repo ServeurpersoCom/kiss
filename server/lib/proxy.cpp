@@ -14,18 +14,27 @@
 // for a while; one that redirects, its key going to no address the route does
 // not name; an url no client of this build reaches. A server that cannot be
 // reached answers 502. The proxy knows no protocol: MCP and LLM endpoints pass
-// alike.
+// alike. A request out ends as the process does, its socket shut down.
 
 #include "lib/proxy.h"
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
 #include "engine/text.h"
+#include "lib/api.h"
 #include "lib/log.h"
 #include "lib/remote.h"
 
 #include <memory>
 #include <optional>
+
+// a request out: its stop, the client the stop watches, and the stream, which
+// goes first
+struct proxied_t {
+    api_stop                          stop;
+    std::shared_ptr<httplib::Client>  client;
+    httplib::ClientImpl::StreamHandle stream;
+};
 
 // the headers that stay on their side of the proxy, lowercase: those of the
 // connection, those that tell who each side is, the keys, and those the proxy
@@ -127,7 +136,9 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     const std::string head   = rest.empty() ? base : base.substr(0, base.find_last_not_of('/') + 1);
     const size_t      query  = req.target.find('?');
     const std::string path   = head + rest + (query == std::string::npos ? "" : req.target.substr(query));
-    const auto        client = std::make_shared<httplib::Client>(host);
+    const auto        up     = std::make_shared<proxied_t>();
+    up->client               = std::make_shared<httplib::Client>(host);
+    httplib::Client * client = up->client.get();
     if (!client->is_valid()) {
         refuse(res, *r, route, httplib::StatusCode::FailedDependency_424,
                r->url + " cannot be reached: a bad port, or https on a build without TLS");
@@ -156,8 +167,13 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         headers.emplace(r->header, r->value);
     }
 
-    const auto stream = std::make_shared<httplib::ClientImpl::StreamHandle>(
-        client->open_stream(req.method, path, {}, headers, req.body, req.get_header_value("Content-Type")));
+    api_watch(*client, up->stop);
+    if (up->stop.stopped) {
+        refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+        return;
+    }
+    up->stream = client->open_stream(req.method, path, {}, headers, req.body, req.get_header_value("Content-Type"));
+    httplib::ClientImpl::StreamHandle * stream = &up->stream;
     if (!stream->is_valid()) {
         refuse(res, *r, route, httplib::StatusCode::BadGateway_502,
                r->url + " cannot be reached: " + httplib::to_string(stream->error));
@@ -198,7 +214,7 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         return;
     }
     const auto events = std::make_shared<seal_events>(seal_events{ secrets, "" });
-    res.set_chunked_content_provider(type, [client, stream, events](size_t, httplib::DataSink & sink) {
+    res.set_chunked_content_provider(type, [up, stream, events](size_t, httplib::DataSink & sink) {
         char              buf[PROXY_CHUNK];
         const ssize_t     n   = stream->read(buf, sizeof(buf));
         const std::string out = n > 0 ? events->feed(buf, (size_t) n) : events->end();

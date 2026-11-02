@@ -5,13 +5,21 @@
 
 #include "httplib.h"
 
+#include <functional>
+#include <string>
+
 // the actions a page sends, POST /conversations/<action>, beside the stream
 // /conversations/events
 constexpr const char * SYNC_ACTIONS = "send|command|complete|edit|retry|stop|answer|pin|browse|drop|erase";
 
+// the next message of a page into message, the socket looked at every tenth
+// of a second: false once the socket ends, or going no longer holds
+bool sync_read(httplib::ws::WebSocket & ws, std::string & message, const std::function<bool()> & going);
+
 // events, over a WebSocket: every conversation with the protocol, then what
 // changes, each message one event per line, an empty message after 15
-// seconds of silence, until the page leaves or the listener moves; every
+// seconds of silence, until the page leaves, the listener moves or the
+// process ends; every
 // stream is an attached page, which runs the calls of the config tool of the
 // pages while it lasts
 void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws);

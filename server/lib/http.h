@@ -8,4 +8,6 @@
 // the file the site configuration of the page lives in
 void http_open(const std::string & site);
 
-void http_routes(httplib::Server & server);
+// the routes of a server listening on host and port, its requests checked
+// against that address
+void http_routes(httplib::Server & server, const std::string & host, int port);

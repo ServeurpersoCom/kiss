@@ -4,6 +4,7 @@
 
 #    include "term.h"
 
+#    include <poll.h>
 #    include <sys/ioctl.h>
 #    include <termios.h>
 #    include <unistd.h>
@@ -36,6 +37,11 @@ bool term_raw() {
     }
     g_raw = true;
     return true;
+}
+
+bool term_wait(int ms) {
+    pollfd in = { STDIN_FILENO, POLLIN, 0 };
+    return poll(&in, 1, ms) != 0;
 }
 
 int term_read() {

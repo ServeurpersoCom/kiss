@@ -22,6 +22,7 @@
 #include "httplib.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
+#include "lib/quit.h"
 #include "lib/sync.h"
 #include "lib/tools.h"
 #include "yyjson.h"
@@ -59,6 +60,9 @@ static std::vector<std::string> g_tools;
 static std::atomic<int>         g_down{ 0 };
 // the messages of each request of the conversation that compacts
 static std::vector<std::string> g_compacted;
+// whether the endpoint that hangs is asked, and whether the laws let it answer
+static std::atomic<bool>        g_hanging{ false };
+static std::atomic<bool>        g_released{ false };
 
 static std::string json(const std::string & s) {
     const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
@@ -178,6 +182,14 @@ int main() {
     server.Get("/slow/v1/models", [](const httplib::Request &, httplib::Response & res) {
         std::this_thread::sleep_for(std::chrono::seconds(2));
         res.set_content("{\"data\":[{\"id\":\"z\"}]}", "application/json");
+    });
+    // an endpoint that lists its models once the laws let it
+    server.Get("/hung/v1/models", [](const httplib::Request &, httplib::Response & res) {
+        g_hanging = true;
+        for (int i = 0; i < 1000 && !g_released; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        res.set_content("{\"data\":[{\"id\":\"h\"}]}", "application/json");
     });
     server.Post("/down", [](const httplib::Request & req, httplib::Response & res) {
         g_down += req.body.find("\"initialize\"") != std::string::npos;
@@ -609,9 +621,22 @@ int main() {
     }
     law(late, "completion offers what a slow source serves once it answers");
 
+    // the process ends at once while a source hangs: the refresh in flight,
+    // once the one before it answered, stopped and its thread joined
+    engine_run("set endpoints url hung " + at + "/hung/v1", ENGINE_ADMIN);
+    for (int i = 0; i < 500 && !g_hanging; i++) {
+        engine_suggest("set chat model ");
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    const auto ending = std::chrono::steady_clock::now();
+    quit_all();
+    law(g_hanging && std::chrono::steady_clock::now() - ending < std::chrono::seconds(1),
+        "the process ends at once while a source hangs");
+    g_released = true;
+
     server.stop();
     listening.join();
     fs::remove_all(root);
     printf("[Laws] agent_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    engine_exit(g_fails ? 1 : 0);
+    return g_fails ? 1 : 0;
 }

@@ -15,6 +15,7 @@
 
 #include "engine/text.h"
 #include "factory.h"
+#include "lib/quit.h"
 
 #include <algorithm>
 #include <chrono>
@@ -233,5 +234,6 @@ int main() {
 
     fs::remove_all(root);
     printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    engine_exit(g_fails ? 1 : 0);
+    quit_all();
+    return g_fails ? 1 : 0;
 }

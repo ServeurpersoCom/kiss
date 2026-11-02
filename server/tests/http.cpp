@@ -8,9 +8,11 @@
 #include "factory.h"
 #include "httplib.h"
 #include "lib/listener.h"
+#include "lib/quit.h"
 
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -69,6 +71,63 @@ static void release(long long s) {
 #else
     close((int) s);
 #endif
+}
+
+// a socket listening on 127.0.0.1 that accepts no connection, its port one
+// the system picks
+static long long muted() {
+    const auto  s = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in at{};
+    at.sin_family      = AF_INET;
+    at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    bind(s, reinterpret_cast<sockaddr *>(&at), sizeof(at));
+    listen(s, 8);
+    return (long long) s;
+}
+
+static int bound_port(long long s) {
+    sockaddr_in at{};
+    socklen_t   size = sizeof(at);
+#if defined(_WIN32)
+    getsockname((SOCKET) s, reinterpret_cast<sockaddr *>(&at), &size);
+#else
+    getsockname((int) s, reinterpret_cast<sockaddr *>(&at), &size);
+#endif
+    return ntohs(at.sin_port);
+}
+
+// a connection to 127.0.0.1:port, -1 when it does not open
+static long long connected(int port) {
+    const auto  s = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in at{};
+    at.sin_family      = AF_INET;
+    at.sin_port        = htons((unsigned short) port);
+    at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(s, reinterpret_cast<sockaddr *>(&at), sizeof(at)) != 0) {
+        release((long long) s);
+        return -1;
+    }
+    return (long long) s;
+}
+
+static void sent(long long s, const std::string & text) {
+#if defined(_WIN32)
+    send((SOCKET) s, text.data(), (int) text.size(), 0);
+#else
+    send((int) s, text.data(), text.size(), 0);
+#endif
+}
+
+// the status line of the answer read on s, empty when none comes
+static std::string answered(long long s) {
+    char buf[256] = {};
+#if defined(_WIN32)
+    recv((SOCKET) s, buf, sizeof(buf) - 1, 0);
+#else
+    recv((int) s, buf, sizeof(buf) - 1, 0);
+#endif
+    const std::string text = buf;
+    return text.substr(0, text.find("\r\n"));
 }
 
 static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})";
@@ -178,10 +237,52 @@ int main() {
         release(held);
     }
 
+    // a request the wildcard took before a move to loopback that drops the
+    // key is checked as one of the wildcard, which needs the key, while one
+    // the loopback takes passes without it
+    law(engine_run("set server listen-address 0.0.0.0", ENGINE_ADMIN).ok && status("/mcp", key) == 200,
+        "the server moves to 0.0.0.0");
+    const long long pending = connected(port);
+    sent(pending, "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
+                      "\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(strlen(LIST)) +
+                      "\r\n\r\n");
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    law(engine_run("set server listen-address 127.0.0.1\nno server key", ENGINE_ADMIN).ok,
+        "the server moves to 127.0.0.1 and drops the key");
+    sent(pending, LIST);
+    const std::string late = answered(pending);
+    release(pending);
+    law(late == "HTTP/1.1 401 Unauthorized", "a request the wildcard took needs the key it had: " + late);
+    for (int i = 0; i < 100 && status("/mcp", {}) != 200; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    law(status("/mcp", {}) == 200, "a request the loopback takes passes without the key");
+
+    // the process ends at once while a page opens the stream of the
+    // conversations and sends nothing, and while a proxied server takes the
+    // connection and never answers: a socket that listens and accepts none
+    httplib::ws::WebSocketClient silent("ws://127.0.0.1:" + std::to_string(port) + "/conversations/events");
+    law(silent.connect() && silent.is_open(), "a page opens the stream of the conversations");
+    const long long mute = muted();
+    engine_run("set proxies url mute http://127.0.0.1:" + std::to_string(bound_port(mute)), ENGINE_ADMIN);
+    int         proxied = 0;
+    std::thread asking([&] {
+        httplib::Client waiting("127.0.0.1", port);
+        const auto      res = waiting.Get("/proxy/mute/");
+        proxied             = res ? res->status : -1;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
     listener_stop();
     listening.join();
+    const auto ending = std::chrono::steady_clock::now();
+    quit_all();
+    law(std::chrono::steady_clock::now() - ending < std::chrono::seconds(1),
+        "the process ends at once while a page sends nothing and a proxied server never answers");
+    asking.join();
+    law(proxied == 502, "the request it proxied answers 502: " + std::to_string(proxied));
+    release(mute);
     fs::remove_all(root);
 
     printf("[Laws] http_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    engine_exit(g_fails ? 1 : 0);
+    return g_fails ? 1 : 0;
 }

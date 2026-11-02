@@ -70,3 +70,6 @@ std::string agent_fill(const std::string & id, uint64_t question, const std::str
 // the turn of a conversation stops: its request closes, no call runs after
 // it, and the answer keeps what settled before
 void agent_stop(const std::string & id);
+
+// every turn stops, as the process ends
+void agent_quit();

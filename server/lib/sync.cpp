@@ -9,10 +9,12 @@
 #include "lib/library.h"
 #include "lib/listener.h"
 #include "lib/log.h"
+#include "lib/quit.h"
 #include "yyjson.h"
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <thread>
@@ -23,6 +25,19 @@
 static const int TICK_MS = 1000;
 static const int IDLE_MS = 15000;
 
+bool sync_read(httplib::ws::WebSocket & ws, std::string & message, const std::function<bool()> & going) {
+    ws.set_read_timeout(std::chrono::milliseconds(100));
+    for (;;) {
+        const httplib::ws::ReadResult r = ws.read(message);
+        if (r == httplib::ws::Fail || (r == httplib::ws::Timeout && !going())) {
+            return false;
+        }
+        if (r != httplib::ws::Timeout) {
+            return true;
+        }
+    }
+}
+
 // a page follows the conversations attached, running the lines the agent
 // calls the config tool of the pages with while its stream lasts
 void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
@@ -32,15 +47,16 @@ void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
     agent_attach();
     log_info("Sync", "%s follows the conversations", from.c_str());
     // the page sends nothing more: what it reads only answers the pings, and
-    // ends once the page closes
+    // ends once the page closes or the stream does
     std::atomic<bool> gone{ false };
+    std::atomic<bool> done{ false };
     std::thread       reader([&] {
         std::string message;
-        while (ws.read(message) != httplib::ws::Fail) {
+        while (sync_read(ws, message, [&] { return !done; })) {
         }
         gone = true;
     });
-    for (int idle = 0; !gone && listener_epoch() == epoch;) {
+    for (int idle = 0; !gone && listener_epoch() == epoch && !quit_ending();) {
         const std::string events = library_follow(f, TICK_MS, keychain_known());
         idle                     = events.empty() ? idle + TICK_MS : 0;
         if ((!events.empty() || idle >= IDLE_MS) && !ws.send(events)) {
@@ -48,9 +64,10 @@ void sync_events(const httplib::Request & req, httplib::ws::WebSocket & ws) {
         }
         idle = idle >= IDLE_MS ? 0 : idle;
     }
+    done = true;
+    reader.join();
     agent_detach();
     ws.close();
-    reader.join();
     log_info("Sync", "%s leaves", from.c_str());
 }
 

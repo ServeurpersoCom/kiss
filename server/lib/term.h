@@ -8,6 +8,10 @@ bool term_raw();
 // the terminal as term_raw found it, once the console is done with it
 void term_restore();
 
+// whether a byte is typed within ms milliseconds, or stdin ends, so the next
+// term_read returns at once
+bool term_wait(int ms);
+
 // the next byte typed, -1 once stdin ends
 int term_read();
 

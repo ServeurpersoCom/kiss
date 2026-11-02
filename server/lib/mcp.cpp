@@ -68,7 +68,9 @@ static doc_t post(const remote &           r,
     const auto  client  = api_client(r, stop, path);
     auto        headers = remote_headers(r);
     headers.emplace("Accept", "application/json, text/event-stream");
-    headers.insert(era.begin(), era.end());
+    for (const auto & h : era) {
+        headers.insert(h);
+    }
     auto stream = client->open_stream("POST", path, {}, headers, body, "application/json");
     if (stop.stopped) {
         throw api_error("Stopped");

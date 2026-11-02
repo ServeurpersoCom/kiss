@@ -12,6 +12,12 @@
 #include <chrono>
 #include <condition_variable>
 #include <map>
+#include <set>
+
+#if !defined(_WIN32)
+#    include <fcntl.h>
+#    include <unistd.h>
+#endif
 
 const protocol & protocol_chat();
 const protocol & protocol_messages();
@@ -56,13 +62,96 @@ std::vector<endpoint> api_endpoints(const engine_reader & config) {
 
 static std::condition_variable g_woken;
 
+// every stop alive, and whether the process stops them all
+static std::mutex           g_stops_mutex;
+static std::set<api_stop *> g_stops;
+static bool                 g_quit = false;
+
+api_stop::api_stop() {
+    std::lock_guard<std::mutex> lock(g_stops_mutex);
+    g_stops.insert(this);
+    stopped = g_quit;
+}
+
+api_stop::~api_stop() {
+    std::lock_guard<std::mutex> lock(g_stops_mutex);
+    g_stops.erase(this);
+}
+
+void api_quit() {
+    std::lock_guard<std::mutex> lock(g_stops_mutex);
+    g_quit = true;
+    for (api_stop * s : g_stops) {
+        s->stop();
+    }
+}
+
+static void shut(socket_t s) {
+#if defined(_WIN32)
+    shutdown(s, SD_BOTH);
+#else
+    shutdown(s, SHUT_RDWR);
+#endif
+}
+
 void api_stop::stop() {
     stopped = true;
     std::lock_guard<std::mutex> lock(mutex);
-    if (close) {
-        close();
+    for (socket_t s : sockets) {
+        shut(s);
     }
     g_woken.notify_all();
+}
+
+// a descriptor of the socket s of its own, closed apart, not inherited
+static socket_t duplicated(socket_t s) {
+#if defined(_WIN32)
+    WSAPROTOCOL_INFOW info;
+    if (WSADuplicateSocketW(s, GetCurrentProcessId(), &info) != 0) {
+        return INVALID_SOCKET;
+    }
+    return WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0,
+                      WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+#else
+    return fcntl(s, F_DUPFD_CLOEXEC, 0);
+#endif
+}
+
+// the duplicates of the sockets a client opened, which its socket options
+// hold, so they go with it
+struct watched_t {
+    api_stop &            stop;
+    std::vector<socket_t> held;
+
+    explicit watched_t(api_stop & s) : stop(s) {}
+
+    ~watched_t() {
+        std::lock_guard<std::mutex> lock(stop.mutex);
+        for (socket_t s : held) {
+            stop.sockets.erase(std::find(stop.sockets.begin(), stop.sockets.end(), s));
+#if defined(_WIN32)
+            closesocket(s);
+#else
+            close(s);
+#endif
+        }
+    }
+};
+
+void api_watch(httplib::Client & client, api_stop & stop) {
+    const auto w = std::make_shared<watched_t>(stop);
+    client.set_socket_options([w](socket_t s) {
+        const socket_t              d = duplicated(s);
+        std::lock_guard<std::mutex> lock(w->stop.mutex);
+        if (d == INVALID_SOCKET) {
+            return;
+        }
+        w->held.push_back(d);
+        w->stop.sockets.push_back(d);
+        if (w->stop.stopped) {
+            shut(d);
+        }
+    });
 }
 
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path) {
@@ -76,10 +165,7 @@ std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, s
     const long   micros  = (long) ((r.timeout - (double) seconds) * 1e6);
     client->set_connection_timeout(seconds, micros);
     client->set_read_timeout(seconds, micros);
-    std::lock_guard<std::mutex> lock(stop.mutex);
-    stop.close = [client] {
-        client->stop();
-    };
+    api_watch(*client, stop);
     if (stop.stopped) {
         throw api_error("Stopped");
     }
