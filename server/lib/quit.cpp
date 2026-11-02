@@ -5,7 +5,9 @@
 #include "lib/agent.h"
 #include "lib/api.h"
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -46,20 +48,29 @@ bool quit_ending() {
 
 void quit_all() {
     g_ending = true;
-    api_quit();
-    agent_quit();
-    // a thread joined may have started another, joined in turn
+    // the stops are made again until every thread is done, as a stop finds a
+    // request only once it went out; then every thread is joined, a thread
+    // joined maybe having started another
     for (;;) {
+        api_quit();
+        agent_quit();
         std::list<started_t> started;
         {
             std::lock_guard<std::mutex> lock(g_mutex);
-            started.swap(g_started);
+            if (g_started.empty()) {
+                return;
+            }
+            const bool done =
+                std::all_of(g_started.begin(), g_started.end(), [](const started_t & t) { return t.done->load(); });
+            if (done) {
+                started.swap(g_started);
+            }
         }
         if (started.empty()) {
-            return;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        for (started_t & s : started) {
-            s.thread.join();
+        for (started_t & t : started) {
+            t.thread.join();
         }
     }
 }

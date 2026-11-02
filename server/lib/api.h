@@ -102,14 +102,14 @@ struct endpoint {
 // every endpoint the configuration names, sorted by name
 std::vector<endpoint> api_endpoints(const engine_reader & config);
 
-// what stops a request: a flag, and a duplicate of each socket the clients
-// it watches opened, shut down at once on a stop; every stop alive is known,
-// so api_quit stops them all, and one made once it did is stopped from the
-// start
+// what stops a request: a flag, and the clients its requests go through,
+// each stopped at once, httplib ending the request it sends; every stop alive
+// is known, so api_quit stops them all, and one made once it did is stopped
+// from the start
 struct api_stop {
-    std::atomic<bool>     stopped{ false };
-    std::mutex            mutex;
-    std::vector<socket_t> sockets;
+    std::atomic<bool>                           stopped{ false };
+    std::mutex                                  mutex;
+    std::vector<std::weak_ptr<httplib::Client>> clients;
 
     api_stop();
     ~api_stop();
@@ -122,15 +122,26 @@ struct api_stop {
 // stops every stop alive and every one made from now on
 void api_quit();
 
-// the requests of client end on a stop at every stage, from the connection
-// to the last byte: each socket it opens is duplicated into the stop, so a
-// socket the client let go is never one of another, and the duplicates go
-// with the client, which never outlives the stop
-void api_watch(httplib::Client & client, api_stop & stop);
-
-// a client of a remote server, its seconds those of the item, its requests
-// ended by the stop; path is the path of its url
+// a client of a remote server, its seconds those of the item, which the stop
+// stops; path is the path of its url
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path);
+
+// sends req through client, a client of the stop: each step of the request
+// looks at the stop, the body sent, the head of the answer, each piece of its
+// body, so a stop that comes before the client sends ends the request too
+httplib::Result api_send(httplib::Client & client, httplib::Request & req, api_stop & stop);
+
+// the events of a stream as its pieces come, its lines ending in LF, CR LF or
+// CR alike: the data lines of each, joined by LF, handed to event once a
+// blank line ends it
+struct api_events {
+    std::string              line;
+    std::vector<std::string> data;
+    bool                     cr = false;
+
+    // false once event answers false, the stream read far enough
+    bool feed(const char * piece, size_t n, const std::function<bool(const std::string &)> & event);
+};
 
 // the ids of the models an endpoint serves; throws why it lists none
 std::vector<std::string> api_models(const endpoint & e, api_stop & stop);

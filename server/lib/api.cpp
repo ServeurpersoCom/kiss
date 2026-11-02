@@ -14,11 +14,6 @@
 #include <map>
 #include <set>
 
-#if !defined(_WIN32)
-#    include <fcntl.h>
-#    include <unistd.h>
-#endif
-
 const protocol & protocol_chat();
 const protocol & protocol_messages();
 const protocol & protocol_responses();
@@ -35,8 +30,6 @@ static const int          TRANSIENT[] = { 408, 429, 500, 502, 503, 504, 529 };
 static const char * const KEY_FIX     = "set endpoints key <name> <key>";
 static const char * const URL_FIX     = "set endpoints url <name> <url>";
 static const char * const DATA        = "data:";
-// the bytes read at a time
-static const size_t       CHUNK       = 16384;
 
 static const protocol * protocol_named(const std::string & name) {
     for (const protocol * p : api_protocols()) {
@@ -86,72 +79,15 @@ void api_quit() {
     }
 }
 
-static void shut(socket_t s) {
-#if defined(_WIN32)
-    shutdown(s, SD_BOTH);
-#else
-    shutdown(s, SHUT_RDWR);
-#endif
-}
-
 void api_stop::stop() {
     stopped = true;
     std::lock_guard<std::mutex> lock(mutex);
-    for (socket_t s : sockets) {
-        shut(s);
+    for (const std::weak_ptr<httplib::Client> & c : clients) {
+        if (const auto client = c.lock()) {
+            client->stop();
+        }
     }
     g_woken.notify_all();
-}
-
-// a descriptor of the socket s of its own, closed apart, not inherited
-static socket_t duplicated(socket_t s) {
-#if defined(_WIN32)
-    WSAPROTOCOL_INFOW info;
-    if (WSADuplicateSocketW(s, GetCurrentProcessId(), &info) != 0) {
-        return INVALID_SOCKET;
-    }
-    return WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0,
-                      WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
-#else
-    return fcntl(s, F_DUPFD_CLOEXEC, 0);
-#endif
-}
-
-// the duplicates of the sockets a client opened, which its socket options
-// hold, so they go with it
-struct watched_t {
-    api_stop &            stop;
-    std::vector<socket_t> held;
-
-    explicit watched_t(api_stop & s) : stop(s) {}
-
-    ~watched_t() {
-        std::lock_guard<std::mutex> lock(stop.mutex);
-        for (socket_t s : held) {
-            stop.sockets.erase(std::find(stop.sockets.begin(), stop.sockets.end(), s));
-#if defined(_WIN32)
-            closesocket(s);
-#else
-            close(s);
-#endif
-        }
-    }
-};
-
-void api_watch(httplib::Client & client, api_stop & stop) {
-    const auto w = std::make_shared<watched_t>(stop);
-    client.set_socket_options([w](socket_t s) {
-        const socket_t              d = duplicated(s);
-        std::lock_guard<std::mutex> lock(w->stop.mutex);
-        if (d == INVALID_SOCKET) {
-            return;
-        }
-        w->held.push_back(d);
-        w->stop.sockets.push_back(d);
-        if (w->stop.stopped) {
-            shut(d);
-        }
-    });
 }
 
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path) {
@@ -165,11 +101,66 @@ std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, s
     const long   micros  = (long) ((r.timeout - (double) seconds) * 1e6);
     client->set_connection_timeout(seconds, micros);
     client->set_read_timeout(seconds, micros);
-    api_watch(*client, stop);
+    std::lock_guard<std::mutex> lock(stop.mutex);
+    stop.clients.erase(std::remove_if(stop.clients.begin(), stop.clients.end(),
+                                      [](const std::weak_ptr<httplib::Client> & c) { return c.expired(); }),
+                       stop.clients.end());
+    stop.clients.push_back(client);
     if (stop.stopped) {
         throw api_error("Stopped");
     }
     return client;
+}
+
+httplib::Result api_send(httplib::Client & client, httplib::Request & req, api_stop & stop) {
+    const auto going = [&stop](size_t, size_t) {
+        return !stop.stopped;
+    };
+    const auto handler    = std::move(req.response_handler);
+    const auto receiver   = std::move(req.content_receiver);
+    req.upload_progress   = going;
+    req.download_progress = going;
+    req.response_handler  = [&stop, handler](const httplib::Response & res) {
+        return !stop.stopped && (!handler || handler(res));
+    };
+    if (receiver) {
+        req.content_receiver = [&stop, receiver](const char * data, size_t n, size_t offset, size_t total) {
+            return !stop.stopped && receiver(data, n, offset, total);
+        };
+    }
+    return client.send(req);
+}
+
+bool api_events::feed(const char * piece, size_t n, const std::function<bool(const std::string &)> & event) {
+    for (size_t i = 0; i < n; i++) {
+        const char c = piece[i];
+        if (cr && c == '\n') {
+            cr = false;
+            continue;
+        }
+        cr = c == '\r';
+        if (c != '\r' && c != '\n') {
+            line += c;
+            continue;
+        }
+        if (!line.empty()) {
+            if (starts_with(line, DATA)) {
+                const size_t from = strlen(DATA) + (line.size() > strlen(DATA) && line[strlen(DATA)] == ' ' ? 1 : 0);
+                data.push_back(line.substr(from));
+            }
+            line.clear();
+            continue;
+        }
+        if (data.empty()) {
+            continue;
+        }
+        const std::string e = join(data, "\n");
+        data.clear();
+        if (!event(e)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // what a request carries: the key and the headers of the endpoint, with those
@@ -204,9 +195,16 @@ static api_error failure(const endpoint & e, int status, const std::string & typ
 
 // the models an endpoint serves, by id, each as its list writes it, JSON
 static std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop) {
-    std::string base;
-    const auto  client = api_client(e.server, stop, base);
-    const auto  res    = client->Get(joined(base, e.speaks->models), sent(e));
+    std::string      base;
+    const auto       client = api_client(e.server, stop, base);
+    httplib::Request req;
+    req.method                = "GET";
+    req.path                  = joined(base, e.speaks->models);
+    req.headers               = sent(e);
+    const httplib::Result res = api_send(*client, req, stop);
+    if (stop.stopped) {
+        throw api_error("Stopped");
+    }
     if (!res) {
         throw api_error(e.server.url + " does not answer", URL_FIX);
     }
@@ -286,50 +284,6 @@ std::pair<endpoint, std::string> api_pick(const std::vector<endpoint> & all,
     throw api_error("chat model " + chosen + " names no endpoint", "set chat model <endpoint/model>");
 }
 
-// the stream of a reply, asked again while the endpoint answers a status
-// that passes; nothing streamed yet, nothing repeats
-static std::shared_ptr<httplib::ClientImpl::StreamHandle> opened(const endpoint &                           e,
-                                                                 const std::string &                        body,
-                                                                 api_stop &                                 stop,
-                                                                 std::shared_ptr<httplib::Client> &         keep,
-                                                                 const std::function<void(int, int, int)> & retrying) {
-    for (int attempt = 1;; attempt++) {
-        std::string base;
-        keep              = api_client(e.server, stop, base);
-        const auto stream = std::make_shared<httplib::ClientImpl::StreamHandle>(
-            keep->open_stream("POST", joined(base, e.speaks->path), {}, sent(e), body, "application/json"));
-        if (stop.stopped) {
-            throw api_error("Stopped");
-        }
-        if (!stream->is_valid()) {
-            throw api_error(e.server.url + " does not answer: " + httplib::to_string(stream->error), URL_FIX);
-        }
-        const int         status = stream->response->status;
-        const std::string type   = stream->response->get_header_value("Content-Type");
-        const bool        passes = std::find(std::begin(TRANSIENT), std::end(TRANSIENT), status) != std::end(TRANSIENT);
-        if (status == 200 && type.find("html") != std::string::npos) {
-            throw api_error(e.server.url + " answers a web page, not an LLM", URL_FIX);
-        }
-        if (status == 200) {
-            return stream;
-        }
-        if (!passes || attempt > e.retries) {
-            std::string all;
-            char        buf[CHUNK];
-            for (ssize_t n; (n = stream->read(buf, sizeof(buf))) > 0;) {
-                all.append(buf, (size_t) n);
-            }
-            throw failure(e, status, type, all);
-        }
-        retrying(status, attempt, e.retries);
-        std::unique_lock<std::mutex> lock(stop.mutex);
-        g_woken.wait_for(lock, std::chrono::duration<double>(e.pause), [&] { return stop.stopped.load(); });
-        if (stop.stopped) {
-            throw api_error("Stopped");
-        }
-    }
-}
-
 void api_chat(const endpoint &                               e,
               const api_request &                            r,
               api_stop &                                     stop,
@@ -337,51 +291,87 @@ void api_chat(const endpoint &                               e,
               const std::function<void(int, int, int)> &     retrying) {
     std::string body;
     seal_json(e.speaks->body(r), keychain_known(), body);
-    std::shared_ptr<httplib::Client> client;
-    const auto                       stream = opened(e, body, stop, client, retrying);
-    const auto                       read   = e.speaks->reader();
-    std::string                      buffer;
-    std::vector<std::string>         data;
-    char                             buf[CHUNK];
-    for (;;) {
-        const ssize_t n = stream->read(buf, sizeof(buf));
+    const auto read = e.speaks->reader();
+    // asked again while the endpoint answers a status that passes, before it
+    // streamed anything, so nothing repeats
+    for (int attempt = 1;; attempt++) {
+        std::string      base;
+        const auto       client = api_client(e.server, stop, base);
+        httplib::Request req;
+        req.method  = "POST";
+        req.path    = joined(base, e.speaks->path);
+        req.headers = sent(e);
+        req.body    = body;
+        req.set_header("Content-Type", "application/json");
+        int                status = 0;
+        std::string        type, refused;
+        api_events         events;
+        bool               ended = false;
+        std::exception_ptr broke;
+        req.response_handler = [&](const httplib::Response & res) {
+            status = res.status;
+            type   = res.get_header_value("Content-Type");
+            return !(status == 200 && type.find("html") != std::string::npos);
+        };
+        // each event of the stream a delta as it comes, the stream read until
+        // its last; anything they throw ends the request, thrown again once
+        // it did
+        const auto each = [&](const std::string & event) {
+            std::optional<api_delta> d;
+            try {
+                d = read(trim(event));
+            } catch (const std::exception &) {
+                throw api_error(e.server.url + " sent an event that does not read: " + trim(event));
+            }
+            if (d && d->error) {
+                throw api_error(d->error->empty() ? e.server.url + " broke the stream" : *d->error);
+            }
+            if (d) {
+                delta(*d);
+                ended = d->end;
+            }
+            return !ended;
+        };
+        req.content_receiver = [&](const char * piece, size_t n, size_t, size_t) {
+            if (status != 200) {
+                refused.append(piece, n);
+                return true;
+            }
+            try {
+                return events.feed(piece, n, each);
+            } catch (...) {
+                broke = std::current_exception();
+                return false;
+            }
+        };
+        const httplib::Result res = api_send(*client, req, stop);
         if (stop.stopped) {
             throw api_error("Stopped");
         }
-        if (n <= 0) {
+        if (broke) {
+            std::rethrow_exception(broke);
+        }
+        if (ended) {
+            return;
+        }
+        if (status == 0) {
+            throw api_error(e.server.url + " does not answer: " + httplib::to_string(res.error()), URL_FIX);
+        }
+        if (status == 200 && type.find("html") != std::string::npos) {
+            throw api_error(e.server.url + " answers a web page, not an LLM", URL_FIX);
+        }
+        if (status == 200) {
             throw api_error(std::string("the stream ended before ") + e.speaks->last);
         }
-        buffer.append(buf, (size_t) n);
-        for (size_t nl; (nl = buffer.find('\n')) != std::string::npos;) {
-            std::string line = buffer.substr(0, nl);
-            buffer.erase(0, nl + 1);
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
-            }
-            if (starts_with(line, DATA)) {
-                data.push_back(line.substr(strlen(DATA)));
-            }
-            if (!line.empty() || data.empty()) {
-                continue;
-            }
-            const std::string event = trim(join(data, "\n"));
-            data.clear();
-            std::optional<api_delta> d;
-            try {
-                d = read(event);
-            } catch (const std::exception &) {
-                throw api_error(e.server.url + " sent an event that does not read: " + event);
-            }
-            if (!d) {
-                continue;
-            }
-            if (d->error) {
-                throw api_error(d->error->empty() ? e.server.url + " broke the stream" : *d->error);
-            }
-            delta(*d);
-            if (d->end) {
-                return;
-            }
+        const bool passes = std::find(std::begin(TRANSIENT), std::end(TRANSIENT), status) != std::end(TRANSIENT);
+        if (!passes || attempt > e.retries) {
+            throw failure(e, status, type, refused);
+        }
+        retrying(status, attempt, e.retries);
+        std::unique_lock<std::mutex> lock(stop.mutex);
+        g_woken.wait_for(lock, std::chrono::duration<double>(e.pause), [&] { return stop.stopped.load(); });
+        if (stop.stopped) {
+            throw api_error("Stopped");
         }
     }
 }

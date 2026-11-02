@@ -27,8 +27,6 @@ static const char * const ELICITATION       = "elicitation/create";
 static const char * const FORM_MODE         = "form";
 static const char * const SESSION_ID_HEADER = "Mcp-Session-Id";
 static const char * const VERSION_HEADER    = "MCP-Protocol-Version";
-static const char * const DATA              = "data:";
-static const size_t       CHUNK             = 16384;
 
 // a session: what it was opened with, whether it stands, the era the server
 // speaks, its id in the 2025 era, and the tools of the server; a session that
@@ -64,50 +62,56 @@ static doc_t post(const remote &           r,
                   api_stop &               stop,
                   std::string &            given,
                   bool                     notification) {
-    std::string path;
-    const auto  client  = api_client(r, stop, path);
-    auto        headers = remote_headers(r);
-    headers.emplace("Accept", "application/json, text/event-stream");
+    std::string      path;
+    const auto       client = api_client(r, stop, path);
+    httplib::Request req;
+    req.method  = "POST";
+    req.path    = path;
+    req.headers = remote_headers(r);
+    req.body    = body;
+    req.set_header("Content-Type", "application/json");
+    req.set_header("Accept", "application/json, text/event-stream");
     for (const auto & h : era) {
-        headers.insert(h);
+        req.headers.insert(h);
     }
-    auto stream = client->open_stream("POST", path, {}, headers, body, "application/json");
+    int         status   = 0;
+    bool        streamed = false;
+    std::string all;
+    api_events  events;
+    doc_t       found;
+    req.response_handler = [&](const httplib::Response & res) {
+        status   = res.status;
+        given    = res.get_header_value(SESSION_ID_HEADER);
+        streamed = starts_with(lower(res.get_header_value("Content-Type")), "text/event-stream");
+        return !(notification && status < 300);
+    };
+    // the first event that holds an answer, a result or an error
+    req.content_receiver = [&](const char * piece, size_t n, size_t, size_t) {
+        if (!streamed) {
+            all.append(piece, n);
+            return true;
+        }
+        return events.feed(piece, n, [&](const std::string & event) {
+            doc_t        d(yyjson_read(event.data(), event.size(), 0), yyjson_doc_free);
+            yyjson_val * root = d ? yyjson_doc_get_root(d.get()) : nullptr;
+            if (yyjson_obj_get(root, "result") || yyjson_obj_get(root, "error")) {
+                found = d;
+            }
+            return !found;
+        });
+    };
+    const httplib::Result res = api_send(*client, req, stop);
     if (stop.stopped) {
         throw api_error("Stopped");
     }
-    if (!stream.is_valid()) {
-        throw unreached(r.url + " does not answer: " + httplib::to_string(stream.error));
+    if (status == 0) {
+        throw unreached(r.url + " does not answer: " + httplib::to_string(res.error()));
     }
-    const int status = stream.response->status;
-    given            = stream.response->get_header_value(SESSION_ID_HEADER);
     if (notification && status < 300) {
         return nullptr;
     }
-    std::string all;
-    char        buf[CHUNK];
-    const bool  events = starts_with(lower(stream.response->get_header_value("Content-Type")), "text/event-stream");
-    for (ssize_t n; (n = stream.read(buf, sizeof(buf))) > 0;) {
-        all.append(buf, (size_t) n);
-        if (!events) {
-            continue;
-        }
-        // lines end in LF, CR LF or CR alike
-        all.erase(std::remove(all.begin(), all.end(), '\r'), all.end());
-        // the first event that holds an answer, a result or an error
-        for (size_t end; (end = all.find("\n\n")) != std::string::npos;) {
-            std::string data;
-            for (const std::string & line : split(all.substr(0, end), '\n')) {
-                if (starts_with(line, DATA)) {
-                    data += (data.empty() ? "" : "\n") + trim(line.substr(strlen(DATA)));
-                }
-            }
-            all.erase(0, end + 2);
-            doc_t        d(yyjson_read(data.data(), data.size(), 0), yyjson_doc_free);
-            yyjson_val * root = d ? yyjson_doc_get_root(d.get()) : nullptr;
-            if (yyjson_obj_get(root, "result") || yyjson_obj_get(root, "error")) {
-                return d;
-            }
-        }
+    if (found) {
+        return found;
     }
     if (status >= 300) {
         throw api_error(r.url + " answers " + std::to_string(status) + " " + trim(all));

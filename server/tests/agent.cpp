@@ -60,8 +60,10 @@ static std::vector<std::string> g_tools;
 static std::atomic<int>         g_down{ 0 };
 // the messages of each request of the conversation that compacts
 static std::vector<std::string> g_compacted;
-// whether the endpoint that hangs is asked, and whether the laws let it answer
+// whether the endpoint that hangs is asked, whether it took a message
+// silent, and whether the laws let them answer
 static std::atomic<bool>        g_hanging{ false };
+static std::atomic<bool>        g_silent{ false };
 static std::atomic<bool>        g_released{ false };
 
 static std::string json(const std::string & s) {
@@ -119,6 +121,15 @@ int main() {
                                 (usage.empty() ? "" : "data: {\"choices\":[],\"usage\":" + usage + "}\n\n") +
                                 "data: [DONE]\n\n",
                             "text/event-stream");
+            return;
+        }
+        // a message silent takes the request and answers nothing, not even
+        // the head of the answer, until the laws let it
+        if (text == "silent") {
+            g_silent = true;
+            for (int i = 0; i < 1000 && !g_released; i++) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
             return;
         }
         // the conversation of a message vanish erased once its call streamed
@@ -577,6 +588,28 @@ int main() {
     bool found = false;
     library_each([&](const conversation & x) { found = found || x.id == gone.id; });
     law(!agent_busy(gone.id) && !found, "a conversation erased once its round streamed stops its turn");
+
+    // a stop ends at once a turn whose endpoint took the request and answers
+    // nothing yet
+    conversation mute;
+    mute.id = conversation_uuid();
+    conversation_entry hush;
+    hush.text = "silent";
+    conversation_append(mute, std::nullopt, hush);
+    library_create(mute, {});
+    const std::string asked_mute = mute.entries[0].id;
+    law(agent_answer(mute.id, [&](conversation &) { return asked_mute; }).empty(),
+        "a turn sent to a silent endpoint starts");
+    for (int i = 0; i < 500 && !g_silent; i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    const auto stopping = std::chrono::steady_clock::now();
+    agent_stop(mute.id);
+    for (int i = 0; i < 300 && agent_busy(mute.id); i++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    law(g_silent && !agent_busy(mute.id) && std::chrono::steady_clock::now() - stopping < std::chrono::seconds(1),
+        "a stop ends at once a turn whose endpoint answers nothing yet");
 
     // what the sources serve: the models of each endpoint, the tools of this
     // server, of the pages and of each MCP server, a source that fails

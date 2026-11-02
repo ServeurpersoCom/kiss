@@ -15,7 +15,9 @@
 
 #include <cstdio>
 #include <memory>
+#include <string>
 #include <thread>
+#include <vector>
 
 static size_t g_laws  = 0;
 static size_t g_fails = 0;
@@ -221,6 +223,25 @@ int main() {
     const bool named = mcp_kept(r).size() == 2;
     mcp_forget({});
     law(named && mcp_kept(r).empty(), "a server no longer named is forgotten, its tools with it");
+
+    // a stream of events reads whatever its line ends and wherever its pieces
+    // cut it: LF, CR LF and CR, a CR LF cut between two pieces one end, the
+    // space after data: dropped, its data lines joined, the read stopped
+    // where the reader says
+    const std::string stream = "data: a\r\ndata:b\r\r\n: note\ndata: c\r\n\r\ndata: d\n\n";
+    bool              every  = true;
+    for (size_t cut = 0; cut <= stream.size(); cut++) {
+        api_events               events;
+        std::vector<std::string> got;
+        const auto               each = [&](const std::string & e) {
+            got.push_back(e);
+            return got.size() < 2;
+        };
+        const bool read =
+            events.feed(stream.data(), cut, each) && events.feed(stream.data() + cut, stream.size() - cut, each);
+        every = every && !read && got == std::vector<std::string>{ "a\nb", "c" };
+    }
+    law(every, "a stream reads its events whatever its line ends and wherever its pieces cut it");
 
     server.stop();
     listening.join();

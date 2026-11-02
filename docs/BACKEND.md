@@ -369,7 +369,7 @@ request would carry, the key among them, `{"Authorization":"Bearer <server key>"
 closes a stream it refuses with 1008, policy violation, and why. Every next message is the server's:
 events, one JSON object per line, an empty message after 15 seconds without one, so a page that
 hears nothing for 45 seconds knows its stream gone and opens another; the server pings every 15
-seconds and lets go of a page silent for 45. A WebSocket counts in none of the six connections a
+seconds and lets go of a page that answers neither of two pings in a row. A WebSocket counts in none of the six connections a
 browser opens to a site in HTTP/1.1, which all its tabs share, so no number of pages blocks another.
 The server keeps no log of events: it holds, for each page, what that page has, and sends what it
 lacks, so a page that comes back gets every conversation as it stands. The first event sets every
@@ -419,7 +419,8 @@ input request of an `elicitation/create` form, or `{"kind":"run","lines":...}` f
 `client_config` the pages run (see The agent), each with `question`, its number, which no other
 question of the server has.
 
-The stream ends when the listener moves.
+The stream ends when the page leaves, when the listener moves and when the server stops: the server
+sends its Close, and lets go of a page that does not answer it within a second.
 
 #### Acting: `POST /conversations/<action>`
 
@@ -564,9 +565,10 @@ The line is edited as in a shell, and completes as IOS does, from the words the 
   console, not of the CLI, so no MCP client can stop it.
 
 The server stops as SIGINT or SIGTERM does, through `main` like any program: the listener lets its
-port go, every request out closes, a turn stops as a page stops it, a call ends as its client
-leaves, the console clears its line and gives the terminal back as it found it, then every thread
-the server started is joined before its statics go.
+port go, every request out ends as httplib stops its client, at whatever step it stands, a turn
+stops as a page stops it, a call ends as its client leaves, every stream of a page closes, the
+console clears its line and gives the terminal back as it found it, then every thread the server
+started is joined before its statics go.
 
 ## Tools
 
@@ -961,7 +963,9 @@ that refuses the key of its route answers 424 with the fix, `set proxies key <na
 never takes it for a refusal of its own key nor for a server down for a while, which it asks again;
 one that redirects answers 424 naming where, `set proxies url <name>`, since a redirect followed would
 carry the key elsewhere; an url no client of the build reaches answers 424 too. A server that cannot
-be reached answers 502. A route the configuration does not name answers 404. A server that hides its
+be reached answers 502. A route the configuration does not name answers 404. The request out goes on
+a thread of its own, which hands the answer of this server the head of its answer, then its body as
+it comes; a client that leaves lets it go. A server that hides its
 own key some other way, deeper than the JSON a page decodes or in pieces across events, betrays a
 key it holds, which no filter stops, so a key goes only to a server trusted with it. The client
 speaks HTTPS: LibreSSL built with the binary on Windows, the system OpenSSL elsewhere.
