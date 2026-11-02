@@ -1886,11 +1886,18 @@ ssize_t select_write(socket_t sock, time_t sec, time_t usec) {
 
 // The point sec and usec from now, for select_until(). A negative sec never
 // comes, as a negative timeout waits forever in select_impl().
+// A sec past what the clock can reach waits forever too.
 std::chrono::steady_clock::time_point deadline_after(time_t sec,
                                                             time_t usec) {
-  if (sec < 0) { return (std::chrono::steady_clock::time_point::max)(); }
-  return std::chrono::steady_clock::now() + std::chrono::seconds(sec) +
-         std::chrono::microseconds(usec);
+  auto now = std::chrono::steady_clock::now();
+  auto never = (std::chrono::steady_clock::time_point::max)();
+  if (sec < 0 ||
+      sec >= std::chrono::duration_cast<std::chrono::seconds>(never - now)
+                     .count() -
+                 1) {
+    return never;
+  }
+  return now + std::chrono::seconds(sec) + std::chrono::microseconds(usec);
 }
 
 // Waits only for the time left until deadline, so that all the waits of one
@@ -1959,8 +1966,7 @@ wait_until_socket_is_ready(socket_t sock, time_t sec, time_t usec,
     poll_res =
         handle_EINTR([&]() { return poll_wrapper(&pfd_read, 1, timeout); });
   } else {
-    auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout);
+    auto deadline = deadline_after(sec, usec);
     for (;;) {
       if (interrupted()) { return Error::Canceled; }
       auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -8642,6 +8648,13 @@ bool WebSocketSSLStream::wait_writable() const {
 }
 
 ssize_t WebSocketSSLStream::read(char *ptr, size_t size) {
+  // A read decrypts what the session and the socket already hold before it
+  // ever waits, so a peer that keeps the socket full never lets it reach the
+  // wait: the interrupt is looked at first
+  if (read_interrupted_ && read_interrupted_()) {
+    error_ = Error::Timeout;
+    return -1;
+  }
   tls::TlsError err;
   auto n = 1000;
   while (--n >= 0) {
@@ -10753,7 +10766,7 @@ socket_t ClientImpl::create_client_socket(Error &error) const {
         ipv6_v6only_, socket_options_, connection_timeout_sec_,
         connection_timeout_usec_, read_timeout_sec_, read_timeout_usec_,
         write_timeout_sec_, write_timeout_usec_, interface_, error,
-        [this] { return stop_requested_.load(); });
+        [this] { return interrupted(); });
   }
 
   // Check is custom IP or hostname specified for host_
@@ -10765,8 +10778,7 @@ socket_t ClientImpl::create_client_socket(Error &error) const {
       connect_host, ip, port_, address_family_, tcp_nodelay_, ipv6_v6only_,
       socket_options_, connection_timeout_sec_, connection_timeout_usec_,
       read_timeout_sec_, read_timeout_usec_, write_timeout_sec_,
-      write_timeout_usec_, interface_, error,
-      [this] { return stop_requested_.load(); });
+      write_timeout_usec_, interface_, error, [this] { return interrupted(); });
 }
 
 bool ClientImpl::create_and_connect_socket(Socket &socket,
@@ -10829,7 +10841,9 @@ void ClientImpl::disconnect(bool gracefully) {
 }
 
 bool ClientImpl::end_connecting() {
-  return connect_state_.exchange(ConnectState::Idle) == ConnectState::Canceled;
+  return connect_state_.exchange(ConnectState::Idle) ==
+             ConnectState::Canceled ||
+         interrupted();
 }
 
 bool ClientImpl::socket_reusable() {
@@ -10934,6 +10948,11 @@ bool ClientImpl::send_(Request &req, Response &res, Error &error) {
     // A redirect or a retry sent inside a request keeps its stop()
     if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
+    if (interrupted()) {
+      error = Error::Canceled;
+      return false;
+    }
+
     if (!socket_reusable()) {
       connect_state_ = ConnectState::Connecting;
 
@@ -10993,7 +11012,7 @@ bool ClientImpl::send_(Request &req, Response &res, Error &error) {
   });
 
   ret = process_socket(socket_, req.start_time_, [&](Stream &strm) {
-    strm.set_read_interrupt([this] { return stop_requested_.load(); });
+    strm.set_read_interrupt([this] { return interrupted(); });
     return handle_request(strm, req, res, close_connection, error);
   });
 
@@ -11113,6 +11132,12 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
     // A stream opened after stop() clears it, as a request sent after it does
     if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
+    if (interrupted()) {
+      handle.error = Error::Canceled;
+      handle.response.reset();
+      return handle;
+    }
+
     if (!socket_reusable()) {
       connect_state_ = ConnectState::Connecting;
 
@@ -11165,6 +11190,12 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
   handle.stream_ = handle.socket_stream_.get();
 
   auto &strm = *handle.stream_;
+
+  // The request and the head of its answer end on an interrupt; the body the
+  // handle reads afterwards outlives this client's reach
+  strm.set_read_interrupt([this] { return interrupted(); });
+  auto release_interrupt =
+      detail::scope_exit([&] { strm.set_read_interrupt(nullptr); });
 
   // After connecting, as for a buffered request
   add_credential_headers(req);
@@ -11741,6 +11772,7 @@ void ClientImpl::setup_redirect_client(ClientType &client) {
   client.set_path_encode(path_encode_);
   client.set_compress(compress_);
   client.set_decompress(decompress_);
+  client.set_interrupt(interrupt_);
 
   // NOTE: Authentication credentials (basic auth, bearer token, digest auth)
   // are intentionally NOT copied to the redirect client. Per RFC 9110 Section
@@ -13256,6 +13288,14 @@ void ClientImpl::stop() {
   disconnect(/*gracefully=*/true);
 }
 
+void ClientImpl::set_interrupt(std::function<bool()> interrupted) {
+  interrupt_ = std::move(interrupted);
+}
+
+bool ClientImpl::interrupted() const {
+  return stop_requested_ || (interrupt_ && interrupt_());
+}
+
 std::string ClientImpl::host() const { return host_; }
 
 int ClientImpl::port() const { return port_; }
@@ -14015,6 +14055,10 @@ Result Client::send(const Request &req) { return cli_->send(req); }
 
 void Client::stop() { cli_->stop(); }
 
+void Client::set_interrupt(std::function<bool()> interrupted) {
+  cli_->set_interrupt(std::move(interrupted));
+}
+
 std::string Client::host() const { return cli_->host(); }
 
 int Client::port() const { return cli_->port(); }
@@ -14413,7 +14457,7 @@ bool SSLClient::connect_with_proxy(
           write_timeout_sec_, write_timeout_usec_, max_timeout_msec_,
           start_time, [&](Stream &strm) {
             // A stop() while the tunnel opens ends the wait for the proxy
-            strm.set_read_interrupt([this] { return stop_requested_.load(); });
+            strm.set_read_interrupt([this] { return interrupted(); });
             Request req2;
             req2.method = "CONNECT";
             req2.path = connect_target;
@@ -14454,8 +14498,7 @@ bool SSLClient::connect_with_proxy(
                 socket.sock, read_timeout_sec_, read_timeout_usec_,
                 write_timeout_sec_, write_timeout_usec_, max_timeout_msec_,
                 start_time, [&](Stream &strm) {
-                  strm.set_read_interrupt(
-                      [this] { return stop_requested_.load(); });
+                  strm.set_read_interrupt([this] { return interrupted(); });
                   Request req3;
                   req3.method = "CONNECT";
                   req3.path = connect_target;
@@ -14650,7 +14693,7 @@ bool SSLClient::initialize_ssl(Socket &socket, Error &error) {
   detail::ClientTlsSessionOptions options;
   options.server_hostname_verification = server_hostname_verification_;
   options.session_verifier = session_verifier_;
-  options.interrupted = [this] { return stop_requested_.load(); };
+  options.interrupted = [this] { return interrupted(); };
   options.ctx_mutex = &ctx_mutex_;
 #ifdef CPPHTTPLIB_WINDOWS_AUTOMATIC_ROOT_CERTIFICATES_UPDATE
   // Skip Schannel when a custom CA cert is specified, as the Windows
@@ -18853,10 +18896,6 @@ ReadResult WebSocket::read(std::string &msg) {
       // Handle fragmentation
       if (!fin) {
         while (true) {
-          // A wss:// read decrypts whatever the socket already holds before
-          // it ever waits, so a peer that keeps sending fragments would never
-          // reach the interrupt: the deadline is looked at on every fragment
-          if (close_expired()) { return Fail; }
           Opcode cont_opcode;
           std::string cont_payload;
           bool cont_fin;
@@ -18966,9 +19005,8 @@ void WebSocket::close(CloseStatus status, const std::string &reason) {
   Opcode op;
   std::string resp;
   bool fin;
-  while (!close_expired() &&
-         impl::read_websocket_frame(strm_, op, resp, fin, is_server_, 125) ==
-             impl::FrameRead::Ok) {
+  while (impl::read_websocket_frame(strm_, op, resp, fin, is_server_, 125) ==
+         impl::FrameRead::Ok) {
     if (op == Opcode::Close) { break; }
   }
 }

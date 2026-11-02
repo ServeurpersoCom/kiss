@@ -2920,6 +2920,12 @@ public:
   Result send(const Request &req);
 
   void stop();
+  // `interrupted` is polled from the thread of each request, in the waits of
+  // its connection, its TLS handshake and its reads, and before it sends;
+  // it is set before the requests it ends and is safe to call from any
+  // thread. A call already blocked in the system, a send() of a large body
+  // or a TLS read inside a record, ends through stop() alone.
+  void set_interrupt(std::function<bool()> interrupted);
 
   std::string host() const;
   int port() const;
@@ -3066,6 +3072,9 @@ protected:
   // socket_mutex_ until it is, and shutting the socket down does not wake a
   // read on Windows.
   std::atomic<bool> stop_requested_{false};
+  // Set by set_interrupt(), polled wherever stop_requested_ is
+  std::function<bool()> interrupt_;
+  bool interrupted() const;
   // Phase of the connection send_() or open_stream_() opens holding
   // socket_mutex_: stop() cancels it from Connecting alone, and the end of
   // the phase takes the state back to Idle in the same operation that reads
@@ -3364,6 +3373,12 @@ public:
   Result send(const Request &req);
 
   void stop();
+  // `interrupted` is polled from the thread of each request, in the waits of
+  // its connection, its TLS handshake and its reads, and before it sends;
+  // it is set before the requests it ends and is safe to call from any
+  // thread. A call already blocked in the system, a send() of a large body
+  // or a TLS read inside a record, ends through stop() alone.
+  void set_interrupt(std::function<bool()> interrupted);
 
   std::string host() const;
   int port() const;
