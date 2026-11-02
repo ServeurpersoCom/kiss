@@ -1,4 +1,4 @@
-# cpp-httplib: HTTP server and client, commit e25c4b4 of the branch live of
+# cpp-httplib: HTTP server and client, commit e8e1fb3 of the branch live of
 # ServeurpersoCom/cpp-httplib: its master a18895f, 0.64.0 with the stop of a
 # client that ends a request waiting on Windows, and the commits of its two
 # pull requests to yhirose/cpp-httplib, pending: one deadline on every wait

@@ -3021,6 +3021,9 @@ protected:
   void close_socket(Socket &socket);
   void disconnect(bool gracefully);
 
+  // Ends the connection phase. Returns whether stop() canceled it.
+  bool end_connecting();
+
   // Under socket_mutex_: whether the connection kept alive can take another
   // request. One the peer has closed, or one set up under TLS settings changed
   // since, is closed instead.
@@ -3063,8 +3066,12 @@ protected:
   // socket_mutex_ until it is, and shutting the socket down does not wake a
   // read on Windows.
   std::atomic<bool> stop_requested_{false};
-  // Whether send_() is opening the connection, holding socket_mutex_
-  std::atomic<bool> connecting_{false};
+  // Phase of the connection send_() or open_stream_() opens holding
+  // socket_mutex_: stop() cancels it from Connecting alone, and the end of
+  // the phase takes the state back to Idle in the same operation that reads
+  // whether it was canceled
+  enum class ConnectState { Idle, Connecting, Canceled };
+  std::atomic<ConnectState> connect_state_{ConnectState::Idle};
 
   std::atomic<size_t> tls_settings_version_{0};
 

@@ -10828,6 +10828,10 @@ void ClientImpl::disconnect(bool gracefully) {
   close_socket(socket_);
 }
 
+bool ClientImpl::end_connecting() {
+  return connect_state_.exchange(ConnectState::Idle) == ConnectState::Canceled;
+}
+
 bool ClientImpl::socket_reusable() {
   if (!socket_.is_open()) { return false; }
 
@@ -10931,11 +10935,10 @@ bool ClientImpl::send_(Request &req, Response &res, Error &error) {
     if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
     if (!socket_reusable()) {
-      connecting_ = true;
-      auto connected = detail::scope_exit([&] { connecting_ = false; });
+      connect_state_ = ConnectState::Connecting;
 
       if (!ensure_socket_connection(socket_, error)) {
-        if (stop_requested_) { error = Error::Canceled; }
+        if (end_connecting()) { error = Error::Canceled; }
         return false;
       }
 
@@ -10943,9 +10946,15 @@ bool ClientImpl::send_(Request &req, Response &res, Error &error) {
         auto success = true;
         if (!setup_proxy_connection(socket_, req.start_time_, res, success,
                                     error)) {
-          if (stop_requested_) { error = Error::Canceled; }
+          if (end_connecting()) { error = Error::Canceled; }
           return success;
         }
+      }
+
+      if (end_connecting()) {
+        disconnect(/*gracefully=*/false);
+        error = Error::Canceled;
+        return false;
       }
     }
 
@@ -11105,11 +11114,10 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
     if (socket_requests_in_flight_ == 0) { stop_requested_ = false; }
 
     if (!socket_reusable()) {
-      connecting_ = true;
-      auto connected = detail::scope_exit([&] { connecting_ = false; });
+      connect_state_ = ConnectState::Connecting;
 
       if (!ensure_socket_connection(socket_, handle.error)) {
-        if (stop_requested_) { handle.error = Error::Canceled; }
+        if (end_connecting()) { handle.error = Error::Canceled; }
         handle.response.reset();
         return handle;
       }
@@ -11119,18 +11127,16 @@ ClientImpl::StreamHandle ClientImpl::open_stream_(Request &req) {
         auto start_time = std::chrono::steady_clock::now();
         if (!setup_proxy_connection(socket_, start_time, *handle.response,
                                     success, handle.error)) {
-          if (stop_requested_) { handle.error = Error::Canceled; }
+          if (end_connecting()) { handle.error = Error::Canceled; }
           if (!success) { handle.response.reset(); }
           return handle;
         }
       }
 
-      // A stop() that came as the connection opened ends the stream here,
-      // since nothing reads its flag once the stream holds the socket
-      if (stop_requested_) {
-        shutdown_ssl(socket_, false);
-        shutdown_socket(socket_);
-        close_socket(socket_);
+      // A stop() that canceled the connection ends the stream here, since the
+      // stream that holds the socket is out of its reach
+      if (end_connecting()) {
+        disconnect(/*gracefully=*/false);
         handle.error = Error::Canceled;
         handle.response.reset();
         return handle;
@@ -13213,14 +13219,17 @@ Result ClientImpl::Options(const std::string &path,
 }
 
 void ClientImpl::stop() {
-  // send_() holds socket_mutex_ while it opens the connection, as long as the
-  // connection timeout. stop() does not wait for it: it sets the flag the
-  // waits of the connection, and the reads of the request after them, poll.
-  // send_() clears the flag for its request before it sets connecting_, so a
-  // flag set once connecting_ is seen is never cleared by that request.
+  // send_() and open_stream_() hold socket_mutex_ while they open the
+  // connection, as long as the connection timeout. stop() does not wait for
+  // it: it cancels the connection phase, whose end then gives up the
+  // connection, and sets the flag its waits poll. Both clear the flag for
+  // their request before the phase starts, so a flag set once it is canceled
+  // is never cleared by that request.
   std::unique_lock<std::mutex> guard(socket_mutex_, std::defer_lock);
   while (!guard.try_lock()) {
-    if (connecting_) {
+    auto connecting = ConnectState::Connecting;
+    if (connect_state_.compare_exchange_strong(connecting,
+                                               ConnectState::Canceled)) {
       stop_requested_ = true;
       return;
     }
