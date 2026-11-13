@@ -60,25 +60,32 @@ foreach(input tools/public/index.html.gz server/client.conf server/server.conf s
     list(APPEND EMBEDDED "${output}")
 endforeach()
 
-# server: the binary. The commands, the modules and the tools register
-# themselves by existing, so every source is compiled into the executable,
-# never into a library the linker could leave out.
+# kiss: every source of the server but its start, compiled once for the binary
+# and the tests built on the whole server. The commands, the modules and the
+# tools register themselves by existing, so they are objects every target
+# links whole, never a library the linker could leave a file out of.
 file(GLOB SERVER_SOURCES CONFIGURE_DEPENDS server/*.cpp server/*/*.cpp)
-list(FILTER SERVER_SOURCES EXCLUDE REGEX "/server/tests/")
-add_executable(server ${SERVER_SOURCES} ${EMBEDDED})
-target_include_directories(server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
+list(FILTER SERVER_SOURCES EXCLUDE REGEX "/server/(tests/|main.cpp$)")
 if(MSVC)
-    target_compile_options(server PRIVATE /W4 /wd4100 /wd4505)
+    set(SERVER_WARNINGS /W4 /wd4100 /wd4505)
 else()
-    target_compile_options(server PRIVATE -Wall -Wextra -Wshadow -Wconversion
-                           -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion)
+    set(SERVER_WARNINGS -Wall -Wextra -Wshadow -Wconversion
+        -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion)
 endif()
-target_link_libraries(server PRIVATE httplib yyjson stb Threads::Threads)
+add_library(kiss OBJECT ${SERVER_SOURCES} ${EMBEDDED})
+target_include_directories(kiss PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
+                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
+target_compile_options(kiss PRIVATE ${SERVER_WARNINGS})
+target_link_libraries(kiss PUBLIC httplib yyjson stb Threads::Threads)
 if(WIN32)
-    target_link_libraries(server PRIVATE ws2_32)
+    target_link_libraries(kiss PUBLIC ws2_32)
 endif()
-add_dependencies(server version)
+add_dependencies(kiss version)
+
+# server: the binary
+add_executable(server server/main.cpp)
+target_compile_options(server PRIVATE ${SERVER_WARNINGS})
+target_link_libraries(server PRIVATE kiss)
 
 # seal_test: the laws of the seal of the keychain, run once built, a broken law
 # failing the build
@@ -112,83 +119,18 @@ target_compile_definitions(protocol_test PRIVATE BODIES="${CMAKE_CURRENT_SOURCE_
 target_link_libraries(protocol_test PRIVATE httplib yyjson)
 add_custom_command(TARGET protocol_test POST_BUILD COMMAND protocol_test)
 
-# mcp_test: the laws of the client of the MCP servers, against a server of
-# the test, built on every source of the server but its start, run once
-# built, a broken law failing the build
-set(SERVER_LIBRARY ${SERVER_SOURCES})
-list(FILTER SERVER_LIBRARY EXCLUDE REGEX "/server/main.cpp$")
-add_executable(mcp_test server/tests/mcp.cpp ${SERVER_LIBRARY} ${EMBEDDED})
-add_dependencies(mcp_test version)
-target_include_directories(mcp_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
-target_link_libraries(mcp_test PRIVATE httplib yyjson stb Threads::Threads)
-if(WIN32)
-    target_link_libraries(mcp_test PRIVATE ws2_32)
-endif()
-add_custom_command(TARGET mcp_test POST_BUILD COMMAND mcp_test)
-
-# agent_test: the laws of the agent of the server, a turn against an
-# endpoint and MCP servers of the test, built the same way, run once built, a
-# broken law failing the build
-add_executable(agent_test server/tests/agent.cpp ${SERVER_LIBRARY} ${EMBEDDED})
-add_dependencies(agent_test version)
-target_include_directories(agent_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
-target_link_libraries(agent_test PRIVATE httplib yyjson stb Threads::Threads)
-if(WIN32)
-    target_link_libraries(agent_test PRIVATE ws2_32)
-endif()
+# the laws built on the whole server, each run once built, a broken law
+# failing the build: mcp_test, the client of the MCP servers against a server
+# of the test; agent_test, a turn of the agent against an endpoint and MCP
+# servers of the test; place_test, the place the tools on files act on, the
+# machine of the server and a POSIX shell answering alike; engine_test, the
+# engine, twins of the laws of the page; http_test, the admission of a
+# request, against the server listening on loopback; compaction_test, the
+# compaction of a history, the twins of those of the page
+foreach(test mcp agent place engine http compaction)
+    add_executable(${test}_test server/tests/${test}.cpp)
+    target_link_libraries(${test}_test PRIVATE kiss)
+    add_custom_command(TARGET ${test}_test POST_BUILD COMMAND ${test}_test)
+endforeach()
 target_compile_definitions(agent_test PRIVATE COMPACTION="${CMAKE_CURRENT_SOURCE_DIR}/webui/tests/compaction.jsonl"
                                               COMPACT="${CMAKE_CURRENT_SOURCE_DIR}/webui/tests/compact.jsonl")
-add_custom_command(TARGET agent_test POST_BUILD COMMAND agent_test)
-
-# place_test: the laws of the place the tools on files act on, the machine
-# of the server and a POSIX shell answering alike, built the same way, run
-# once built, a broken law failing the build
-add_executable(place_test server/tests/place.cpp ${SERVER_LIBRARY} ${EMBEDDED})
-add_dependencies(place_test version)
-target_include_directories(place_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
-target_link_libraries(place_test PRIVATE httplib yyjson stb Threads::Threads)
-if(WIN32)
-    target_link_libraries(place_test PRIVATE ws2_32)
-endif()
-add_custom_command(TARGET place_test POST_BUILD COMMAND place_test)
-
-# engine_test: the laws of the engine, twins of those of the page, built the
-# same way, run once built, a broken law failing the build
-add_executable(engine_test server/tests/engine.cpp ${SERVER_LIBRARY} ${EMBEDDED})
-add_dependencies(engine_test version)
-target_include_directories(engine_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
-target_link_libraries(engine_test PRIVATE httplib yyjson stb Threads::Threads)
-if(WIN32)
-    target_link_libraries(engine_test PRIVATE ws2_32)
-endif()
-add_custom_command(TARGET engine_test POST_BUILD COMMAND engine_test)
-
-# http_test: the laws of the admission of a request, against the server
-# listening on loopback, built the same way, run once built, a broken law
-# failing the build
-add_executable(http_test server/tests/http.cpp ${SERVER_LIBRARY} ${EMBEDDED})
-add_dependencies(http_test version)
-target_include_directories(http_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
-target_link_libraries(http_test PRIVATE httplib yyjson stb Threads::Threads)
-if(WIN32)
-    target_link_libraries(http_test PRIVATE ws2_32)
-endif()
-add_custom_command(TARGET http_test POST_BUILD COMMAND http_test)
-
-# compaction_test: the laws of the compaction of a history, the twins of those
-# of the page, built the same way, run once built, a broken law failing the
-# build
-add_executable(compaction_test server/tests/compaction.cpp ${SERVER_LIBRARY} ${EMBEDDED})
-add_dependencies(compaction_test version)
-target_include_directories(compaction_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server ${CMAKE_CURRENT_BINARY_DIR}
-                           ${CMAKE_CURRENT_BINARY_DIR}/embedded)
-target_link_libraries(compaction_test PRIVATE httplib yyjson stb Threads::Threads)
-if(WIN32)
-    target_link_libraries(compaction_test PRIVATE ws2_32)
-endif()
-add_custom_command(TARGET compaction_test POST_BUILD COMMAND compaction_test)

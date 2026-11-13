@@ -71,7 +71,7 @@ remote remote_of(const engine_reader & config,
     r.keyed   = credential(config, config.get(module + " auth-header", name).value_or(fallback), module, name, r.header,
                            r.value);
     r.headers = config.get(module + " headers", name).value_or("");
-    r.timeout = std::stod(config.get(module + " timeout", name).value_or("0"));
+    r.timeout = std::stod(*config.get(module + " timeout", name));
     return r;
 }
 

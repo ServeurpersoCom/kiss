@@ -18,10 +18,8 @@ const std::vector<engine_module> & schema_modules();
 const engine_module *              find_module(const std::string & name);
 const engine_key *                 find_key(const std::string & key);
 words_t                            module_names();
-words_t                            key_names(const std::string & module);
 bool                               collection(const std::string & module);
 std::string                        schema_module(const std::string & word);
-std::string                        schema_key(const std::string & module, const std::string & word);
 
 // the key the word after a module names where an item may stand too: a key
 // written whole, or a prefix of one taking no item or followed by its item;

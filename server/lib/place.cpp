@@ -6,6 +6,7 @@
 
 #include "lib/place.h"
 
+#include "engine/text.h"
 #include "lib/base64.h"
 #include "lib/file.h"
 #include "lib/job.h"
@@ -40,7 +41,7 @@ place place_of(const engine_reader & config) {
     }
     const std::vector<std::string> names = config.names("shells");
     p.shell                              = config.get("shells command", *shell).value_or("");
-    p.timeout                            = std::stoi(config.get("shells timeout", *shell).value_or("0"));
+    p.timeout                            = std::stoi(*config.get("shells timeout", *shell));
     if (std::find(names.begin(), names.end(), *shell) == names.end() || p.shell.empty()) {
         p.broken = "files shell " + *shell + " names no shell";
     }
@@ -54,12 +55,6 @@ static std::string quoted(const std::string & s) {
         out += c == '\'' ? std::string("'\\''") : std::string(1, c);
     }
     return out + "'";
-}
-
-static std::string trimmed(const std::string & s) {
-    const size_t a = s.find_first_not_of(" \t\r\n");
-    const size_t b = s.find_last_not_of(" \t\r\n");
-    return a == std::string::npos ? "" : s.substr(a, b - a + 1);
 }
 
 // a script run by the shell of the place, its output within budget, and the
@@ -97,10 +92,10 @@ static std::string run(const place &                 p,
     answer              = framed && to >= from ? out.substr(from, to - from) : "";
     // a script that fails frames why, a shell that fails tells it its own way
     if (r.exit_code != 0) {
-        const std::string why = trimmed(framed ? answer : out);
+        const std::string why = trim(framed ? answer : out);
         return why.empty() ? "Exit code " + std::to_string(r.exit_code) : why;
     }
-    return framed ? "" : "The shell answered nothing the server reads: " + trimmed(out);
+    return framed ? "" : "The shell answered nothing the server reads: " + trim(out);
 }
 
 // the bytes base64 writes for size bytes, its line breaks counted
@@ -111,7 +106,7 @@ static size_t encoded(size_t size) {
 
 // a count as a script prints it, none for another text
 static std::optional<uintmax_t> count(const std::string & s) {
-    const std::string n = trimmed(s);
+    const std::string n = trim(s);
     if (n.empty() || n.size() > 19 || n.find_first_not_of("0123456789") != std::string::npos) {
         return std::nullopt;
     }
@@ -160,7 +155,7 @@ place_kind place_stat(const place &                 p,
     const std::string              kind = answer.substr(0, 2);
     const std::optional<uintmax_t> n    = answer.size() > 2 ? count(answer.substr(2)) : std::nullopt;
     if (!n || (kind != "d " && kind != "f " && kind != "o " && kind != "n ")) {
-        why = "The shell answered no kind of file: " + trimmed(answer);
+        why = "The shell answered no kind of file: " + trim(answer);
         return PLACE_NONE;
     }
     size = *n;
@@ -335,14 +330,14 @@ std::string place_walk(const place &                                    p,
         const size_t      nul    = answer.find('\0', from);
         const std::string record = answer.substr(from, nul == std::string::npos ? std::string::npos : nul - from);
         from                     = nul == std::string::npos ? answer.size() : nul + 1;
-        if (nul == std::string::npos && trimmed(record).empty()) {
+        if (nul == std::string::npos && trim(record).empty()) {
             break;
         }
         // t size ./path
         const size_t sp = record.find(' ', 2);
         if (record.size() < 2 || std::string("fdlo").find(record[0]) == std::string::npos || record[1] != ' ' ||
             sp == std::string::npos || record.compare(sp + 1, 2, "./") != 0 || !count(record.substr(2, sp - 2))) {
-            return "The shell answered an entry the server reads not: " + trimmed(record);
+            return "The shell answered an entry the server reads not: " + trim(record);
         }
         place_entry e;
         e.rel     = record.substr(sp + 3);

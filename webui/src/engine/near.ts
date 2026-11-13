@@ -1,4 +1,7 @@
-import { SPACE, TYPO_LETTERS_PER_EDIT } from '../lib/config.js';
+import { SPACE } from '../lib/config.js';
+
+// a word this many edits away from a candidate per three letters is a typo
+const TYPO_LETTERS_PER_EDIT = 3;
 
 // the edits turning a into b: inserting, deleting or changing a letter, or
 // swapping two letters side by side, each one edit

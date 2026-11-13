@@ -41,9 +41,6 @@ inline yyjson_mut_val * json_value(yyjson_mut_doc * d, const std::string & text)
     return v ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) : yyjson_mut_null(d);
 }
 
-// the JSON string that writes a text
-inline std::string json_quote(const std::string & s);
-
 // the JSON that writes a value, empty for none
 inline std::string json_write(yyjson_val * v) {
     const std::shared_ptr<char> text(yyjson_val_write(v, 0, nullptr), free);
@@ -60,6 +57,7 @@ inline std::string json_write(const json_mut & d) {
     return json_write(d.get());
 }
 
+// the JSON string that writes a text
 inline std::string json_quote(const std::string & s) {
     const json_mut doc = json_new();
     yyjson_mut_doc_set_root(doc.get(), yyjson_mut_strncpy(doc.get(), s.data(), s.size()));

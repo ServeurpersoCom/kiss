@@ -318,8 +318,8 @@ static refusal answered(acting & a) {
     }
     if (std::find_if(std::begin(AGENT_VERDICTS), std::end(AGENT_VERDICTS),
                      [&](const char * v) { return verdict == v; }) == std::end(AGENT_VERDICTS)) {
-        return { MALFORMED, "\"" + verdict + "\" is not " + AGENT_VERDICTS[0] + ", " + AGENT_VERDICTS[1] + " or " +
-                                AGENT_VERDICTS[2] };
+        return { MALFORMED,
+                 "\"" + verdict + "\" is not " + VERDICT_ONCE + ", " + VERDICT_ALWAYS + " or " + VERDICT_REFUSE };
     }
     return unless(agent_grant(a.id, question, verdict), CONFLICT);
 }

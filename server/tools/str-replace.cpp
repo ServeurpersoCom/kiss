@@ -57,7 +57,7 @@ static tool_outcome str_replace(const replacer & r, yyjson_val * args, const too
 static std::vector<tool> str_replace_tool(const engine_reader & config) {
     replacer r;
     r.at   = place_of(config);
-    r.load = (size_t) std::stoull(config.get("files max-load").value_or("0"));
+    r.load = (size_t) std::stoull(*config.get("files max-load"));
 
     tool t;
     t.suffix      = NAME;

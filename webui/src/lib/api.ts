@@ -9,7 +9,8 @@ import chatProtocol from '../protocols/chat.js';
 // the client of every endpoint: the model list, and a request streamed in the
 // protocol the endpoint speaks
 
-const UNAUTHORIZED = [401, 403];
+// the statuses of an endpoint that refuses the key
+const KEY_REFUSED = [401, 403];
 // the statuses of an endpoint busy or down for a while: a timeout, too many
 // requests, a server or gateway error, overloaded
 const TRANSIENT = [408, 429, 500, 502, 503, 504, 529];
@@ -94,7 +95,7 @@ async function failure(res: Response): Promise<EndpointError> {
 	} catch {
 		if (res.headers.get('content-type')?.startsWith(TEXT_TYPE)) message = body.trim() || message;
 	}
-	const fix = UNAUTHORIZED.includes(res.status)
+	const fix = KEY_REFUSED.includes(res.status)
 		? KEY_FIX
 		: res.status === NOT_FOUND
 			? URL_FIX

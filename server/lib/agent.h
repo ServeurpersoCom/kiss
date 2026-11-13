@@ -15,7 +15,10 @@ constexpr const char * AGENT_BUSY = "a turn runs in this conversation";
 
 // the verdicts a user gives a call in consent: once, always, which turns the
 // tool on, or refuse
-constexpr const char * AGENT_VERDICTS[] = { "once", "always", "refuse" };
+constexpr const char * VERDICT_ONCE     = "once";
+constexpr const char * VERDICT_ALWAYS   = "always";
+constexpr const char * VERDICT_REFUSE   = "refuse";
+constexpr const char * AGENT_VERDICTS[] = { VERDICT_ONCE, VERDICT_ALWAYS, VERDICT_REFUSE };
 
 // the model answers a message of the user in a conversation, from the path up
 // to it, the answer entering as a new entry beside those it had, or when it

@@ -10,7 +10,8 @@ import {
 	SPACE,
 	TEXT_TYPE,
 	TITLE_LENGTH,
-	capital
+	capital,
+	cut
 } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
 import { prune } from './drafts.js';
@@ -190,7 +191,7 @@ function current(title: string): Conversation {
 	if (app.current) return app.current;
 	app.conversations.unshift({
 		id: uuid(),
-		title: title.slice(0, TITLE_LENGTH),
+		title: cut(title, TITLE_LENGTH),
 		updated: Date.now(),
 		entries: [],
 		leaf: null
@@ -335,7 +336,7 @@ async function enter(
 		return result.ok;
 	}
 	// a conversation with no title yet takes it from its first message
-	if (!conversation.title) conversation.title = text.slice(0, TITLE_LENGTH);
+	if (!conversation.title) conversation.title = cut(text, TITLE_LENGTH);
 	const user = append(conversation, parent, { role: 'user', text });
 	await answer(conversation, user.id);
 	return true;

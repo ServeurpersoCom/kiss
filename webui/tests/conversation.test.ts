@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, Entry } from '../src/lib/types.js';
-import { ago, dayName, stamp } from '../src/lib/config.js';
+import { TITLE_LENGTH, ago, cut, dayName, stamp } from '../src/lib/config.js';
 import {
 	append,
 	drop,
@@ -119,6 +119,12 @@ describe('a message', () => {
 		const early = new Date(2026, 9, 9, 1, 0).getTime();
 		expect(ago(early - 23 * 3600 * 1000, early, 'en')).toBe('23 hours ago');
 		expect(ago(early - 26 * 3600 * 1000, early, 'en')).toBe('2 days ago');
+	});
+
+	it('names its conversation by its first characters, whole ones, as the server cuts them', () => {
+		const wide = '🙂'.repeat(TITLE_LENGTH);
+		expect(cut(wide + '🙂', TITLE_LENGTH)).toBe(wide);
+		expect(cut('short', TITLE_LENGTH)).toBe('short');
 	});
 
 	it('falls under the name of its day: today, yesterday, else its date', () => {

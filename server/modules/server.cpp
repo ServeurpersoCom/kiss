@@ -76,7 +76,7 @@ static void apply(const engine_reader & config) {
             log_level_set((log_level) l);
         }
     }
-    log_buffer_set((size_t) std::stoull(config.get("server log-buffer").value_or("0")));
+    log_buffer_set((size_t) std::stoull(*config.get("server log-buffer")));
 }
 
 // the listener moves to the address before the batch applies, or the batch

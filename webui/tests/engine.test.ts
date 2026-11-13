@@ -691,6 +691,10 @@ describe('a title', () => {
 		expect(c.title).toBe('Bonjour le monde');
 		const long = await k.run(`title ${'a'.repeat(61)}`, 'llm', { conversation: c });
 		expect(long.text).toContain('60 characters at most');
+		const wide = '🙂'.repeat(60);
+		await k.run(`title ${wide}`, 'llm', { conversation: c });
+		expect(c.title).toBe(wide);
+		await k.run('title "Bonjour le monde"', 'llm', { conversation: c });
 		expect((await k.run('title "a\\nb"', 'llm', { conversation: c })).text).toContain('one line');
 		expect((await k.run('title ""', 'llm', { conversation: c })).text).toContain('a word at least');
 		expect((await k.run('title x', 'llm')).text).toContain('no conversation here');

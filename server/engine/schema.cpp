@@ -66,7 +66,7 @@ words_t module_names() {
     return names;
 }
 
-words_t key_names(const std::string & module) {
+static words_t key_names(const std::string & module) {
     words_t names;
     for (const engine_key & k : find_module(module)->keys) {
         names.push_back(k.name);
@@ -99,7 +99,7 @@ std::string schema_module(const std::string & word) {
     return module;
 }
 
-std::string schema_key(const std::string & module, const std::string & word) {
+static std::string schema_key(const std::string & module, const std::string & word) {
     return pick(word, key_names(module), module + " key");
 }
 

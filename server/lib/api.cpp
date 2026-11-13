@@ -58,8 +58,8 @@ std::vector<endpoint> api_endpoints(const engine_reader & config) {
         endpoint e;
         e.speaks  = api_protocol(config.get("endpoints protocol", name).value_or(""));
         e.server  = remote_of(config, "endpoints", name, e.speaks->key);
-        e.retries = std::stoi(config.get("endpoints max-retries", name).value_or("0"));
-        e.pause   = std::stod(config.get("endpoints retry-pause", name).value_or("0"));
+        e.retries = std::stoi(*config.get("endpoints max-retries", name));
+        e.pause   = std::stod(*config.get("endpoints retry-pause", name));
         out.push_back(e);
     }
     return out;

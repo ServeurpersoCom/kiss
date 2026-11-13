@@ -1,6 +1,6 @@
 import type { Command } from '../engine/engine.js';
 import { Incomplete, hint } from '../engine/text.js';
-import { NEWLINE, SPACE, TITLE_LENGTH } from '../lib/config.js';
+import { NEWLINE, SPACE, TITLE_LENGTH, cut } from '../lib/config.js';
 
 export default {
 	path: ['title'],
@@ -10,7 +10,7 @@ export default {
 		const title = args.join(SPACE);
 		if (!title.trim()) throw new Error('a title holds a word at least');
 		if (title.includes(NEWLINE)) throw new Error('a title holds one line');
-		if (title.length > TITLE_LENGTH) {
+		if (cut(title, TITLE_LENGTH) !== title) {
 			throw new Error(`a title holds ${TITLE_LENGTH} characters at most`);
 		}
 		return title;

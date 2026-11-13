@@ -65,8 +65,6 @@ export const titled = (title: string, quote: (value: string) => string): string 
 // the page that a site writes over it: set lines both
 export const FACTORY_FILE = 'factory client.conf';
 export const SITE_CONFIG_URL = 'client.conf';
-// a word this many edits away from a candidate per three letters is a typo
-export const TYPO_LETTERS_PER_EDIT = 3;
 
 // mcp: a connection, its handshake and tool list, within MCP_CONNECT_TIMEOUT_MS,
 // so a server that answers no more never holds a turn for longer
@@ -74,6 +72,9 @@ export const MCP_CONNECT_TIMEOUT_MS = 5000;
 
 // agent
 export const TITLE_LENGTH = 60;
+// the first characters of a text, whole ones, as the server cuts a title
+export const cut = (text: string, characters: number): string =>
+	[...text].slice(0, characters).join('');
 
 // page: how long a copy button shows its check
 export const COPIED_MS = 1500;

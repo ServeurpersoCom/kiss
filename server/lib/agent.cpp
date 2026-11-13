@@ -55,9 +55,6 @@ static uint64_t g_asked = 0;
 // the pages attached to this server, which run the config tool of the pages
 static size_t g_pages = 0;
 
-static const char * const ALWAYS = AGENT_VERDICTS[1];
-static const char * const REFUSE = AGENT_VERDICTS[2];
-
 // the question each turn waits on, by conversation
 static std::map<std::string, std::shared_ptr<question_t>> g_questions;
 
@@ -604,11 +601,11 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
         bool off = false;
         engine_with(
             [&](const engine_reader & config) { off = config.get("tools use", item).value_or(USE_OFF) == USE_OFF; });
-        if (verdict == REFUSE || off) {
+        if (verdict == VERDICT_REFUSE || off) {
             settle(called.args, "The user refused the call", false, {});
             return false;
         }
-        if (verdict == ALWAYS) {
+        if (verdict == VERDICT_ALWAYS) {
             engine_run("set tools use " + quote(item) + " " + USE_ON, ENGINE_ADMIN);
         }
     }
@@ -911,8 +908,7 @@ static void turn(std::string                     id,
     }
     try {
         int rounds = 0;
-        engine_with(
-            [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
+        engine_with([&](const engine_reader & config) { rounds = std::stoi(*config.get("tools max-rounds")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
             more = round(self, before, r, context, asked, compact);
