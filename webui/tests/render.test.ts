@@ -30,12 +30,13 @@ describe('markdown', () => {
 		expect(code.querySelector('.head')!.textContent).toBe('nix');
 		expect(code.querySelectorAll('.head .copy svg')).toHaveLength(2);
 		expect(code.querySelector('pre code .hljs-attr, pre code [class^="hljs-"]')).not.toBeNull();
+		expect(code.querySelector('pre')!.textContent).toBe('{ a = 1; }');
 	});
 
 	it('heads a code block still streaming the same way', () => {
 		const root = page('text\n\n```js\nlet a');
 		expect(root.querySelector('.code .head')!.textContent).toBe('js');
-		expect(root.querySelector('.code pre')!.textContent).toBe('let a\n');
+		expect(root.querySelector('.code pre')!.textContent).toBe('let a');
 	});
 
 	it('lets every element read its direction from its own text', () => {

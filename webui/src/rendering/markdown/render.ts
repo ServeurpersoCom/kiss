@@ -167,6 +167,14 @@ function rehypeCells() {
 	return (tree: HastRoot) => walk(tree);
 }
 
+// the code of a block as written: the line break the block closes on leaves
+// its last text, so a copy pastes no line more
+function unbreak(node: Element): void {
+	const last = node.children.at(-1);
+	if (last?.type === 'text') last.value = last.value.replace(/\n$/, '');
+	else if (last?.type === 'element') unbreak(last);
+}
+
 // a wide table scrolls in its own box instead of widening the thread; a code
 // block gets a head naming its language, with a button copying it
 function rehypeBlocks() {
@@ -177,6 +185,7 @@ function rehypeBlocks() {
 			if (child.tagName === 'table') return element('div', [child], CLASS.table);
 			if (child.tagName === 'pre') {
 				const code = child.children[0] as Element | undefined;
+				if (code) unbreak(code);
 				const classes = (code?.properties.className ?? []) as string[];
 				const lang =
 					classes.find((c) => c.startsWith(LANGUAGE_PREFIX))?.slice(LANGUAGE_PREFIX.length) ??
