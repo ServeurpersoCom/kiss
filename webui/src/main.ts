@@ -17,7 +17,8 @@ if (site?.ok && !site.headers.get('content-type')?.includes('html')) {
 for (const problem of start()) console.error(`${STARTUP_CONFIG}: ${problem}`);
 await restore();
 
-// development only: run CLI lines from the browser console, kiss('show running', 'llm')
+// development only: run CLI lines from the browser console,
+// kiss('show running', 'llm')
 if (import.meta.env.DEV) Object.assign(globalThis, { kiss: run });
 
 mount(App, { target: document.getElementById('app')! });

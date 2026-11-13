@@ -1,7 +1,8 @@
 #pragma once
 // tools.h: the tools the server serves over MCP, each named after the server
-// and its role, <server hostname>_server_<suffix>; a file in tools/ registers its source by existing,
-// which gives its tools from the configuration it reads
+// and its role, <server hostname>_server_<suffix>; a file in tools/ registers
+// its source by existing, which gives its tools from the configuration it
+// reads
 
 #include "engine/engine.h"
 #include "lib/log.h"

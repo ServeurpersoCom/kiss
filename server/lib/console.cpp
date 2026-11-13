@@ -51,11 +51,11 @@ static const int CTRL_V    = 22;
 static const int ESCAPE    = 27;
 static const int BACKSPACE = 127;
 
-// the words that stop the server, the console's own: the engine never reads
-// them, so no MCP client stops it
 // the milliseconds between two looks at whether the process ends
 static const int TICK_MS = 100;
 
+// the words that stop the server, the console's own: the engine never reads
+// them, so no MCP client stops it
 static const words_t QUIT = { "exit", "quit" };
 
 // the prompt names the server, as a router names its host: forge#

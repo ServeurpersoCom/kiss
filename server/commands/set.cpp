@@ -78,7 +78,7 @@ static step_t compile_set(const words_t & args) {
 }
 
 static command make_set() {
-    return { { "set" }, true, compile_set, next_set };
+    return { { SET }, true, compile_set, next_set };
 }
 
 ENGINE_COMMAND(make_set);

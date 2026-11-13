@@ -9,10 +9,10 @@
 
 #include <chrono>
 
-// a shell as its tool runs it
 // the texts every shell tool shares, by this name in prompts.json
 static const char * const NAME = "shells";
 
+// a shell as its tool runs it
 struct shell {
     std::string command;
     std::string cwd;

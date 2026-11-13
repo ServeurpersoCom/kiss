@@ -28,11 +28,11 @@ static std::string g_site;
 // captured
 static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+)(/.*)?)";
 
-// the stream of the conversations, a WebSocket pinged every PING_SECONDS, and
-// the path of an action, captured
 // what opens the header that carries the key of the server
 static const char * const BEARER_PREFIX = "Bearer ";
 
+// the stream of the conversations, a WebSocket pinged every PING_SECONDS, and
+// the path of an action, captured
 static const char * const EVENTS_PATH  = "/conversations/events";
 static const time_t       PING_SECONDS = 15;
 static const std::string  ACTION_PATH  = "/conversations/(" + sync_actions() + ")";

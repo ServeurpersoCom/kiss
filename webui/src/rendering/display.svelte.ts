@@ -1,7 +1,7 @@
 // how a block folds: folded, unfolded, or unfolded while the model writes it only
 export const FOLDS = ['closed', 'open', 'inference'] as const;
 export type Fold = (typeof FOLDS)[number];
-export const [CLOSED, OPEN, INFERENCE] = FOLDS;
+export const [, OPEN, INFERENCE] = FOLDS;
 
 // how a block of text renders: as markdown, or plain in monospace as written
 export const RENDERS = ['markdown', 'plain'] as const;

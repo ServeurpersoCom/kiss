@@ -1,23 +1,24 @@
 // proxy.cpp: the proxy of the servers the proxies module names
 //
-// Each request is built anew from the one it proxies, never spliced: its method,
-// the rest of its path and its query after the url of the route, its body and
-// every header but those that stay on its side, then the headers of the route,
-// which replace those of the same name, and its key, in the header its auth-header
-// names. The key of this server never leaves it. The answer keeps its status and
-// every header but those that stay on its side, each through the keychain of
-// every secret of this server: a stream of events event by event as it arrives,
-// any other body whole, JSON filtered as decoded and written again, any other
-// text as it is written. A route the configuration makes unusable answers 424
-// here with the fix: a server that refuses the key of the route, so the client
-// never takes it for a refusal of the key of this server nor for a server down
-// for a while; one that redirects, its key going to no address the route does
-// not name; an url no client of this build reaches. A server that cannot be
-// reached answers 502. The proxy knows no protocol: MCP and LLM endpoints pass
-// alike. The request out is sent on a thread of its own, which hands the head
-// of its answer, then its body piece by piece as they come, to the answer of
-// this server; it ends once its client leaves, seen within a second however
-// silent the server is, or the process ends.
+// Each request is built anew from the one it proxies, never spliced: its
+// method, the rest of its path and its query after the url of the route, its
+// body and every header but those that stay on its side, then the headers of
+// the route, which replace those of the same name, and its key, in the header
+// its auth-header names. The key of this server never leaves it. The answer
+// keeps its status and every header but those that stay on its side, each
+// through the keychain of every secret of this server: a stream of events
+// event by event as it arrives, any other body whole, JSON filtered as decoded
+// and written again, any other text as it is written. A route the
+// configuration makes unusable answers 424 here with the fix: a server that
+// refuses the key of the route, so the client never takes it for a refusal of
+// the key of this server nor for a server down for a while; one that
+// redirects, its key going to no address the route does not name; an url no
+// client of this build reaches. A server that cannot be reached answers 502.
+// The proxy knows no protocol: MCP and LLM endpoints pass alike. The request
+// out is sent on a thread of its own, which hands the head of its answer, then
+// its body piece by piece as they come, to the answer of this server; it ends
+// once its client leaves, seen within a second however silent the server is,
+// or the process ends.
 
 #include "lib/proxy.h"
 
@@ -57,6 +58,10 @@ struct relay_t {
 // what a stream of events holds that its client has not taken yet, at most:
 // past it, the request out waits for the client
 static const size_t RELAY_PENDING = 1 << 20;
+
+// the seconds between two looks at whether the client left or the server
+// stops
+static const int TICK_S = 1;
 
 // the headers that stay on their side of the proxy, lowercase: those of the
 // connection, those that tell who each side is, the keys, and those the proxy
@@ -129,12 +134,12 @@ static void refuse(httplib::Response & res,
     res.set_content(text + "\n", TEXT_TYPE);
 }
 
-// sends out on the thread of the relay, through a client of its stop
 // a request this server stops before its answer goes
 static void stopping(httplib::Response & res, const route_conf & r, const std::string & route) {
     refuse(res, r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
 }
 
+// sends out on the thread of the relay, through a client of its stop
 static void relayed(const std::shared_ptr<relay_t> &         relay,
                     const std::shared_ptr<httplib::Client> & client,
                     httplib::Request                         out) {
@@ -153,7 +158,7 @@ static void relayed(const std::shared_ptr<relay_t> &         relay,
         out.content_receiver = [&relay](const char * piece, size_t n, size_t, size_t) {
             std::unique_lock<std::mutex> lock(relay->mutex);
             while (relay->streamed && relay->body.size() >= RELAY_PENDING && !relay->stop.stopped) {
-                relay->moved.wait_for(lock, std::chrono::seconds(1));
+                relay->moved.wait_for(lock, std::chrono::seconds(TICK_S));
             }
             if (relay->stop.stopped) {
                 return false;
@@ -195,7 +200,8 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         return;
     }
 
-    // the rest joins the url with one slash, whether the url ends with one or not
+    // the rest joins the url with one slash, whether the url ends with one or
+    // not
     const std::string head  = rest.empty() ? base : base.substr(0, base.find_last_not_of('/') + 1);
     const size_t      query = req.target.find('?');
     httplib::Request  out;
@@ -224,7 +230,7 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     // client is still there; false once it left, the request out let go
     std::unique_lock<std::mutex> lock(relay->mutex);
     const auto                   waited = [&](const std::function<bool()> & moved) {
-        while (!relay->moved.wait_for(lock, std::chrono::seconds(1), moved)) {
+        while (!relay->moved.wait_for(lock, std::chrono::seconds(TICK_S), moved)) {
             if (req.is_connection_closed()) {
                 relay->stop.stop();
                 return false;
@@ -313,7 +319,7 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
                 // a second at most, so a client that left while the server is
                 // silent lets the request out go
                 std::unique_lock<std::mutex> held(relay->mutex);
-                if (!relay->moved.wait_for(held, std::chrono::seconds(1),
+                if (!relay->moved.wait_for(held, std::chrono::seconds(TICK_S),
                                            [&] { return !relay->body.empty() || relay->ended; })) {
                     if (sink.is_writable()) {
                         return true;
@@ -326,8 +332,9 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
                 error = relay->error;
                 relay->moved.notify_all();
             }
-            // the events as they come, the client cut off as the server was when
-            // the stream breaks, and the request out let go once the client left
+            // the events as they come, the client cut off as the server was
+            // when the stream breaks, and the request out let go once the
+            // client left
             const std::string sent = piece.empty() ? "" : events->feed(piece.data(), piece.size());
             if (!sent.empty() && !sink.write(sent.data(), sent.size())) {
                 relay->stop.stop();

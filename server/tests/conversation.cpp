@@ -211,7 +211,8 @@ int main() {
             "a file writes back as the page wrote it");
     }
     {
-        // a tree: e1, its answers e2 then e4, e3 under e2, e5 a command under e4
+        // a tree: e1, its answers e2 then e4, e3 under e2, e5 a command under
+        // e4
         conversation t;
         t.entries = {
             { "e1", std::nullopt },
@@ -500,7 +501,8 @@ int main() {
                                     r.reasoning += word();
                                     break;
                                 case 4:
-                                    // an item the protocol keeps, after those of the round
+                                    // an item the protocol keeps, after those
+                                    // of the round
                                     if (!r.opaque) {
                                         r.opaque = conversation_opaque{ "messages", "[]" };
                                     }

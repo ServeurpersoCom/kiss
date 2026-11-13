@@ -32,8 +32,8 @@ std::string engine_component(const std::string & name, const std::string & versi
     return "server " + (name.empty() ? "" : name + " ") + version + " on " + engine_platform();
 }
 
-// the running configuration over the factory configuration, the version, and the lock that
-// lets one batch run at a time
+// the running configuration over the factory configuration, the version, and
+// the lock that lets one batch run at a time
 static layer       g_running;
 static std::string g_version;
 static std::mutex  g_mutex;
@@ -74,8 +74,6 @@ static step compile(const std::string & text, bool alone, const layer & target) 
 
 // the key an item names where it sends its secrets by
 static const char * const URL_KEY = "url";
-
-// what the user answers to let a url
 
 // the url of the item of a stored key, in the draft, when its module has one
 static std::string url_of(const layer & draft, const std::string & s) {
@@ -225,15 +223,15 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
 // every line compiles before the first one runs, then runs on a copy of the
 // target, which it replaces only when all of them succeed and the rules of
 // every module hold; the batch answers with what it changed, and on the
-// running configuration the modules whose keys changed apply. A secret left
-// to ask for, a url of an MCP client the user has not let, a guarded register
-// it opens, or a yes a command of an MCP client waits for, stops it once every
-// line ran, before the rules:
-// what the user answers decides them. A batch of an MCP client moves no
-// secret and changes no key of the administrator, in the configuration that
-// runs nor in the one the next start runs. A save writes the draft as the batch leaves it, an erase removes
-// server.conf, and the conversations erased go, once the rules hold and
-// before it replaces the target
+// running configuration the modules whose keys changed apply. A secret left to
+// ask for, a url of an MCP client the user has not let, a guarded register it
+// opens, or a yes a command of an MCP client waits for, stops it once every
+// line ran, before the rules: what the user answers decides them. A batch of
+// an MCP client moves no secret and changes no key of the administrator, in
+// the configuration that runs nor in the one the next start runs. A save
+// writes the draft as the batch leaves it, an erase removes server.conf, and
+// the conversations erased go, once the rules hold and before it replaces the
+// target
 static engine_result batch(layer &                                                  target,
                            const std::string &                                      text,
                            engine_role                                              role,
@@ -347,7 +345,7 @@ static engine_result batch(layer &                                              
 // alone
 static std::string block_of(const std::string & line) {
     const auto [cmd, args] = resolve(tokenize(split_filter(line).first));
-    if (cmd->path != words_t{ "set" }) {
+    if (cmd->path != words_t{ SET }) {
         return line;
     }
     const key_words kw = schema_read(args);
@@ -433,7 +431,7 @@ std::string engine_factory(const std::string & text) {
     for (const std::string & line : split_lines(text)) {
         try {
             const words_t words = tokenize(line);
-            if (words.empty() || lower(words[0]) != "set") {
+            if (words.empty() || lower(words[0]) != SET) {
                 fail("the factory configuration holds set lines only");
             }
             const key_words kw = schema_read(words_t(words.begin() + 1, words.end()));
@@ -598,7 +596,7 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
             std::vector<const engine_module *> listed;
             if (c->path == words_t{ "show" } && !args.empty()) {
                 listed.push_back(find_module(schema_module(args[0])));
-            } else if (c->path == words_t{ "set" }) {
+            } else if (c->path == words_t{ SET }) {
                 const key_words kw  = schema_read(args);
                 const words_t   set = reader(running_now()).names(kw.module);
                 if (!kw.item.empty() && std::find(set.begin(), set.end(), kw.item) == set.end()) {

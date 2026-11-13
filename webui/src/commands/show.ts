@@ -58,10 +58,10 @@ export default {
 			throw beyond(['show', key, ...args.slice(2, words)], args.slice(words));
 		return { module, key, name: args[2] };
 	},
-	// the values in force the words name, as set lines to paste back;
-	// the items of a module that knows more than those set go by group, who
-	// serves them, those unavailable last, whatever keeps them away; an
-	// item names one set or known, a prefix being enough
+	// the values in force the words name, as set lines to paste back; the items
+	// of a module that knows more than those set go by group, who serves them,
+	// those unavailable last, whatever keeps them away; an item names one set or
+	// known, a prefix being enough
 	async run(ctx, plan) {
 		const set = ctx.config.names(plan.module);
 		const items = ctx.modules.find((m) => m.name === plan.module)!.items;
@@ -74,7 +74,8 @@ export default {
 		else {
 			const listed = new Set(groups.flatMap((g) => g.names));
 			groups.push({ group: 'unavailable', names: set.filter((n) => !listed.has(n)) });
-			// an item without a setting shows by its name alone, unless a key is named
+			// an item without a setting shows by its name alone, unless a key is
+			// named
 			const body = (n: string) => {
 				const shown = lines(ctx, plan, n);
 				return shown.length || plan.key ? shown : [comment(n)];

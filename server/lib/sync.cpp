@@ -163,13 +163,22 @@ static refusal changed(const std::string & id, const std::function<refusal(conve
     return r.status ? r : refusal{ known(id) ? FAILED : UNKNOWN, why };
 }
 
+// nothing kept an action from being applied, or the status that tells why
+static refusal unless(const std::string & why, int status) {
+    return why.empty() ? refusal{} : refusal{ status, why };
+}
+
+// what keeps a turn from being taken: one that runs, else a file not written
+static refusal taken(const std::string & why) {
+    return unless(why, why == AGENT_BUSY ? CONFLICT : FAILED);
+}
+
 // the model answers the message of the user that user names, writing it
 // first when it enters with the turn
 static refusal answer(const std::string &                                id,
                       const std::function<std::string(conversation &)> & user,
                       bool                                               compact = false) {
-    const std::string why = agent_answer(id, user, compact);
-    return why.empty() ? refusal{} : refusal{ why == AGENT_BUSY ? CONFLICT : FAILED, why };
+    return taken(agent_answer(id, user, compact));
 }
 
 // a message of the user entering a conversation after the entry parent
@@ -207,16 +216,6 @@ struct acting {
     std::optional<words_t> words;
 };
 
-// nothing kept an action from being applied, or the status that tells why
-static refusal unless(const std::string & why, int status) {
-    return why.empty() ? refusal{} : refusal{ status, why };
-}
-
-// what keeps a turn from being taken: one that runs, else a file not written
-static refusal taken(const std::string & why) {
-    return unless(why, why == AGENT_BUSY ? CONFLICT : FAILED);
-}
-
 // a line entering a conversation, opened by it when the page named none: a
 // message of the user, or a line this server runs as its config tool does
 static refusal enter(acting & a, const char * field, const char * missing, bool message) {
@@ -228,7 +227,8 @@ static refusal enter(acting & a, const char * field, const char * missing, bool 
         return { CONFLICT, AGENT_BUSY };
     }
     if (!a.named) {
-        // a conversation the line opens, without a title until a message names it
+        // a conversation the line opens, without a title until a message names
+        // it
         conversation c;
         c.id                  = conversation_uuid();
         c.updated             = conversation_now();

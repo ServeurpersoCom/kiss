@@ -18,6 +18,9 @@ constexpr const char * PIPE           = "|";
 constexpr const char * RUNNING_CONFIG = "running-config";
 constexpr const char * STARTUP_CONFIG = "startup-config";
 constexpr const char * ALL            = "all";
+// the two commands a configuration is written in
+constexpr const char * SET            = "set";
+constexpr const char * NO             = "no";
 
 // a command that misses words: a lone line lists what may follow instead of
 // failing

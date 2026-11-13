@@ -37,6 +37,9 @@ static served                g_served;
 static std::atomic<bool>     g_quit{ false };
 static std::atomic<unsigned> g_epoch{ 0 };
 
+// the milliseconds between two looks at whether the listener stops
+static const int TICK_MS = 100;
+
 // localhost, or a loopback address as written: IPv4 in 127.0.0.0/8, or ::1
 bool listener_loopback(const std::string & host) {
     in_addr  v4;
@@ -133,7 +136,7 @@ bool listener_run() {
     }
     // a signal may stop the listener, so the stop is a flag looked at here
     while (!g_quit) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(TICK_MS));
     }
     std::lock_guard<std::mutex> lock(g_mutex);
     halt(g_served);

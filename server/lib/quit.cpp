@@ -24,6 +24,9 @@ static std::mutex           g_mutex;
 static std::list<started_t> g_started;
 static std::atomic<bool>    g_ending{ false };
 
+// the milliseconds between two looks at whether every thread is done
+static const int TICK_MS = 100;
+
 void quit_thread(std::function<void()> f) {
     const auto                  done = std::make_shared<std::atomic<bool>>(false);
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -67,7 +70,7 @@ void quit_all() {
             }
         }
         if (started.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(TICK_MS));
         }
         for (started_t & t : started) {
             t.thread.join();

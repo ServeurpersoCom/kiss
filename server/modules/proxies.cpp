@@ -1,7 +1,7 @@
-// proxies.cpp: the proxies module: the servers this server proxies, MCP servers and
-// LLM endpoints alike, each at proxy/<name> of this server: the URL of the
-// server, the key sent to it and the header that carries it, more headers, and
-// the seconds the server may stay silent
+// proxies.cpp: the proxies module: the servers this server proxies, MCP
+// servers and LLM endpoints alike, each at proxy/<name> of this server: the
+// URL of the server, the key sent to it and the header that carries it, more
+// headers, and the seconds the server may stay silent
 
 #include "engine/engine.h"
 #include "engine/keychain.h"

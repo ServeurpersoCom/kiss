@@ -24,12 +24,10 @@
 #include <memory>
 #include <mutex>
 
-static const char * const PROTOCOL_VERSION  = "2025-06-18";
-static const char * const MODERN_VERSION    = "2026-07-28";
+static const char * const PROTOCOL_VERSION = "2025-06-18";
+static const char * const MODERN_VERSION   = "2026-07-28";
 // the name this client gives of itself
-static const char * const CLIENT_NAME       = "kiss";
-static const char * const SESSION_ID_HEADER = "Mcp-Session-Id";
-static const char * const VERSION_HEADER    = "MCP-Protocol-Version";
+static const char * const CLIENT_NAME      = "kiss";
 
 // a session: what it was opened with, whether it stands, the era the server
 // speaks, its id in the 2025 era, and the tools of the server; a session that
@@ -82,7 +80,7 @@ static json_doc post(const remote &           r,
     json_doc    found;
     req.response_handler = [&](const httplib::Response & res) {
         status   = res.status;
-        given    = res.get_header_value(SESSION_ID_HEADER);
+        given    = res.get_header_value(MCP_SESSION_HEADER);
         streamed = starts_with(lower(res.get_header_value("Content-Type")), EVENTS_TYPE);
         return !(notification && status < httplib::StatusCode::MultipleChoices_300);
     };
@@ -130,11 +128,11 @@ static json_doc post(const remote &           r,
 static httplib::Headers era_headers(const session & s, const std::string & method, const std::string & name) {
     if (s.modern) {
         httplib::Headers h{
-            { VERSION_HEADER, MODERN_VERSION },
-            { "Mcp-Method",   method         }
+            { MCP_VERSION_HEADER, MODERN_VERSION },
+            { MCP_METHOD_HEADER,  method         }
         };
         if (!name.empty()) {
-            h.emplace("Mcp-Name", name);
+            h.emplace(MCP_NAME_HEADER, name);
         }
         return h;
     }
@@ -142,8 +140,8 @@ static httplib::Headers era_headers(const session & s, const std::string & metho
         return {};
     }
     return {
-        { SESSION_ID_HEADER, s.id             },
-        { VERSION_HEADER,    PROTOCOL_VERSION }
+        { MCP_SESSION_HEADER, s.id             },
+        { MCP_VERSION_HEADER, PROTOCOL_VERSION }
     };
 }
 
@@ -169,11 +167,11 @@ static json_doc request(const remote &      r,
     if (s.modern) {
         const std::string version = engine_version();
         yyjson_mut_val *  meta    = yyjson_mut_obj_add_obj(doc.get(), p, "_meta");
-        yyjson_mut_obj_add_str(doc.get(), meta, "io.modelcontextprotocol/protocolVersion", MODERN_VERSION);
-        yyjson_mut_val * info = yyjson_mut_obj_add_obj(doc.get(), meta, "io.modelcontextprotocol/clientInfo");
+        yyjson_mut_obj_add_str(doc.get(), meta, MCP_VERSION_META, MODERN_VERSION);
+        yyjson_mut_val * info = yyjson_mut_obj_add_obj(doc.get(), meta, MCP_CLIENT_META);
         yyjson_mut_obj_add_str(doc.get(), info, "name", CLIENT_NAME);
         json_put(doc.get(), info, "version", version);
-        yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc.get(), meta, "io.modelcontextprotocol/clientCapabilities");
+        yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc.get(), meta, MCP_CAPABILITIES_META);
         yyjson_mut_obj_add_obj(doc.get(), yyjson_mut_obj_add_obj(doc.get(), caps, "elicitation"), MCP_FORM_MODE);
     }
     const std::string body = json_write(doc);
@@ -381,9 +379,9 @@ mcp_outcome mcp_call(const remote &      r,
                     }
                     const std::string response = answer(json_write(input));
                     const json_doc    answered = json_read(response);
-                    // the key copied into the call, as the answer it holds: the
-                    // answer of the server it comes from is gone before the call
-                    // goes again
+                    // the key copied into the call, as the answer it holds:
+                    // the answer of the server it comes from is gone before
+                    // the call goes again
                     yyjson_mut_obj_add(responses,
                                        yyjson_mut_strncpy(doc.get(), yyjson_get_str(key), yyjson_get_len(key)),
                                        yyjson_val_mut_copy(doc.get(), yyjson_doc_get_root(answered.get())));

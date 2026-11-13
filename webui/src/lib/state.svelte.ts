@@ -49,10 +49,11 @@ const pulses = new Map<string, Pulse>();
 // server, if any
 export const pulseOf = (id: string): Pulse | undefined => pulses.get(id) ?? turnOf(id);
 
-// what asks the user from the page itself, in no conversation: the key of a
-// server the page reaches, a command the page runs while attached
 // whether the model answers in the open conversation now
 export const answering = (): boolean => !!app.current && app.current.id in app.replies;
+
+// what asks the user from the page itself, in no conversation: the key of a
+// server the page reaches, a command the page runs while attached
 const PAGE = '';
 
 // the question a conversation shows, the first it or the page asks, if any
@@ -392,14 +393,14 @@ async function answer(conversation: Conversation, from: string, compact = false)
 	}
 }
 
-// a question to the user from a conversation; the time it stands leaves the
-// clock of the turn that asks
 // asks the user of a conversation to let the model make a change
 const granting =
 	(id: string) =>
 	(request: Grant): Promise<Verdict> =>
 		pose(id, (settle) => ({ kind: 'grant', request, settle }));
 
+// a question to the user from a conversation; the time it stands leaves the
+// clock of the turn that asks
 function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return posing(from, ask, (ms) => {
 		const p = pulses.get(from);

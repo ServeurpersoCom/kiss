@@ -10,13 +10,11 @@
 
 #include "lib/json.h"
 #include "lib/log.h"
+#include "lib/mcp.h"
 #include "mcp/jsonrpc.h"
 #include "mcp/methods.h"
 
 #include <memory>
-
-static const char * const PROTOCOL_VERSION_META = "io.modelcontextprotocol/protocolVersion";
-static const char * const CLIENT_INFO_META      = "io.modelcontextprotocol/clientInfo";
 
 static bool modern_version(const std::string & v) {
     for (const char * m : MODERN_VERSIONS) {
@@ -34,12 +32,12 @@ static bool modern_request(const httplib::Request & req,
                            yyjson_val *             id,
                            const std::string &      method,
                            yyjson_val *             params) {
-    if (req.get_header_value("MCP-Protocol-Version").empty()) {
+    if (req.get_header_value(MCP_VERSION_HEADER).empty()) {
         jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
                       "a request of this era carries MCP-Protocol-Version");
         return false;
     }
-    if (req.get_header_value("Mcp-Method") != method) {
+    if (req.get_header_value(MCP_METHOD_HEADER) != method) {
         jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
                       "Mcp-Method disagrees with the method " + method);
         return false;
@@ -47,7 +45,7 @@ static bool modern_request(const httplib::Request & req,
     if (method == "tools/call") {
         yyjson_val *      name   = yyjson_obj_get(params, "name");
         const std::string called = yyjson_is_str(name) ? yyjson_get_str(name) : "";
-        if (req.get_header_value("Mcp-Name") != called) {
+        if (req.get_header_value(MCP_NAME_HEADER) != called) {
             jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
                           "Mcp-Name disagrees with the tool " + called);
             return false;
@@ -86,8 +84,8 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     }
     const std::string method = yyjson_get_str(method_val);
     yyjson_val *      params = yyjson_obj_get(root, "params");
-    yyjson_val *      claim  = yyjson_obj_get(yyjson_obj_get(params, "_meta"), PROTOCOL_VERSION_META);
-    const std::string header = req.get_header_value("MCP-Protocol-Version");
+    yyjson_val *      claim  = yyjson_obj_get(yyjson_obj_get(params, "_meta"), MCP_VERSION_META);
+    const std::string header = req.get_header_value(MCP_VERSION_HEADER);
     const bool        modern = claim != nullptr;
     const std::string era    = yyjson_is_str(claim) ? yyjson_get_str(claim) : header.empty() ? "2025" : header;
     log_debug("MCP", "%s from %s, %s", method.c_str(), req.remote_addr.c_str(), era.c_str());
@@ -95,7 +93,7 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     if (modern) {
         if (!yyjson_is_str(claim)) {
             jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_INVALID_PARAMS,
-                          std::string(PROTOCOL_VERSION_META) + " is a string");
+                          std::string(MCP_VERSION_META) + " is a string");
             return;
         }
         const std::string requested = yyjson_get_str(claim);
@@ -131,7 +129,7 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     }
 
     if (method == "server/discover" || method == "initialize") {
-        connected(req, modern ? yyjson_obj_get(yyjson_obj_get(params, "_meta"), CLIENT_INFO_META) :
+        connected(req, modern ? yyjson_obj_get(yyjson_obj_get(params, "_meta"), MCP_CLIENT_META) :
                                 yyjson_obj_get(params, "clientInfo"));
     }
     if (method == "ping") {

@@ -85,6 +85,9 @@ static size_t event_end(const std::string & s) {
     }
 }
 
+// what opens a data line of an event
+static const char * const DATA = "data:";
+
 // an event sealed: its data lines joined as a client joins them, sealed as
 // JSON when they are, its other lines as they are written, every line ending
 // in LF
@@ -95,18 +98,19 @@ static std::string sealed_event(const std::string & event, const words_t & secre
         const size_t      eol  = std::min(event.find_first_of("\r\n", at), event.size());
         const std::string line = event.substr(at, eol - at);
         at                     = eol + (event.compare(eol, 2, "\r\n") == 0 ? 2 : 1);
-        if (starts_with(line, "data:")) {
-            data.push_back(line.substr(line.compare(5, 1, " ") == 0 ? 6 : 5));
+        if (starts_with(line, DATA)) {
+            const size_t n = std::strlen(DATA);
+            data.push_back(line.substr(line.compare(n, 1, " ") == 0 ? n + 1 : n));
         } else if (!line.empty()) {
             out += seal_text(line, secrets) + "\n";
         }
     }
     std::string json;
     if (!data.empty() && seal_json(join(data, "\n"), secrets, json)) {
-        out += "data: " + json + "\n";
+        out += std::string(DATA) + " " + json + "\n";
     } else {
         for (const std::string & d : data) {
-            out += "data: " + seal_text(d, secrets) + "\n";
+            out += std::string(DATA) + " " + seal_text(d, secrets) + "\n";
         }
     }
     return out + "\n";

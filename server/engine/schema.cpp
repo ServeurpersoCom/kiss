@@ -286,7 +286,7 @@ bool secret(const std::string & s) {
 }
 
 std::string set_line(const std::string & s, const std::string & v) {
-    return "set " + s + " " + quote(v);
+    return std::string(SET) + " " + s + " " + quote(v);
 }
 
 std::string show_line(const std::string & s, const std::string & v) {
@@ -294,7 +294,7 @@ std::string show_line(const std::string & s, const std::string & v) {
 }
 
 std::string no_line(const std::string & s) {
-    return "no " + s;
+    return std::string(NO) + " " + s;
 }
 
 const std::vector<engine_module> & schema_modules() {

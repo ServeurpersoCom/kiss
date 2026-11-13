@@ -84,7 +84,8 @@ struct engine_group {
 // the items every module with sources knows beyond those set, by module
 using engine_known = std::map<std::string, std::vector<std::string>>;
 
-// a module owns the keys spelled after its name: "server" owns "server listen-port"
+// a module owns the keys spelled after its name: "server" owns
+// "server listen-port"
 struct engine_module {
     std::string                                                                         name;
     std::vector<engine_key>                                                             keys;

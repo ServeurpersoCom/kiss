@@ -77,7 +77,7 @@ const archive = new SaveArchive();
 const unruly = breaks(running);
 if (unruly) throw new Error(`${FACTORY_FILE}: ${unruly}`);
 
-// what replaces a value that must not be kept, and where a value may open
+// where a value may open in a line
 const QUOTE = /["']/;
 
 // the running configuration, read only, for the rest of the page

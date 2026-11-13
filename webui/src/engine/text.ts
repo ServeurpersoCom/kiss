@@ -1,4 +1,8 @@
 import { SPACE } from '../lib/config.js';
+
+// the words of the engine: the constants of the grammar, the notes a line
+// prints and the errors it raises
+
 // what opens a line of a change: what goes, then what comes
 export const GONE_PREFIX = '- ';
 export const COME_PREFIX = '+ ';
@@ -7,9 +11,6 @@ export const COME_PREFIX = '+ ';
 const HINT_OPEN = '<';
 export const hint = (what: string): string => `${HINT_OPEN}${what}>`;
 export const hinted = (word: string): boolean => word.startsWith(HINT_OPEN);
-// the words of the engine: the constants of the grammar, the notes a line
-// prints and the errors it raises
-
 export const COMMENT_PREFIX = '!';
 // what stands for a secret kept out of view, in the lines the history keeps;
 // never a value, as its brackets tell

@@ -1,9 +1,9 @@
 #pragma once
 // prompts.h: what a model reads of this server, from the prompts.json it
 // embeds: each tool, its description and the JSON schema of its arguments,
-// each module and what it sets; and the config tool
-// of the page, from the prompts.json of the page it embeds too; a {mark} of a
-// description stands for what only the running server knows
+// each module and what it sets; and the config tool of the page, from the
+// prompts.json of the page it embeds too; a {mark} of a description stands for
+// what only the running server knows
 
 #include <string>
 #include <utility>

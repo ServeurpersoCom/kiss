@@ -11,7 +11,6 @@ const NAME = 'responses';
 // the parameters of models sent as they are named
 const CARRIED = ['temperature', 'top_p'] as const;
 const SUMMARY = 'auto';
-// the parts of a summary as they read one after the other
 
 type Item = Record<string, unknown>;
 

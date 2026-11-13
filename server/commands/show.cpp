@@ -112,9 +112,9 @@ static words_t next_key_or_item(const completing & c) {
     return schema_next(c.config, c.args, false, true, c.known);
 }
 
-// show server, show server listen-port: the word after a collection names a key as
-// schema_key_after reads it, else an item, one the draft holds, a prefix being
-// enough
+// show server, show server listen-port: the word after a collection names a
+// key as schema_key_after reads it, else an item, one the draft holds, a
+// prefix being enough
 static step_t compile_show(const words_t & args) {
     if (args.empty()) {
         throw incomplete();

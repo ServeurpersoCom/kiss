@@ -16,8 +16,6 @@
 
 #include <thread>
 
-// off, the model never sees the tool; consent, each call asks the user; on
-
 // the tools of this server, then the one the pages serve, then those of every
 // MCP server at once, by server, each asked in a thread of its own, one that
 // fails holding why and the tools it listed last, as the agent serves them,
@@ -67,6 +65,8 @@ static engine_module make_tools() {
     rounds.integer = true;
     rounds.reset   = "1000";
 
+    // off, the model never sees the tool; consent, each call asks the user;
+    // on, it runs
     engine_key use("use", ENGINE_ENUM);
     use.named  = true;
     use.values = words_t(std::begin(TOOL_USES), std::end(TOOL_USES));

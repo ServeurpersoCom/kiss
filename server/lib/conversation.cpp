@@ -371,13 +371,9 @@ static yyjson_mut_val * number_val(yyjson_mut_doc * d, double v) {
     return (double) whole == v ? yyjson_mut_sint(d, whole) : yyjson_mut_real(d, v);
 }
 
-static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
-    json_put(d, o, key, v);
-}
-
 static void add_link(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::optional<std::string> & v) {
     if (v) {
-        add_text(d, o, key, *v);
+        json_put(d, o, key, *v);
     } else {
         yyjson_mut_obj_add_null(d, o, key);
     }
@@ -386,19 +382,19 @@ static void add_link(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, c
 // a call, its outcome once it ran
 static yyjson_mut_val * call_val(yyjson_mut_doc * d, const conversation_call & c) {
     yyjson_mut_val * call = yyjson_mut_obj(d);
-    add_text(d, call, "id", c.id);
-    add_text(d, call, "name", c.name);
-    add_text(d, call, "args", c.args);
+    json_put(d, call, "id", c.id);
+    json_put(d, call, "name", c.name);
+    json_put(d, call, "args", c.args);
     if (c.ok) {
-        add_text(d, call, "result", c.result);
+        json_put(d, call, "result", c.result);
         yyjson_mut_obj_add_bool(d, call, "ok", *c.ok);
     }
     if (!c.images.empty()) {
         yyjson_mut_val * images = yyjson_mut_obj_add_arr(d, call, "images");
         for (const conversation_image & i : c.images) {
             yyjson_mut_val * image = yyjson_mut_arr_add_obj(d, images);
-            add_text(d, image, "mime", i.mime);
-            add_text(d, image, "data", i.data);
+            json_put(d, image, "mime", i.mime);
+            json_put(d, image, "data", i.data);
         }
     }
     return call;
@@ -406,15 +402,15 @@ static yyjson_mut_val * call_val(yyjson_mut_doc * d, const conversation_call & c
 
 static yyjson_mut_val * round_val(yyjson_mut_doc * d, const conversation_round & r) {
     yyjson_mut_val * o = yyjson_mut_obj(d);
-    add_text(d, o, "reasoning", r.reasoning);
-    add_text(d, o, "text", r.text);
+    json_put(d, o, "reasoning", r.reasoning);
+    json_put(d, o, "text", r.text);
     yyjson_mut_val * calls = yyjson_mut_obj_add_arr(d, o, "calls");
     for (const conversation_call & c : r.calls) {
         yyjson_mut_arr_append(calls, call_val(d, c));
     }
     if (r.opaque) {
         yyjson_mut_val * opaque = yyjson_mut_obj_add_obj(d, o, "opaque");
-        add_text(d, opaque, "protocol", r.opaque->protocol);
+        json_put(d, opaque, "protocol", r.opaque->protocol);
         const json_doc items = json_read(r.opaque->items);
         yyjson_mut_obj_add_val(d, opaque, "items", yyjson_val_mut_copy(d, yyjson_doc_get_root(items.get())));
     }
@@ -429,7 +425,7 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
     switch (e.role) {
         case ROLE_USER:
             yyjson_mut_obj_add_str(d, o, "role", USER);
-            add_text(d, o, "text", e.text);
+            json_put(d, o, "text", e.text);
             break;
         case ROLE_ASSISTANT:
             {
@@ -439,7 +435,7 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
                     yyjson_mut_arr_append(rounds, round_val(d, r));
                 }
                 if (e.error) {
-                    add_text(d, o, "error", *e.error);
+                    json_put(d, o, "error", *e.error);
                 }
                 if (e.compaction) {
                     yyjson_mut_obj_add_true(d, o, "compaction");
@@ -457,12 +453,12 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
             }
         case ROLE_CLI:
             yyjson_mut_obj_add_str(d, o, "role", CLI);
-            add_text(d, o, "input", e.input);
-            add_text(d, o, "output", e.output);
+            json_put(d, o, "input", e.input);
+            json_put(d, o, "output", e.output);
             yyjson_mut_obj_add_bool(d, o, "ok", e.ok);
             break;
     }
-    add_text(d, o, "id", e.id);
+    json_put(d, o, "id", e.id);
     add_link(d, o, "parent", e.parent);
     yyjson_mut_obj_add_val(d, o, "time", number_val(d, e.time));
     return o;
@@ -470,8 +466,8 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
 
 static yyjson_mut_val * conversation_val(yyjson_mut_doc * d, const conversation & c) {
     yyjson_mut_val * o = yyjson_mut_obj(d);
-    add_text(d, o, "id", c.id);
-    add_text(d, o, "title", c.title);
+    json_put(d, o, "id", c.id);
+    json_put(d, o, "title", c.title);
     yyjson_mut_obj_add_val(d, o, "updated", number_val(d, c.updated));
     if (c.pinned) {
         yyjson_mut_obj_add_true(d, o, "pinned");

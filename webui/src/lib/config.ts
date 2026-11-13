@@ -85,9 +85,10 @@ export function localTime(date: string | number): string {
 	return `${day} ${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
-// the day of a moment on the calendar of the browser, as a count of days
 export const SECOND_MS = 1000;
 const DAY_MS = 86400000;
+
+// the day of a moment on the calendar of the browser, as a count of days
 export function day(time: number): number {
 	const d = new Date(time);
 	return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS;
@@ -143,7 +144,7 @@ export function stamp(time: number, locale?: string): string {
 export const CONVERSATIONS = 'conversations';
 export const CONVERSATION = 'conversation';
 // the length an id shows, unique among a few thousand conversations
-export const ID_SHOWN = 8;
+const ID_SHOWN = 8;
 // an id as a line shows it, its first letters
 export const shown = (id: string): string => id.slice(0, ID_SHOWN);
 export const FILE_EXTENSION = '.json';

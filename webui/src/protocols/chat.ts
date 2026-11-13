@@ -4,8 +4,8 @@ import { BEARER } from '../engine/keychain.js';
 
 // OpenAI chat completions, the open standard of llama.cpp, vLLM and Hugging
 // Face: one delta per event until [DONE], the endpoint counting the tokens it
-// generated and those of the prompt on a last chunk of its own; the images of the calls go to a model
-// whose list says it sees them, or says nothing
+// generated and those of the prompt on a last chunk of its own; the images of
+// the calls go to a model whose list says it sees them, or says nothing
 
 const DONE = '[DONE]';
 

@@ -5,7 +5,8 @@ import { MODEL_SEPARATOR, SLASH } from '../lib/config.js';
 export default {
 	name: 'chat',
 	keys: {
-		// endpoint/model as show models lists it; empty: the one model of the one endpoint
+		// endpoint/model as show models lists it; empty: the one model of the one
+		// endpoint
 		model: { kind: 'string', default: '', of: 'models' },
 		// sent first in every request, none when empty
 		'system-prompt': { kind: 'string', default: '' }

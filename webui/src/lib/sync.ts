@@ -25,7 +25,6 @@ const OFF = 'off';
 // server: those that attach and detach the page
 export const PAGE_COMMANDS = ['attach', 'detach'];
 
-// the conversations API of the server: the stream, and the path of an action
 // the actions a page sends, as the server names them
 type Action =
 	| 'send'
@@ -39,6 +38,7 @@ type Action =
 	| 'browse'
 	| 'drop'
 	| 'erase';
+// the conversations API of the server: the stream, and the path of an action
 const EVENTS = 'conversations/events';
 const ACTIONS = 'conversations/';
 // the protocol of the events this page reads
@@ -307,10 +307,9 @@ export function attach(config: ConfigReader, on: boolean): void {
 
 // the server the page attaches to followed, its stream opened again whenever
 // it ends, until the page detaches or the server moves, its url, headers or
-// key changing; every conversation
-// leaves the page as it attaches or detaches, those of the page coming back
-// once it detaches; a page answering a turn of its own attaches once its
-// turns end, so nothing they write goes unseen
+// key changing; every conversation leaves the page as it attaches or detaches,
+// those of the page coming back once it detaches; a page answering a turn of
+// its own attaches once its turns end, so nothing they write goes unseen
 export function follow(config: ConfigReader): void {
 	const backend = remotes(config, 'mcp').find((r) => r.name === BACKEND);
 	const kept = localStorage.getItem(storeName(ATTACHED_STORAGE_KEY));

@@ -6,6 +6,7 @@
 	import Icon from './Icon.svelte';
 	import { INFERENCE, MARKDOWN, OPEN, argument, display, type Fold } from '../display.svelte.js';
 	import { NEWLINE } from '../../lib/config.js';
+	import { dataUrl } from '../../lib/remote.js';
 
 	// live: the round the model writes now; a summary shows folded once
 	// written, the history it folds staying above it
@@ -97,7 +98,7 @@
 				<pre class="output">{c.result}</pre>
 			{/if}
 			{#each c.images ?? [] as image, j (j)}
-				<img src={`data:${image.mime};base64,${image.data}`} alt={`${c.name} result ${j + 1}`} />
+				<img src={dataUrl(image)} alt={`${c.name} result ${j + 1}`} />
 			{/each}
 		</div>
 	</details>

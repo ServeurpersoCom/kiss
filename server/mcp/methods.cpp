@@ -16,8 +16,7 @@
 #include <chrono>
 #include <cstdlib>
 
-static const char * const SERVER_INFO_META         = "io.modelcontextprotocol/serverInfo";
-static const char * const CLIENT_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities";
+static const char * const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo";
 
 // the one input a call asks for: a form the user answers, a text field per
 // secret to type, a yes field per url to let
@@ -80,8 +79,8 @@ void method_initialize(httplib::Response & res, yyjson_val * id, yyjson_val * pa
     const std::string server = engine_get("server hostname").value_or("");
     yyjson_val *      asked  = yyjson_obj_get(params, "protocolVersion");
     const std::string want   = yyjson_is_str(asked) ? yyjson_get_str(asked) : "";
-    std::string       chosen = LEGACY_VERSIONS[0];
-    for (const char * v : LEGACY_VERSIONS) {
+    std::string       chosen = ERA_2025_VERSIONS[0];
+    for (const char * v : ERA_2025_VERSIONS) {
         if (want == v) {
             chosen = v;
         }
@@ -233,7 +232,7 @@ struct call_log {
 // whether a client of the 2026-07-28 era shows a form to the user, as the
 // capabilities of its request declare: elicitation with form, or with no mode
 static bool takes_forms(yyjson_val * params) {
-    yyjson_val * caps        = yyjson_obj_get(yyjson_obj_get(params, "_meta"), CLIENT_CAPABILITIES_META);
+    yyjson_val * caps        = yyjson_obj_get(yyjson_obj_get(params, "_meta"), MCP_CAPABILITIES_META);
     yyjson_val * elicitation = yyjson_obj_get(caps, "elicitation");
     return elicitation && (yyjson_obj_get(elicitation, MCP_FORM_MODE) || !yyjson_obj_get(elicitation, "url"));
 }

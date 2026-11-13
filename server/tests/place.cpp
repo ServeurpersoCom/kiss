@@ -1,19 +1,18 @@
-// place.cpp: the laws of the place the tools on files act on, run as the
-// build ends: the machine of the server and a POSIX shell that reaches the
-// same directory answer alike, what a path names and its size, the bytes of a
-// file whatever they are, a file written in place with its directories made,
+// place.cpp: the laws of the place the tools on files act on, run as the build
+// ends: the machine of the server and a POSIX shell that reaches the same
+// directory answer alike, what a path names and its size, the bytes of a file
+// whatever they are, a file written in place with its directories made,
 // telling whether it was there, and every entry below a directory with its
 // depth and the size of a regular file; a file past the limit loads through
-// neither; a wrapper that prints around the shell, an empty line first or
-// any other, changes nothing, nor does a wc that pads its counts or loses a
-// line of a batch, a far side
-// without find or wc lists nothing
-// and says so, a file is no directory to walk, a line it
-// slips into the answer fails the read, and a shell that frames no answer
-// reads nothing; a machine with no POSIX shell
+// neither; a wrapper that prints around the shell, an empty line first or any
+// other, changes nothing, nor does a wc that pads its counts or loses a line
+// of a batch, a far side without find or wc lists nothing and says so, a file
+// is no directory to walk, a line it slips into the answer fails the read, and
+// a shell that frames no answer reads nothing; a machine with no POSIX shell
 // keeps the laws of the server alone; the configuration gives the tools the
 // shell files shell names, else the machine of the server, and fails every
-// call when it names no shell
+// call when it names no shell; view lists a directory of the place two levels
+// deep, its hidden entries counted, node_modules closed
 
 #include "lib/place.h"
 
@@ -22,7 +21,9 @@
 #include "laws.h"
 #include "lib/base64.h"
 #include "lib/job.h"
+#include "lib/json.h"
 #include "lib/quit.h"
+#include "lib/tools.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -225,6 +226,24 @@ int main() {
         return p;
     };
     law(given().shell.empty(), "the tools on files act on the machine of the server by default");
+    const fs::path seen = root / "seen";
+    put(seen / "a.txt", "a");
+    put(seen / ".hidden", "h");
+    put(seen / "sub" / "b.txt", "b");
+    put(seen / "node_modules" / "inner" / "pkg.js", "p");
+    std::vector<tool> tools;
+    engine_with([&](const engine_reader & config) { tools = tools_list(config); });
+    const auto     view = std::find_if(tools.begin(), tools.end(), [](const tool & t) { return t.suffix == "view"; });
+    const json_doc args = json_read("{\"path\":" + json_quote(seen.u8string()) + "}");
+    const tool_outcome listed = view->run(yyjson_doc_get_root(args.get()), {}, ALIVE);
+    const auto         ends   = [&](const std::string & tail) {
+        return listed.text.size() >= tail.size() &&
+               listed.text.compare(listed.text.size() - tail.size(), tail.size(), tail) == 0;
+    };
+    law(listed.ok && listed.text.find((seen / "sub" / "b.txt").u8string() + "\n") != std::string::npos &&
+            listed.text.find((seen / "node_modules").u8string() + "\n") != std::string::npos &&
+            listed.text.find("inner") == std::string::npos && ends("4 entries, 1 hidden"),
+        "view lists a directory two levels deep, its hidden entries counted, node_modules closed");
     engine_run("set files shell box", ENGINE_ADMIN);
     law(given().shell == "sh -s" && given().timeout == 7 && given().broken.empty(),
         "the tools on files act through the shell files shell names");

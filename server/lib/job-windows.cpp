@@ -137,8 +137,8 @@ job_result job_run(const std::string &           line,
     limits.BasicLimitInformation.LimitFlags     = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
 
-    // the two pipe ends of the command the only handles the command inherits, since tool
-    // calls run side by side
+    // the two pipe ends of the command the only handles the command inherits,
+    // since tool calls run side by side
     HANDLE inherited[2] = { in_child, out_child };
     SIZE_T size         = 0;
     InitializeProcThreadAttributeList(NULL, 1, 0, &size);

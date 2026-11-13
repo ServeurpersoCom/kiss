@@ -26,14 +26,12 @@ void sync_events(const httplib::Request &                                req,
 // message after the thread; command {input, id?}, a line this server runs as
 // its config tool does, its output after the thread once it ran; both open a
 // conversation without id and are answered {id}; complete {line}, answered
-// {words}, the words that complete a line being typed; edit {id, entry,
-// text}; retry {id, entry}; browse {id, entry}; stop {id}; answer {id,
-// verdict}, once, always or refuse to the call its turn asks about, {id,
-// response}, the response of the user to the form it asks them to fill, or
-// {id, output, ok}, what a page that runs a call answers, the first answer
-// settling it; pin {id, pinned};
-// drop {id, entry}; erase {ids};
-// 204 once applied, else why not: 400 a body that does not hold, 404 a
-// conversation or an entry unknown, 409 a turn that runs or a question that
-// does not stand, 500 a file not written
+// {words}, the words that complete a line being typed; edit {id, entry, text};
+// retry {id, entry}; browse {id, entry}; stop {id}; answer {id, verdict},
+// once, always or refuse to the call its turn asks about, {id, response}, the
+// response of the user to the form it asks them to fill, or {id, output, ok},
+// what a page that runs a call answers, the first answer settling it; pin {id,
+// pinned}; drop {id, entry}; erase {ids}; 204 once applied, else why not: 400
+// a body that does not hold, 404 a conversation or an entry unknown, 409 a
+// turn that runs or a question that does not stand, 500 a file not written
 void sync_action(const httplib::Request & req, httplib::Response & res, const std::string & name);

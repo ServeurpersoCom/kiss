@@ -31,7 +31,7 @@ static const size_t MEGAPIXEL = 1000000;
 static const uintmax_t KILO = 1024;
 
 // the directory of packages a listing never opens
-static const char * const PACKAGES = PACKAGES;
+static const char * const PACKAGES = "node_modules";
 
 static const char * const NAME = "view";
 

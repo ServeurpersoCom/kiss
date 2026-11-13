@@ -25,8 +25,6 @@
 #include <mutex>
 #include <set>
 
-// what a call reads when no tool reads it, and why a call does not run
-
 // the stop of the turn of each conversation
 static std::mutex                                       g_mutex;
 static std::map<std::string, std::shared_ptr<api_stop>> g_turns;
@@ -624,7 +622,8 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
     }
     log_info("Agent", "%s calls %s", conversation_shown(self.id).c_str(), called.name.c_str());
     if (server) {
-        // every text the user types in a form of the server is sealed from then on
+        // every text the user types in a form of the server is sealed from
+        // then on
         const auto answer = [&](const std::string & input) {
             const std::string           response = fill(self, server->name, input);
             const json_doc              answered = json_read(response);

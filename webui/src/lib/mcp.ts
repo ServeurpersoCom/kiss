@@ -30,9 +30,9 @@ import { fill } from './form.js';
 // server, kept while its url and key stay, with the tool list it serves,
 // listed once a connection, so the tools the model sees stay the same from
 // turn to turn; a request that fails drops the client, and the next use
-// connects again, listing anew; the
-// tool list a server gave last stays while it is named the same, so a server
-// that fails goes on serving it, each call answering its error
+// connects again, listing anew; the tool list a server gave last stays while
+// it is named the same, so a server that fails goes on serving it, each call
+// answering its error
 
 // a client, the signature of the server it connected to, its tool list, and
 // whether that list came

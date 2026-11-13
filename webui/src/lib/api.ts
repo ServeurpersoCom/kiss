@@ -43,8 +43,8 @@ function protocol(config: ConfigReader, name: string): Protocol {
 	return protocols.find((p) => p.name === config.get('endpoints protocol', name))!;
 }
 
-// the header that carries the key of an endpoint unless its auth-header says: the one
-// of its protocol
+// the header that carries the key of an endpoint unless its auth-header says:
+// the one of its protocol
 export function fallback(config: ConfigReader, name: string): string {
 	return protocol(config, name).key;
 }

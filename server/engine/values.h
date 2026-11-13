@@ -36,10 +36,10 @@ bool factory_holds(const std::string & s);
 // view only when they are to be written
 words_t layer_lines(const layer & l, bool secrets);
 
-// what a change does, line by line: the old line after -, the new one after
-// +, every value resolved through the layers, a register existing while some
-// layer names its item; a secret replaced by another
-// reads as one line, its values out of view
+// what a change does, line by line: the old line after -, the new one after +,
+// every value resolved through the layers, a register existing while some
+// layer names its item; a secret replaced by another reads as one line, its
+// values out of view
 words_t diff(const layer & from, const layer & to);
 
 // the stored keys whose value differs between two layers

@@ -38,9 +38,11 @@ static const int          TRANSIENT[] = { httplib::StatusCode::RequestTimeout_40
                                           httplib::StatusCode::ServiceUnavailable_503,
                                           httplib::StatusCode::GatewayTimeout_504,
                                           OVERLOADED };
-// the commands that fix an endpoint which refuses the key, or is no LLM
+// the commands that fix an endpoint which refuses the key, or is no LLM, and
+// a chat model that names none
 static const char * const KEY_FIX     = "set endpoints key <name> <key>";
 static const char * const URL_FIX     = "set endpoints url <name> <url>";
+static const char * const MODEL_FIX   = "set chat model <endpoint/model>";
 static const char * const DATA        = "data:";
 
 const protocol * api_protocol(const std::string & name) {
@@ -281,7 +283,7 @@ std::pair<endpoint, std::string> api_pick(const std::vector<endpoint> & all,
     if (chosen.empty()) {
         const auto models = all.size() == 1 ? api_list(all[0], stop) : api_named{};
         if (models.size() != 1) {
-            throw api_error("chat model is not set", "set chat model <endpoint/model>");
+            throw api_error("chat model is not set", MODEL_FIX);
         }
         return { all[0], models[0].first };
     }
@@ -291,7 +293,7 @@ std::pair<endpoint, std::string> api_pick(const std::vector<endpoint> & all,
             return { e, chosen.substr(cut + std::strlen(MODEL_SEPARATOR)) };
         }
     }
-    throw api_error("chat model " + chosen + " names no endpoint", "set chat model <endpoint/model>");
+    throw api_error("chat model " + chosen + " names no endpoint", MODEL_FIX);
 }
 
 void api_chat(const endpoint &                               e,
@@ -318,10 +320,14 @@ void api_chat(const endpoint &                               e,
         api_events         events;
         bool               ended = false;
         std::exception_ptr broke;
+        // an endpoint that answers a web page is no LLM
+        const auto         page = [&] {
+            return status == httplib::StatusCode::OK_200 && type.find("html") != std::string::npos;
+        };
         req.response_handler = [&](const httplib::Response & res) {
             status = res.status;
             type   = res.get_header_value("Content-Type");
-            return !(status == httplib::StatusCode::OK_200 && type.find("html") != std::string::npos);
+            return !page();
         };
         // each event of the stream a delta as it comes, the stream read until
         // its last; anything they throw ends the request, thrown again once
@@ -367,7 +373,7 @@ void api_chat(const endpoint &                               e,
         if (status == 0) {
             throw api_error(e.server.url + " does not answer: " + httplib::to_string(res.error()), URL_FIX);
         }
-        if (status == httplib::StatusCode::OK_200 && type.find("html") != std::string::npos) {
+        if (page()) {
             throw api_error(e.server.url + " answers a web page, not an LLM", URL_FIX);
         }
         if (status == httplib::StatusCode::OK_200) {

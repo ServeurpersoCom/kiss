@@ -1,9 +1,9 @@
 #pragma once
-// mcp.h: the client of the MCP servers the agent of the server calls, the
-// twin of mcp.ts of the page: Streamable HTTP in the era each server speaks,
-// one session per server, kept
-// with its tool list while its url, key and headers stay; a request that
-// fails closes it, its tool list kept, and the next use connects again
+// mcp.h: the client of the MCP servers the agent of the server calls, the twin
+// of mcp.ts of the page: Streamable HTTP in the era each server speaks, one
+// session per server, kept with its tool list while its url, key and headers
+// stay; a request that fails closes it, its tool list kept, and the next use
+// connects again
 
 #include "engine/text.h"
 #include "lib/api.h"
@@ -66,6 +66,16 @@ constexpr const char * MCP_CANCEL      = "cancel";
 // the fields of a form KiSS answers: a text, a yes
 constexpr const char * MCP_TEXT_FIELD = "string";
 constexpr const char * MCP_YES_FIELD  = "boolean";
+
+// the headers of the protocol, and the keys of the envelope a request of the
+// 2026-07-28 era carries in its _meta
+constexpr const char * MCP_SESSION_HEADER    = "Mcp-Session-Id";
+constexpr const char * MCP_VERSION_HEADER    = "MCP-Protocol-Version";
+constexpr const char * MCP_METHOD_HEADER     = "Mcp-Method";
+constexpr const char * MCP_NAME_HEADER       = "Mcp-Name";
+constexpr const char * MCP_VERSION_META      = "io.modelcontextprotocol/protocolVersion";
+constexpr const char * MCP_CLIENT_META       = "io.modelcontextprotocol/clientInfo";
+constexpr const char * MCP_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities";
 
 // forgets every server the configuration no longer names, its tools with it
 void mcp_forget(const words_t & named);

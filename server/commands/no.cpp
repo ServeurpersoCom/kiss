@@ -62,7 +62,7 @@ static step_t compile_no(const words_t & args) {
 }
 
 static command make_no() {
-    return { { "no" }, true, compile_no, next_key_or_item };
+    return { { NO }, true, compile_no, next_key_or_item };
 }
 
 ENGINE_COMMAND(make_no);

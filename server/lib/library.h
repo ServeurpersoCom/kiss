@@ -97,12 +97,13 @@ struct library_follower {
 // the version of the protocol of the events, which the first one names
 constexpr int LIBRARY_PROTOCOL = 1;
 
-// what a follower is to apply, as events, one JSON object per line: every conversation at its first
-// call, with the protocol and the moment on the clock of conversation_now(),
-// which the moments of a pulse read on; after it, a conversation changed otherwise than by
-// growth, whole, one gone, as null, the turn that answers in it, its pulse or
-// null, what it asks the user, the question or null, and what an entry a turn
-// writes grew by: the text a string gained, a round or a call that came, the
-// items its protocol keeps, whole, a call whole once its outcome came; it waits up to wait_ms for a change,
+// what a follower is to apply, as events, one JSON object per line: every
+// conversation at its first call, with the protocol and the moment on the
+// clock of conversation_now(), which the moments of a pulse read on; after it,
+// a conversation changed otherwise than by growth, whole, one gone, as null,
+// the turn that answers in it, its pulse or null, what it asks the user, the
+// question or null, and what an entry a turn writes grew by: the text a string
+// gained, a round or a call that came, the items its protocol keeps, whole, a
+// call whole once its outcome came; it waits up to wait_ms for a change,
 // nothing when none came
 std::string library_follow(library_follower & f, int wait_ms, const words_t & secrets);
