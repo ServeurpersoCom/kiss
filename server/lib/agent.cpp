@@ -229,14 +229,14 @@ void agent_quit() {
 // what one round reads of the running configuration, as it stands when the
 // round starts: the endpoints, the model chosen, the system prompt, the
 // parameters of every model, numbers as numbers, the tokens that compact the
-// history of a model and the steps its summary keeps, each tool of the server not
-// off by its own name, then each tool of every MCP server not off, by its own
-// name or, once a tool before holds it, by its server and its name; a server
-// that fails serves the tools
-// it listed last, each call answering its error, and is not asked again in
-// the turn, the turn holding it as it was named, so a new url, key or header
-// tries it again, and a server no longer named is forgotten; a failure, a
-// name prefixed and a tool left out log once a turn
+// history of a model and the steps its summary keeps, each tool of the server
+// not off by its own name, then each tool of every MCP server not off, by its
+// own name or, once a tool before holds it, by its server and its name; a
+// server that fails serves the tools it listed last, each call answering its
+// error, and is not asked again in the turn, the turn holding it as it was
+// named, so a new url, key or header tries it again, and a server no longer
+// named is forgotten; a failure, a name prefixed and a tool left out log once
+// a turn, a tool left out as an error
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
@@ -343,7 +343,11 @@ static setup_t setup(api_stop & stop, met_t & met) {
                 (t.served.empty() ? " left out, " + t.server + "_" + t.name + " is taken or no tool name" :
                                     " served as " + t.served);
             if (t.served != t.name && met.renamed.insert(told).second) {
-                log_info("Agent", "%s", told.c_str());
+                if (t.served.empty()) {
+                    log_error("Agent", "%s", told.c_str());
+                } else {
+                    log_info("Agent", "%s", told.c_str());
+                }
             }
             if (!t.served.empty() && config.get("tools use", t.served).value_or(USE_OFF) != USE_OFF) {
                 s.served.push_back(t);

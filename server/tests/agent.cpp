@@ -60,6 +60,8 @@ static std::mutex               g_mutex;
 static std::vector<std::string> g_systems;
 static std::vector<std::string> g_tools;
 static std::atomic<int>         g_down{ 0 };
+// whether the twin server fails every request
+static std::atomic<bool>        g_twin_down{ false };
 // the messages of each request of the conversation that compacts
 static std::vector<std::string> g_compacted;
 // whether the endpoint that hangs is asked, whether it took a message
@@ -177,8 +179,14 @@ int main() {
     });
     // an MCP server of the 2025 era serving a tool of the name the server
     // serves itself on every machine, a call answering the name it was called
-    // by, and one that fails every request
+    // by, failing every request while the laws hold it down, and one that
+    // fails every request
     server.Post("/twin", [](const httplib::Request & req, httplib::Response & res) {
+        if (g_twin_down) {
+            res.status = 500;
+            res.set_content("down", "text/plain");
+            return;
+        }
         const std::shared_ptr<yyjson_doc> doc(yyjson_read(req.body.data(), req.body.size(), 0), yyjson_doc_free);
         yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
         const std::string                 method = yyjson_get_str(yyjson_obj_get(root, "method"));
@@ -342,6 +350,19 @@ int main() {
             "a tool turned off keeps its name, the one after it its prefix: " + g_tools.back());
     }
     engine_run("set tools use config on", ENGINE_ADMIN);
+    // a server failing once it listed keeps as items the tools it listed last,
+    // by the names the agent serves them under, so a line of tools use names
+    // the tool the model sees
+    g_twin_down = true;
+    law(message("twin"), "a turn calling a server gone down starts");
+    when([&] { return agent_grant(c.id, number(), "once").empty(); });
+    when([&] { return settled(); });
+    {
+        const std::string set = engine_run("set tools use twin_config consent", ENGINE_ADMIN).text;
+        law(set.find("unknown") == std::string::npos,
+            "a server that fails keeps the tools it listed last as served: " + set);
+    }
+    g_twin_down = false;
     library_follower page;
     agent_attach();
     agent_attach();

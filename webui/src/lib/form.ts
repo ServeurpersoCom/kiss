@@ -43,7 +43,7 @@ export async function fill(
 	for (const [field, schema] of fields) {
 		if (schema.type === YES_FIELD) {
 			if (field !== yes[0]) continue;
-			if (!(await ctx.confirm(note || [`Allow this of ${server}?`, ...yes].join('\n'))))
+			if (!(await ctx.confirm(note || [`Allow this change of ${server}?`, ...yes].join('\n'))))
 				return { action: CANCEL };
 			for (const each of yes) content[each] = true;
 			continue;

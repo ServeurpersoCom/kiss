@@ -30,6 +30,8 @@ const ITEM = /<li>([\s\S]*?)<\/li>/gi;
 // the class a code block names its language with, and the name shown without one
 const LANGUAGE_PREFIX = 'language-';
 const PLAIN = 'text';
+// the line break a code block closes on
+const CLOSING_BREAK = /\n$/;
 // the classes of the blocks the page styles and the copy button acts on
 export const CLASS = {
 	code: 'code',
@@ -171,7 +173,7 @@ function rehypeCells() {
 // its last text, so a copy pastes no line more
 function unbreak(node: Element): void {
 	const last = node.children.at(-1);
-	if (last?.type === 'text') last.value = last.value.replace(/\n$/, '');
+	if (last?.type === 'text') last.value = last.value.replace(CLOSING_BREAK, '');
 	else if (last?.type === 'element') unbreak(last);
 }
 

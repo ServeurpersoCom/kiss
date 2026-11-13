@@ -20,7 +20,8 @@ static const char * const USES[] = { "off", "consent", "on" };
 
 // the tools of this server, then the one the pages serve, then those of every
 // MCP server at once, by server, each asked in a thread of its own, one that
-// fails holding why, each tool by the name the model sees it by
+// fails holding why and the tools it listed last, as the agent serves them,
+// each tool by the name the model sees it by
 static std::vector<engine_group> items(const engine_reader & config) {
     std::vector<engine_group> out = {
         { "KiSS",  {},                    "" },
@@ -46,6 +47,9 @@ static std::vector<engine_group> items(const engine_reader & config) {
                 }
             } catch (const std::exception & e) {
                 mcp[i].error = e.what();
+                for (const mcp_tool & t : mcp_kept(servers[i])) {
+                    mcp[i].names.push_back(t.name);
+                }
             }
         });
     }
