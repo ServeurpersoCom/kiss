@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <map>
 #include <mutex>
 #include <set>
@@ -272,10 +273,10 @@ std::pair<endpoint, std::string> api_pick(const std::vector<endpoint> & all,
         }
         return { all[0], models[0].first };
     }
-    const size_t cut = chosen.find('/');
+    const size_t cut = chosen.find(MODEL_SEPARATOR);
     for (const endpoint & e : all) {
         if (cut != std::string::npos && chosen.substr(0, cut) == e.server.name) {
-            return { e, chosen.substr(cut + 1) };
+            return { e, chosen.substr(cut + std::strlen(MODEL_SEPARATOR)) };
         }
     }
     throw api_error("chat model " + chosen + " names no endpoint", "set chat model <endpoint/model>");

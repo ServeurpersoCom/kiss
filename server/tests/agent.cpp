@@ -335,7 +335,7 @@ int main() {
     law(message("twin"), "a turn calling a tool served under its server starts");
     when([&] { return agent_grant(c.id, number(), "once").empty(); });
     when([&] { return settled(); });
-    law(called().name == "twin_config" && called().ok && called().result == "config",
+    law(called().name == "twin_config" && called().ok == true && called().result == "config",
         "a tool served under its server is called by its own name: " + called().result);
     // always sets the tool by its item, its server and the name it gives it,
     // whatever name the model calls it by, and the next call asks nothing
@@ -344,12 +344,26 @@ int main() {
     when([&] { return settled(); });
     law(engine_get("tools use", "twin/config").value_or("") == "on", "always sets a tool of an MCP server by its item");
     law(message("twin"), "a turn calling a tool let always starts");
-    law(settled() && called().ok && called().result == "config",
+    law(settled() && called().ok == true && called().result == "config",
         "a tool on by its item runs unasked: " + called().result);
     // a question that should not stand is refused, so the laws go on
     agent_grant(c.id, number(), "refuse");
     settled();
     engine_run("no tools use twin/config", ENGINE_ADMIN);
+    // a tool turned off while its question stands is refused, always writing
+    // nothing
+    {
+        const uint64_t asked = number();
+        law(message("twin"), "a turn calling a tool turned off while it asks starts");
+        when([&] { return number() > asked; });
+        engine_run("set tools use twin/config off", ENGINE_ADMIN);
+        when([&] { return agent_grant(c.id, number(), "always").empty(); });
+        when([&] { return settled(); });
+        law(called().ok == false && called().result == "The user refused the call" &&
+                engine_get("tools use", "twin/config").value_or("") == "off",
+            "a tool turned off while its question stands is refused: " + called().result);
+        engine_run("no tools use twin/config", ENGINE_ADMIN);
+    }
     // the server turning its own tool off keeps the name of the tool of the
     // MCP server as it was, so no line of tools use changes what it names
     engine_run("set tools use config off", ENGINE_ADMIN);

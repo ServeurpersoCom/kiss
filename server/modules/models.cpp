@@ -19,7 +19,7 @@ static std::string validate(const engine_reader & config) {
     for (const std::string & item : config.names("models")) {
         std::optional<std::string> endpoint;
         for (const std::string & name : config.names("endpoints")) {
-            endpoint = starts_with(item, name + "/") ? name : endpoint;
+            endpoint = starts_with(item, name + MODEL_SEPARATOR) ? name : endpoint;
         }
         if (!endpoint) {
             return "models " + item + " names no endpoint -> no models " + item;
@@ -58,7 +58,7 @@ static std::vector<engine_group> items(const engine_reader & config) {
             try {
                 api_stop stop;
                 for (const std::string & id : api_models(all[i], stop)) {
-                    out[i].names.push_back(all[i].server.name + "/" + id);
+                    out[i].names.push_back(all[i].server.name + MODEL_SEPARATOR + id);
                 }
             } catch (const std::exception & e) {
                 out[i].error = e.what();

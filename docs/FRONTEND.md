@@ -382,8 +382,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
   refuses the line with its error. `chat model` names an endpoint of the configuration, the model
   left to the endpoint. A model names an endpoint, and holds no parameter its protocol never sends.
 - A save or the startup-config drops what no key takes anymore, a key or an item of a key that takes
-  known items only, `display rendering`, `tools use`, or a value its key no longer takes, at boot, in a
-  copy and wherever it shows, and a copy says so; a line naming one fails.
+  known items only, `display rendering`, or a value its key no longer takes, at boot, in a copy and
+  wherever it shows, and a copy says so; a line naming one fails.
 - A model list answers within its timeout, its body included, so no endpoint holds the queue; every
   endpoint lists at once, one that fails beside the others.
 - A copy from `running-config` warns when no model answers the chat: `chat model` empty with more

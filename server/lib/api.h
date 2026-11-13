@@ -16,6 +16,9 @@
 #include <utility>
 #include <vector>
 
+// between the endpoint and its model in the item of a model: e/m
+constexpr const char * MODEL_SEPARATOR = "/";
+
 // what an endpoint answered wrong, with the command that fixes it when the
 // configuration is the cause
 struct api_error : std::runtime_error {

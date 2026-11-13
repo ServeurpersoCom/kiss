@@ -13,13 +13,15 @@ import { run, settings } from '../engine/run.js';
 import { display } from '../rendering/display.svelte.js';
 
 // whether the user lets the model make this call of a tool: a tool in
-// consent asks, and always turns its item on, as the user
+// consent asks, and always turns its item on, as the user; a tool turned off
+// while the question stood is refused, whatever the answer
 async function allowed(ctx: ToolContext, tool: Tool, c: Call): Promise<boolean> {
 	if (settings.get('tools use', item(tool)) !== CONSENT) return true;
 	const verdict = await ctx.grant({ kind: 'call', tool: c.name, args: c.args });
 	ctx.signal.throwIfAborted();
+	if (verdict === REFUSE || settings.get('tools use', item(tool)) === OFF) return false;
 	if (verdict === ALWAYS) await run(`set tools use ${JSON.stringify(item(tool))} ${ON}`, 'user');
-	return verdict !== REFUSE;
+	return true;
 }
 
 // the arguments of a call as an object, none when they read as anything else

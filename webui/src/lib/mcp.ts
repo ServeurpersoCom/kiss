@@ -147,8 +147,10 @@ async function called(
 // timeout; a change of any makes it another server
 const signature = (remote: Remote): string => JSON.stringify([remote, remote.sign()]);
 
-// the tools a client lists now, each called through that client
-async function listed(remote: Remote, c: Client): Promise<Tool[]> {
+// the tools a client lists now, each called through that client, a call that
+// fails dropping its connection, unless another one took its place
+async function listed(made: Connection, c: Client): Promise<Tool[]> {
+	const { remote } = made;
 	const { tools } = await c.listTools(undefined, { timeout: MCP_CONNECT_TIMEOUT_MS });
 	return tools.map((t): Tool => ({
 		name: t.name,
@@ -159,7 +161,7 @@ async function listed(remote: Remote, c: Client): Promise<Tool[]> {
 				return await called(ctx, remote, c, { name: t.name, arguments: args });
 			} catch (e) {
 				if (ctx.signal.aborted) throw e;
-				drop(remote.name);
+				if (connections.get(remote.name) === made) drop(remote.name);
 				throw new Error(`mcp ${remote.name}: ${(e as Error).message}`);
 			}
 		}
@@ -185,7 +187,7 @@ function connection(remote: Remote): Connection {
 		remote,
 		signed,
 		client,
-		tools: client.then((c) => listed(remote, c)),
+		tools: client.then((c) => listed(made, c)),
 		settled: false
 	};
 	connections.set(remote.name, made);

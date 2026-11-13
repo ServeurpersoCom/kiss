@@ -601,7 +601,12 @@ static bool call(const std::string &           id,
         log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
         const std::string verdict = ask(id, made.get(), ASK_CALL, stop, p);
         log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
-        if (verdict == REFUSE) {
+        // a tool turned off while the question stood is refused, whatever the
+        // answer
+        bool off = false;
+        engine_with(
+            [&](const engine_reader & config) { off = config.get("tools use", item).value_or(USE_OFF) == USE_OFF; });
+        if (verdict == REFUSE || off) {
             settle(called.args, "The user refused the call", false, {});
             return false;
         }
@@ -769,7 +774,7 @@ static bool round(const std::string &                     id,
     const auto        pick    = api_pick(s.endpoints, s.chosen, stop);
     const endpoint &  e       = pick.first;
     const std::string model   = pick.second;
-    const std::string item    = e.server.name + "/" + model;
+    const std::string item    = e.server.name + MODEL_SEPARATOR + model;
     // the history as it stands, the reply as the library holds it last
     const auto        history = [&] {
         std::vector<conversation_entry> h = before;

@@ -289,13 +289,21 @@ describe('a turn', () => {
 		expect(p.engine.settings.get('display thinking')).toBe('inference');
 	});
 
-	it('names the endpoint and the event of a stream that does not read', async () => {
+	it('names the endpoint and the event of a stream that does not read, and closes it', async () => {
+		let closed = false;
 		const garbled = () =>
-			new Response('data: {"choices"\n\n', { headers: { 'content-type': 'text/event-stream' } });
+			new Response(
+				new ReadableStream({
+					start: (c) => c.enqueue(new TextEncoder().encode('data: {"choices"\n\n')),
+					cancel: () => void (closed = true)
+				}),
+				{ headers: { 'content-type': 'text/event-stream' } }
+			);
 		const p = await page([garbled]);
 		await expect(p.go()).rejects.toThrow(
 			'http://m/v1 sent an event that does not read: {"choices"'
 		);
+		await vi.waitFor(() => expect(closed).toBe(true));
 	});
 
 	it('reads an event once closed, its data lines joined, never one the stream leaves open', async () => {

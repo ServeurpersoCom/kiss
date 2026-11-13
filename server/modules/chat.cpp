@@ -3,6 +3,7 @@
 
 #include "engine/engine.h"
 #include "engine/text.h"
+#include "lib/api.h"
 
 // a model set names an endpoint of the configuration, the model itself left
 // to the endpoint
@@ -12,7 +13,7 @@ static std::string validate(const engine_reader & config) {
         return "";
     }
     for (const std::string & name : config.names("endpoints")) {
-        if (starts_with(value, name + "/")) {
+        if (starts_with(value, name + MODEL_SEPARATOR)) {
             return "";
         }
     }

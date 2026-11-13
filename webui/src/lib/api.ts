@@ -246,7 +246,8 @@ async function opened(
 // closes it came, its lines ending in LF, CR LF or CR alike, up to the event
 // that ends the stream, which may carry the last count: a stream closed before
 // it is cut short, never a finished answer, and an event it leaves open is
-// never read
+// never read; the stream closes however the reading ends, so the endpoint
+// stops writing an answer nobody reads
 export async function* chat(
 	endpoint: Endpoint,
 	req: Request,
@@ -268,37 +269,41 @@ export async function* chat(
 	let line = '';
 	let cr = false;
 	let data: string[] = [];
-	for (;;) {
-		const { value, done } = await reader.read();
-		if (done) throw new Error(`the stream ended before ${protocol.last}`);
-		for (const c of value) {
-			if (cr && c === LF) {
-				cr = false;
-				continue;
+	try {
+		for (;;) {
+			const { value, done } = await reader.read();
+			if (done) throw new Error(`the stream ended before ${protocol.last}`);
+			for (const c of value) {
+				if (cr && c === LF) {
+					cr = false;
+					continue;
+				}
+				cr = c === CR;
+				if (c !== CR && c !== LF) {
+					line += c;
+					continue;
+				}
+				if (line) {
+					if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
+					line = '';
+					continue;
+				}
+				if (!data.length) continue;
+				const event = data.join(LF).trim();
+				data = [];
+				let d: Delta | undefined;
+				try {
+					d = read(event);
+				} catch {
+					throw new Error(`${endpoint.url} sent an event that does not read: ${event}`);
+				}
+				if (!d) continue;
+				if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);
+				yield d;
+				if (d.end) return;
 			}
-			cr = c === CR;
-			if (c !== CR && c !== LF) {
-				line += c;
-				continue;
-			}
-			if (line) {
-				if (line.startsWith(DATA)) data.push(line.slice(DATA.length));
-				line = '';
-				continue;
-			}
-			if (!data.length) continue;
-			const event = data.join(LF).trim();
-			data = [];
-			let d: Delta | undefined;
-			try {
-				d = read(event);
-			} catch {
-				throw new Error(`${endpoint.url} sent an event that does not read: ${event}`);
-			}
-			if (!d) continue;
-			if (d.error !== undefined) throw new Error(d.error || `${endpoint.url} broke the stream`);
-			yield d;
-			if (d.end) return;
 		}
+	} finally {
+		void reader.cancel().catch(() => undefined);
 	}
 }

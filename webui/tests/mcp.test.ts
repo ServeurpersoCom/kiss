@@ -194,7 +194,11 @@ async function page(
 	const { turn } = await import('../src/lib/agent.js');
 	const go = async () => {
 		const stop = new AbortController();
-		const grant = async (request: Grant) => (asked.push(request), verdicts.shift() ?? ONCE);
+		const grant = async (request: Grant) => {
+			asked.push(request);
+			const v = verdicts.shift() ?? ONCE;
+			return typeof v === 'function' ? v() : v;
+		};
 		const reply: Assistant = { role: 'assistant', rounds: [] };
 		// the rounds as the page last stored them
 		const kept: { rounds: Round[] } = { rounds: [] };
@@ -211,9 +215,10 @@ async function page(
 		const clock = pulse(performance.now());
 		return { reply, stop, clock, kept, done: turn(user, reply, tools, stop.signal, clock) };
 	};
-	// what the model asked the user, answered by the verdicts in order, once past them
+	// what the model asked the user, answered by the verdicts in order, once past
+	// them, one that acts first giving its verdict once it has
 	const asked: Grant[] = [];
-	const verdicts: Verdict[] = [];
+	const verdicts: (Verdict | (() => Promise<Verdict>))[] = [];
 	// the secrets the user types, in order, none once past them, and the keys
 	// they were asked for
 	const secrets: string[] = [];
@@ -903,6 +908,39 @@ describe('an MCP server', () => {
 			config: 'config',
 			b_config: 'b/config'
 		});
+	});
+
+	it('refuses a tool turned off while its question stood, always writing nothing', async () => {
+		const p = await page({ a: modern([{ name: 'search', run: text('a') }]) }, [
+			stream([call('search', {})]),
+			stream([{ content: 'ok' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		p.verdicts.push(async () => (await p.engine.run('set tools use a/search off', 'user'), ALWAYS));
+		const t = await p.go();
+		await t.done;
+		expect(t.reply.rounds[0].calls[0]).toMatchObject({
+			result: 'The user refused the call',
+			ok: false
+		});
+		expect(p.engine.settings.get('tools use', 'a/search')).toBe('off');
+	});
+
+	it('keeps the connection that took the place of one whose call failed', async () => {
+		let started = false;
+		const slow = { name: 'slow', run: () => ((started = true), new Promise<never>(() => {})) };
+		const p = await page({ a: legacy([slow]), b: legacy([slow]) }, [
+			stream([call('slow', {})]),
+			stream([{ content: 'ok' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp\nset tools use a/slow on', 'user');
+		const t = await p.go();
+		await vi.waitFor(() => expect(started).toBe(true));
+		await p.engine.run('set mcp url a http://b/mcp', 'user');
+		await t.done;
+		expect(t.reply.rounds[0].calls[0].ok).toBe(false);
+		await p.engine.run('show tools', 'user');
+		expect(p.methods.b.filter((m) => m === 'initialize')).toHaveLength(1);
 	});
 
 	it('shows a call by the item of its tool before any round, as the page opens', async () => {
