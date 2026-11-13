@@ -230,12 +230,13 @@ void agent_quit() {
 // round starts: the endpoints, the model chosen, the system prompt, the
 // parameters of every model, numbers as numbers, the tokens that compact the
 // history of a model and the steps its summary keeps, each tool of the server not
-// off by its own name, then each tool of every MCP server not off, a name
-// served twice staying with the first; a server that fails serves the tools
+// off by its own name, then each tool of every MCP server not off, by its own
+// name or, once a tool before holds it, by its server and its name; a server
+// that fails serves the tools
 // it listed last, each call answering its error, and is not asked again in
 // the turn, the turn holding it as it was named, so a new url, key or header
-// tries it again, and a server no longer named is forgotten; a failure and a
-// name served twice log once a turn
+// tries it again, and a server no longer named is forgotten; a failure, a
+// name prefixed and a tool left out log once a turn
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
@@ -256,24 +257,24 @@ static std::string json_string(const std::string & s) {
     return text.get();
 }
 
-// the name every tool of this server is served under, as a problem tells it
-static const char * const OWN = "KiSS";
-
 // a server as it is named: its name, url, headers and key
 static std::string signature(const remote & r) {
     return r.name + "\n" + r.url + "\n" + r.headers + "\n" + r.value;
 }
 
 // what a turn met: the servers that failed, as they were named, and the
-// names served twice, as logged
+// names prefixed or left out, as logged
 struct met_t {
     std::set<std::string> down;
-    std::set<std::string> clashes;
+    std::set<std::string> renamed;
 };
 
 static setup_t setup(api_stop & stop, met_t & met) {
-    setup_t             s;
-    std::vector<remote> servers;
+    setup_t               s;
+    std::vector<remote>   servers;
+    // every name of a tool of this server and of the pages, on or off, so the
+    // name of a tool of an MCP server never depends on what the user turns off
+    std::set<std::string> taken = { AGENT_CLIENT_TOOL };
     engine_with([&](const engine_reader & config) {
         s.endpoints = api_endpoints(config);
         s.chosen    = config.get("chat model").value_or("");
@@ -298,6 +299,7 @@ static setup_t setup(api_stop & stop, met_t & met) {
             }
         }
         for (tool & t : tools_list(config)) {
+            taken.insert(t.suffix);
             if (config.get("tools use", t.suffix).value_or(USE_OFF) != USE_OFF) {
                 s.tools.push_back(std::move(t));
             }
@@ -333,29 +335,19 @@ static setup_t setup(api_stop & stop, met_t & met) {
         }
         listed.insert(listed.end(), tools.begin(), tools.end());
     }
-    std::map<std::string, std::string> owner;
-    for (const tool & t : s.tools) {
-        owner[t.suffix] = OWN;
-    }
-    if (s.pages) {
-        owner[AGENT_CLIENT_TOOL] = "the pages";
-    }
     engine_with([&](const engine_reader & config) {
-        for (const mcp_tool & t : listed) {
-            if (config.get("tools use", t.name).value_or(USE_OFF) == USE_OFF) {
-                continue;
+        for (mcp_tool & t : listed) {
+            t.served = tools_unique(taken, t.server, t.name);
+            const std::string told =
+                "MCP server " + t.server + ": tool " + t.name +
+                (t.served.empty() ? " left out, " + t.server + "_" + t.name + " is taken or no tool name" :
+                                    " served as " + t.served);
+            if (t.served != t.name && met.renamed.insert(told).second) {
+                log_info("Agent", "%s", told.c_str());
             }
-            const auto first = owner.find(t.name);
-            if (first != owner.end()) {
-                const std::string clash =
-                    "MCP server " + t.server + ": tool " + t.name + " left out, " + first->second + " serves it";
-                if (met.clashes.insert(clash).second) {
-                    log_error("Agent", "%s", clash.c_str());
-                }
-                continue;
+            if (!t.served.empty() && config.get("tools use", t.served).value_or(USE_OFF) != USE_OFF) {
+                s.served.push_back(t);
             }
-            owner[t.name] = "mcp " + t.server;
-            s.served.push_back(t);
         }
     });
     return s;
@@ -544,6 +536,8 @@ static bool call(const std::string &           id,
     std::optional<tool>     found;
     bool                    paged = false;
     std::optional<remote>   server;
+    // the name its MCP server knows the tool by, the model calling it as served
+    std::string             bare;
     std::string             use;
     const bool              pages = attached();
     engine_with([&](const engine_reader & config) {
@@ -560,11 +554,12 @@ static bool call(const std::string &           id,
             use   = paging;
         }
         for (const mcp_tool & t : served) {
-            const std::string u = config.get("tools use", t.name).value_or(USE_OFF);
-            if (!found && !paged && !server && t.name == called.name && u != USE_OFF &&
+            const std::string u = config.get("tools use", t.served).value_or(USE_OFF);
+            if (!found && !paged && !server && t.served == called.name && u != USE_OFF &&
                 config.get("mcp url", t.server)) {
                 server = remote_of(config, "mcp", t.server, BEARER);
                 use    = u;
+                bare   = t.name;
             }
         }
     });
@@ -637,7 +632,7 @@ static bool call(const std::string &           id,
         };
         mcp_outcome out;
         try {
-            out = mcp_call(*server, called.name, called.args.empty() ? NO_ARGS : called.args, stop, answer);
+            out = mcp_call(*server, bare, called.args.empty() ? NO_ARGS : called.args, stop, answer);
         } catch (const std::exception & e) {
             if (stop.stopped) {
                 throw;
@@ -786,7 +781,7 @@ static bool round(const std::string &                     id,
         req.tools.push_back({ t.suffix, t.description, t.input });
     }
     for (const mcp_tool & t : s.served) {
-        req.tools.push_back({ t.name, t.description, t.input });
+        req.tools.push_back({ t.served, t.description, t.input });
     }
     if (e.speaks->described) {
         req.info = api_describe(e, model, stop);

@@ -11,7 +11,7 @@ import type {
 } from '@modelcontextprotocol/client';
 import type { Image, Outcome, Tool, ToolContext } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
-import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, capital } from './config.js';
+import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, TOOL_NAME_PATTERN, capital } from './config.js';
 import { REDIRECT, headers, remotes, type Remote } from './remote.js';
 import { OFF } from './tools.js';
 import { fill } from './form.js';
@@ -284,10 +284,20 @@ export async function locked(config: ConfigReader): Promise<string[]> {
 	return (await served(config, new Map())).filter((s) => s.locked).map((s) => s.server);
 }
 
+// the name the model sees a tool of a server by, the names before it taken:
+// its own, or <server>_<name> once one before holds it, which it takes in
+// turn; none once that one is taken too, or is no name a model API takes
+export function unique(taken: Set<string>, server: string, name: string): string | null {
+	const served = taken.has(name) ? `${server}_${name}` : name;
+	if (!TOOL_NAME_PATTERN.test(served) || taken.has(served)) return null;
+	taken.add(served);
+	return served;
+}
+
 // the tools the model sees: the given ones, then those of every server, each
-// under its own name, but those the user turned off; a server that fails
-// serves the tools it listed last, a name already served stays with the first
-// to serve it, and each tells why as a problem the user reads, never stopping
+// under the name unique gives it, but those the user turned off; a server
+// that fails serves the tools it listed last, and a tool left out or a server
+// that fails tells why as a problem the user reads, never stopping
 // anything
 export async function aggregate(
 	config: ConfigReader,
@@ -295,19 +305,21 @@ export async function aggregate(
 	down: Map<string, string>
 ): Promise<{ tools: Tool[]; problems: string[] }> {
 	const on = (t: Tool) => config.get('tools use', t.name) !== OFF;
-	const owner = new Map(own.filter(on).map((t) => [t.name, NAME]));
+	const taken = new Set(own.map((t) => t.name));
 	const tools = own.filter(on);
 	const problems: string[] = [];
 	for (const s of await served(config, down)) {
 		if (s.error) problems.push(`mcp ${s.server}: ${s.error}`);
-		for (const t of (s.tools ?? []).filter(on)) {
-			const first = owner.get(t.name);
-			if (first) {
-				problems.push(`mcp ${s.server}: tool ${t.name} left out, ${first} serves it`);
+		for (const t of s.tools ?? []) {
+			const name = unique(taken, s.server, t.name);
+			if (name === null) {
+				problems.push(
+					`mcp ${s.server}: tool ${t.name} left out, ${s.server}_${t.name} is taken or no tool name`
+				);
 				continue;
 			}
-			owner.set(t.name, `mcp ${s.server}`);
-			tools.push(t);
+			const named = { ...t, name };
+			if (on(named)) tools.push(named);
 		}
 	}
 	return { tools, problems };

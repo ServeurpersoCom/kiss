@@ -1,7 +1,8 @@
 // agent.cpp: the laws of the agent of the server, run as the build ends, a
 // turn against an endpoint and MCP servers of the test: every round sends the
 // system prompt alone; a server that fails is asked once in the turn; a tool
-// served twice stays with the first, the server itself;
+// whose name one before holds, the server itself, is served under its server
+// and its name, called by its own;
 // a history compacts as the page compacts it, the very bodies sent;
 // a line the user types runs as the config tool runs it, its output after
 // the thread, a url it asks to let shown as a form, the line running again
@@ -164,6 +165,8 @@ int main() {
         const std::string delta =
             text == "fold" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"config\","
                              "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"compact\\\"}\"}}]}" :
+            text == "twin" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":"
+                             "\"twin_config\",\"arguments\":\"{}\"}}]}" :
             text == "go" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"bash\",\"arguments\":"
                            "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo hi\\\"}\"}}]}" :
             text == "page" ?
@@ -173,7 +176,8 @@ int main() {
         res.set_content("data: {\"choices\":[{\"delta\":" + delta + "}]}\n\ndata: [DONE]\n\n", "text/event-stream");
     });
     // an MCP server of the 2025 era serving a tool of the name the server
-    // serves itself on every machine, and one that fails every request
+    // serves itself on every machine, a call answering the name it was called
+    // by, and one that fails every request
     server.Post("/twin", [](const httplib::Request & req, httplib::Response & res) {
         const std::shared_ptr<yyjson_doc> doc(yyjson_read(req.body.data(), req.body.size(), 0), yyjson_doc_free);
         yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
@@ -187,6 +191,9 @@ int main() {
                 "\"result\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{}}" :
             method == "tools/list" ?
                 "\"result\":{\"tools\":[{\"name\":\"config\",\"inputSchema\":{\"type\":\"object\"}}]}" :
+            method == "tools/call" ?
+                "\"result\":{\"content\":[{\"type\":\"text\",\"text\":" +
+                    json(yyjson_get_str(yyjson_obj_get(yyjson_obj_get(root, "params"), "name"))) + "}]}" :
                 "\"error\":{\"code\":-32601,\"message\":\"no such method\"}";
         res.set_content("{\"jsonrpc\":\"2.0\",\"id\":1," + result + "}", "application/json");
     });
@@ -250,7 +257,9 @@ int main() {
         }
         law(g_down == 1, "a server that fails is asked once in the turn: " + std::to_string(g_down.load()));
         const words_t listed = split(g_tools[0], ' ');
-        law(std::count(listed.begin(), listed.end(), "config") == 1, "a tool served twice goes once: " + g_tools[0]);
+        law(std::count(listed.begin(), listed.end(), "config") == 1 &&
+                std::count(listed.begin(), listed.end(), "twin_config") == 1,
+            "a tool whose name the server holds goes under its server and its name: " + g_tools[0]);
     }
 
     // the entries of the conversation, as the library holds them
@@ -315,6 +324,11 @@ int main() {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     };
+    law(message("twin"), "a turn calling a tool served under its server starts");
+    when([&] { return agent_grant(c.id, number(), "once").empty(); });
+    when([&] { return settled(); });
+    law(called().name == "twin_config" && called().ok && called().result == "config",
+        "a tool served under its server is called by its own name: " + called().result);
     library_follower page;
     agent_attach();
     agent_attach();
@@ -771,7 +785,7 @@ int main() {
     const size_t      kiss  = tools.find("! KiSS\n");
     law(kiss != std::string::npos && tools.find("set tools use config on", kiss) < tools.find("! pages", kiss) &&
             tools.find("! pages\nset tools use client_config consent") != std::string::npos &&
-            tools.find("! mcp twin\nset tools use config on") != std::string::npos &&
+            tools.find("! mcp twin\nset tools use twin_config consent") != std::string::npos &&
             tools.find("! mcp down http://") != std::string::npos,
         "show tools lists the tools of this server, of the pages and of each MCP server, one that fails telling why");
     law(engine_run("show models e/", ENGINE_ADMIN).text ==
@@ -779,7 +793,7 @@ int main() {
         "show names a model an endpoint serves by a prefix");
     law(has(engine_suggest("set chat model "), "e/m"), "chat model completes with the models the endpoints serve");
     const words_t use = engine_suggest("set tools use ");
-    law(has(use, "view") && has(use, "client_config") && has(use, "config"),
+    law(has(use, "view") && has(use, "client_config") && has(use, "config") && has(use, "twin_config"),
         "tools use completes with the tools served");
     law(has(engine_suggest("set files shell "), "bash"), "files shell completes with the shells");
 

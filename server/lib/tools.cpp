@@ -4,6 +4,8 @@
 
 #include "yyjson.h"
 
+#include <algorithm>
+#include <cctype>
 #include <memory>
 
 static std::vector<tool_source> & sources() {
@@ -13,6 +15,14 @@ static std::vector<tool_source> & sources() {
 
 std::string tools_served(const std::string & hostname, const tool & t) {
     return hostname + "_server_" + t.suffix;
+}
+
+std::string tools_unique(std::set<std::string> & taken, const std::string & server, const std::string & name) {
+    const std::string served = taken.count(name) ? server + "_" + name : name;
+    const bool        valid  = !served.empty() && served.size() <= TOOL_NAME_MAX &&
+                       std::all_of(served.begin(), served.end(),
+                                   [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '-'; });
+    return valid && taken.insert(served).second ? served : "";
 }
 
 bool tools_register(tool_source source) {

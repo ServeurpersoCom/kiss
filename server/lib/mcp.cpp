@@ -250,8 +250,11 @@ static session opened(const remote & r, api_stop & stop) {
         size_t       i, n;
         yyjson_val * t;
         yyjson_arr_foreach(yyjson_obj_get(result, "tools"), i, n, t) {
-            s.tools.push_back({ r.name, text_of(yyjson_obj_get(t, "name")), text_of(yyjson_obj_get(t, "description")),
-                                json_of(yyjson_obj_get(t, "inputSchema")) });
+            s.tools.push_back({ r.name,
+                                text_of(yyjson_obj_get(t, "name")),
+                                text_of(yyjson_obj_get(t, "description")),
+                                json_of(yyjson_obj_get(t, "inputSchema")),
+                                {} });
         }
         yyjson_val * next = yyjson_obj_get(result, "nextCursor");
         if (!yyjson_is_str(next)) {

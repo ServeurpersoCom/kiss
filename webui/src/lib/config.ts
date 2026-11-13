@@ -20,6 +20,8 @@ export const STARTUP_STORAGE_KEY = 'startup';
 export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
 // between the endpoint and the model id in the name of a model: prod/qwen3:8b
 export const MODEL_SEPARATOR = '/';
+// a tool name as every model API takes it
+export const TOOL_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 // a line of the page to the user or the model, its first letter capital, but
 // for one that opens on a URL, written as it is
 const URL_START = /^[a-z][a-z0-9+.-]*:\/\//;

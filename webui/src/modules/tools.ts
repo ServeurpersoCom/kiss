@@ -1,7 +1,7 @@
 import type { Module } from '../engine/engine.js';
 import { NAME } from '../lib/config.js';
 import { display } from '../rendering/display.svelte.js';
-import { served } from '../lib/mcp.js';
+import { served, unique } from '../lib/mcp.js';
 import { CONSENT, USES, tools } from '../lib/tools.js';
 
 // every setting of a tool, the tool named as the item: one of KiSS or of an
@@ -27,14 +27,16 @@ export default {
 				.filter(([, argument]) => argument)
 		);
 	},
-	// the tools of KiSS, then those of every MCP server
+	// the tools of KiSS, then those of every MCP server, each by the name the
+	// model sees it by
 	async items(ctx) {
 		const mcp = await served(ctx.running, new Map());
+		const taken = new Set(tools.map((t) => t.name));
 		return [
 			{ group: NAME, names: tools.map((t) => t.name) },
 			...mcp.map((s) => ({
 				group: `mcp ${s.server}`,
-				names: (s.tools ?? []).map((t) => t.name),
+				names: (s.tools ?? []).flatMap((t) => unique(taken, s.server, t.name) ?? []),
 				...(s.error ? { error: s.error } : {})
 			}))
 		];

@@ -825,31 +825,39 @@ describe('an MCP server', () => {
 		expect(t.reply.rounds.flatMap((r) => r.calls)[0].result).toMatch(/^mcp a: /);
 	});
 
-	it('leaves out a name another one serves first, the save warning of it', async () => {
+	it('serves a name one before serves under its server, called by its own name', async () => {
 		const p = await page(
 			{
 				a: legacy(SHELL),
 				b: modern([
-					{ name: 'bash_tool', run: text('x') },
+					{ name: 'bash_tool', run: text('b') },
 					{ name: 'config', run: text('x') }
 				])
 			},
-			[stream([{ content: 'ok' }])]
+			[stream([call('b_bash_tool', { description: 'b' })]), stream([{ content: 'ok' }])]
 		);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await (
-			await p.go()
-		).done;
-		expect(p.bodies[0].tools.map((t) => t.function.name)).toEqual([
+		await p.engine.run('set tools use b_bash_tool on', 'user');
+		const t = await p.go();
+		await t.done;
+		expect(p.bodies[0].tools.map((x) => x.function.name)).toEqual([
 			'config',
 			'bash_tool',
 			'snap',
 			'fail',
-			'wait'
+			'wait',
+			'b_bash_tool',
+			'b_config'
 		]);
-		const saved = (await p.engine.run('copy running-config a', 'user')).text;
-		expect(saved).toContain('mcp b: tool bash_tool left out, mcp a serves it');
-		expect(saved).toContain('mcp b: tool config left out, KiSS serves it');
+		expect(t.reply.rounds.flatMap((r) => r.calls)[0]).toMatchObject({
+			name: 'b_bash_tool',
+			ok: true,
+			result: 'b'
+		});
+		expect((await p.engine.run('show tools use', 'user')).text).toContain(
+			'! mcp b\nset tools use b_bash_tool on\nset tools use b_config consent'
+		);
+		expect((await p.engine.run('copy running-config a', 'user')).text).not.toContain('left out');
 	});
 
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
@@ -901,16 +909,39 @@ describe('an MCP server', () => {
 		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('off');
 	});
 
-	it('turned off is never seen by the model, and frees its name', async () => {
-		const p = await page({ a: legacy(SHELL), b: modern([{ name: 'bash_tool', run: text('x') }]) }, [
-			stream([{ content: 'ok' }])
-		]);
+	it('turned off is never seen by the model, and keeps its name', async () => {
+		const tools = [
+			{ name: 'bash_tool', run: text('x') },
+			{ name: 'config', run: text('x') }
+		];
+		const p = await page({ a: legacy(SHELL), b: modern(tools) }, [stream([{ content: 'ok' }])]);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
 		await p.engine.run('set tools use bash_tool off\nset tools use config off', 'user');
 		await (
 			await p.go()
 		).done;
-		expect(p.bodies[0].tools.map((t) => t.function.name)).toEqual(['snap', 'fail', 'wait']);
+		expect(p.bodies[0].tools.map((t) => t.function.name)).toEqual([
+			'snap',
+			'fail',
+			'wait',
+			'b_bash_tool',
+			'b_config'
+		]);
+	});
+
+	it('leaves out a tool its server names past what a model API takes, the save warning of it', async () => {
+		const p = await page(
+			{ a: legacy(SHELL), 'b.x': modern([{ name: 'bash_tool', run: text('x') }]) },
+			[stream([{ content: 'ok' }])]
+		);
+		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b.x http://b.x/mcp', 'user');
+		await (
+			await p.go()
+		).done;
+		expect(p.bodies[0].tools.map((t) => t.function.name)).not.toContain('b.x_bash_tool');
+		expect((await p.engine.run('copy running-config a', 'user')).text).toContain(
+			'mcp b.x: tool bash_tool left out, b.x_bash_tool is taken or no tool name'
+		);
 	});
 
 	it('fails a call past the timeout of its server', async () => {

@@ -21,6 +21,8 @@ struct mcp_tool {
     std::string name;
     std::string description;
     std::string input;
+    // the name the model sees it by, its own or prefixed by its server
+    std::string served;
 };
 
 // what a call answered: whether it went, its text, its images

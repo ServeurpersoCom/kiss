@@ -36,7 +36,7 @@ export default {
 		void served(config, new Map());
 		follow(config);
 	},
-	// every server answers with its tools, and no name is served twice
+	// every server answers with its tools, each under a name the model takes
 	async check(config) {
 		const { problems } = await aggregate(config, tools, new Map());
 		return problems.length ? problems.join(', ') : null;
