@@ -656,7 +656,7 @@ int main() {
     law(agent_answer(folding.id, [&](conversation &) { return folded; }).empty(), "a turn that folds starts");
     after = waited(folding.id);
     law(after.size() == 2 && after[1].rounds.size() == 3 && after[1].rounds[0].calls.size() == 1 &&
-            after[1].rounds[0].calls[0].ok && after[1].rounds[1].text == "S" && after[1].rounds[1].kept == 1 &&
+            after[1].rounds[0].calls[0].ok == true && after[1].rounds[1].text == "S" && after[1].rounds[1].kept == 1 &&
             after[1].rounds[2].text == "done" && !after[1].error,
         "a batch of the model that compacts folds the history before its next request");
     engine_run("set models compaction-preserve-steps e/m 2", ENGINE_ADMIN);
