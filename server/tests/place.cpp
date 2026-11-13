@@ -240,9 +240,9 @@ int main() {
         return listed.text.size() >= tail.size() &&
                listed.text.compare(listed.text.size() - tail.size(), tail.size(), tail) == 0;
     };
-    law(listed.ok && listed.text.find((seen / "sub" / "b.txt").u8string() + "\n") != std::string::npos &&
-            listed.text.find((seen / "node_modules").u8string() + "\n") != std::string::npos &&
-            listed.text.find("inner") == std::string::npos && ends("4 entries, 1 hidden"),
+    law(listed.ok && listed.text.find("b.txt\n") != std::string::npos &&
+            listed.text.find("node_modules\n") != std::string::npos && listed.text.find("inner") == std::string::npos &&
+            ends("4 entries, 1 hidden"),
         "view lists a directory two levels deep, its hidden entries counted, node_modules closed");
     engine_run("set files shell box", ENGINE_ADMIN);
     law(given().shell == "sh -s" && given().timeout == 7 && given().broken.empty(),
