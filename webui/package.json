@@ -8,7 +8,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"format": "prettier --write .",
-		"format:check": "prettier --check .",
+		"lint": "prettier --check .",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest run"
 	},
