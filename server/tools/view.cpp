@@ -138,10 +138,10 @@ static tool_outcome listing(const viewer & v, const std::string & given, ticker 
     for (const auto & [rel, size] : sizes) {
         // a path as its machine writes it: the one of the server by its own
         // separator, the one a shell reaches by a slash
-        const std::string far  = given + (given.back() == '/' ? "" : "/") + rel;
-        const std::string near = (fs::u8path(given) / fs::u8path(rel).make_preferred()).u8string();
-        const std::string path = rel.empty() ? given : v.at.shell.empty() ? near : far;
-        const std::string line = human(size) + " " + path + "\n";
+        const std::string there = given + (given.back() == '/' ? "" : "/") + rel;
+        const std::string here  = (fs::u8path(given) / fs::u8path(rel).make_preferred()).u8string();
+        const std::string path  = rel.empty() ? given : v.at.shell.empty() ? here : there;
+        const std::string line  = human(size) + " " + path + "\n";
         kept.add(line.data(), line.size());
     }
     const std::string tail = hidden ? ", " + std::to_string(hidden) + " hidden" : "";
