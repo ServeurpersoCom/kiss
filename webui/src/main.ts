@@ -4,6 +4,7 @@ import App from './rendering/App.svelte';
 import { defaults, run, start } from './engine/run.js';
 import { restore, unlock } from './lib/state.svelte.js';
 import { SITE_CONFIG_URL } from './lib/config.js';
+import { STARTUP_CONFIG } from './engine/text.js';
 
 // a missing site configuration is the common case; a static server may answer
 // a missing file with its index page, which is not a configuration either
@@ -13,7 +14,7 @@ if (site?.ok && !site.headers.get('content-type')?.includes('html')) {
 		console.error(`${SITE_CONFIG_URL}: ${problem}`);
 }
 
-for (const problem of start()) console.error(`startup-config: ${problem}`);
+for (const problem of start()) console.error(`${STARTUP_CONFIG}: ${problem}`);
 await restore();
 
 // development only: run CLI lines from the browser console, kiss('show running', 'llm')

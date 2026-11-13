@@ -159,6 +159,7 @@ server/lib/tools.cpp|h     the tools the server serves, each source registered b
 server/lib/prompts.cpp|h   the texts of prompts.json and of the page, read once
 server/lib/utf8.h          the UTF-8 boundary of Windows: argv, fopen
 server/lib/quit.cpp|h      the end of the process: the work in flight stopped, its threads joined
+server/tests/laws.h        the laws a test holds: each counted, the first broken ones told
 server/tests/factory.h     the factory configuration a law runs on, on a port free on the machine
 server/tests/engine.cpp    the laws of the engine, built and run with the server, twins of those of
                            the page

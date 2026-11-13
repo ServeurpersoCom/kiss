@@ -7,6 +7,7 @@
 #include "engine/engine.h"
 #include "factory.h"
 #include "httplib.h"
+#include "laws.h"
 #include "lib/listener.h"
 #include "lib/quit.h"
 
@@ -31,16 +32,6 @@
 #endif
 
 namespace fs = std::filesystem;
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] http_test broken: %s\n", what.c_str());
-    }
-}
 
 // a socket listening on [::1]:port that no other socket binds, as another
 // process holds an address: exclusive on Windows, without SO_REUSEPORT on
@@ -195,13 +186,14 @@ static std::string heard(long long s) {
 static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})";
 
 int main() {
+    laws_of("http_test");
     const fs::path root = fs::temp_directory_path() / ("http_test." + std::to_string(std::random_device{}()));
     fs::create_directories(root);
     const int port = laws_factory();
     engine_start((root / "server.conf").u8string(), "test");
     if (engine_get("server listen-port") != std::to_string(port)) {
         fs::remove_all(root);
-        printf("[Laws] http_test broken: the server takes the free port %d\n", port);
+        printf("[Laws] %s broken: the server takes the free port %d\n", g_test, port);
         return 1;
     }
 
@@ -471,6 +463,5 @@ int main() {
     release(mute);
     fs::remove_all(root);
 
-    printf("[Laws] http_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

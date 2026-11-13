@@ -19,6 +19,7 @@
 
 #include "engine/engine.h"
 #include "factory.h"
+#include "laws.h"
 #include "lib/base64.h"
 #include "lib/job.h"
 #include "lib/quit.h"
@@ -32,16 +33,6 @@
 #include <vector>
 
 namespace fs = std::filesystem;
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] place_test broken: %s\n", what.c_str());
-    }
-}
 
 static const auto ALIVE = [] {
     return true;
@@ -93,6 +84,7 @@ static std::string stat(const place & at, const std::string & given) {
 }
 
 int main() {
+    laws_of("place_test");
     const fs::path root = fs::temp_directory_path() / ("place_test." + std::to_string(std::random_device{}()));
     const fs::path box  = root / "box";
     std::string    binary;
@@ -136,7 +128,7 @@ int main() {
         places.push_back(noisy);
         places.push_back(blank);
     } else {
-        printf("[Laws] place_test: no POSIX shell here, the laws of the server alone\n");
+        printf("[Laws] %s: no POSIX shell here, the laws of the server alone\n", g_test);
     }
 
     for (const place & at : places) {
@@ -243,7 +235,7 @@ int main() {
         "a files shell that names no shell fails every call, never on the machine of the server");
 
     fs::remove_all(root);
-    printf("[Laws] place_test: %zu laws, %zu broken\n", g_laws, g_fails);
+    const int code = laws_told();
     quit_all();
-    return g_fails ? 1 : 0;
+    return code;
 }

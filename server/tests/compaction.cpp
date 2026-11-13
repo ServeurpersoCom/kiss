@@ -7,6 +7,7 @@
 
 #include "lib/compaction.h"
 
+#include "laws.h"
 #include "lib/api.h"
 #include "lib/prompts.h"
 #include "yyjson.h"
@@ -18,16 +19,6 @@
 #include <vector>
 
 const protocol & protocol_chat();
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] compaction_test broken: %s\n", what.c_str());
-    }
-}
 
 static conversation_round made(const std::string & text, std::optional<int> kept = std::nullopt) {
     conversation_round r;
@@ -94,6 +85,7 @@ static std::vector<std::string> sent(const std::vector<conversation_entry> & mes
 }
 
 int main() {
+    laws_of("compaction_test");
     conversation_entry cli;
     cli.role                                      = ROLE_CLI;
     cli.input                                     = "show title";
@@ -140,6 +132,5 @@ int main() {
             !compaction_folding(done, 1),
         "a summary folds nothing when no step lies past the preserved ones");
 
-    printf("[Laws] compaction_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

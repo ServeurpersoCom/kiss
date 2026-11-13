@@ -21,6 +21,7 @@
 #include "engine/keychain.h"
 #include "factory.h"
 #include "httplib.h"
+#include "laws.h"
 #include "lib/api.h"
 #include "lib/conversation.h"
 #include "lib/library.h"
@@ -43,16 +44,6 @@
 #include <vector>
 
 namespace fs = std::filesystem;
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] agent_test broken: %s\n", what.c_str());
-    }
-}
 
 // what the endpoint of the test saw: the system prompt and the tools of each
 // request, and how often the server that fails was asked to open a session
@@ -78,6 +69,7 @@ static std::string json(const std::string & s) {
 }
 
 int main() {
+    laws_of("agent_test");
     httplib::Server server;
     // the endpoint: a message go calls bash, a message page calls the config
     // tool of the pages, a tool result answers text
@@ -902,6 +894,5 @@ int main() {
     server.stop();
     listening.join();
     fs::remove_all(root);
-    printf("[Laws] agent_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

@@ -6,6 +6,7 @@
 // first occurs, its count telling whether it is unique; a file the server
 // keeps is replaced whole
 
+#include "laws.h"
 #include "lib/file.h"
 
 #include <cstdio>
@@ -14,16 +15,6 @@
 
 namespace fs = std::filesystem;
 
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] files_test broken: %s\n", what.c_str());
-    }
-}
-
 static std::string loaded(const fs::path & path, size_t limit = 1 << 20) {
     std::string       text;
     const std::string why = file_load(path, limit, text);
@@ -31,6 +22,7 @@ static std::string loaded(const fs::path & path, size_t limit = 1 << 20) {
 }
 
 int main() {
+    laws_of("files_test");
     const fs::path root = fs::temp_directory_path() / ("files_test." + std::to_string(std::random_device{}()));
     fs::create_directories(root);
     const std::string cwd = root.u8string();
@@ -80,6 +72,5 @@ int main() {
     law(file_find("a\r\nb", "a\nb").count == 0, "bytes match as they are, LF never matches CRLF");
 
     fs::remove_all(root);
-    printf("[Laws] files_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

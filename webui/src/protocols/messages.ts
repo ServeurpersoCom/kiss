@@ -199,9 +199,9 @@ export default {
 			}
 			if (e.type === 'message_delta') {
 				const usage = e.usage?.output_tokens;
-				const cut = e.delta?.stop_reason === 'max_tokens' ? { cut: true as const } : {};
-				if (typeof usage !== 'number')
-					return e.delta?.stop_reason === 'max_tokens' ? cut : undefined;
+				const stopped = e.delta?.stop_reason === MAX_TOKENS;
+				const cut = stopped ? { cut: true as const } : {};
+				if (typeof usage !== 'number') return stopped ? cut : undefined;
 				return { usage, ...(prompt !== undefined ? { context: prompt + usage } : {}), ...cut };
 			}
 			if (e.type === 'message_stop') return { end: true };

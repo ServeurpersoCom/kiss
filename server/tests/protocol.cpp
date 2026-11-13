@@ -8,6 +8,7 @@
 // and read their streams into text, thinking, calls, the items they need
 // back, the count and the end
 
+#include "laws.h"
 #include "lib/api.h"
 #include "yyjson.h"
 
@@ -20,16 +21,6 @@ const protocol & protocol_chat();
 const protocol & protocol_messages();
 const protocol & protocol_responses();
 
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] protocol_test broken: %s\n", what.c_str());
-    }
-}
-
 // the messages of a body, each as JSON
 static std::string messages(const std::string & body) {
     const std::shared_ptr<yyjson_doc> doc(yyjson_read(body.data(), body.size(), 0), yyjson_doc_free);
@@ -39,6 +30,7 @@ static std::string messages(const std::string & body) {
 }
 
 int main() {
+    laws_of("protocol_test");
     const protocol & chat = protocol_chat();
 
     api_request r;
@@ -250,6 +242,5 @@ int main() {
             "messages counted, none when the prompt goes untold");
     }
 
-    printf("[Laws] protocol_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

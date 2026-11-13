@@ -9,6 +9,7 @@
 
 #include "engine/seal.h"
 
+#include "laws.h"
 #include "yyjson.h"
 
 #include <cstdio>
@@ -21,16 +22,6 @@ static const words_t KEYS = { "sk\\route\"q/0005", "sk-\xF0\x9F\x98\x80-0004", "
 
 // the most bytes a stream is cut into
 static const size_t PIECE = 40;
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] seal_test broken: %s\n", what.c_str());
-    }
-}
 
 // every string a JSON value holds, the names of properties included
 static void strings(yyjson_val * v, words_t & out) {
@@ -132,6 +123,7 @@ static std::string events(const std::string & key, int way) {
 }
 
 int main() {
+    laws_of("seal_test");
     for (const std::string & key : KEYS) {
         for (int way = 0; way < 3; way++) {
             const std::string b = body(key, way);
@@ -155,6 +147,5 @@ int main() {
             }
         }
     }
-    printf("[Laws] seal_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

@@ -11,6 +11,7 @@
 #include "lib/mcp.h"
 
 #include "httplib.h"
+#include "laws.h"
 #include "yyjson.h"
 
 #include <cstdio>
@@ -18,16 +19,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] mcp_test broken: %s\n", what.c_str());
-    }
-}
 
 // what the server of the test saw: the session id and protocol version of
 // every request after the handshake, and the arguments of the last call
@@ -44,6 +35,7 @@ static std::string event(const std::string & json) {
 }
 
 int main() {
+    laws_of("mcp_test");
     httplib::Server server;
     server.Post("/mcp", [](const httplib::Request & req, httplib::Response & res) {
         if (g_gone) {
@@ -245,6 +237,5 @@ int main() {
 
     server.stop();
     listening.join();
-    printf("[Laws] mcp_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

@@ -9,7 +9,8 @@ import type { ConfigReader } from './engine.js';
 // where a key goes when nothing else says: Header, or Header: Scheme
 export const BEARER = 'Authorization: Bearer';
 
-const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+// a header name, and a scheme: a token of HTTP
+export const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
 // the secrets the running configuration holds, as the engine lists them
 let held: () => string[] = () => [];

@@ -1,6 +1,6 @@
 import type { Image } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
-import { BEARER, credential, placement } from '../engine/keychain.js';
+import { BEARER, TOKEN, credential, placement } from '../engine/keychain.js';
 import { SPACE } from './config.js';
 
 // an item of a collection module that names a remote server by a url, the
@@ -32,7 +32,6 @@ export const REDIRECT: RequestRedirect = 'error';
 
 // the headers of an item, Name: value pairs split by ;
 const SEPARATOR = ';';
-const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
 // the pairs of a headers value, each a name and its value, either empty when
 // the pair is not Name: value

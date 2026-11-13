@@ -37,6 +37,12 @@ export const capital = (text: string): string =>
 export const NEWLINE = '\n';
 export const SPACE = ' ';
 export const TAB = '\t';
+// what parts two facts on one line of the status
+export const PART_SEPARATOR = ' - ';
+// the CSS layers of the page: what its libraries bring, then its own, which
+// wins
+export const LIB_LAYER = 'lib';
+export const PAGE_LAYER = 'page';
 // what parts two paragraphs
 export const PARAGRAPH = NEWLINE + NEWLINE;
 // the keys the page reads by their name

@@ -8,6 +8,7 @@
 // gone; every follower, through any run of changes, read at any pace, holds
 // what a new follower gets
 
+#include "laws.h"
 #include "lib/file.h"
 #include "lib/library.h"
 #include "lib/log.h"
@@ -26,16 +27,6 @@
 #include <string>
 
 namespace fs = std::filesystem;
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] conversation_test broken: %s\n", what.c_str());
-    }
-}
 
 // a conversation holding one turn of each kind, as the page writes it
 static const char * const DEMO = R"({
@@ -210,6 +201,7 @@ static void write(const fs::path & path, const std::string & text) {
 }
 
 int main() {
+    laws_of("conversation_test");
     const std::vector<conversation> read = conversation_parse(DEMO);
     {
         const std::string                 back = conversation_file(read, {});
@@ -583,6 +575,5 @@ int main() {
     }
 
     fs::remove_all(root);
-    printf("[Laws] conversation_test: %zu laws, %zu broken\n", g_laws, g_fails);
-    return g_fails ? 1 : 0;
+    return laws_told();
 }

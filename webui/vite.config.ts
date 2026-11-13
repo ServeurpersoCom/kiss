@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { gzipSync } from 'zlib';
 import { resolve } from 'path';
 import type { Plugin as CssPlugin } from 'postcss';
-import { scope } from './src/lib/config.ts';
+import { LIB_LAYER, PAGE_LAYER, scope } from './src/lib/config.ts';
 
 // git version baked at build time
 function gitVersion(): string {
@@ -68,9 +68,9 @@ function katexWoff2Only() {
 const layers: CssPlugin = {
 	postcssPlugin: 'kiss-layers',
 	Once(root, { AtRule }) {
-		const name = root.source?.input.file?.includes('/node_modules/') ? 'lib' : 'page';
+		const name = root.source?.input.file?.includes('/node_modules/') ? LIB_LAYER : PAGE_LAYER;
 		root.append(new AtRule({ name: 'layer', params: name }).append(root.nodes));
-		root.prepend(new AtRule({ name: 'layer', params: 'lib, page' }));
+		root.prepend(new AtRule({ name: 'layer', params: `${LIB_LAYER}, ${PAGE_LAYER}` }));
 	}
 };
 

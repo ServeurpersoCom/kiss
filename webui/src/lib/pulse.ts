@@ -1,5 +1,5 @@
 import type { Stats } from './types.js';
-import { SECOND_MS, capital } from './config.js';
+import { PART_SEPARATOR, SECOND_MS, capital } from './config.js';
 
 // what a turn does now, as the system spends it: preparing a round, its model
 // and its tools, waiting for the endpoint, asking it again, streaming its
@@ -146,7 +146,7 @@ export function line(p: Pulse, now: number): string {
 		parts.push(tokens(p.tokens));
 		if (p.tokens > 1) parts.push(rate(p.tokens - 1, p.last - p.first));
 	}
-	return parts.map(capital).join(' - ');
+	return parts.map(capital).join(PART_SEPARATOR);
 }
 
 // what a turn spent, as it reads under its answer
@@ -154,5 +154,5 @@ export function summary(s: Stats): string {
 	const parts = [tokens(s.tokens)];
 	if (s.generation > 0) parts.push(rate(s.tokens, s.generation));
 	parts.push(ms(s.system));
-	return parts.join(' - ');
+	return parts.join(PART_SEPARATOR);
 }

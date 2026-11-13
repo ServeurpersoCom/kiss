@@ -15,6 +15,7 @@
 
 #include "engine/text.h"
 #include "factory.h"
+#include "laws.h"
 #include "lib/quit.h"
 
 #include <algorithm>
@@ -28,16 +29,6 @@
 #include <thread>
 
 namespace fs = std::filesystem;
-
-static size_t g_laws  = 0;
-static size_t g_fails = 0;
-
-static void law(bool kept, const std::string & what) {
-    g_laws++;
-    if (!kept && g_fails++ < 8) {
-        fprintf(stderr, "[Laws] engine_test broken: %s\n", what.c_str());
-    }
-}
 
 // what a batch of the administrator answers
 static std::string admin(const std::string & lines) {
@@ -63,6 +54,7 @@ static std::string read(const fs::path & p) {
 }
 
 int main() {
+    laws_of("engine_test");
     const fs::path root = fs::temp_directory_path() / ("engine_test." + std::to_string(std::random_device{}()));
     fs::create_directories(root);
     const fs::path conf = root / "server.conf";
@@ -233,7 +225,7 @@ int main() {
         "show running-config all lists the items of a module by source, as show <module> does");
 
     fs::remove_all(root);
-    printf("[Laws] engine_test: %zu laws, %zu broken\n", g_laws, g_fails);
+    const int code = laws_told();
     quit_all();
-    return g_fails ? 1 : 0;
+    return code;
 }
