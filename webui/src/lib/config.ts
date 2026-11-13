@@ -22,6 +22,12 @@ export const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]*$/;
 export const MODEL_SEPARATOR = '/';
 // a tool name as every model API takes it
 export const TOOL_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+// between the MCP server and its tool in the item that sets the tool:
+// exa/web_search_exa
+export const TOOL_SEPARATOR = '/';
+// between the MCP server and its tool in the name the model sees a tool by
+// once one before holds its own: exa_search
+export const SERVED_SEPARATOR = '_';
 // a line of the page to the user or the model, its first letter capital, but
 // for one that opens on a URL, written as it is
 const URL_START = /^[a-z][a-z0-9+.-]*:\/\//;

@@ -7,17 +7,17 @@ import { aggregate, connecting } from './mcp.js';
 import { settled } from './conversation.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
-import { CONSENT, OFF, ON, tools as own } from './tools.js';
+import { CONSENT, OFF, ON, item, tools as own } from './tools.js';
 import { PARAMETERS } from '../modules/models.js';
 import { run, settings } from '../engine/run.js';
 
-// whether the user lets the model make this call: a tool in consent asks, and
-// always turns it on, as the user
-async function allowed(ctx: ToolContext, c: Call): Promise<boolean> {
-	if (settings.get('tools use', c.name) !== CONSENT) return true;
+// whether the user lets the model make this call of a tool: a tool in
+// consent asks, and always turns its item on, as the user
+async function allowed(ctx: ToolContext, tool: Tool, c: Call): Promise<boolean> {
+	if (settings.get('tools use', item(tool)) !== CONSENT) return true;
 	const verdict = await ctx.grant({ kind: 'call', tool: c.name, args: c.args });
 	ctx.signal.throwIfAborted();
-	if (verdict === ALWAYS) await run(`set tools use ${JSON.stringify(c.name)} ${ON}`, 'user');
+	if (verdict === ALWAYS) await run(`set tools use ${JSON.stringify(item(tool))} ${ON}`, 'user');
 	return verdict !== REFUSE;
 }
 
@@ -39,7 +39,7 @@ function object(text: string): Record<string, unknown> | null {
 // reaches its tool, so a stop or a page closed while it runs leaves it
 // stopped, whatever the tool answers
 async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<void> {
-	const tool = tools.find((t) => t.name === c.name && settings.get('tools use', t.name) !== OFF);
+	const tool = tools.find((t) => t.name === c.name && settings.get('tools use', item(t)) !== OFF);
 	const args = object(c.args);
 	if (!tool || !args) {
 		// what no tool reads, or what does not read, is kept as no arguments
@@ -49,7 +49,7 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 		return;
 	}
 	if (tool.stored) c.args = JSON.stringify(tool.stored(ctx, args));
-	if (!(await allowed(ctx, c))) {
+	if (!(await allowed(ctx, tool, c))) {
 		c.result = 'The user refused the call';
 		c.ok = false;
 		return;

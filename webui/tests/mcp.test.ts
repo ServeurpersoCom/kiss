@@ -304,7 +304,7 @@ describe('an MCP server', () => {
 			stream([{ content: 'one' }]),
 			stream([{ content: 'two' }])
 		]);
-		await p.engine.run('set mcp url a http://a/mcp\nset tools use grow on', 'user');
+		await p.engine.run('set mcp url a http://a/mcp\nset tools use a/grow on', 'user');
 		await (
 			await p.go()
 		).done;
@@ -340,7 +340,7 @@ describe('an MCP server', () => {
 		const p = await page({ a: legacy(SHELL) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp key a sk-mcp', 'user');
 		expect((await p.engine.run('show tools', 'user')).text).toContain(
-			'! mcp a\nset tools use bash_tool consent'
+			'! mcp a\nset tools use a/bash_tool consent'
 		);
 		expect(p.auth.length).toBeGreaterThan(0);
 		expect(p.auth.every((a) => a === 'Bearer sk-mcp')).toBe(true);
@@ -451,7 +451,7 @@ describe('an MCP server', () => {
 		]);
 		await p.engine.run(
 			'set endpoints url k http://k/v1\nset endpoints key k sk-proj-endpoint-0001\n' +
-				'set mcp url a http://a/mcp\nset tools use echo on',
+				'set mcp url a http://a/mcp\nset tools use a/echo on',
 			'user'
 		);
 		p.secrets.push('typed-secret-0002');
@@ -619,7 +619,7 @@ describe('an MCP server', () => {
 			'user'
 		);
 		expect((await p.engine.run('show tools', 'user')).text).toContain(
-			'! mcp exa\nset tools use search'
+			'! mcp exa\nset tools use exa/search'
 		);
 		expect(p.methods.e).toBeUndefined();
 		expect(p.auth).toContain('Bearer K');
@@ -837,7 +837,7 @@ describe('an MCP server', () => {
 			[stream([call('b_bash_tool', { description: 'b' })]), stream([{ content: 'ok' }])]
 		);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await p.engine.run('set tools use b_bash_tool on', 'user');
+		await p.engine.run('set tools use b/bash_tool on', 'user');
 		const t = await p.go();
 		await t.done;
 		expect(p.bodies[0].tools.map((x) => x.function.name)).toEqual([
@@ -855,27 +855,56 @@ describe('an MCP server', () => {
 			result: 'b'
 		});
 		expect((await p.engine.run('show tools use', 'user')).text).toContain(
-			'! mcp b\nset tools use b_bash_tool on\nset tools use b_config consent'
+			'! mcp b\nset tools use b/bash_tool on\nset tools use b/config consent'
 		);
+		expect(p.asked).toEqual([]);
 		expect((await p.engine.run('copy running-config a', 'user')).text).not.toContain('left out');
+	});
+
+	it('sets a tool by its server and its name, whatever name the model calls it by', async () => {
+		const p = await page(
+			{
+				a: modern([{ name: 'search', run: text('a') }]),
+				b: modern([{ name: 'search', run: text('b') }])
+			},
+			[
+				stream([call('search', { description: 'a' })]),
+				stream([call('b_search', { description: 'b' })]),
+				stream([{ content: 'ok' }])
+			]
+		);
+		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
+		await p.engine.run('set tools use a/search on', 'user');
+		p.verdicts.push(ALWAYS);
+		const t = await p.go();
+		await t.done;
+		expect(t.reply.rounds.flatMap((r) => r.calls).map((c) => c.result)).toEqual(['a', 'b']);
+		expect(p.asked.map((g) => g.kind === 'call' && g.tool)).toEqual(['b_search']);
+		expect(p.engine.settings.get('tools use', 'b/search')).toBe('on');
+		await p.engine.run(
+			'set tools preview-argument a/search query\nset tools preview-argument config x',
+			'user'
+		);
+		const { display } = await import('../src/rendering/display.svelte.js');
+		expect(display.preview).toEqual({ config: 'x', search: 'query', a_search: 'query' });
 	});
 
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
 		const p = await page({ a: legacy(SHELL), b: legacy([{ name: 'old', run: text('old') }]) }, []);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await p.engine.run('set tools use snap off\nset tools preview-argument old x', 'user');
+		await p.engine.run('set tools use a/snap off\nset tools preview-argument b/old x', 'user');
 		await p.engine.run('no mcp b', 'user');
 		expect((await p.engine.run('show tools use', 'user')).text).toBe(
 			[
 				'! KiSS',
 				'set tools use config on',
 				'! mcp a',
-				'set tools use bash_tool consent',
-				'set tools use snap off',
-				'set tools use fail consent',
-				'set tools use wait consent',
+				'set tools use a/bash_tool consent',
+				'set tools use a/snap off',
+				'set tools use a/fail consent',
+				'set tools use a/wait consent',
 				'! unavailable',
-				'set tools use old consent'
+				'set tools use b/old consent'
 			].join('\n')
 		);
 	});
@@ -883,7 +912,7 @@ describe('an MCP server', () => {
 	it('turned off by a call is reached by no later call of the same round', async () => {
 		const off = {
 			name: 'config',
-			arguments: JSON.stringify({ lines: 'set tools use bash_tool off' })
+			arguments: JSON.stringify({ lines: 'set tools use a/bash_tool off' })
 		};
 		const bash = {
 			name: 'bash_tool',
@@ -906,7 +935,7 @@ describe('an MCP server', () => {
 		).done;
 		expect(p.asked).toEqual([]);
 		expect(p.methods.a).not.toContain('tools/call');
-		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('off');
+		expect(p.engine.settings.get('tools use', 'a/bash_tool')).toBe('off');
 	});
 
 	it('turned off is never seen by the model, and keeps its name', async () => {
@@ -916,7 +945,7 @@ describe('an MCP server', () => {
 		];
 		const p = await page({ a: legacy(SHELL), b: modern(tools) }, [stream([{ content: 'ok' }])]);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url b http://b/mcp', 'user');
-		await p.engine.run('set tools use bash_tool off\nset tools use config off', 'user');
+		await p.engine.run('set tools use a/bash_tool off\nset tools use config off', 'user');
 		await (
 			await p.go()
 		).done;
@@ -935,7 +964,7 @@ describe('an MCP server', () => {
 			{ name: 'config', run: text('x') }
 		];
 		const p = await page({ b: modern(tools) }, [stream([{ content: 'ok' }])]);
-		await p.engine.run('set mcp url b http://b/mcp\nset tools use b_config on', 'user');
+		await p.engine.run('set mcp url b http://b/mcp\nset tools use b/b_config on', 'user');
 		await (
 			await p.go()
 		).done;
@@ -1016,7 +1045,7 @@ describe('an MCP server', () => {
 			tool: 'bash_tool',
 			args: JSON.stringify({ description: 'a', text: 'one' })
 		});
-		expect(p.engine.settings.get('tools use', 'bash_tool')).toBe('on');
+		expect(p.engine.settings.get('tools use', 'a/bash_tool')).toBe('on');
 	});
 
 	it('holding a key moves with it once the user lets the model move it', async () => {

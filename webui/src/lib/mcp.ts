@@ -11,9 +11,17 @@ import type {
 } from '@modelcontextprotocol/client';
 import type { Image, Outcome, Tool, ToolContext } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
-import { MCP_CONNECT_TIMEOUT_MS, NAME, SYSTEM, TOOL_NAME_PATTERN, capital } from './config.js';
+import {
+	MCP_CONNECT_TIMEOUT_MS,
+	NAME,
+	SERVED_SEPARATOR,
+	SYSTEM,
+	TOOL_NAME_PATTERN,
+	TOOL_SEPARATOR,
+	capital
+} from './config.js';
 import { REDIRECT, headers, remotes, type Remote } from './remote.js';
-import { OFF } from './tools.js';
+import { OFF, item } from './tools.js';
 import { fill } from './form.js';
 
 // the MCP servers of the configuration, over Streamable HTTP: one client per
@@ -284,27 +292,38 @@ export async function locked(config: ConfigReader): Promise<string[]> {
 	return (await served(config, new Map())).filter((s) => s.locked).map((s) => s.server);
 }
 
+// the item of tools that sets a tool of a server: the server, then the name
+// it gives the tool
+export function mcpItem(server: string, name: string): string {
+	return `${server}${TOOL_SEPARATOR}${name}`;
+}
+
+// the name of a tool of a server prefixed by its server
+export function prefixed(server: string, name: string): string {
+	return `${server}${SERVED_SEPARATOR}${name}`;
+}
+
 // the name the model sees a tool of a server by, the names before it taken:
-// its own, or <server>_<name> once one before holds it, which it takes in
-// turn; none once that one is taken too, or is no name a model API takes
+// its own, or prefixed once one before holds it, which it takes in turn;
+// none once that one is taken too, or is no name a model API takes
 export function unique(taken: Set<string>, server: string, name: string): string | null {
-	const served = taken.has(name) ? `${server}_${name}` : name;
+	const served = taken.has(name) ? prefixed(server, name) : name;
 	if (!TOOL_NAME_PATTERN.test(served) || taken.has(served)) return null;
 	taken.add(served);
 	return served;
 }
 
 // the tools the model sees: the given ones, then those of every server, each
-// under the name unique gives it, but those the user turned off; a server
-// that fails serves the tools it listed last, and a tool left out or a server
-// that fails tells why as a problem the user reads, never stopping
-// anything
+// under the name unique gives it and set by its item, but those the user
+// turned off; a server that fails serves the tools it listed last, and a tool
+// left out or a server that fails tells why as a problem the user reads,
+// never stopping anything
 export async function aggregate(
 	config: ConfigReader,
 	own: readonly Tool[],
 	down: Map<string, string>
 ): Promise<{ tools: Tool[]; problems: string[] }> {
-	const on = (t: Tool) => config.get('tools use', t.name) !== OFF;
+	const on = (t: Tool) => config.get('tools use', item(t)) !== OFF;
 	const taken = new Set(own.map((t) => t.name));
 	const tools = own.filter(on);
 	const problems: string[] = [];
@@ -314,11 +333,11 @@ export async function aggregate(
 			const name = unique(taken, s.server, t.name);
 			if (name === null) {
 				problems.push(
-					`mcp ${s.server}: tool ${t.name} left out, ${s.server}_${t.name} is taken or no tool name`
+					`mcp ${s.server}: tool ${t.name} left out, ${prefixed(s.server, t.name)} is taken or no tool name`
 				);
 				continue;
 			}
-			const named = { ...t, name };
+			const named = { ...t, name, item: mcpItem(s.server, t.name) };
 			if (on(named)) tools.push(named);
 		}
 	}

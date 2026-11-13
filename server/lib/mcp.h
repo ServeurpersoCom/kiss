@@ -32,6 +32,11 @@ struct mcp_outcome {
     std::vector<conversation_image> images;
 };
 
+// the item of tools that sets a tool of a server: the server, then the name
+// it gives the tool, exa/search, so a setting stays with its server whatever
+// name the model sees the tool by
+std::string mcp_item(const std::string & server, const std::string & name);
+
 // the tools a server serves; throws why it serves none
 std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop);
 

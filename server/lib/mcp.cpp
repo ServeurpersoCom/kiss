@@ -277,6 +277,13 @@ static void drop(const std::string & name) {
     }
 }
 
+// between the server and its tool in the item of the tool
+static const char * const ITEM_SEPARATOR = "/";
+
+std::string mcp_item(const std::string & server, const std::string & name) {
+    return server + ITEM_SEPARATOR + name;
+}
+
 std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop) {
     try {
         return opened(r, stop).tools;

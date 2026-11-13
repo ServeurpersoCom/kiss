@@ -1,8 +1,9 @@
 // tools.cpp: the tools module: every setting of a tool the agent of this
 // server calls, the twin of the tools module of the page; a tool of this
 // server is named here by its own name, bash, view, as an interface of a
-// router is, the name <hostname>_server_bash being how a client sees it; its
-// items, the tools of this server, of the pages and of every MCP server
+// router is, the name <hostname>_server_bash being how a client sees it, and
+// a tool of an MCP server by its item, exa/search; its items, the tools of
+// this server, of the pages and of every MCP server
 
 #include "lib/tools.h"
 
@@ -21,7 +22,7 @@ static const char * const USES[] = { "off", "consent", "on" };
 // the tools of this server, then the one the pages serve, then those of every
 // MCP server at once, by server, each asked in a thread of its own, one that
 // fails holding why and the tools it listed last, as the agent serves them,
-// each tool by the name the model sees it by
+// each tool of an MCP server by its item, <server>/<name>
 static std::vector<engine_group> items(const engine_reader & config) {
     std::vector<engine_group> out = {
         { "KiSS",  {},                    "" },
@@ -43,31 +44,18 @@ static std::vector<engine_group> items(const engine_reader & config) {
             try {
                 api_stop stop;
                 for (const mcp_tool & t : mcp_tools(servers[i], stop)) {
-                    mcp[i].names.push_back(t.name);
+                    mcp[i].names.push_back(mcp_item(servers[i].name, t.name));
                 }
             } catch (const std::exception & e) {
                 mcp[i].error = e.what();
                 for (const mcp_tool & t : mcp_kept(servers[i])) {
-                    mcp[i].names.push_back(t.name);
+                    mcp[i].names.push_back(mcp_item(servers[i].name, t.name));
                 }
             }
         });
     }
     for (std::thread & t : asking) {
         t.join();
-    }
-    // each tool of an MCP server by the name the model sees it by
-    std::set<std::string> taken(out[0].names.begin(), out[0].names.end());
-    taken.insert(AGENT_CLIENT_TOOL);
-    for (size_t i = 0; i < servers.size(); i++) {
-        words_t served;
-        for (const std::string & name : mcp[i].names) {
-            const std::string as = tools_unique(taken, servers[i].name, name);
-            if (!as.empty()) {
-                served.push_back(as);
-            }
-        }
-        mcp[i].names = served;
     }
     out.insert(out.end(), mcp.begin(), mcp.end());
     return out;

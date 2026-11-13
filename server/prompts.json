@@ -145,7 +145,7 @@
 		"chat": "the model this server answers with, endpoint/model, and its system prompt",
 		"endpoints": "the LLM APIs this server talks to",
 		"files": "the machine view, str_replace and create_file act on, the one a shell reaches or this one, and their limits",
-		"mcp": "the MCP servers whose tools this server calls, each tool taking tools use by its name, consent unless set",
+		"mcp": "the MCP servers whose tools this server calls, each tool taking tools use by <server>/<tool>, consent unless set",
 		"models": "the request parameters of an endpoint/model, each sent only when set, and when its history compacts: compaction-trigger-tokens, the tokens a request holds that fold the history into a summary before the next, and compaction-preserve-steps, the last steps the summary keeps as written",
 		"proxies": "the routes of this server, each relaying proxy/<name> to its url",
 		"server": "where it listens, its hostname, its key, its working directory, its logs",

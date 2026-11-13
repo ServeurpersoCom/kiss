@@ -640,21 +640,23 @@ as a router names its interfaces: `forge_server_bash` is how a client sees it, a
 machine, which no other machine reads, names it `bash`. So the factory configuration turns them on
 for every machine, `set tools use bash on`, and a tool of another server stays in `consent`.
 
-It calls the tools of the MCP servers the `mcp` module names as well, each by the name its server
-gives it, after the tools of the server, a name served twice staying with the first. A server is
-reached over Streamable HTTP in the era it speaks: one that answers `server/discover` with
-2026-07-28 gets the envelope and the headers of that era on every request, any other the
-`initialize` handshake of 2025-06-18 and its session. Its tools are listed once a session, kept
-while its url, key and headers stay, and forgotten once the configuration no longer names it. A
-server that fails goes on serving the tools it listed last, each call answering its error, so the
-tools and the system prompt stay the same from round to round and the endpoint reuses its prefill;
-it is logged once and asked again by the next turn or once its url, key or headers change, and a
-server never listed serves nothing. A name a server serves that another tool already holds stays
-with the first, logged once a turn:
+It calls the tools of the MCP servers the `mcp` module names as well, after the tools of the server,
+each by the name its server gives it, or by `<server>_<name>` once a tool before holds that name.
+The configuration sets a tool of a server by its item, the server then the name it gives,
+`set tools use exa/web_search_exa on`, so a setting stays with its server whatever name the model
+calls the tool by. A server is reached over Streamable HTTP in the era it speaks: one that answers
+`server/discover` with 2026-07-28 gets the envelope and the headers of that era on every request,
+any other the `initialize` handshake of 2025-06-18 and its session. Its tools are listed once a
+session, kept while its url, key and headers stay, and forgotten once the configuration no longer
+names it. A server that fails goes on serving the tools it listed last, each call answering its
+error, so the tools and the system prompt stay the same from round to round and the endpoint reuses
+its prefill; it is logged once and asked again by the next turn or once its url, key or headers
+change, and a server never listed serves nothing. A prefixed name is logged once a turn, and a tool
+whose prefixed name is taken too, or is no name a model API takes, is left out with an error:
 
 ```
 [Agent] MCP server exa serves the 3 tools it listed last: https://mcp.exa.ai/mcp does not answer
-[Agent] MCP server twin: tool config left out, KiSS serves it
+[Agent] MCP server twin: tool config served as twin_config
 ```
 
 The model reads the system prompt alone.
@@ -782,24 +784,26 @@ the console. An MCP client writes `set server key` alone: the batch applies noth
 answers `input_required` with a form of one text field per secret, MCP elicitation of the 2026-07-28
 era, its message naming the url each secret goes to. The client asks the user and calls again with
 the values in `inputResponses`, out of the context of the model; the batch runs again with them and
-answers `! the user typed server key`. The server keeps nothing between the two calls. A url an MCP
-client gives a route asks the user to let it, a yes field of the same form, `Let proxy/exa proxy
-https://mcp.exa.ai/mcp`, unless the running-config before the batch or the startup-config already
-holds it; the secrets of the route go with it once the user lets it, and the form names them, `Let
-proxy/b proxy https://b.example/mcp, proxies key b with it`, so a key is never typed again for a url
-that changes. A `copy`, a `write` or an `erase` asks a yes field the same way, `Copy running-config
-to startup-config for the KiSS server forge`, the batch running again once the user says yes. A
-batch that opens a tool, its `tools use` moved toward `on` by whatever line, a `set`, a `no`, a
-`copy` or an `erase`, asks a yes field the same way for each, `Set tools use web_search_exa on for
-the KiSS server forge`, as the page asks before its model opens a way out; the administrator opens
-one at once. A line that writes the value of a secret is refused, and a client that takes no form,
-every client of the 2025 era, is told the secret goes in `server.conf` or on the console. The text
-every tool answers goes through the keychain of the server and reads `<removed>` where the value of
-a secret of the server stood, so a shell, `view` or `show logging` never hands a key on; a value the
-server never read, a line it refused, is no secret it knows. `<removed>` is never a value: a line
-that sets a secret to it is refused, as on the page, so a line pasted back from
-`show running-config` keeps the secret it masks. A module reads a secret `<removed>`:
-the keychain alone reads its value beside the engine, as a route sends its key and as the key of a
+answers `! the user typed server key`. The server keeps nothing between the two calls. A batch that
+asks for more than a secret asks it all in that form, under one question,
+`Allow this change of the KiSS server forge?`, then one line per thing asked, as the lines of the
+batch. A url an MCP client gives a route asks the user to let it,
+`let proxy/exa proxy https://mcp.exa.ai/mcp`, unless the running-config before the batch or the
+startup-config already holds it; the secrets of the route go with it once the user lets it, and its
+line names them, `let proxy/b proxy https://b.example/mcp, proxies key b with it`, so a key is never
+typed again for a url that changes. A `copy`, a `write` or an `erase` asks its line the same way,
+`copy running-config to startup-config`, and a batch that opens a tool, its `tools use` moved toward
+`on` by whatever line, a `set`, a `no`, a `copy` or an `erase`, asks one for each,
+`set tools use exa/web_search_exa on`, as the page asks before its model opens a way out; the page
+confirms them all by one answer, the batch running again once the user says yes, and the
+administrator opens one at once. A line that writes the value of a secret is refused, and a client
+that takes no form, every client of the 2025 era, is told the secret goes in `server.conf` or on the
+console. The text every tool answers goes through the keychain of the server and reads `<removed>`
+where the value of a secret of the server stood, so a shell, `view` or `show logging` never hands a
+key on; a value the server never read, a line it refused, is no secret it knows. `<removed>` is
+never a value: a line that sets a secret to it is refused, as on the page, so a line pasted back
+from `show running-config` keeps the secret it masks. A module reads a secret `<removed>`: the
+keychain alone reads its value beside the engine, as a route sends its key and as the key of a
 client is checked. A line `server.conf` refuses is logged by its number, never by its text:
 `server.conf skips line 4: unterminated "`.
 

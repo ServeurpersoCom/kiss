@@ -337,6 +337,19 @@ int main() {
     when([&] { return settled(); });
     law(called().name == "twin_config" && called().ok && called().result == "config",
         "a tool served under its server is called by its own name: " + called().result);
+    // always sets the tool by its item, its server and the name it gives it,
+    // whatever name the model calls it by, and the next call asks nothing
+    law(message("twin"), "a turn calling a tool to always let starts");
+    when([&] { return agent_grant(c.id, number(), "always").empty(); });
+    when([&] { return settled(); });
+    law(engine_get("tools use", "twin/config").value_or("") == "on", "always sets a tool of an MCP server by its item");
+    law(message("twin"), "a turn calling a tool let always starts");
+    law(settled() && called().ok && called().result == "config",
+        "a tool on by its item runs unasked: " + called().result);
+    // a question that should not stand is refused, so the laws go on
+    agent_grant(c.id, number(), "refuse");
+    settled();
+    engine_run("no tools use twin/config", ENGINE_ADMIN);
     // the server turning its own tool off keeps the name of the tool of the
     // MCP server as it was, so no line of tools use changes what it names
     engine_run("set tools use config off", ENGINE_ADMIN);
@@ -350,15 +363,25 @@ int main() {
             "a tool turned off keeps its name, the one after it its prefix: " + g_tools.back());
     }
     engine_run("set tools use config on", ENGINE_ADMIN);
+    // a tool of an MCP server turned off by its item is never seen
+    engine_run("set tools use twin/config off", ENGINE_ADMIN);
+    law(message("still"), "a turn with a tool of an MCP server off starts");
+    when([&] { return settled(); });
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        const words_t               sent = split(g_tools.back(), ' ');
+        law(std::count(sent.begin(), sent.end(), "twin_config") == 0,
+            "a tool of an MCP server off by its item is not sent: " + g_tools.back());
+    }
+    engine_run("no tools use twin/config", ENGINE_ADMIN);
     // a server failing once it listed keeps as items the tools it listed last,
-    // by the names the agent serves them under, so a line of tools use names
-    // the tool the model sees
+    // so a line of tools use still sets them
     g_twin_down = true;
     law(message("twin"), "a turn calling a server gone down starts");
     when([&] { return agent_grant(c.id, number(), "once").empty(); });
     when([&] { return settled(); });
     {
-        const std::string set = engine_run("set tools use twin_config consent", ENGINE_ADMIN).text;
+        const std::string set = engine_run("set tools use twin/config consent", ENGINE_ADMIN).text;
         law(set.find("unknown") == std::string::npos,
             "a server that fails keeps the tools it listed last as served: " + set);
     }
@@ -819,7 +842,7 @@ int main() {
     const size_t      kiss  = tools.find("! KiSS\n");
     law(kiss != std::string::npos && tools.find("set tools use config on", kiss) < tools.find("! pages", kiss) &&
             tools.find("! pages\nset tools use client_config consent") != std::string::npos &&
-            tools.find("! mcp twin\nset tools use twin_config consent") != std::string::npos &&
+            tools.find("! mcp twin\nset tools use twin/config consent") != std::string::npos &&
             tools.find("! mcp down http://") != std::string::npos,
         "show tools lists the tools of this server, of the pages and of each MCP server, one that fails telling why");
     law(engine_run("show models e/", ENGINE_ADMIN).text ==
@@ -827,7 +850,7 @@ int main() {
         "show names a model an endpoint serves by a prefix");
     law(has(engine_suggest("set chat model "), "e/m"), "chat model completes with the models the endpoints serve");
     const words_t use = engine_suggest("set tools use ");
-    law(has(use, "view") && has(use, "client_config") && has(use, "config") && has(use, "twin_config"),
+    law(has(use, "view") && has(use, "client_config") && has(use, "config") && has(use, "twin/config"),
         "tools use completes with the tools served");
     law(has(engine_suggest("set files shell "), "bash"), "files shell completes with the shells");
 

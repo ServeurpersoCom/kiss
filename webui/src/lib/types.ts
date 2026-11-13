@@ -149,6 +149,9 @@ export interface ToolContext {
 // a tool the model may call: a file of tools/, or one an MCP server serves
 export interface Tool {
 	name: string;
+	// the item of tools that sets it, <server>/<name> for a tool of an MCP
+	// server, so a setting stays with its server whatever name the model sees
+	item?: string;
 	description: string;
 	input: Record<string, unknown>;
 	// the arguments as the conversation keeps them, before the call is sent:

@@ -230,8 +230,9 @@ void agent_quit() {
 // round starts: the endpoints, the model chosen, the system prompt, the
 // parameters of every model, numbers as numbers, the tokens that compact the
 // history of a model and the steps its summary keeps, each tool of the server
-// not off by its own name, then each tool of every MCP server not off, by its
-// own name or, once a tool before holds it, by its server and its name; a
+// not off by its own name, then each tool of every MCP server its item does
+// not turn off, by its own name or, once a tool before holds it, by its server
+// and its name; a
 // server that fails serves the tools it listed last, each call answering its
 // error, and is not asked again in the turn, the turn holding it as it was
 // named, so a new url, key or header tries it again, and a server no longer
@@ -349,7 +350,7 @@ static setup_t setup(api_stop & stop, met_t & met) {
                     log_info("Agent", "%s", told.c_str());
                 }
             }
-            if (!t.served.empty() && config.get("tools use", t.served).value_or(USE_OFF) != USE_OFF) {
+            if (!t.served.empty() && config.get("tools use", mcp_item(t.server, t.name)).value_or(USE_OFF) != USE_OFF) {
                 s.served.push_back(t);
             }
         }
@@ -542,12 +543,15 @@ static bool call(const std::string &           id,
     std::optional<remote>   server;
     // the name its MCP server knows the tool by, the model calling it as served
     std::string             bare;
+    // the item of tools that sets the tool, and its use
+    std::string             item;
     std::string             use;
     const bool              pages = attached();
     engine_with([&](const engine_reader & config) {
         for (tool & t : tools_list(config)) {
             const std::string u = config.get("tools use", t.suffix).value_or(USE_OFF);
             if (t.suffix == called.name && u != USE_OFF) {
+                item  = t.suffix;
                 found = std::move(t);
                 use   = u;
             }
@@ -555,13 +559,16 @@ static bool call(const std::string &           id,
         const std::string paging = config.get("tools use", AGENT_CLIENT_TOOL).value_or(USE_OFF);
         if (!found && pages && called.name == AGENT_CLIENT_TOOL && paging != USE_OFF) {
             paged = true;
+            item  = AGENT_CLIENT_TOOL;
             use   = paging;
         }
         for (const mcp_tool & t : served) {
-            const std::string u = config.get("tools use", t.served).value_or(USE_OFF);
+            const std::string set = mcp_item(t.server, t.name);
+            const std::string u   = config.get("tools use", set).value_or(USE_OFF);
             if (!found && !paged && !server && t.served == called.name && u != USE_OFF &&
                 config.get("mcp url", t.server)) {
                 server = remote_of(config, "mcp", t.server, BEARER);
+                item   = set;
                 use    = u;
                 bare   = t.name;
             }
@@ -600,7 +607,7 @@ static bool call(const std::string &           id,
             return false;
         }
         if (verdict == ALWAYS) {
-            engine_run("set tools use " + quote(called.name) + " " + USE_ON, ENGINE_ADMIN);
+            engine_run("set tools use " + quote(item) + " " + USE_ON, ENGINE_ADMIN);
         }
     }
     const std::string refused = found ? tools_check(*found, args) : paged ? tools_check(client_tool(), args) : "";

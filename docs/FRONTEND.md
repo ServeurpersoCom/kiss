@@ -460,7 +460,7 @@ turn read in the font of the page.
 
 ```
 ! each call asks, until always
-set tools use bash_tool consent
+set tools use sandbox/bash_tool consent
 ! no value: a masked field asks for it
 set mcp key sandbox
 ```
@@ -618,11 +618,11 @@ agrees, as a url. The backend the page comes from is `backend` in the `client.co
 ships, `set mcp url backend mcp`, wherever it runs.
 
 A server may ask the user, the form mode of MCP elicitation, under its message: each text field of
-its form asks in the masked field of the page, `Value of server key of backend`, and each yes or no
-field asks the user to confirm; the call goes again with the answers, which never reach the model.
-Leaving a field empty, or saying no, cancels the form; a form with no field, or with a field of
-another kind, is refused. A KiSS server asks this way for `set server key` written alone by the
-model, and to let a route take a url the model gives it.
+its form asks in the masked field of the page, `Value of server key of backend`, and its yes or no
+fields ask the user to confirm them together, by one answer; the call goes again with the answers,
+which never reach the model. Leaving a field empty, or saying no, cancels the form; a form with no
+field, or with a field of another kind, is refused. A KiSS server asks this way for `set server key`
+written alone by the model, and to let a route take a url the model gives it.
 
 ```
 set mcp url sandbox https://example.com/mcp
@@ -633,11 +633,11 @@ show tools
 ! the settings of the tools named bash
 show tools | include bash
 ! the model never sees it
-set tools use str_replace off
+set tools use sandbox/str_replace off
 ! the argument every folded call shows, the default
 set display preview-argument description
 ! the one of a tool over it; a call without it shows its first argument
-set tools preview-argument bash_tool command
+set tools preview-argument sandbox/bash_tool command
 ! every setting of that tool, gone
 no tools bash_tool
 ! the tool rounds a turn takes at most, 1000 by default
