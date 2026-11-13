@@ -929,6 +929,23 @@ describe('an MCP server', () => {
 		]);
 	});
 
+	it('leaves out a tool whose prefixed name one before holds, the save warning of it', async () => {
+		const tools = [
+			{ name: 'b_config', run: text('x') },
+			{ name: 'config', run: text('x') }
+		];
+		const p = await page({ b: modern(tools) }, [stream([{ content: 'ok' }])]);
+		await p.engine.run('set mcp url b http://b/mcp\nset tools use b_config on', 'user');
+		await (
+			await p.go()
+		).done;
+		const names = p.bodies[0].tools.map((t) => t.function.name);
+		expect(names.filter((n) => n === 'b_config')).toHaveLength(1);
+		expect((await p.engine.run('copy running-config a', 'user')).text).toContain(
+			'mcp b: tool config left out, b_config is taken or no tool name'
+		);
+	});
+
 	it('leaves out a tool its server names past what a model API takes, the save warning of it', async () => {
 		const p = await page(
 			{ a: legacy(SHELL), 'b.x': modern([{ name: 'bash_tool', run: text('x') }]) },

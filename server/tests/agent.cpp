@@ -329,6 +329,19 @@ int main() {
     when([&] { return settled(); });
     law(called().name == "twin_config" && called().ok && called().result == "config",
         "a tool served under its server is called by its own name: " + called().result);
+    // the server turning its own tool off keeps the name of the tool of the
+    // MCP server as it was, so no line of tools use changes what it names
+    engine_run("set tools use config off", ENGINE_ADMIN);
+    law(message("still"), "a turn with the own tool off starts");
+    when([&] { return settled(); });
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        const words_t               sent = split(g_tools.back(), ' ');
+        law(std::count(sent.begin(), sent.end(), "twin_config") == 1 &&
+                std::count(sent.begin(), sent.end(), "config") == 0,
+            "a tool turned off keeps its name, the one after it its prefix: " + g_tools.back());
+    }
+    engine_run("set tools use config on", ENGINE_ADMIN);
     library_follower page;
     agent_attach();
     agent_attach();
