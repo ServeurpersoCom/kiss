@@ -99,6 +99,7 @@ export default {
 			if (!yes) throw new Error('the user copied nothing');
 		}
 		const warnings = from === RUNNING_CONFIG ? await checks(ctx) : [];
+		ctx.signal?.throwIfAborted();
 		if (to === STARTUP_CONFIG) ctx.archive.boot(copied);
 		else ctx.archive.save(to, copied);
 		return [`copied ${from} to ${to}`, ...warnings].map(comment).join(NEWLINE);

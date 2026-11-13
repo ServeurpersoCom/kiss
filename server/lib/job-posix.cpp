@@ -133,21 +133,23 @@ job_result job_run(const std::string &           line,
     bool       killed    = false;
     auto       drain_end = clock::time_point::max();
     int        status    = 0;
+    // the end the output is read from, none once every writer closed theirs
+    int        out_fd    = out[0];
 
     for (;;) {
         pollfd fds[2] = {
-            { out[0], POLLIN,  0 },
+            { out_fd, POLLIN,  0 },
             { in_fd,  POLLOUT, 0 },
         };
-        const int n = poll(fds, in_fd >= 0 ? 2 : 1, POLL_MS);
+        const int n = poll(fds, 2, POLL_MS);
         if (n < 0 && errno != EINTR) {
             break;
         }
-        if (fds[0].revents & (POLLIN | POLLHUP)) {
+        if (out_fd >= 0 && (fds[0].revents & (POLLIN | POLLHUP))) {
             char          buf[PIPE_SIZE];
-            const ssize_t got = read(out[0], buf, sizeof(buf));
+            const ssize_t got = read(out_fd, buf, sizeof(buf));
             if (got == 0) {
-                break;
+                out_fd = -1;
             }
             if (got > 0) {
                 kept.add(buf, (size_t) got);
@@ -187,7 +189,7 @@ job_result job_run(const std::string &           line,
             kill(-pid, SIGKILL);
             drain_end = now + std::chrono::milliseconds(DRAIN_MS);
         }
-        if (now >= drain_end) {
+        if ((exited && out_fd < 0) || now >= drain_end) {
             break;
         }
     }

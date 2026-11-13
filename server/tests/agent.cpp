@@ -45,6 +45,11 @@
 
 namespace fs = std::filesystem;
 
+// a call whose client stays
+static const auto ALIVE = [] {
+    return true;
+};
+
 // what the endpoint of the test saw: the system prompt and the tools of each
 // request, and how often the server that fails was asked to open a session
 static std::mutex               g_mutex;
@@ -498,14 +503,14 @@ int main() {
     const engine_result               console = engine_run("compact", ENGINE_ADMIN);
     const std::shared_ptr<yyjson_doc> lines(yyjson_read("{\"lines\":\"compact\"}", 19, 0), yyjson_doc_free);
     law(!console.ok && console.text == "% no conversation here" && !console.compact &&
-            tools_config(yyjson_doc_get_root(lines.get()), {}, c.id).compact &&
-            !tools_config(yyjson_doc_get_root(lines.get()), {}, "").compact,
+            tools_config(yyjson_doc_get_root(lines.get()), {}, c.id, ALIVE).compact &&
+            !tools_config(yyjson_doc_get_root(lines.get()), {}, "", ALIVE).compact,
         "compact runs only in a conversation: " + console.text);
     // show conversations marks the one the batch runs in, and an erase asks
     // the user as the page asks it
     const std::shared_ptr<yyjson_doc> listing(yyjson_read("{\"lines\":\"show conversations\"}", 30, 0),
                                               yyjson_doc_free);
-    law(tools_config(yyjson_doc_get_root(listing.get()), {}, c.id).text.find("! * " + c.id.substr(0, 8)) !=
+    law(tools_config(yyjson_doc_get_root(listing.get()), {}, c.id, ALIVE).text.find("! * " + c.id.substr(0, 8)) !=
                 std::string::npos &&
             engine_run("show conversations", ENGINE_ADMIN).text.find("! * ") == std::string::npos,
         "show conversations marks the conversation the batch runs in");
@@ -518,7 +523,7 @@ int main() {
     const std::string batch =
         R"({"lines":"set endpoints url u1 https://a.example/v1\nset endpoints url u2 https://b.example/v1"})";
     const std::shared_ptr<yyjson_doc> two(yyjson_read(batch.data(), batch.size(), 0), yyjson_doc_free);
-    const tool_outcome                both = tools_config(yyjson_doc_get_root(two.get()), {}, c.id);
+    const tool_outcome                both = tools_config(yyjson_doc_get_root(two.get()), {}, c.id, ALIVE);
     law(both.asks.size() == 2 &&
             both.text == "Allow this change of the KiSS server " + engine_get("server hostname").value_or("") +
                              "?\nlet endpoints u1 reach https://a.example/v1\nlet endpoints u2 reach "

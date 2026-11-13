@@ -53,8 +53,12 @@ constexpr const char * USE_ON      = TOOL_USES[2];
 constexpr const char * TOOL_CONFIG = "config";
 
 // a call of the config tool, in a conversation of the agent of this server, by
-// its id, or for a client that has none, the id empty
-tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const std::string & conversation);
+// its id, or for a client that has none, the id empty; a batch whose tick
+// answers false once its sources answered applies nothing
+tool_outcome tools_config(yyjson_val *         args,
+                          const engine_typed & typed,
+                          const std::string &  conversation,
+                          const tool_tick &    tick);
 
 struct tool {
     std::string                                                                                        suffix;

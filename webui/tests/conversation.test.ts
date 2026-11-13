@@ -227,6 +227,12 @@ describe('a conversation file', () => {
 		expect(altered((f) => (f.conversations[0].entries[0].role = 'system'))).toThrow(
 			`${at}.entries[0].role: not one of user assistant cli`
 		);
+		expect(altered((f) => (f.conversations[0].entries[0].role = 'toString'))).toThrow(
+			`${at}.entries[0].role: not one of user assistant cli`
+		);
+		expect(altered((f) => (f.conversations[0].constructor = 1))).toThrow(
+			`${at}.constructor: unknown`
+		);
 		expect(altered((f) => delete f.conversations[0].entries[1].rounds[0].calls[0].ok)).toThrow(
 			`${at}.entries[1].rounds[0].calls[0].ok: missing`
 		);

@@ -9,14 +9,17 @@
 // a key of the administrator, where commands and the tools on files run, moves
 // by no line of an MCP client, the administrator moving it at once; the mask of
 // a secret is no value; a dotted key, no, and show running-config all answer as
-// on the page
+// on the page; a batch whose sender left while its sources answered applies
+// nothing
 
 #include "engine/engine.h"
 
 #include "engine/text.h"
 #include "factory.h"
 #include "laws.h"
+#include "lib/json.h"
 #include "lib/quit.h"
+#include "lib/tools.h"
 
 #include <algorithm>
 #include <chrono>
@@ -223,6 +226,10 @@ int main() {
         "no completes with the items set, set with the items served too");
     law(admin("show running-config all").find("! KiSS") != std::string::npos,
         "show running-config all lists the items of a module by source, as show <module> does");
+    const json_doc left = json_read("{\"lines\":\"set chat system-prompt gone\"}");
+    law(!tools_config(yyjson_doc_get_root(left.get()), {}, "", [] { return false; }).ok &&
+            admin("show chat system-prompt").find("gone") == std::string::npos,
+        "a batch whose sender left while its sources answered applies nothing");
 
     fs::remove_all(root);
     const int code = laws_told();

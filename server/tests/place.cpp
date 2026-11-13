@@ -12,7 +12,8 @@
 // keeps the laws of the server alone; the configuration gives the tools the
 // shell files shell names, else the machine of the server, and fails every
 // call when it names no shell; view lists a directory of the place two levels
-// deep, its hidden entries counted, node_modules closed
+// deep, its hidden entries counted, node_modules closed; a command that closes
+// its output runs on to its end
 
 #include "lib/place.h"
 
@@ -128,6 +129,12 @@ int main() {
         places.push_back(shell);
         places.push_back(noisy);
         places.push_back(blank);
+        const job_result quiet = job_run("sh -s", root.u8string(),
+                                         "exec > /dev/null 2>&1\ni=0\nwhile [ $i -lt 20000 ]; do i=$((i + 1)); done\n"
+                                         "echo done > late.txt\n",
+                                         60, 4096, ALIVE);
+        law(quiet.exit_code == 0 && fs::exists(root / "late.txt"),
+            "a command that closes its output runs on to its end");
     } else {
         printf("[Laws] %s: no POSIX shell here, the laws of the server alone\n", g_test);
     }

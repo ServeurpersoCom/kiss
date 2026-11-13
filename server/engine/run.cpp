@@ -202,6 +202,9 @@ bool engine_save(context & ctx) {
     return true;
 }
 
+// what a batch says whose sender left while its sources answered
+static const char * const SENDER_LEFT = "stopped";
+
 // what a batch that fails says last
 static const char * const NOTHING_APPLIED = "nothing applied";
 
@@ -621,14 +624,18 @@ static std::map<std::string, std::vector<engine_group>> shown(const std::string 
 
 // a batch that changes the running configuration says who changed it, as IOS
 // logs a configuration from the console
-engine_result engine_run(const std::string &  text,
-                         engine_role          role,
-                         const engine_typed & typed,
-                         const std::string &  conversation) {
+engine_result engine_run(const std::string &           text,
+                         engine_role                   role,
+                         const engine_typed &          typed,
+                         const std::string &           conversation,
+                         const std::function<bool()> & alive) {
     const auto                  groups = shown(text);
     std::lock_guard<std::mutex> lock(g_mutex);
-    const layer                 before = g_running;
-    const engine_result         r      = batch(g_running, text, role, true, typed, conversation, groups);
+    if (alive && !alive()) {
+        return failed(std::nullopt, false, SENDER_LEFT);
+    }
+    const layer         before = g_running;
+    const engine_result r      = batch(g_running, text, role, true, typed, conversation, groups);
     if (r.ok && !(before == g_running)) {
         log_info("Engine", "Configured by %s", role == ENGINE_ADMIN ? "the administrator" : "an MCP client");
     }

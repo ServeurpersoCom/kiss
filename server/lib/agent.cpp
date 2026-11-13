@@ -471,7 +471,7 @@ static tool_outcome run_own(turn_t & self, const tool & t, yyjson_val * args) {
     engine_typed typed;
     // the config tool of this server runs its batch in the conversation
     const auto   go = [&] {
-        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, self.id) : t.run(args, typed, tick);
+        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, self.id, tick) : t.run(args, typed, tick);
     };
     tool_outcome out = go();
     while (!out.asks.empty() && !self.stop.stopped) {

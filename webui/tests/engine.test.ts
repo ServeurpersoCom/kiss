@@ -304,6 +304,23 @@ describe('after a stop', () => {
 		expect(k.settings.get('chat system-prompt')).toBe('');
 	});
 
+	it('a copy stopped while its checks ran saves nothing', async () => {
+		const k = await page();
+		let open = () => {};
+		const gate = new Promise<void>((resolve) => (open = resolve));
+		const fetch = vi.fn(async () => (await gate, models(['m'])));
+		vi.stubGlobal('fetch', fetch);
+		await k.run('set endpoints url a http://a/v1', 'user');
+		const stop = new AbortController();
+		const confirm = async () => true;
+		const r = k.run('copy running-config kept', 'llm', { signal: stop.signal, confirm });
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+		stop.abort();
+		open();
+		await expect(r).rejects.toThrow();
+		expect((await k.run('show saves', 'user')).text).toBe('! nothing saved yet');
+	});
+
 	it('a queued batch never starts', async () => {
 		const k = await page();
 		const h = held();

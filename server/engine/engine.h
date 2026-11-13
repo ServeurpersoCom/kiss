@@ -172,11 +172,14 @@ void engine_start(const std::string & path, const std::string & version);
 
 // one batch at a time, whoever sends it; typed fills the set lines of secrets
 // written without their value; conversation names the one it runs in, the
-// only place compact takes, empty outside one
-engine_result engine_run(const std::string &  text,
-                         engine_role          role,
-                         const engine_typed & typed        = {},
-                         const std::string &  conversation = "");
+// only place compact takes, empty outside one; alive, when given, tells
+// whether whoever sent it is still there once its sources answered: a turn
+// stopped or a client gone meanwhile, and the batch applies nothing
+engine_result engine_run(const std::string &           text,
+                         engine_role                   role,
+                         const engine_typed &          typed        = {},
+                         const std::string &           conversation = "",
+                         const std::function<bool()> & alive        = {});
 
 // the running configuration, read under the lock of the engine
 std::optional<std::string> engine_get(const std::string & key, const std::string & item = "");

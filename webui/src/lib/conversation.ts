@@ -194,14 +194,15 @@ function object(fields: Record<string, Check>, optional: Record<string, Check> =
 		if (!v || typeof v !== 'object' || Array.isArray(v)) fail(at, 'not an object');
 		const record = v as Record<string, unknown>;
 		for (const key of Object.keys(record)) {
-			if (!(key in fields) && !(key in optional)) fail(`${at}.${key}`, 'unknown');
+			if (!Object.hasOwn(fields, key) && !Object.hasOwn(optional, key))
+				fail(`${at}.${key}`, 'unknown');
 		}
 		for (const [key, check] of Object.entries(fields)) {
-			if (!(key in record)) fail(`${at}.${key}`, 'missing');
+			if (!Object.hasOwn(record, key)) fail(`${at}.${key}`, 'missing');
 			check(record[key], `${at}.${key}`);
 		}
 		for (const [key, check] of Object.entries(optional)) {
-			if (key in record) check(record[key], `${at}.${key}`);
+			if (Object.hasOwn(record, key)) check(record[key], `${at}.${key}`);
 		}
 	};
 }
@@ -216,7 +217,7 @@ function array(check: Check): Check {
 // an entry by its role, each role its own fields beside the link of the entry
 function entry(v: unknown, at: string): void {
 	const role = (v as { role?: unknown } | null)?.role;
-	const variant = MESSAGES[String(role)];
+	const variant = Object.hasOwn(MESSAGES, String(role)) ? MESSAGES[String(role)] : undefined;
 	if (!variant) fail(`${at}.role`, `not one of ${Object.keys(MESSAGES).join(SPACE)}`);
 	variant(v, at);
 }

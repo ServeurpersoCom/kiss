@@ -14,9 +14,12 @@
 // writes or erases a configuration asks their yes, the form saying it all
 // under one question, each thing asked on a line of its own as the lines of
 // the batch; it runs again with what they answered
-tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const std::string & conversation) {
+tool_outcome tools_config(yyjson_val *         args,
+                          const engine_typed & typed,
+                          const std::string &  conversation,
+                          const tool_tick &    tick) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
-    const engine_result r     = engine_run(json_text(lines), ENGINE_MCP, typed, conversation);
+    const engine_result r     = engine_run(json_text(lines), ENGINE_MCP, typed, conversation, tick);
     if (!r.asks.empty()) {
         words_t keys, told;
         for (const engine_ask & a : r.asks) {
@@ -62,8 +65,8 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                                                          { "modules", join(modules, "; ") }
     });
     t.input       = prompts_input(TOOL_CONFIG);
-    t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick &) {
-        return tools_config(args, typed, "");
+    t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick & tick) {
+        return tools_config(args, typed, "", tick);
     };
     return { t };
 }
