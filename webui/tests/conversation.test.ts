@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Conversation, Entry } from '../src/lib/types.js';
-import { TITLE_LENGTH, ago, cut, dayName, stamp } from '../src/lib/config.js';
+import { TITLE_LENGTH, ago, dayName, stamp } from '../src/lib/config.js';
 import {
 	append,
+	cut,
 	drop,
 	forks,
 	fresh,

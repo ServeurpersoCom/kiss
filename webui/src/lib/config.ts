@@ -72,9 +72,6 @@ export const MCP_CONNECT_TIMEOUT_MS = 5000;
 
 // agent
 export const TITLE_LENGTH = 60;
-// the first characters of a text, whole ones, as the server cuts a title
-export const cut = (text: string, characters: number): string =>
-	[...text].slice(0, characters).join('');
 
 // page: how long a copy button shows its check
 export const COPIED_MS = 1500;

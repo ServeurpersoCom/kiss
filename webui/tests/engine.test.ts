@@ -3,7 +3,7 @@ import { Server, createMcpHandler } from '@modelcontextprotocol/server';
 import type { Conversation } from '../src/lib/types.js';
 import type { Grant, Library, Verdict } from '../src/engine/engine.js';
 import { append, fresh, named, parse, serialize } from '../src/lib/conversation.js';
-import { NEWLINE, localTime, storeName } from '../src/lib/config.js';
+import { NEWLINE, TITLE_LENGTH, localTime, storeName } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/engine/engine.js';
 
 type Engine = typeof import('../src/engine/run.js');
@@ -689,9 +689,9 @@ describe('a title', () => {
 		});
 		expect(failed.ok).toBe(false);
 		expect(c.title).toBe('Bonjour le monde');
-		const long = await k.run(`title ${'a'.repeat(61)}`, 'llm', { conversation: c });
-		expect(long.text).toContain('60 characters at most');
-		const wide = '🙂'.repeat(60);
+		const long = await k.run(`title ${'a'.repeat(TITLE_LENGTH + 1)}`, 'llm', { conversation: c });
+		expect(long.text).toContain(`${TITLE_LENGTH} characters at most`);
+		const wide = '🙂'.repeat(TITLE_LENGTH);
 		await k.run(`title ${wide}`, 'llm', { conversation: c });
 		expect(c.title).toBe(wide);
 		await k.run('title "Bonjour le monde"', 'llm', { conversation: c });

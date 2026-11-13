@@ -10,8 +10,7 @@ import {
 	SPACE,
 	TEXT_TYPE,
 	TITLE_LENGTH,
-	capital,
-	cut
+	capital
 } from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
 import { prune } from './drafts.js';
@@ -19,6 +18,7 @@ import { turn } from './agent.js';
 import {
 	TURN_STOPPED,
 	append,
+	cut,
 	drop,
 	fresh,
 	latest,

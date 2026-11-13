@@ -28,6 +28,10 @@ export function source(m: Message): string {
 	}
 }
 
+// the first characters of a text, whole ones, as the server cuts a title
+export const cut = (text: string, characters: number): string =>
+	[...text].slice(0, characters).join('');
+
 // what a turn the user stopped says
 export const TURN_STOPPED = 'Stopped';
 

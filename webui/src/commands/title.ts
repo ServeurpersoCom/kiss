@@ -1,6 +1,7 @@
 import type { Command } from '../engine/engine.js';
 import { Incomplete, hint } from '../engine/text.js';
-import { NEWLINE, SPACE, TITLE_LENGTH, cut } from '../lib/config.js';
+import { NEWLINE, SPACE, TITLE_LENGTH } from '../lib/config.js';
+import { cut } from '../lib/conversation.js';
 
 export default {
 	path: ['title'],
