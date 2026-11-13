@@ -136,7 +136,11 @@ static tool_outcome listing(const viewer & v, const std::string & given, ticker 
     }
     output_buffer kept(v.output);
     for (const auto & [rel, size] : sizes) {
-        const std::string path = rel.empty() ? given : (fs::u8path(given) / fs::u8path(rel)).u8string();
+        // a path as its machine writes it: the one of the server by its own
+        // separator, the one a shell reaches by a slash
+        const std::string far  = given + (given.back() == '/' ? "" : "/") + rel;
+        const std::string near = (fs::u8path(given) / fs::u8path(rel).make_preferred()).u8string();
+        const std::string path = rel.empty() ? given : v.at.shell.empty() ? near : far;
         const std::string line = human(size) + " " + path + "\n";
         kept.add(line.data(), line.size());
     }
