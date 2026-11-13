@@ -556,6 +556,54 @@ describe('an MCP server', () => {
 		]);
 	});
 
+	it('confirms the yes fields of a form by one answer, all of them or none', async () => {
+		const answers: unknown[] = [];
+		const BOTH: Declared = {
+			name: 'route',
+			run: async (_args, _signal, again) => {
+				answers.push(again.inputResponses ?? null);
+				if (again.inputResponses) return { content: [{ type: 'text', text: 'ran' }] };
+				return {
+					resultType: 'input_required',
+					inputRequests: {
+						confirm: {
+							method: 'elicitation/create',
+							params: {
+								mode: 'form',
+								message: 'Allow?\nlet x\nlet y',
+								requestedSchema: {
+									type: 'object',
+									properties: {
+										'mcp url x': { type: 'boolean' },
+										'mcp url y': { type: 'boolean' }
+									},
+									required: ['mcp url x', 'mcp url y']
+								}
+							}
+						}
+					}
+				};
+			}
+		};
+		const p = await page({ a: modern([BOTH]) }, [
+			stream([call('route', { description: 'route' })]),
+			stream([call('route', { description: 'route' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		p.yeses.push(true, false);
+		await (
+			await p.go()
+		).done;
+		expect(p.questions).toEqual(['Allow?\nlet x\nlet y', 'Allow?\nlet x\nlet y']);
+		expect(answers).toEqual([
+			null,
+			{ confirm: { action: 'accept', content: { 'mcp url x': true, 'mcp url y': true } } },
+			null,
+			{ confirm: { action: 'cancel' } }
+		]);
+	});
+
 	it('reaches a server through the KiSS server that proxies it, with the key of that server', async () => {
 		const own = modern(SHELL, FIXTURE, { exa: true });
 		const proxied = modern([{ name: 'search', run: text('hit') }]);

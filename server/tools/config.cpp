@@ -10,8 +10,9 @@
 // a batch that writes a secret without its value asks the user to type it,
 // telling where each one goes, one that gives an item a new url asks the user
 // to let it, the item reached at <module>/<item> of this server, and one that
-// writes or erases a configuration asks their yes; it runs again with what
-// they answered
+// writes or erases a configuration asks their yes, the form saying it all
+// under one question, each thing asked on a line of its own as the lines of
+// the batch; it runs again with what they answered
 tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const std::string & conversation) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
     const engine_result r =
@@ -32,8 +33,8 @@ tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const s
                 told.push_back("type " + (a.to.empty() ? a.key : a.key + " sent to " + a.to));
             }
         }
-        std::string text = join(told, ", ") + " for the KiSS server " + engine_get("server hostname").value_or("");
-        text[0]          = (char) toupper((unsigned char) text[0]);
+        const std::string text = "Allow this change of the KiSS server " + engine_get("server hostname").value_or("") +
+                                 "?\n" + join(told, "\n");
         tool_outcome asked(true, text);
         asked.asks    = r.asks;
         asked.outcome = "asks the user for " + join(keys, ", ");

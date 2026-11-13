@@ -80,7 +80,12 @@
 				<button onclick={() => ask.settle(null)}>Cancel</button>
 			</div>
 		{:else if ask.kind === 'confirm'}
-			<div class="head">{ask.question}</div>
+			<!-- a question, then the lines of what it asks, as the grant shows them -->
+			{@const [head, ...lines] = ask.question.split('\n')}
+			<div class="head">{head}</div>
+			{#if lines.length}
+				<pre>{lines.join('\n')}</pre>
+			{/if}
 			<div class="answers">
 				<button {@attach focused} onclick={() => ask.settle(true)}>OK</button>
 				<button onclick={() => ask.settle(false)}>Cancel</button>

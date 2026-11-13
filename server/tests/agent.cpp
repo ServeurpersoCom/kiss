@@ -436,6 +436,17 @@ int main() {
     law(erase.asks.size() == 1 && erase.asks[0].question == "erase this conversation",
         "an erase asks for a conversation as the page asks: " +
             (erase.asks.empty() ? std::string() : erase.asks[0].question));
+    // a batch that asks several things asks them under one question, each on
+    // a line of its own as the lines of the batch, the CLI as written
+    const std::string batch =
+        R"({"lines":"set endpoints url u1 https://a.example/v1\nset endpoints url u2 https://b.example/v1"})";
+    const std::shared_ptr<yyjson_doc> two(yyjson_read(batch.data(), batch.size(), 0), yyjson_doc_free);
+    const tool_outcome                both = tools_config(yyjson_doc_get_root(two.get()), {}, c.id);
+    law(both.asks.size() == 2 &&
+            both.text == "Allow this change of the KiSS server " + engine_get("server hostname").value_or("") +
+                             "?\nlet endpoints u1 reach https://a.example/v1\nlet endpoints u2 reach "
+                             "https://b.example/v1",
+        "a batch asks its things under one question, one a line: " + both.text);
     engine_run("set models compaction-preserve-steps e/m 1", ENGINE_ADMIN);
     // the entries of a conversation once its turn ended
     const auto waited = [&](const std::string & id) {
