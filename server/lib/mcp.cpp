@@ -13,9 +13,11 @@
 #include "engine/run.h"
 #include "engine/text.h"
 #include "lib/log.h"
+#include "lib/tools.h"
 #include "yyjson.h"
 
 #include <algorithm>
+#include <cctype>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -277,11 +279,27 @@ static void drop(const std::string & name) {
     }
 }
 
-// between the server and its tool in the item of the tool
-static const char * const ITEM_SEPARATOR = "/";
+// between the server and its tool in the item that sets the tool:
+// exa/web_search_exa
+static const char * const TOOL_SEPARATOR   = "/";
+// between the server and its tool in the name the model sees a tool by once
+// one before holds its own: exa_search
+static const char * const SERVED_SEPARATOR = "_";
 
 std::string mcp_item(const std::string & server, const std::string & name) {
-    return server + ITEM_SEPARATOR + name;
+    return server + TOOL_SEPARATOR + name;
+}
+
+std::string mcp_prefixed(const std::string & server, const std::string & name) {
+    return server + SERVED_SEPARATOR + name;
+}
+
+std::string mcp_unique(std::set<std::string> & taken, const std::string & server, const std::string & name) {
+    const std::string served = taken.count(name) ? mcp_prefixed(server, name) : name;
+    const bool        valid  = !served.empty() && served.size() <= TOOL_NAME_MAX &&
+                       std::all_of(served.begin(), served.end(),
+                                   [](unsigned char c) { return std::isalnum(c) || c == '_' || c == '-'; });
+    return valid && taken.insert(served).second ? served : "";
 }
 
 std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop) {

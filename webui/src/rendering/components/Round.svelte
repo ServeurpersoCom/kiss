@@ -4,7 +4,7 @@
 	import Markdown from '../markdown/Markdown.svelte';
 	import { partial } from '../../lib/partial.js';
 	import Icon from './Icon.svelte';
-	import { INFERENCE, MARKDOWN, OPEN, display, type Fold } from '../display.svelte.js';
+	import { INFERENCE, MARKDOWN, OPEN, argument, display, type Fold } from '../display.svelte.js';
 
 	// live: the round the model writes now; a summary shows folded once
 	// written, the history it folds staying above it
@@ -30,11 +30,10 @@
 		return typeof value === 'string' ? value : JSON.stringify(value);
 	}
 
-	// what a folded call shows: the argument the tools module names for its
-	// tool, else the one the display names for every tool, else the first one,
-	// on its first line
+	// what a folded call shows: the argument its tool shows, else the first
+	// one, on its first line
 	function preview(c: Call, all: [string, unknown][]): string {
-		const named = display.preview[c.name] ?? display.argument;
+		const named = argument(c.name);
 		const picked = all.find(([k]) => k === named) ?? all[0];
 		return picked ? text(picked[1]).split('\n')[0] : '';
 	}

@@ -11,6 +11,7 @@
 #include "lib/remote.h"
 
 #include <functional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,9 @@ struct mcp_tool {
     std::string input;
     // the name the model sees it by, its own or prefixed by its server
     std::string served;
+    // the item of tools that sets it, <server>/<name>, so a setting stays with
+    // its server whatever name the model sees
+    std::string item;
 };
 
 // what a call answered: whether it went, its text, its images
@@ -33,9 +37,17 @@ struct mcp_outcome {
 };
 
 // the item of tools that sets a tool of a server: the server, then the name
-// it gives the tool, exa/search, so a setting stays with its server whatever
-// name the model sees the tool by
+// it gives the tool, exa/search
 std::string mcp_item(const std::string & server, const std::string & name);
+
+// the name of a tool of a server prefixed by its server
+std::string mcp_prefixed(const std::string & server, const std::string & name);
+
+// the name the model sees a tool of a server by, the names before it taken:
+// its own, or prefixed once one before holds it, which it takes in turn;
+// none once that one is taken too, or is no name a model API takes: letters,
+// digits, _ and -, TOOL_NAME_MAX at most
+std::string mcp_unique(std::set<std::string> & taken, const std::string & server, const std::string & name);
 
 // the tools a server serves; throws why it serves none
 std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop);

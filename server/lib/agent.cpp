@@ -232,12 +232,11 @@ void agent_quit() {
 // history of a model and the steps its summary keeps, each tool of the server
 // not off by its own name, then each tool of every MCP server its item does
 // not turn off, by its own name or, once a tool before holds it, by its server
-// and its name; a
-// server that fails serves the tools it listed last, each call answering its
-// error, and is not asked again in the turn, the turn holding it as it was
-// named, so a new url, key or header tries it again, and a server no longer
-// named is forgotten; a failure, a name prefixed and a tool left out log once
-// a turn, a tool left out as an error
+// and its name; a server that fails serves the tools it listed last, each call
+// answering its error, and is not asked again in the turn, the turn holding it
+// as it was named, so a new url, key or header tries it again, and a server no
+// longer named is forgotten; a failure, a name prefixed and a tool left out log
+// once a turn, a tool left out as an error
 struct setup_t {
     std::vector<endpoint>                                                   endpoints;
     std::string                                                             chosen;
@@ -338,10 +337,11 @@ static setup_t setup(api_stop & stop, met_t & met) {
     }
     engine_with([&](const engine_reader & config) {
         for (mcp_tool & t : listed) {
-            t.served = tools_unique(taken, t.server, t.name);
+            t.served = mcp_unique(taken, t.server, t.name);
+            t.item   = mcp_item(t.server, t.name);
             const std::string told =
                 "MCP server " + t.server + ": tool " + t.name +
-                (t.served.empty() ? " left out, " + t.server + "_" + t.name + " is taken or no tool name" :
+                (t.served.empty() ? " left out, " + mcp_prefixed(t.server, t.name) + " is taken or no tool name" :
                                     " served as " + t.served);
             if (t.served != t.name && met.renamed.insert(told).second) {
                 if (t.served.empty()) {
@@ -350,7 +350,7 @@ static setup_t setup(api_stop & stop, met_t & met) {
                     log_info("Agent", "%s", told.c_str());
                 }
             }
-            if (!t.served.empty() && config.get("tools use", mcp_item(t.server, t.name)).value_or(USE_OFF) != USE_OFF) {
+            if (!t.served.empty() && config.get("tools use", t.item).value_or(USE_OFF) != USE_OFF) {
                 s.served.push_back(t);
             }
         }
@@ -563,12 +563,11 @@ static bool call(const std::string &           id,
             use   = paging;
         }
         for (const mcp_tool & t : served) {
-            const std::string set = mcp_item(t.server, t.name);
-            const std::string u   = config.get("tools use", set).value_or(USE_OFF);
+            const std::string u = config.get("tools use", t.item).value_or(USE_OFF);
             if (!found && !paged && !server && t.served == called.name && u != USE_OFF &&
                 config.get("mcp url", t.server)) {
                 server = remote_of(config, "mcp", t.server, BEARER);
-                item   = set;
+                item   = t.item;
                 use    = u;
                 bare   = t.name;
             }

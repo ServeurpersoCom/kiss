@@ -299,14 +299,14 @@ export function mcpItem(server: string, name: string): string {
 }
 
 // the name of a tool of a server prefixed by its server
-export function prefixed(server: string, name: string): string {
+function prefixed(server: string, name: string): string {
 	return `${server}${SERVED_SEPARATOR}${name}`;
 }
 
 // the name the model sees a tool of a server by, the names before it taken:
 // its own, or prefixed once one before holds it, which it takes in turn;
 // none once that one is taken too, or is no name a model API takes
-export function unique(taken: Set<string>, server: string, name: string): string | null {
+function unique(taken: Set<string>, server: string, name: string): string | null {
 	const served = taken.has(name) ? prefixed(server, name) : name;
 	if (!TOOL_NAME_PATTERN.test(served) || taken.has(served)) return null;
 	taken.add(served);
@@ -315,17 +315,17 @@ export function unique(taken: Set<string>, server: string, name: string): string
 
 // the tools the model sees: the given ones, then those of every server, each
 // under the name unique gives it and set by its item, but those the user
-// turned off; a server that fails serves the tools it listed last, and a tool
-// left out or a server that fails tells why as a problem the user reads,
+// turned off; the item of every tool served, by the name the model calls it
+// by, off or not; a server that fails serves the tools it listed last, and a
+// tool left out or a server that fails tells why as a problem the user reads,
 // never stopping anything
 export async function aggregate(
 	config: ConfigReader,
 	own: readonly Tool[],
 	down: Map<string, string>
-): Promise<{ tools: Tool[]; problems: string[] }> {
-	const on = (t: Tool) => config.get('tools use', item(t)) !== OFF;
+): Promise<{ tools: Tool[]; items: Record<string, string>; problems: string[] }> {
+	const all = [...own];
 	const taken = new Set(own.map((t) => t.name));
-	const tools = own.filter(on);
 	const problems: string[] = [];
 	for (const s of await served(config, down)) {
 		if (s.error) problems.push(`mcp ${s.server}: ${s.error}`);
@@ -337,9 +337,12 @@ export async function aggregate(
 				);
 				continue;
 			}
-			const named = { ...t, name, item: mcpItem(s.server, t.name) };
-			if (on(named)) tools.push(named);
+			all.push({ ...t, name, item: mcpItem(s.server, t.name) });
 		}
 	}
-	return { tools, problems };
+	return {
+		tools: all.filter((t) => config.get('tools use', item(t)) !== OFF),
+		items: Object.fromEntries(all.map((t) => [t.name, item(t)])),
+		problems
+	};
 }

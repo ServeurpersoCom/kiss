@@ -10,6 +10,7 @@ import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, item, tools as own } from './tools.js';
 import { PARAMETERS } from '../modules/models.js';
 import { run, settings } from '../engine/run.js';
+import { display } from '../rendering/display.svelte.js';
 
 // whether the user lets the model make this call of a tool: a tool in
 // consent asks, and always turns its item on, as the user
@@ -72,7 +73,8 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 // round to round while the configuration stays, a server that fails serving
 // the tools it listed last; and when the history of the model compacts, the
 // tokens that fold it, none never, and the steps a summary keeps; the pulse
-// names the servers the round waits for
+// names the servers the round waits for, and the thread reads the item of
+// each tool by the name the round serves it under
 async function setup(
 	messages: readonly Message[],
 	signal: AbortSignal,
@@ -91,7 +93,8 @@ async function setup(
 			return value === undefined ? [] : [[name, def.kind === 'number' ? Number(value) : value]];
 		})
 	);
-	const { tools } = await aggregate(settings, own, down);
+	const { tools, items } = await aggregate(settings, own, down);
+	display.items = items;
 	const info = endpoint.protocol.described ? await describe(endpoint, model, signal) : undefined;
 	const request: Request = {
 		model,

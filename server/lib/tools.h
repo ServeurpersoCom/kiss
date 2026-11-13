@@ -7,7 +7,6 @@
 #include "lib/log.h"
 
 #include <functional>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -66,12 +65,6 @@ constexpr size_t TOOL_NAME_MAX = 64;
 // hostname and the tool: forge_server_bash; the agent of this server names it
 // bare, bash, as a router names its own interfaces
 std::string tools_served(const std::string & hostname, const tool & t);
-
-// the name the model sees a tool of MCP server <server> by, the names before
-// it taken: its own, or <server>_<name> once one before holds it, which it
-// takes in turn; none once that one is taken too, or is no name a model API
-// takes: letters, digits, _ and -, TOOL_NAME_MAX at most
-std::string tools_unique(std::set<std::string> & taken, const std::string & server, const std::string & name);
 
 using tool_source = std::vector<tool> (*)(const engine_reader & config);
 

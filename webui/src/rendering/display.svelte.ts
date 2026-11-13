@@ -14,12 +14,21 @@ type Block = (typeof BLOCKS)[number];
 
 // how the thread shows a turn: how the thinking and the tool calls fold, how
 // each block of text renders and the argument every folded call shows, from
-// the display module, and the argument a tool shows instead, by tool name,
-// from the tools module
+// the display module, the argument a tool shows instead, by its item, from
+// the tools module, and the item of each tool by the name the model calls it
+// by, as the tools were last served
 export const display = $state({
 	thinking: INFERENCE as Fold,
 	tools: INFERENCE as Fold,
 	rendering: Object.fromEntries(BLOCKS.map((b) => [b, MARKDOWN])) as Record<Block, Render>,
 	argument: '',
-	preview: {} as Record<string, string>
+	preview: {} as Record<string, string>,
+	items: {} as Record<string, string>
 });
+
+// the argument a folded call of a tool shows, by the name the model called it
+// by: the one the tools module names for its item, else the one the display
+// names for every tool
+export function argument(name: string): string {
+	return display.preview[display.items[name] ?? name] ?? display.argument;
+}

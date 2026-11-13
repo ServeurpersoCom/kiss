@@ -865,7 +865,10 @@ describe('an MCP server', () => {
 		const p = await page(
 			{
 				a: modern([{ name: 'search', run: text('a') }]),
-				b: modern([{ name: 'search', run: text('b') }])
+				b: modern([
+					{ name: 'search', run: text('b') },
+					{ name: 'config', run: text('config') }
+				])
 			},
 			[
 				stream([call('search', { description: 'a' })]),
@@ -881,12 +884,57 @@ describe('an MCP server', () => {
 		expect(t.reply.rounds.flatMap((r) => r.calls).map((c) => c.result)).toEqual(['a', 'b']);
 		expect(p.asked.map((g) => g.kind === 'call' && g.tool)).toEqual(['b_search']);
 		expect(p.engine.settings.get('tools use', 'b/search')).toBe('on');
+		// a call shows the argument of the item of its tool, never of another
+		// tool named alike: config of KiSS keeps the default, b_config of b its own
 		await p.engine.run(
-			'set tools preview-argument a/search query\nset tools preview-argument config x',
+			'set tools preview-argument a/search query\nset tools preview-argument b/config path',
 			'user'
 		);
-		const { display } = await import('../src/rendering/display.svelte.js');
-		expect(display.preview).toEqual({ config: 'x', search: 'query', a_search: 'query' });
+		const { argument, display } = await import('../src/rendering/display.svelte.js');
+		expect([
+			argument('search'),
+			argument('b_search'),
+			argument('config'),
+			argument('b_config')
+		]).toEqual(['query', display.argument, display.argument, 'path']);
+		expect(display.items).toMatchObject({
+			search: 'a/search',
+			b_search: 'b/search',
+			config: 'config',
+			b_config: 'b/config'
+		});
+	});
+
+	it('shows a call by the item of its tool before any round, as the page opens', async () => {
+		const p = await page({ b: modern([{ name: 'config', run: text('b') }]) }, []);
+		await p.engine.run('set mcp url b http://b/mcp', 'user');
+		await p.engine.run('set tools preview-argument b/config path', 'user');
+		const { argument } = await import('../src/rendering/display.svelte.js');
+		await vi.waitFor(() => expect(argument('b_config')).toBe('path'));
+	});
+
+	it('shows a call by the item of the tool its round served, a server down at first', async () => {
+		let up = false;
+		let tried = false;
+		const b = modern([{ name: 'config', run: text('b') }]);
+		const p = await page(
+			{
+				b: (req) => {
+					if (up) return b(req);
+					tried = true;
+					return Promise.reject(new TypeError('fetch failed: b'));
+				}
+			},
+			[stream([{ content: 'ok' }])]
+		);
+		await p.engine.run('set mcp url b http://b/mcp', 'user');
+		await vi.waitFor(() => expect(tried).toBe(true));
+		up = true;
+		await p.engine.run('set tools preview-argument b/config path', 'user');
+		const t = await p.go();
+		await t.done;
+		const { argument } = await import('../src/rendering/display.svelte.js');
+		expect(argument('b_config')).toBe('path');
 	});
 
 	it('lists every tool by who serves it, the settings of a tool no longer served last', async () => {
