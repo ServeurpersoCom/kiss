@@ -10,6 +10,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { PATHS, stroke, type IconName } from '../icons.js';
+import { NEWLINE, SPACE } from '../../lib/config.js';
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const LINK_PROTOCOLS = ['http:', 'https:', 'mailto:'];
@@ -154,7 +155,7 @@ function rehypeCells() {
 			};
 			for (const child of node.children) {
 				if (child.type === 'text') run += child.value;
-				else if (child.type === 'element' && child.tagName === 'br') run += '\n';
+				else if (child.type === 'element' && child.tagName === 'br') run += NEWLINE;
 				else {
 					flush();
 					children.push(child);
@@ -265,7 +266,7 @@ function openFence(markdown: string): { start: number; lang: string; code: strin
 	let lang = '';
 	let start = 0;
 	let offset = 0;
-	for (const line of markdown.split('\n')) {
+	for (const line of markdown.split(NEWLINE)) {
 		const m = FENCE.exec(line);
 		if (m && !fence) {
 			fence = m[1];
@@ -278,7 +279,7 @@ function openFence(markdown: string): { start: number; lang: string; code: strin
 	}
 	if (!fence) return null;
 	const body = markdown.slice(start);
-	return { start, lang, code: body.slice(body.indexOf('\n') + 1) };
+	return { start, lang, code: body.slice(body.indexOf(NEWLINE) + 1) };
 }
 
 // incremental rendering of a growing text: every top level block but the last
@@ -302,7 +303,7 @@ export class Renderer {
 			return { blocks: [], tail: html(nodes) + fence };
 		}
 		const definitions = nodes.filter((n) => n.type === 'definition');
-		const context = definitions.map(span).join(' ');
+		const context = definitions.map(span).join(SPACE);
 		const stable = open ? nodes.length : Math.max(nodes.length - 1, 0);
 		const cache = new Map<string, string>();
 		const blocks = nodes.slice(0, stable).map((node) => {

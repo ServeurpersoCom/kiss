@@ -1,6 +1,7 @@
 import type { Command, Context, Value } from '../engine/engine.js';
-import { Incomplete } from '../engine/text.js';
-import { comment } from '../engine/text.js';
+import { Incomplete, SET, comment } from '../engine/text.js';
+import { SPACE } from '../lib/config.js';
+import { moduleOf } from '../engine/schema.js';
 
 // no value for a secret: it is asked of the user
 interface Plan {
@@ -21,19 +22,19 @@ async function asked(ctx: Context, key: string, name?: string): Promise<Value> {
 }
 
 export default {
-	path: ['set'],
+	path: [SET],
 	roles: ['user', 'llm'],
 	module: true,
 	parse(schema, args) {
 		const { key, def, name, rest } = schema.read(args);
-		if (rest.length) return { key, name, value: schema.parse(key, rest.join(' ')) };
+		if (rest.length) return { key, name, value: schema.parse(key, rest.join(SPACE)) };
 		if (def.kind !== 'secret') throw new Incomplete();
 		return { key, name };
 	},
 	// an item it names is one its module may hold; a secret the user types says
 	// so, so whoever wrote the line knows it is given
 	async run(ctx, { key, name, value }) {
-		if (name !== undefined) await ctx.admit(key.slice(0, key.indexOf(' ')), name);
+		if (name !== undefined) await ctx.admit(moduleOf(key), name);
 		if (value !== undefined) {
 			ctx.config.set(key, value, name);
 			return '';

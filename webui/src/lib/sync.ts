@@ -1,6 +1,6 @@
 import type { Assistant, Conversation, Form, Outcome, Run, Turn } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
-import { ATTACHED_STORAGE_KEY, storeName } from './config.js';
+import { ATTACHED_STORAGE_KEY, JSON_TYPE, NEWLINE, storeName } from './config.js';
 import { REDIRECT, remotes, type Remote } from './remote.js';
 import type { Grant, Verdict } from '../engine/engine.js';
 import { app, last, pose, withdraw, type Asking } from './app.svelte.js';
@@ -8,6 +8,7 @@ import { fill } from './form.js';
 import { pulse, type Pulse } from './pulse.js';
 import { secrets } from '../engine/keychain.js';
 import { sealText } from '../engine/seal.js';
+import { newest } from './conversation.js';
 
 // the page attached to a KiSS server, the mcp item backend: it shows the
 // conversations of the server alone, follows them by one stream of events and
@@ -25,6 +26,19 @@ const OFF = 'off';
 export const PAGE_COMMANDS = ['attach', 'detach'];
 
 // the conversations API of the server: the stream, and the path of an action
+// the actions a page sends, as the server names them
+type Action =
+	| 'send'
+	| 'command'
+	| 'complete'
+	| 'edit'
+	| 'retry'
+	| 'stop'
+	| 'answer'
+	| 'pin'
+	| 'browse'
+	| 'drop'
+	| 'erase';
 const EVENTS = 'conversations/events';
 const ACTIONS = 'conversations/';
 // the protocol of the events this page reads
@@ -37,6 +51,8 @@ export const SYNC_RETRY_MS = 2000;
 const SYNC_IDLE_MS = 15000;
 export const SYNC_SILENCE_MS = 3 * SYNC_IDLE_MS;
 const POLICY_VIOLATION = 1008;
+// the status of an action applied that answers nothing
+const NO_CONTENT = 204;
 
 // what each conversation of a server asks for its turn, while the turn asks
 // it: the number of the question of the server, the number of the question
@@ -184,7 +200,7 @@ function turned(id: string, t: Turn | null): void {
 }
 
 function sorted(): void {
-	app.conversations.sort((a, b) => b.updated - a.updated);
+	app.conversations.sort(newest);
 }
 
 // one event applied to the conversations of the server
@@ -261,7 +277,7 @@ function stream(server: Remote, signal: AbortSignal): Promise<void> {
 			clearTimeout(timer);
 			timer = setTimeout(cut, SYNC_SILENCE_MS);
 			try {
-				for (const line of m.data.split('\n')) if (line) apply(JSON.parse(line) as Event);
+				for (const line of m.data.split(NEWLINE)) if (line) apply(JSON.parse(line) as Event);
 			} catch (e) {
 				reject(e);
 				cut();
@@ -328,18 +344,18 @@ export function follow(config: ConfigReader): void {
 // sees; what the server answers: the id of the conversation a line went in, the
 // words that may follow a line
 export async function act(
-	action: string,
+	action: Action,
 	body: object
 ): Promise<{ id?: string; words?: string[] }> {
 	const server = followed?.server;
 	if (!server) throw new Error('the page is attached to no server');
 	const res = await fetch(new URL(ACTIONS + action, new URL(server.url, location.href)), {
 		method: 'POST',
-		headers: { ...headers(server), 'Content-Type': 'application/json' },
+		headers: { ...headers(server), 'Content-Type': JSON_TYPE },
 		body: JSON.stringify(body),
 		redirect: REDIRECT
 	});
 	if (!res.ok) throw new Error((await res.text()).trim() || `${server.url} answers ${res.status}`);
-	if (res.status === 204) return {};
+	if (res.status === NO_CONTENT) return {};
 	return (await res.json()) as { id?: string; words?: string[] };
 }

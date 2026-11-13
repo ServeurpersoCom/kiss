@@ -153,7 +153,7 @@ static size_t source_of(int orientation, int x, int y, int w, int h) {
 }
 
 static void append(void * context, void * data, int size) {
-    static_cast<std::string *>(context)->append(static_cast<const char *>(data), (size_t) size);
+    ((std::string *) context)->append((const char *) data, (size_t) size);
 }
 
 image_sent image_fit(const std::string & bytes, const image_limits & limits) {

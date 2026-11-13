@@ -1,6 +1,7 @@
 import type { Config, Held, Schema, Value } from './engine.js';
 import { REMOVED } from './text.js';
 import { stored, unstore } from './schema.js';
+import { SPACE } from '../lib/config.js';
 
 // a configuration: the keys set in the session, over the values the site
 // gives, over the factory configuration, over the reset value of each key; a
@@ -43,7 +44,7 @@ export class Values implements Config {
 		const names = [...this.stored(), ...this.factory.keys()]
 			.filter((k) => this.given(k) != null)
 			.map(unstore)
-			.filter(([key, name]) => name && key.startsWith(module + ' '))
+			.filter(([key, name]) => name && key.startsWith(module + SPACE))
 			.map(([, name]) => name!);
 		return [...new Set(names)].sort();
 	}
@@ -65,7 +66,7 @@ export class Values implements Config {
 	drop(module: string, name: string): void {
 		for (const k of new Set([...this.stored(), ...this.factory.keys()])) {
 			const [key, item] = unstore(k);
-			if (item === name && key.startsWith(module + ' ')) this.takeBack(key, item);
+			if (item === name && key.startsWith(module + SPACE)) this.takeBack(key, item);
 		}
 	}
 

@@ -16,6 +16,10 @@ std::filesystem::path file_path(const std::string & cwd, const std::string & giv
 // to another path; empty when it may name a file
 std::string file_refused(const std::string & given);
 
+// the bytes of a file of at most limit bytes, whatever they are; the message
+// of what keeps it from loading, empty when it loads
+std::string file_bytes(const std::filesystem::path & path, size_t limit, std::string & bytes);
+
 // the whole of a text file of at most limit bytes, a NUL in its first chunk
 // telling a binary; the message of what keeps it from loading, empty when
 // it loads

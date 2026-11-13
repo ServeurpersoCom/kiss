@@ -33,6 +33,13 @@ export const SERVED_SEPARATOR = '_';
 const URL_START = /^[a-z][a-z0-9+.-]*:\/\//;
 export const capital = (text: string): string =>
 	URL_START.test(text) ? text : text.charAt(0).toUpperCase() + text.slice(1);
+// what ends a line, what parts two words, and the other blank of a line
+export const NEWLINE = '\n';
+export const SPACE = ' ';
+export const TAB = '\t';
+// the content types the page sends and saves
+export const JSON_TYPE = 'application/json';
+export const TEXT_TYPE = 'text/plain';
 // a line of the composer opening with it runs on the CLI
 export const SLASH = '/';
 // the name of the command line: the head of a command, and what reads in place
@@ -69,6 +76,7 @@ export function localTime(date: string | number): string {
 }
 
 // the day of a moment on the calendar of the browser, as a count of days
+export const SECOND_MS = 1000;
 const DAY_MS = 86400000;
 export function day(time: number): number {
 	const d = new Date(time);
@@ -95,7 +103,7 @@ export function ago(time: number, now: number, locale?: string): string {
 		const [unit, size] = CALENDAR.find(([, size]) => days >= size)!;
 		return format.format(-Math.floor(days / size), unit);
 	}
-	const seconds = (now - time) / 1000;
+	const seconds = (now - time) / SECOND_MS;
 	const passed = PASSING.find(([, size]) => seconds >= size);
 	return passed
 		? format.format(-Math.floor(seconds / passed[1]), passed[0])

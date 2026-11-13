@@ -1,6 +1,6 @@
 import type { Delta, Protocol, Request } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
-import { MODEL_SEPARATOR, SLASH } from './config.js';
+import { JSON_TYPE, MODEL_SEPARATOR, SECOND_MS, SLASH, TEXT_TYPE } from './config.js';
 import { secrets } from '../engine/keychain.js';
 import { seal } from '../engine/seal.js';
 import { REDIRECT, remotes, type Remote } from './remote.js';
@@ -92,7 +92,7 @@ async function failure(res: Response): Promise<EndpointError> {
 	try {
 		message = JSON.parse(body).error?.message ?? message;
 	} catch {
-		if (res.headers.get('content-type')?.startsWith('text/plain')) message = body.trim() || message;
+		if (res.headers.get('content-type')?.startsWith(TEXT_TYPE)) message = body.trim() || message;
 	}
 	const fix = UNAUTHORIZED.includes(res.status)
 		? KEY_FIX
@@ -120,7 +120,7 @@ async function request<T>(
 	const start = new AbortController();
 	const timer = setTimeout(
 		() => start.abort(new Error(`${endpoint.url} does not answer within ${endpoint.timeout} s`)),
-		endpoint.timeout * 1000
+		endpoint.timeout * SECOND_MS
 	);
 	try {
 		const res = await fetch(`${endpoint.url}${path}`, {
@@ -237,7 +237,7 @@ async function opened(
 		if (!(answer instanceof Response)) return answer;
 		await answer.body?.cancel();
 		retrying(answer.status, attempt, endpoint.retries);
-		await sleep(endpoint.pause * 1000, signal);
+		await sleep(endpoint.pause * SECOND_MS, signal);
 	}
 }
 
@@ -257,7 +257,7 @@ export async function* chat(
 	const { protocol } = endpoint;
 	const init = {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: { 'Content-Type': JSON_TYPE },
 		// what the model reads leaves sealed, whatever the history holds
 		body: seal(protocol.body(req), secrets())
 	};

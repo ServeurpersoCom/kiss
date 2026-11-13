@@ -1,5 +1,6 @@
 import type { Command } from '../../engine/engine.js';
 import { comment } from '../../engine/text.js';
+import { NEWLINE, SPACE } from '../../lib/config.js';
 
 // the rules of the page style, one per line, those of the libraries left out
 // as their own layer holds them
@@ -8,7 +9,7 @@ function rules(list: CSSRuleList, page: boolean): string[] {
 		if (rule instanceof CSSLayerBlockRule && rule.name === 'page')
 			return rules(rule.cssRules, true);
 		if (!page) return [];
-		return [rule.cssText.replace(/\s+/g, ' ')];
+		return [rule.cssText.replace(/\s+/g, SPACE)];
 	});
 }
 
@@ -25,6 +26,6 @@ export default {
 			const name = /\bsvelte-([a-z0-9]+)/.exec(rule)?.[1] ?? 'page';
 			groups.set(name, [...(groups.get(name) ?? []), rule]);
 		}
-		return [...groups].flatMap(([name, list]) => [comment(name), ...list]).join('\n');
+		return [...groups].flatMap(([name, list]) => [comment(name), ...list]).join(NEWLINE);
 	}
 } satisfies Command;

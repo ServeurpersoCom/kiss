@@ -1,7 +1,6 @@
 import type { Command, Context } from '../engine/engine.js';
-import { Incomplete } from '../engine/text.js';
-import { CONVERSATIONS, ID_SHOWN, titled } from '../lib/config.js';
-import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
+import { Incomplete, RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
+import { CONVERSATIONS, ID_SHOWN, NEWLINE, titled } from '../lib/config.js';
 import { configs, named, target } from './copy.js';
 
 // what erase names, a prefix being enough: every conversation but the pinned
@@ -64,7 +63,7 @@ export default {
 		await library.remove(list.map((c) => c.id));
 		return list
 			.map((c) => `- ${c.id.slice(0, ID_SHOWN)}${titled(c.title, (v) => ctx.schema.quote(v))}`)
-			.join('\n');
+			.join(NEWLINE);
 	},
 	complete(ctx, args) {
 		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), '<id>'];

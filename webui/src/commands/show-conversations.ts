@@ -1,5 +1,5 @@
 import type { Command } from '../engine/engine.js';
-import { ID_SHOWN, localTime, titled } from '../lib/config.js';
+import { ID_SHOWN, NEWLINE, localTime, titled } from '../lib/config.js';
 import { comment } from '../engine/text.js';
 
 const MARK = '* ';
@@ -18,6 +18,6 @@ export default {
 				const title = titled(c.title, (v) => ctx.schema.quote(v));
 				return comment(`${mark}${c.id.slice(0, ID_SHOWN)} ${localTime(c.updated)}${title}`);
 			})
-			.join('\n');
+			.join(NEWLINE);
 	}
 } satisfies Command;

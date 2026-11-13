@@ -4,7 +4,10 @@
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
+#include "lib/http.h"
+#include "lib/json.h"
 #include "lib/log.h"
+#include "lib/mcp.h"
 #include "lib/quit.h"
 #include "lib/tools.h"
 #include "mcp/jsonrpc.h"
@@ -28,6 +31,12 @@ static const char * const ROUTE_KEYED_META = "kiss/keyed";
 // a result the server does not keep: the tools and the routes follow the
 // configuration, so a client asks again rather than caching
 static const int TTL_MS = 0;
+
+// how long a client may keep an answer, and for whom
+static void cached(yyjson_mut_doc * doc, yyjson_mut_val * out) {
+    yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);
+    yyjson_mut_obj_add_str(doc, out, "cacheScope", "private");
+}
 
 static void server_info(yyjson_mut_doc *    doc,
                         yyjson_mut_val *    info,
@@ -60,8 +69,7 @@ void method_discover(httplib::Response & res, yyjson_val * id, const std::string
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc, out, "capabilities");
         yyjson_mut_obj_add_obj(doc, caps, "tools");
         yyjson_mut_obj_add_obj(doc, caps, "resources");
-        yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);
-        yyjson_mut_obj_add_str(doc, out, "cacheScope", "private");
+        cached(doc, out);
         yyjson_mut_val * meta = yyjson_mut_obj_add_obj(doc, out, "_meta");
         server_info(doc, yyjson_mut_obj_add_obj(doc, meta, SERVER_INFO_META), server, version);
     });
@@ -97,13 +105,12 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
             yyjson_mut_val *  item = yyjson_mut_arr_add_obj(doc, list);
             yyjson_mut_obj_add_strncpy(doc, item, "name", name.c_str(), name.size());
             yyjson_mut_obj_add_strncpy(doc, item, "description", t.description.c_str(), t.description.size());
-            yyjson_doc * schema = yyjson_read(t.input.c_str(), t.input.size(), 0);
-            yyjson_mut_obj_add_val(doc, item, "inputSchema", yyjson_val_mut_copy(doc, yyjson_doc_get_root(schema)));
-            yyjson_doc_free(schema);
+            const json_doc schema = json_read(t.input);
+            yyjson_mut_obj_add_val(doc, item, "inputSchema",
+                                   yyjson_val_mut_copy(doc, yyjson_doc_get_root(schema.get())));
         }
         if (modern) {
-            yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);
-            yyjson_mut_obj_add_str(doc, out, "cacheScope", "private");
+            cached(doc, out);
         }
     });
 }
@@ -128,8 +135,7 @@ void method_resources_list(httplib::Response & res, yyjson_val * id, bool modern
             yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, item, "_meta"), ROUTE_KEYED_META, keyed);
         }
         if (modern) {
-            yyjson_mut_obj_add_int(doc, out, "ttlMs", TTL_MS);
-            yyjson_mut_obj_add_str(doc, out, "cacheScope", "private");
+            cached(doc, out);
         }
     });
 }
@@ -199,9 +205,7 @@ struct call_log {
                 const size_t      lines = (size_t) std::count(text.begin(), text.end(), '\n') + 1;
                 shown = text.substr(0, text.find('\n')) + (lines > 1 ? " (" + std::to_string(lines) + " lines)" : "");
             } else {
-                char * json = yyjson_val_write(value, 0, nullptr);
-                shown       = json ? json : "";
-                free(json);
+                shown = json_write(value);
             }
             log_debug("MCP", "Call %s: %s %s", tool.c_str(), yyjson_get_str(key), shown.c_str());
         }
@@ -231,7 +235,7 @@ struct call_log {
 static bool takes_forms(yyjson_val * params) {
     yyjson_val * caps        = yyjson_obj_get(yyjson_obj_get(params, "_meta"), CLIENT_CAPABILITIES_META);
     yyjson_val * elicitation = yyjson_obj_get(caps, "elicitation");
-    return elicitation && (yyjson_obj_get(elicitation, "form") || !yyjson_obj_get(elicitation, "url"));
+    return elicitation && (yyjson_obj_get(elicitation, MCP_FORM_MODE) || !yyjson_obj_get(elicitation, "url"));
 }
 
 // what the user answered to the form of an earlier call, when the call comes
@@ -265,7 +269,7 @@ void method_tools_call(const httplib::Request &            req,
         const std::string refused = tools_check(t, args);
         if (!refused.empty()) {
             log_error("MCP", "Call %s: refused, %s", called.c_str(), refused.c_str());
-            res.set_content(call_json(id, modern, { false, refused }), "application/json");
+            res.set_content(call_json(id, modern, { false, refused }), JSON_TYPE);
             return;
         }
         engine_typed typed;
@@ -285,36 +289,35 @@ void method_tools_call(const httplib::Request &            req,
         };
         const call_log log{ called };
         log.start(args);
-        if (req.get_header_value("Accept").find("text/event-stream") == std::string::npos) {
+        if (req.get_header_value("Accept").find(EVENTS_TYPE) == std::string::npos) {
             const tool_outcome r = run([&req]() { return !req.is_connection_closed() && !quit_ending(); });
             if (req.is_connection_closed()) {
                 log.gone();
                 return;
             }
             log.end(r, "as JSON");
-            res.set_content(call_json(id, modern, r), "application/json");
+            res.set_content(call_json(id, modern, r), JSON_TYPE);
             return;
         }
         res.set_header("Cache-Control", "no-cache");
-        res.set_chunked_content_provider(
-            "text/event-stream", [body, run, log, id, modern](size_t, httplib::DataSink & sink) {
-                bool               gone = false;
-                const tool_outcome r    = run([&]() {
-                    gone = gone || !sink.write(":\n\n", 3);
-                    return !gone && !quit_ending();
-                });
-                if (gone) {
-                    log.gone();
-                    return false;
-                }
-                log.end(r, "by SSE");
-                const std::string event = "event: message\ndata: " + call_json(id, modern, r) + "\n\n";
-                sink.write(event.data(), event.size());
-                sink.done();
-                return true;
+        res.set_chunked_content_provider(EVENTS_TYPE, [body, run, log, id, modern](size_t, httplib::DataSink & sink) {
+            bool               gone = false;
+            const tool_outcome r    = run([&]() {
+                gone = gone || !sink.write(":\n\n", 3);
+                return !gone && !quit_ending();
             });
+            if (gone) {
+                log.gone();
+                return false;
+            }
+            log.end(r, "by SSE");
+            const std::string event = "event: message\ndata: " + call_json(id, modern, r) + "\n\n";
+            sink.write(event.data(), event.size());
+            sink.done();
+            return true;
+        });
         return;
     }
     log_error("MCP", "Call %s: refused, no such tool", called.c_str());
-    jsonrpc_error(res, 200, id, JSONRPC_INVALID_PARAMS, "Unknown tool \"" + called + "\"");
+    jsonrpc_error(res, httplib::StatusCode::OK_200, id, JSONRPC_INVALID_PARAMS, "Unknown tool \"" + called + "\"");
 }

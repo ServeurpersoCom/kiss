@@ -1,5 +1,5 @@
 import type { Command } from '../engine/engine.js';
-import { localTime } from '../lib/config.js';
+import { NEWLINE, localTime } from '../lib/config.js';
 import { beyond, comment } from '../engine/text.js';
 import { listed } from './copy.js';
 import { choose } from '../engine/near.js';
@@ -21,11 +21,11 @@ export default {
 				'save'
 			);
 			const lines = listed(ctx, name);
-			return lines.length ? lines.join('\n') : comment('every key is at its default');
+			return lines.length ? lines.join(NEWLINE) : comment('every key is at its default');
 		}
 		const saves = ctx.archive.list();
 		if (!saves.length) return comment('nothing saved yet');
-		return saves.map((s) => comment(`${s.name} ${localTime(s.date)}`)).join('\n');
+		return saves.map((s) => comment(`${s.name} ${localTime(s.date)}`)).join(NEWLINE);
 	},
 	complete(ctx, args) {
 		return args.length ? [] : ctx.archive.list().map((s) => s.name);

@@ -1,4 +1,4 @@
-import { TYPO_LETTERS_PER_EDIT } from '../lib/config.js';
+import { SPACE, TYPO_LETTERS_PER_EDIT } from '../lib/config.js';
 
 // the edits turning a into b: inserting, deleting or changing a letter, or
 // swapping two letters side by side, each one edit
@@ -51,7 +51,7 @@ export function pick(word: string, words: readonly string[], what: string): stri
 	const hits = [...new Set(words.filter((w) => w.toLowerCase().startsWith(typed)))];
 	const exact = hits.filter((w) => w.toLowerCase() === typed);
 	if (exact.length === 1) return exact[0];
-	if (hits.length > 1) throw new Error(`ambiguous ${what} "${word}": ${hits.join(' ')}`);
+	if (hits.length > 1) throw new Error(`ambiguous ${what} "${word}": ${hits.join(SPACE)}`);
 	return hits[0];
 }
 

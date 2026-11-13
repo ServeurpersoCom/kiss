@@ -1,11 +1,12 @@
 import type { Conversation } from '../lib/types.js';
 import type { Command, Context } from '../engine/engine.js';
 import {
+	CONFIG_EXTENSION,
 	CONVERSATION,
 	CONVERSATIONS,
-	CONFIG_EXTENSION,
 	FILE_EXTENSION,
 	ID_SHOWN,
+	NEWLINE,
 	fileName,
 	localTime
 } from '../lib/config.js';
@@ -29,7 +30,7 @@ interface File {
 function configFile(ctx: Context, config: string, minute: string): File {
 	const lines = listed(ctx, config, true);
 	const name = fileName(`${config} ${minute}`, CONFIG_EXTENSION);
-	return { name, text: lines.join('\n') + '\n', told: `exported ${config} to ${name}` };
+	return { name, text: lines.join(NEWLINE) + NEWLINE, told: `exported ${config} to ${name}` };
 }
 
 // the conversations, named after the minute, or one, named after its title

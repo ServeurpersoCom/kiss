@@ -3,6 +3,7 @@
 // tools, how much the log says and how much of it show logging keeps
 
 #include "engine/engine.h"
+#include "engine/parse.h"
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/tools.h"
@@ -41,21 +42,9 @@ static std::string start_directory() {
     return std::filesystem::current_path().u8string();
 }
 
-static bool tool_word(const std::string & s) {
-    if (s.empty()) {
-        return false;
-    }
-    for (char c : s) {
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
-            return false;
-        }
-    }
-    return true;
-}
-
 static std::string validate(const engine_reader & config) {
     const std::string name = config.get("server hostname").value_or("");
-    if (!tool_word(name)) {
+    if (!plain_word(name, "_")) {
         return "server hostname \"" + name + "\" takes a-z, 0-9 and _ only, as a tool name does";
     }
     for (const tool & t : tools_list(config)) {
@@ -117,7 +106,7 @@ static engine_module make_server() {
 
     engine_key level("log-level", ENGINE_ENUM);
     level.values = { std::begin(LOG_LEVELS), std::end(LOG_LEVELS) };
-    level.reset  = "debugging";
+    level.reset  = LOG_LEVELS[LOG_DEBUG];
 
     // the bytes of the last lines of the log show logging keeps, 0 none
     engine_key buffer("log-buffer", ENGINE_NUMBER);
@@ -126,14 +115,8 @@ static engine_module make_server() {
     buffer.reset   = "65536";
 
     engine_module m;
-    m.name = "server";
-    m.keys.push_back(address);
-    m.keys.push_back(port);
-    m.keys.push_back(hostname);
-    m.keys.push_back(engine_key("key", ENGINE_SECRET));
-    m.keys.push_back(cwd);
-    m.keys.push_back(level);
-    m.keys.push_back(buffer);
+    m.name     = "server";
+    m.keys     = { address, port, hostname, engine_key("key", ENGINE_SECRET), cwd, level, buffer };
     m.validate = validate;
     m.prepare  = prepare;
     m.apply    = apply;

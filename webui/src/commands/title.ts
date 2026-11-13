@@ -1,15 +1,15 @@
 import type { Command } from '../engine/engine.js';
 import { Incomplete } from '../engine/text.js';
-import { TITLE_LENGTH } from '../lib/config.js';
+import { NEWLINE, SPACE, TITLE_LENGTH } from '../lib/config.js';
 
 export default {
 	path: ['title'],
 	roles: ['user', 'llm'],
 	parse(_schema, args) {
 		if (!args.length) throw new Incomplete();
-		const title = args.join(' ');
+		const title = args.join(SPACE);
 		if (!title.trim()) throw new Error('a title holds a word at least');
-		if (title.includes('\n')) throw new Error('a title holds one line');
+		if (title.includes(NEWLINE)) throw new Error('a title holds one line');
 		if (title.length > TITLE_LENGTH) {
 			throw new Error(`a title holds ${TITLE_LENGTH} characters at most`);
 		}

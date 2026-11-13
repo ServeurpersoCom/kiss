@@ -9,6 +9,7 @@
 #include "engine/seal.h"
 #include "lib/api.h"
 #include "lib/compaction.h"
+#include "lib/json.h"
 #include "lib/library.h"
 #include "lib/log.h"
 #include "lib/mcp.h"
@@ -16,7 +17,6 @@
 #include "lib/pulse.h"
 #include "lib/quit.h"
 #include "lib/tools.h"
-#include "yyjson.h"
 
 #include <algorithm>
 #include <condition_variable>
@@ -26,9 +26,6 @@
 #include <set>
 
 // what a call reads when no tool reads it, and why a call does not run
-static const char * const NO_ARGS = "{}";
-static const char * const USE_ON  = "on";
-static const char * const USE_OFF = "off";
 
 // the stop of the turn of each conversation
 static std::mutex                                       g_mutex;
@@ -132,13 +129,12 @@ static std::string settle_standing(const std::string & id,
 
 // what a page answers a run, as JSON
 static std::string ran(const std::string & output, bool ok) {
-    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_val *                      out = yyjson_mut_obj(made.get());
+    const json_mut   made = json_new();
+    yyjson_mut_val * out  = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), out);
     yyjson_mut_obj_add_strncpy(made.get(), out, "output", output.data(), output.size());
     yyjson_mut_obj_add_bool(made.get(), out, "ok", ok);
-    const std::shared_ptr<char> json(yyjson_mut_write(made.get(), 0, nullptr), free);
-    return json.get();
+    return json_write(made);
 }
 
 // what a run answers once no page is attached
@@ -238,24 +234,16 @@ void agent_quit() {
 // longer named is forgotten; a failure, a name prefixed and a tool left out log
 // once a turn, a tool left out as an error
 struct setup_t {
-    std::vector<endpoint>                                                   endpoints;
-    std::string                                                             chosen;
-    std::string                                                             system;
-    std::map<std::string, std::vector<std::pair<std::string, std::string>>> parameters;
-    std::map<std::string, double>                                           triggers;
-    std::map<std::string, int>                                              preserves;
-    std::vector<tool>                                                       tools;
-    bool                                                                    pages = false;
-    std::vector<mcp_tool>                                                   served;
+    std::vector<endpoint>            endpoints;
+    std::string                      chosen;
+    std::string                      system;
+    std::map<std::string, api_named> parameters;
+    std::map<std::string, double>    triggers;
+    std::map<std::string, int>       preserves;
+    std::vector<tool>                tools;
+    bool                             pages = false;
+    std::vector<mcp_tool>            served;
 };
-
-// a string as JSON, the way a parameter of a model goes
-static std::string json_string(const std::string & s) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_doc_set_root(doc.get(), yyjson_mut_strncpy(doc.get(), s.data(), s.size()));
-    const std::shared_ptr<char> text(yyjson_mut_write(doc.get(), 0, nullptr), free);
-    return text.get();
-}
 
 // a server as it is named: its name, url, headers and key
 static std::string signature(const remote & r) {
@@ -294,7 +282,7 @@ static setup_t setup(api_stop & stop, met_t & met) {
                 } else if (k.name == COMPACTION_PRESERVE) {
                     s.preserves[item] = std::stoi(*v);
                 } else {
-                    s.parameters[item].emplace_back(k.name, k.kind == ENGINE_NUMBER ? *v : json_string(*v));
+                    s.parameters[item].emplace_back(k.name, k.kind == ENGINE_NUMBER ? *v : json_quote(*v));
                 }
             }
         }
@@ -358,39 +346,63 @@ static setup_t setup(api_stop & stop, met_t & met) {
     return s;
 }
 
+// a turn as it runs: its conversation, the reply it writes, none for a line
+// that runs alone, what stops it, its pulse, and what it met
+struct turn_t {
+    std::string id;
+    std::string entry;
+    api_stop &  stop;
+    pulse       p;
+    met_t       met;
+};
+
+// the turn of a conversation taken, none while one runs
+static std::shared_ptr<api_stop> take(const std::string & id) {
+    const auto                  stop = std::make_shared<api_stop>();
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_turns.count(id)) {
+        return nullptr;
+    }
+    g_turns[id] = stop;
+    return stop;
+}
+
+// the turn of a conversation given back
+static void leave(const std::string & id) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_turns.erase(id);
+}
+
 // the pulse of a turn as every page following its conversation shows it
-static void beat(const std::string & id, const pulse & p) {
-    library_turn(id, pulse_json(p));
+static void beat(const turn_t & self) {
+    library_turn(self.id, pulse_json(self.p));
 }
 
 // the reply as the library holds it; a reply gone, its conversation erased,
 // stops the turn
-static conversation_entry reply_of(const std::string & id, const std::string & entry, api_stop & stop) {
+static conversation_entry reply_of(const turn_t & self) {
     std::optional<conversation_entry> out;
     library_each([&](const conversation & c) {
-        if (c.id == id) {
+        if (c.id == self.id) {
             for (const conversation_entry & e : c.entries) {
-                if (e.id == entry) {
+                if (e.id == self.entry) {
                     out = e;
                 }
             }
         }
     });
     if (!out) {
-        stop.stop();
-        throw api_error("Stopped");
+        self.stop.stop();
+        throw api_error(TURN_STOPPED);
     }
     return *out;
 }
 
 // the reply grows; a reply gone, its conversation erased, stops the turn
-static void grow(const std::string &                               id,
-                 const std::string &                               entry,
-                 api_stop &                                        stop,
-                 const std::function<void(conversation_entry &)> & change) {
-    if (!library_grow(id, entry, change)) {
-        stop.stop();
-        throw api_error("Stopped");
+static void grow(turn_t & self, const std::function<void(conversation_entry &)> & change) {
+    if (!library_grow(self.id, self.entry, change)) {
+        self.stop.stop();
+        throw api_error(TURN_STOPPED);
     }
 }
 
@@ -398,98 +410,90 @@ static void grow(const std::string &                               id,
 // with the conversation as the library holds it
 static void logged(const std::string & id, const std::string & why) {
     if (!why.empty()) {
-        log_error("Agent", "%.8s is not written: %s", id.c_str(), why.c_str());
+        log_error("Agent", "%s is not written: %s", conversation_shown(id).c_str(), why.c_str());
     }
 }
 
 // what the user answers a question of a turn, the question made its number
 // and shown to every page following the conversation while it stands, the
 // time it stands taken out of the pulse
-static std::string ask(const std::string & id,
-                       yyjson_mut_doc *    made,
-                       const std::string & kind,
-                       api_stop &          stop,
-                       pulse &             p) {
+static std::string ask(turn_t & self, yyjson_mut_doc * made, const std::string & kind) {
     const double asked = pulse_now();
     const auto   q     = std::make_shared<question_t>();
     q->kind            = kind;
     {
         // a run asked once no page is attached answers at once
         std::lock_guard<std::mutex> lock(g_mutex);
-        q->number       = ++g_asked;
-        g_questions[id] = q;
+        q->number            = ++g_asked;
+        g_questions[self.id] = q;
         if (kind == ASK_RUN && !g_pages) {
             q->verdict = gone();
         }
     }
     yyjson_mut_obj_add_uint(made, yyjson_mut_doc_get_root(made), "question", q->number);
-    const std::shared_ptr<char> question(yyjson_mut_write(made, 0, nullptr), free);
-    library_asking(id, question.get());
+    const std::string question = json_write(made);
+    library_asking(self.id, question);
     std::string verdict;
     {
         std::unique_lock<std::mutex> lock(q->mutex);
-        q->settled.wait(lock, [&] { return !q->verdict.empty() || stop.stopped; });
+        q->settled.wait(lock, [&] { return !q->verdict.empty() || self.stop.stopped; });
         verdict = q->verdict;
     }
     {
         std::lock_guard<std::mutex> lock(g_mutex);
-        g_questions.erase(id);
+        g_questions.erase(self.id);
     }
-    library_asking(id, "");
-    pulse_held(p, pulse_now() - asked);
-    beat(id, p);
-    if (stop.stopped) {
-        throw api_error("Stopped");
+    library_asking(self.id, "");
+    pulse_held(self.p, pulse_now() - asked);
+    beat(self);
+    if (self.stop.stopped) {
+        throw api_error(TURN_STOPPED);
     }
     return verdict;
 }
 
 // the response of the user to a form a tool asks them to fill, an MCP input
 // request, shown under the name of the server that asks
-static std::string fill(const std::string & id,
-                        const std::string & server,
-                        const std::string & input,
-                        api_stop &          stop,
-                        pulse &             p) {
-    const std::shared_ptr<yyjson_doc>     in(yyjson_read(input.data(), input.size(), 0), yyjson_doc_free);
-    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
+static std::string fill(turn_t & self, const std::string & server, const std::string & input) {
+    const json_doc   in   = json_read(input);
+    const json_mut   made = json_new();
+    yyjson_mut_val * q    = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), q);
-    yyjson_mut_obj_add_str(made.get(), q, "kind", "form");
+    yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_FORM);
     yyjson_mut_obj_add_strncpy(made.get(), q, "server", server.data(), server.size());
     yyjson_mut_obj_add_val(made.get(), q, "input", yyjson_val_mut_copy(made.get(), yyjson_doc_get_root(in.get())));
-    log_info("Agent", "%.8s asks the user to fill a form of %s", id.c_str(), server.c_str());
-    return ask(id, made.get(), ASK_FORM, stop, p);
+    log_info("Agent", "%s asks the user to fill a form of %s", conversation_shown(self.id).c_str(), server.c_str());
+    return ask(self, made.get(), ASK_FORM);
 }
 
 // what a tool of this server answers, run again with what the user answers
 // each time it asks them to fill a form, until it asks nothing more; one they
 // cancel answers nothing; throws once stopped
-static tool_outcome run_own(const std::string & id, const tool & t, yyjson_val * args, api_stop & stop, pulse & p) {
-    const tool_tick tick = [&stop] {
-        return !stop.stopped;
+static tool_outcome run_own(turn_t & self, const tool & t, yyjson_val * args) {
+    const tool_tick tick = [&self] {
+        return !self.stop.stopped;
     };
     engine_typed typed;
     // the config tool of this server runs its batch in the conversation
     const auto   go = [&] {
-        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, id) : t.run(args, typed, tick);
+        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, self.id) : t.run(args, typed, tick);
     };
     tool_outcome out = go();
-    while (!out.asks.empty() && !stop.stopped) {
-        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-        yyjson_mut_val *                      input = yyjson_mut_obj(made.get());
+    while (!out.asks.empty() && !self.stop.stopped) {
+        const json_mut   made  = json_new();
+        yyjson_mut_val * input = yyjson_mut_obj(made.get());
         yyjson_mut_doc_set_root(made.get(), input);
         tools_form(made.get(), input, out);
-        const std::shared_ptr<char> form(yyjson_mut_write(made.get(), 0, nullptr), free);
-        const std::string response = fill(id, engine_get("server hostname").value_or(""), form.get(), stop, p);
-        const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
+        const std::string form     = json_write(made);
+        const std::string response = fill(self, engine_get("server hostname").value_or(""), form);
+        const json_doc    answered = json_read(response);
         if (!tools_typed(yyjson_doc_get_root(answered.get()), typed)) {
             return { false, "The user answered nothing" };
         }
         out = go();
     }
-    if (stop.stopped) {
-        throw api_error("Stopped");
+    if (self.stop.stopped) {
+        throw api_error(TURN_STOPPED);
     }
     return out;
 }
@@ -509,18 +513,18 @@ static tool client_tool() {
 // configuration, the call shown to every page following the conversation,
 // the first answer winning; once no page is attached it answers so; throws
 // once stopped
-static tool_outcome run_client(const std::string & id, yyjson_val * args, api_stop & stop, pulse & p) {
-    yyjson_val *                          lines = yyjson_obj_get(args, "lines");
-    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
+static tool_outcome run_client(turn_t & self, yyjson_val * args) {
+    yyjson_val *     lines = yyjson_obj_get(args, "lines");
+    const json_mut   made  = json_new();
+    yyjson_mut_val * q     = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), q);
     yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_RUN);
     yyjson_mut_obj_add_strncpy(made.get(), q, "lines", yyjson_get_str(lines), yyjson_get_len(lines));
-    log_info("Agent", "%.8s asks the pages to run a call", id.c_str());
-    const std::string                 answer = ask(id, made.get(), ASK_RUN, stop, p);
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(answer.data(), answer.size(), 0), yyjson_doc_free);
-    yyjson_val *                      root   = yyjson_doc_get_root(doc.get());
-    yyjson_val *                      output = yyjson_obj_get(root, "output");
+    log_info("Agent", "%s asks the pages to run a call", conversation_shown(self.id).c_str());
+    const std::string answer = ask(self, made.get(), ASK_RUN);
+    const json_doc    doc    = json_read(answer);
+    yyjson_val *      root   = yyjson_doc_get_root(doc.get());
+    yyjson_val *      output = yyjson_obj_get(root, "output");
     return { yyjson_get_bool(yyjson_obj_get(root, "ok")), std::string(yyjson_get_str(output), yyjson_get_len(output)) };
 }
 
@@ -530,14 +534,8 @@ static tool_outcome run_client(const std::string & id, yyjson_val * args, api_st
 // always, which turns the tool on, or refuse; a tool that asks the user to
 // fill a form, a secret to type or a url to let, gets their response the
 // same way; whether its batch asks the conversation to compact
-static bool call(const std::string &           id,
-                 const std::string &           entry,
-                 size_t                        r,
-                 size_t                        c,
-                 api_stop &                    stop,
-                 pulse &                       p,
-                 const std::vector<mcp_tool> & served) {
-    const conversation_call called = reply_of(id, entry, stop).rounds[r].calls[c];
+static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> & served) {
+    const conversation_call called = reply_of(self).rounds[r].calls[c];
     std::optional<tool>     found;
     bool                    paged = false;
     std::optional<remote>   server;
@@ -575,7 +573,7 @@ static bool call(const std::string &           id,
     });
     const auto settle = [&](const std::string & args, const std::string & result, bool ok,
                             const std::vector<conversation_image> & images) {
-        grow(id, entry, stop, [&](conversation_entry & e) {
+        grow(self, [&](conversation_entry & e) {
             conversation_call & x = e.rounds[r].calls[c];
             x.args                = args;
             x.result              = result;
@@ -583,24 +581,24 @@ static bool call(const std::string &           id,
             x.images              = images;
         });
     };
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(called.args.data(), called.args.size(), 0), yyjson_doc_free);
-    yyjson_val * args  = called.args.empty() ? nullptr : doc ? yyjson_doc_get_root(doc.get()) : nullptr;
-    const bool   known = found || paged || server;
+    const json_doc doc   = json_read(called.args);
+    yyjson_val *   args  = called.args.empty() ? nullptr : doc ? yyjson_doc_get_root(doc.get()) : nullptr;
+    const bool     known = found || paged || server;
     if (!known || (!called.args.empty() && !yyjson_is_obj(args))) {
-        settle(NO_ARGS, known ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"", false,
-               {});
+        settle(JSON_OBJECT, known ? "The arguments are not a JSON object" : "Unknown tool \"" + called.name + "\"",
+               false, {});
         return false;
     }
     if (use != USE_ON) {
-        const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-        yyjson_mut_val *                      q = yyjson_mut_obj(made.get());
+        const json_mut   made = json_new();
+        yyjson_mut_val * q    = yyjson_mut_obj(made.get());
         yyjson_mut_doc_set_root(made.get(), q);
-        yyjson_mut_obj_add_str(made.get(), q, "kind", "call");
+        yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_CALL);
         yyjson_mut_obj_add_strncpy(made.get(), q, "tool", called.name.data(), called.name.size());
         yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
-        log_info("Agent", "%.8s asks the user for %s", id.c_str(), called.name.c_str());
-        const std::string verdict = ask(id, made.get(), ASK_CALL, stop, p);
-        log_info("Agent", "%.8s %s: %s", id.c_str(), called.name.c_str(), verdict.c_str());
+        log_info("Agent", "%s asks the user for %s", conversation_shown(self.id).c_str(), called.name.c_str());
+        const std::string verdict = ask(self, made.get(), ASK_CALL);
+        log_info("Agent", "%s %s: %s", conversation_shown(self.id).c_str(), called.name.c_str(), verdict.c_str());
         // a tool turned off while the question stood is refused, whatever the
         // answer
         bool off = false;
@@ -619,25 +617,24 @@ static bool call(const std::string &           id,
         settle(called.args, refused, false, {});
         return false;
     }
-    grow(id, entry, stop, [&](conversation_entry & e) { e.rounds[r].calls[c].sent = true; });
+    grow(self, [&](conversation_entry & e) { e.rounds[r].calls[c].sent = true; });
     // the call written as sent before it runs, or it does not run
-    const std::string unkept = library_keep(id, keychain_known());
+    const std::string unkept = library_keep(self.id, keychain_known());
     if (!unkept.empty()) {
-        logged(id, unkept);
+        logged(self.id, unkept);
         settle(called.args, "The conversation is not written: " + unkept, false, {});
         return false;
     }
-    log_info("Agent", "%.8s calls %s", id.c_str(), called.name.c_str());
+    log_info("Agent", "%s calls %s", conversation_shown(self.id).c_str(), called.name.c_str());
     if (server) {
         // every text the user types in a form of the server is sealed from then on
         const auto answer = [&](const std::string & input) {
-            const std::string                 response = fill(id, server->name, input, stop, p);
-            const std::shared_ptr<yyjson_doc> answered(yyjson_read(response.data(), response.size(), 0),
-                                                       yyjson_doc_free);
-            size_t                            i, n;
-            yyjson_val *                      key;
-            yyjson_val *                      value;
-            std::lock_guard<std::mutex>       lock(g_mutex);
+            const std::string           response = fill(self, server->name, input);
+            const json_doc              answered = json_read(response);
+            size_t                      i, n;
+            yyjson_val *                key;
+            yyjson_val *                value;
+            std::lock_guard<std::mutex> lock(g_mutex);
             yyjson_obj_foreach(yyjson_obj_get(yyjson_doc_get_root(answered.get()), "content"), i, n, key, value) {
                 if (yyjson_is_str(value) && yyjson_get_len(value)) {
                     g_typed.push_back(yyjson_get_str(value));
@@ -647,9 +644,9 @@ static bool call(const std::string &           id,
         };
         mcp_outcome out;
         try {
-            out = mcp_call(*server, bare, called.args.empty() ? NO_ARGS : called.args, stop, answer);
+            out = mcp_call(*server, bare, called.args.empty() ? JSON_OBJECT : called.args, self.stop, answer);
         } catch (const std::exception & e) {
-            if (stop.stopped) {
+            if (self.stop.stopped) {
                 throw;
             }
             out.text = e.what();
@@ -663,11 +660,11 @@ static bool call(const std::string &           id,
         return false;
     }
     if (paged) {
-        const tool_outcome out = run_client(id, args, stop, p);
+        const tool_outcome out = run_client(self, args);
         settle(called.args, out.text, out.ok, {});
         return false;
     }
-    const tool_outcome              out = run_own(id, *found, args, stop, p);
+    const tool_outcome              out = run_own(self, *found, args);
     std::vector<conversation_image> images;
     if (!out.image.empty()) {
         images.push_back({ out.mime, out.image });
@@ -680,39 +677,30 @@ static bool call(const std::string &           id,
 // cause, its first letter capital unless it opens on a URL
 static std::string explain(const std::exception & e, const api_stop & stop) {
     if (stop.stopped) {
-        return "Stopped";
+        return TURN_STOPPED;
     }
     const api_error * a = dynamic_cast<const api_error *>(&e);
-    std::string       s = std::string(e.what()) + (a && !a->fix.empty() ? " -> " + a->fix : "");
-    if (!s.empty() && s[0] >= 'a' && s[0] <= 'z' && !starts_with(s, "http")) {
-        s[0] = (char) (s[0] - 'a' + 'A');
-    }
-    return s;
+    const std::string s = std::string(e.what()) + (a && !a->fix.empty() ? " -> " + a->fix : "");
+    return starts_with(s, "http") ? s : capital(s);
 }
 
 // the endpoint asked again, the clock running since it first failed
-static void retried(const std::string & id, const endpoint & e, pulse & p, int status, int attempt, int attempts) {
-    log_info("Agent", "%.8s %s answers %d, attempt %d/%d", id.c_str(), e.server.name.c_str(), status, attempt,
-             attempts);
-    pulse_retry(p, e.server.name, status, attempt, attempts, pulse_now());
-    beat(id, p);
+static void retried(turn_t & self, const endpoint & e, int status, int attempt, int attempts) {
+    log_info("Agent", "%s %s answers %d, attempt %d/%d", conversation_shown(self.id).c_str(), e.server.name.c_str(),
+             status, attempt, attempts);
+    pulse_retry(self.p, e.server.name, status, attempt, attempts, pulse_now());
+    beat(self);
 }
 
 // the summary the steps a request folds go into, streamed into a round of the
 // reply that keeps the steps it does not fold; it runs no call, and one that
 // writes no summary, or that the output limit cuts, fails the turn
-static void summarize(const std::string & id,
-                      const std::string & entry,
-                      const endpoint &    e,
-                      const api_request & req,
-                      int                 kept,
-                      api_stop &          stop,
-                      pulse &             p) {
-    log_info("Agent", "%.8s compacting, %d steps kept", id.c_str(), kept);
-    pulse_mark(p, PHASE_COMPACTING, e.server.name, pulse_now());
-    beat(id, p);
+static void summarize(turn_t & self, const endpoint & e, const api_request & req, int kept) {
+    log_info("Agent", "%s compacting, %d steps kept", conversation_shown(self.id).c_str(), kept);
+    pulse_mark(self.p, PHASE_COMPACTING, e.server.name, pulse_now());
+    beat(self);
     size_t at = 0;
-    grow(id, entry, stop, [&](conversation_entry & x) {
+    grow(self, [&](conversation_entry & x) {
         conversation_round r;
         r.kept    = kept;
         r.folding = true;
@@ -722,33 +710,33 @@ static void summarize(const std::string & id,
     std::optional<double> usage;
     bool                  cut = false;
     api_chat(
-        e, req, stop,
+        e, req, self.stop,
         [&](const api_delta & d) {
             const double now = pulse_now();
             if (d.usage) {
                 usage = d.usage;
             }
             cut = cut || d.cut;
-            pulse_chunk(p, !d.content.empty() || !d.reasoning.empty(), now);
+            pulse_chunk(self.p, !d.content.empty() || !d.reasoning.empty(), now);
             if (d.content.empty() && d.reasoning.empty()) {
                 return;
             }
-            pulse_mark(p, PHASE_COMPACTING, e.server.name, now);
-            grow(id, entry, stop, [&](conversation_entry & x) {
+            pulse_mark(self.p, PHASE_COMPACTING, e.server.name, now);
+            grow(self, [&](conversation_entry & x) {
                 x.rounds[at].reasoning += d.reasoning;
                 x.rounds[at].text += d.content;
             });
-            beat(id, p);
+            beat(self);
         },
-        [&](int status, int attempt, int attempts) { retried(id, e, p, status, attempt, attempts); });
-    pulse_close(p, usage);
+        [&](int status, int attempt, int attempts) { retried(self, e, status, attempt, attempts); });
+    pulse_close(self.p, usage);
     if (cut) {
         throw api_error("Endpoint " + e.server.name + " cut the summary at its output limit");
     }
-    if (reply_of(id, entry, stop).rounds[at].text.empty()) {
+    if (reply_of(self).rounds[at].text.empty()) {
         throw api_error("Endpoint " + e.server.name + " wrote no summary");
     }
-    grow(id, entry, stop, [&](conversation_entry & x) { x.rounds[at].folding = false; });
+    grow(self, [&](conversation_entry & x) { x.rounds[at].folding = false; });
 }
 
 // one round streamed into the reply, the history first compacted when the
@@ -757,28 +745,24 @@ static void summarize(const std::string & id,
 // tokens the last request held once answered, none once unknown; a turn that
 // compacts writes the summary alone, failing when no step lies past the
 // preserved ones
-static bool round(const std::string &                     id,
-                  const std::string &                     entry,
+static bool round(turn_t &                                self,
                   const std::vector<conversation_entry> & before,
                   size_t                                  r,
                   std::optional<double> &                 context,
                   bool &                                  asked,
-                  bool                                    compact,
-                  api_stop &                              stop,
-                  pulse &                                 p,
-                  met_t &                                 met) {
-    p.round = (int) r + 1;
-    pulse_mark(p, PHASE_PREPARING, "", pulse_now());
-    beat(id, p);
-    const setup_t     s       = setup(stop, met);
-    const auto        pick    = api_pick(s.endpoints, s.chosen, stop);
+                  bool                                    compact) {
+    self.p.round = (int) r + 1;
+    pulse_mark(self.p, PHASE_PREPARING, "", pulse_now());
+    beat(self);
+    const setup_t     s       = setup(self.stop, self.met);
+    const auto        pick    = api_pick(s.endpoints, s.chosen, self.stop);
     const endpoint &  e       = pick.first;
     const std::string model   = pick.second;
     const std::string item    = e.server.name + MODEL_SEPARATOR + model;
     // the history as it stands, the reply as the library holds it last
     const auto        history = [&] {
         std::vector<conversation_entry> h = before;
-        h.push_back(reply_of(id, entry, stop));
+        h.push_back(reply_of(self));
         return h;
     };
     api_request req;
@@ -799,7 +783,7 @@ static bool round(const std::string &                     id,
         req.tools.push_back({ t.served, t.description, t.input });
     }
     if (e.speaks->described) {
-        req.info = api_describe(e, model, stop);
+        req.info = api_describe(e, model, self.stop);
     }
     const auto trigger = s.triggers.find(item);
     if (asked || (trigger != s.triggers.end() && context && *context >= trigger->second)) {
@@ -811,7 +795,7 @@ static bool round(const std::string &                     id,
         if (fold) {
             api_request ask = req;
             ask.messages    = fold->messages;
-            summarize(id, entry, e, ask, fold->kept, stop, p);
+            summarize(self, e, ask, fold->kept);
         }
     }
     asked = false;
@@ -820,12 +804,13 @@ static bool round(const std::string &                     id,
         return false;
     }
     req.messages = compaction_compacted(history());
-    log_info("Agent", "%.8s round %zu: %s/%s", id.c_str(), r + 1, e.server.name.c_str(), model.c_str());
-    pulse_mark(p, PHASE_WAITING, e.server.name, pulse_now());
-    beat(id, p);
+    log_info("Agent", "%s round %zu: %s/%s", conversation_shown(self.id).c_str(), r + 1, e.server.name.c_str(),
+             model.c_str());
+    pulse_mark(self.p, PHASE_WAITING, e.server.name, pulse_now());
+    beat(self);
     // the round as the reply holds it
     size_t at = 0;
-    grow(id, entry, stop, [&](conversation_entry & x) {
+    grow(self, [&](conversation_entry & x) {
         x.rounds.emplace_back();
         at = x.rounds.size() - 1;
     });
@@ -835,7 +820,7 @@ static bool round(const std::string &                     id,
     // the call the stream writes now
     std::string           calling;
     api_chat(
-        e, req, stop,
+        e, req, self.stop,
         [&](const api_delta & d) {
             const double now = pulse_now();
             if (d.usage) {
@@ -844,27 +829,27 @@ static bool round(const std::string &                     id,
             if (d.context) {
                 context = d.context;
             }
-            pulse_chunk(p, !d.content.empty() || !d.reasoning.empty() || !d.calls.empty(), now);
+            pulse_chunk(self.p, !d.content.empty() || !d.reasoning.empty() || !d.calls.empty(), now);
             if (d.content.empty() && d.reasoning.empty() && d.calls.empty() && d.opaque.empty()) {
                 return;
             }
             if (!d.reasoning.empty()) {
-                pulse_mark(p, PHASE_THINKING, "", now);
+                pulse_mark(self.p, PHASE_THINKING, "", now);
             }
             if (!d.content.empty()) {
-                pulse_mark(p, PHASE_WRITING, "", now);
+                pulse_mark(self.p, PHASE_WRITING, "", now);
             }
-            grow(id, entry, stop, [&](conversation_entry & x) {
+            grow(self, [&](conversation_entry & x) {
                 conversation_round & round = x.rounds[at];
                 round.reasoning += d.reasoning;
                 round.text += d.content;
                 if (!d.opaque.empty()) {
                     // an item the protocol needs back, after those of the round
                     if (!round.opaque) {
-                        round.opaque = conversation_opaque{ e.speaks->name, "[]" };
+                        round.opaque = conversation_opaque{ e.speaks->name, JSON_LIST };
                     }
                     std::string & items = round.opaque->items;
-                    items.insert(items.size() - 1, (items == "[]" ? "" : ",") + d.opaque);
+                    items.insert(items.size() - 1, (items == JSON_LIST ? "" : ",") + d.opaque);
                 }
                 for (const api_call_piece & piece : d.calls) {
                     if (!calls.count(piece.index)) {
@@ -883,20 +868,20 @@ static bool round(const std::string &                     id,
                 }
             });
             if (!d.calls.empty()) {
-                pulse_mark(p, PHASE_CALLING, calling, now);
+                pulse_mark(self.p, PHASE_CALLING, calling, now);
             }
-            beat(id, p);
+            beat(self);
         },
-        [&](int status, int attempt, int attempts) { retried(id, e, p, status, attempt, attempts); });
-    pulse_close(p, usage);
-    const size_t n = reply_of(id, entry, stop).rounds[at].calls.size();
+        [&](int status, int attempt, int attempts) { retried(self, e, status, attempt, attempts); });
+    pulse_close(self.p, usage);
+    const size_t n = reply_of(self).rounds[at].calls.size();
     for (size_t c = 0; c < n; c++) {
-        if (stop.stopped) {
-            throw api_error("Stopped");
+        if (self.stop.stopped) {
+            throw api_error(TURN_STOPPED);
         }
-        pulse_mark(p, PHASE_RUNNING, reply_of(id, entry, stop).rounds[at].calls[c].name, pulse_now());
-        beat(id, p);
-        asked = call(id, entry, at, c, stop, p, s.served) || asked;
+        pulse_mark(self.p, PHASE_RUNNING, reply_of(self).rounds[at].calls[c].name, pulse_now());
+        beat(self);
+        asked = call(self, at, c, s.served) || asked;
     }
     return n > 0;
 }
@@ -911,9 +896,9 @@ static void turn(std::string                     id,
                  bool                            compact,
                  std::shared_ptr<api_stop>       stop,
                  pulse                           p) {
+    turn_t                     self{ id, entry, *stop, p, {} };
     std::optional<std::string> error;
-    size_t                     r = 0;
-    met_t                      met;
+    size_t                     r     = 0;
     // a compaction asked before the next request
     bool                       asked = compact;
     // the tokens the last request held once answered, as the last turn kept
@@ -930,7 +915,7 @@ static void turn(std::string                     id,
             [&](const engine_reader & config) { rounds = std::stoi(config.get("tools max-rounds").value_or("1")); });
         bool more = true;
         for (; more && r < (size_t) rounds; r++) {
-            more = round(id, entry, before, r, context, asked, compact, *stop, p, met);
+            more = round(self, before, r, context, asked, compact);
         }
         if (more) {
             error = "Stopped after " + std::to_string(r) + " tool rounds";
@@ -938,7 +923,7 @@ static void turn(std::string                     id,
     } catch (const std::exception & e) {
         error = explain(e, *stop);
     }
-    std::optional<conversation_stats> spent = pulse_stats(p, pulse_now());
+    std::optional<conversation_stats> spent = pulse_stats(self.p, pulse_now());
     if (spent) {
         spent->context = context;
     }
@@ -957,10 +942,10 @@ static void turn(std::string                     id,
                        return std::string();
                    },
                    keychain_known()));
-    log_info("Agent", "%.8s %s in %.0f ms", id.c_str(), error ? error->c_str() : "answered", pulse_now() - p.start);
+    log_info("Agent", "%s %s in %.0f ms", conversation_shown(id).c_str(), error ? error->c_str() : "answered",
+             pulse_now() - self.p.start);
     library_turn(id, "");
-    std::lock_guard<std::mutex> lock(g_mutex);
-    g_turns.erase(id);
+    leave(id);
 }
 
 // the reply a turn writes after the entry from names, a message of the user
@@ -998,16 +983,17 @@ static std::string reply(const std::string &                                id,
 // turn of the conversation while it asks; its output enters after the thread,
 // and the summary of the history after it when it asks to compact
 static void command(std::string id, std::string input, std::shared_ptr<api_stop> stop, pulse p) {
+    turn_t              self{ id, "", *stop, p, {} };
     std::optional<tool> config;
     engine_with([&](const engine_reader & reader) {
         for (tool & t : tools_list(reader)) {
-            if (t.suffix == "config") {
+            if (t.suffix == TOOL_CONFIG) {
                 config = std::move(t);
             }
         }
     });
-    const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_val *                      args = yyjson_mut_obj(made.get());
+    const json_mut   made = json_new();
+    yyjson_mut_val * args = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), args);
     yyjson_mut_obj_add_strncpy(made.get(), args, "lines", input.data(), input.size());
     const std::shared_ptr<yyjson_doc> doc(yyjson_mut_doc_imut_copy(made.get(), nullptr), yyjson_doc_free);
@@ -1016,7 +1002,7 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
     e.input      = input;
     bool compact = false;
     try {
-        const tool_outcome out = run_own(id, *config, yyjson_doc_get_root(doc.get()), *stop, p);
+        const tool_outcome out = run_own(self, *config, yyjson_doc_get_root(doc.get()));
         e.output               = out.text;
         e.ok                   = out.ok;
         compact                = out.compact;
@@ -1031,7 +1017,7 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
                        return std::string();
                    },
                    keychain_known()));
-    log_info("Agent", "%.8s ran %s", id.c_str(), e.ok ? "a line" : "a line that failed");
+    log_info("Agent", "%s ran %s", conversation_shown(id).c_str(), e.ok ? "a line" : "a line that failed");
     // a line that asks to compact: the summary written after it, as the same
     // turn of the conversation
     std::string                     entry;
@@ -1041,22 +1027,17 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
         return;
     }
     library_turn(id, "");
-    std::lock_guard<std::mutex> lock(g_mutex);
-    g_turns.erase(id);
+    leave(id);
 }
 
 std::string agent_command(const std::string & id, const std::string & input) {
-    const auto stop = std::make_shared<api_stop>();
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        if (g_turns.count(id)) {
-            return AGENT_BUSY;
-        }
-        g_turns[id] = stop;
+    const auto stop = take(id);
+    if (!stop) {
+        return AGENT_BUSY;
     }
     pulse p = pulse_start(pulse_now());
-    pulse_mark(p, PHASE_RUNNING, "config", pulse_now());
-    beat(id, p);
+    pulse_mark(p, PHASE_RUNNING, TOOL_CONFIG, pulse_now());
+    library_turn(id, pulse_json(p));
     quit_thread([id, input, stop, p] { command(id, input, stop, p); });
     return "";
 }
@@ -1064,24 +1045,19 @@ std::string agent_command(const std::string & id, const std::string & input) {
 std::string agent_answer(const std::string &                                id,
                          const std::function<std::string(conversation &)> & user,
                          bool                                               compact) {
-    const auto stop = std::make_shared<api_stop>();
-    {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        if (g_turns.count(id)) {
-            return AGENT_BUSY;
-        }
-        g_turns[id] = stop;
+    const auto stop = take(id);
+    if (!stop) {
+        return AGENT_BUSY;
     }
     std::string                     entry;
     std::vector<conversation_entry> before;
     const std::string               why = reply(id, user, compact, entry, before);
     if (!why.empty()) {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        g_turns.erase(id);
+        leave(id);
         return why;
     }
     const pulse p = pulse_start(pulse_now());
-    beat(id, p);
+    library_turn(id, pulse_json(p));
     quit_thread([id, entry, before, compact, stop, p] { turn(id, entry, before, compact, stop, p); });
     return "";
 }

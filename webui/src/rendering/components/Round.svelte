@@ -5,6 +5,7 @@
 	import { partial } from '../../lib/partial.js';
 	import Icon from './Icon.svelte';
 	import { INFERENCE, MARKDOWN, OPEN, argument, display, type Fold } from '../display.svelte.js';
+	import { NEWLINE } from '../../lib/config.js';
 
 	// live: the round the model writes now; a summary shows folded once
 	// written, the history it folds staying above it
@@ -35,7 +36,7 @@
 	function preview(c: Call, all: [string, unknown][]): string {
 		const named = argument(c.name);
 		const picked = all.find(([k]) => k === named) ?? all[0];
-		return picked ? text(picked[1]).split('\n')[0] : '';
+		return picked ? text(picked[1]).split(NEWLINE)[0] : '';
 	}
 </script>
 

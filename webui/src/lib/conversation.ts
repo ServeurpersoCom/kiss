@@ -1,6 +1,7 @@
 import type { Conversation, Entry, Message, Round } from './types.js';
 import { secrets } from '../engine/keychain.js';
 import { seal } from '../engine/seal.js';
+import { NEWLINE, SPACE } from './config.js';
 
 // conversations as a file: a marker naming what it holds, then the
 // conversations as the browser stores them, ids included
@@ -26,6 +27,13 @@ export function source(m: Message): string {
 			return m.output;
 	}
 }
+
+// what a turn the user stopped says
+export const TURN_STOPPED = 'Stopped';
+
+// the conversation that changed last comes first
+export const newest = (a: { updated: number }, b: { updated: number }): number =>
+	b.updated - a.updated;
 
 // the outcome of a call stopped once sent: its tool may have acted
 export const STOPPED = 'Stopped before it answered: the tool may have acted';
@@ -134,14 +142,14 @@ export function serialize(conversations: readonly Conversation[]): string {
 			entries: stored(c.entries)
 		}))
 	};
-	return seal(file, secrets()) + '\n';
+	return seal(file, secrets()) + NEWLINE;
 }
 
 // the one conversation a prefix of its id names
 export function named(conversations: readonly Conversation[], prefix: string): Conversation {
 	const hits = conversations.filter((c) => c.id.startsWith(prefix));
 	if (hits.length > 1) {
-		throw new Error(`ambiguous conversation "${prefix}": ${hits.map((c) => c.id).join(' ')}`);
+		throw new Error(`ambiguous conversation "${prefix}": ${hits.map((c) => c.id).join(SPACE)}`);
 	}
 	if (!hits.length) throw new Error(`unknown conversation "${prefix}"`);
 	return hits[0];
@@ -205,7 +213,7 @@ function array(check: Check): Check {
 function entry(v: unknown, at: string): void {
 	const role = (v as { role?: unknown } | null)?.role;
 	const variant = MESSAGES[String(role)];
-	if (!variant) fail(`${at}.role`, `not one of ${Object.keys(MESSAGES).join(' ')}`);
+	if (!variant) fail(`${at}.role`, `not one of ${Object.keys(MESSAGES).join(SPACE)}`);
 	variant(v, at);
 }
 

@@ -2,7 +2,8 @@
 
 #include "lib/tools.h"
 
-#include "yyjson.h"
+#include "lib/json.h"
+#include "lib/mcp.h"
 
 #include <memory>
 
@@ -30,19 +31,10 @@ std::vector<tool> tools_list(const engine_reader & config) {
     return out;
 }
 
-// the key as a message opens with it: command -> Command
-static std::string capital(const char * key) {
-    std::string s = key;
-    if (!s.empty() && s[0] >= 'a' && s[0] <= 'z') {
-        s[0] = (char) (s[0] - 'a' + 'A');
-    }
-    return s;
-}
-
 std::string tools_check(const tool & t, yyjson_val * args) {
-    const std::shared_ptr<yyjson_doc> schema(yyjson_read(t.input.c_str(), t.input.size(), 0), yyjson_doc_free);
-    yyjson_val *                      root       = yyjson_doc_get_root(schema.get());
-    yyjson_val *                      properties = yyjson_obj_get(root, "properties");
+    const json_doc schema     = json_read(t.input);
+    yyjson_val *   root       = yyjson_doc_get_root(schema.get());
+    yyjson_val *   properties = yyjson_obj_get(root, "properties");
     if (args && !yyjson_is_obj(args)) {
         return "Arguments are not an object";
     }
@@ -79,9 +71,9 @@ std::string tools_check(const tool & t, yyjson_val * args) {
 }
 
 void tools_form(yyjson_mut_doc * doc, yyjson_mut_val * input, const tool_outcome & asked) {
-    yyjson_mut_obj_add_str(doc, input, "method", "elicitation/create");
+    yyjson_mut_obj_add_str(doc, input, "method", MCP_ELICITATION);
     yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc, input, "params");
-    yyjson_mut_obj_add_str(doc, params, "mode", "form");
+    yyjson_mut_obj_add_str(doc, params, "mode", MCP_FORM_MODE);
     yyjson_mut_obj_add_strncpy(doc, params, "message", asked.text.c_str(), asked.text.size());
     yyjson_mut_val * schema = yyjson_mut_obj_add_obj(doc, params, "requestedSchema");
     yyjson_mut_obj_add_str(doc, schema, "type", "object");
@@ -95,8 +87,7 @@ void tools_form(yyjson_mut_doc * doc, yyjson_mut_val * input, const tool_outcome
 }
 
 bool tools_typed(yyjson_val * response, engine_typed & typed) {
-    yyjson_val * action = yyjson_obj_get(response, "action");
-    if (!yyjson_is_str(action) || std::string(yyjson_get_str(action)) != "accept") {
+    if (json_text(yyjson_obj_get(response, "action")) != MCP_ACCEPT) {
         return false;
     }
     size_t       i, n;
@@ -106,7 +97,7 @@ bool tools_typed(yyjson_val * response, engine_typed & typed) {
         if (yyjson_is_str(value)) {
             typed[yyjson_get_str(key)] = yyjson_get_str(value);
         } else if (yyjson_is_true(value)) {
-            typed[yyjson_get_str(key)] = "true";
+            typed[yyjson_get_str(key)] = ENGINE_YES;
         }
     }
     return true;

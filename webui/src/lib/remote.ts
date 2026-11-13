@@ -1,6 +1,7 @@
 import type { Image } from './types.js';
 import type { ConfigReader } from '../engine/engine.js';
 import { BEARER, credential, placement } from '../engine/keychain.js';
+import { SPACE } from './config.js';
 
 // an item of a collection module that names a remote server by a url, the
 // header that carries its key, the headers sent besides it and the seconds it
@@ -109,7 +110,7 @@ export function rules(
 	const names = config
 		.names(module)
 		.filter((n) => !config.get(`${module} url`, n) && !config.get(`${module} proxy`, n));
-	if (names.length) return `${module} url ${names.join(' ')} is not set`;
+	if (names.length) return `${module} url ${names.join(SPACE)} is not set`;
 	for (const name of config.names(module)) {
 		const proxy = config.get(`${module} proxy`, name);
 		if (proxy === undefined) continue;
@@ -121,7 +122,7 @@ export function rules(
 				.filter(
 					(s) => config.get(`${SERVERS} url`, s) && config.get(`${SERVERS} proxy`, s) === undefined
 				);
-			return `${module} proxy ${name}: no ${SERVERS} ${proxy} -> a proxy names the KiSS server holding route ${name}, one of ${SERVERS} ${servers.join(' ')}`;
+			return `${module} proxy ${name}: no ${SERVERS} ${proxy} -> a proxy names the KiSS server holding route ${name}, one of ${SERVERS} ${servers.join(SPACE)}`;
 		}
 		if (config.get(`${SERVERS} proxy`, proxy) !== undefined)
 			return `${module} proxy ${name}: ${SERVERS} ${proxy} has a proxy itself`;

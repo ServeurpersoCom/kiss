@@ -1,6 +1,7 @@
 import type { Command, Module } from './engine.js';
 import { Incomplete } from './text.js';
 import { didYouMean } from './near.js';
+import { NEWLINE, SPACE } from '../lib/config.js';
 
 const PATH_WORD = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
@@ -18,7 +19,7 @@ const moduleFiles = import.meta.glob<{ default: Module }>(
 
 export const commands: readonly Command<unknown>[] = Object.values(commandFiles)
 	.map((f) => f.default)
-	.sort((a, b) => a.path.join(' ').localeCompare(b.path.join(' ')));
+	.sort((a, b) => a.path.join(SPACE).localeCompare(b.path.join(SPACE)));
 
 export const modules: readonly Module[] = Object.values(moduleFiles).map((f) => f.default);
 const moduleNames = modules.map((m) => m.name);
@@ -26,7 +27,7 @@ const moduleNames = modules.map((m) => m.name);
 // a plugin declared wrong or twice stops the page at once, never later
 function audit(): string[] {
 	const problems: string[] = [];
-	const paths = commands.map((c) => c.path.join(' '));
+	const paths = commands.map((c) => c.path.join(SPACE));
 	for (const [i, c] of commands.entries()) {
 		const path = paths[i];
 		if (!c.path.length || !c.path.every((w) => PATH_WORD.test(w)))
@@ -46,7 +47,7 @@ function audit(): string[] {
 }
 
 const problems = audit();
-if (problems.length) throw new Error(['bad plugins', ...problems].join('\n'));
+if (problems.length) throw new Error(['bad plugins', ...problems].join(NEWLINE));
 
 interface Walk {
 	// the deepest command whose whole path the words spell
@@ -97,11 +98,11 @@ export function walk(words: readonly string[], all: readonly Command<unknown>[])
 export function resolve(words: readonly string[]): { command: Command<unknown>; args: string[] } {
 	const w = walk(words, commands);
 	if (w.ambiguous) {
-		throw new Error(`ambiguous word "${w.ambiguous.word}": ${w.ambiguous.names.join(' ')}`);
+		throw new Error(`ambiguous word "${w.ambiguous.word}": ${w.ambiguous.names.join(SPACE)}`);
 	}
 	const names = [...new Set(w.pool.map((c) => c.path[w.consumed]).filter((n) => n))];
 	const word = words[w.consumed];
-	const head = words.slice(0, w.consumed).join(' ');
+	const head = words.slice(0, w.consumed).join(SPACE);
 	// after a command naming a module, a word that is neither a module nor a
 	// longer command is a typo of either
 	if (w.command?.module && w.depth === w.consumed && names.length && word !== undefined) {

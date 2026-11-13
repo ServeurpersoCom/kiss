@@ -6,10 +6,11 @@
 #include "lib/prompts.h"
 
 #include <algorithm>
+#include <cstring>
 #include <string>
 
 // where the summary goes in the text the model reads it in
-static const std::string SUMMARY = "{summary}";
+static const char * const SUMMARY = "{summary}";
 
 // a step by where it sits: a user message, or one round of an assistant turn,
 // none for a user message
@@ -76,7 +77,7 @@ static std::vector<conversation_entry> render(const std::vector<conversation_ent
         conversation_entry summary;
         summary.text    = prompts_compaction("summary");
         const size_t at = summary.text.find(SUMMARY);
-        summary.text.replace(at, SUMMARY.size(), *v.summary);
+        summary.text.replace(at, std::strlen(SUMMARY), *v.summary);
         out.push_back(summary);
     }
     // the turn whose rounds the last assistant message holds, none after

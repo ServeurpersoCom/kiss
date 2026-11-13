@@ -215,6 +215,15 @@ std::string quote(const std::string & v) {
     return out + "\"";
 }
 
+bool plain_word(const std::string & s, const char * marks) {
+    for (char c : s) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || strchr(marks, c))) {
+            return false;
+        }
+    }
+    return !s.empty();
+}
+
 bool item_name(const std::string & s) {
     if (s.empty() || !isalnum((unsigned char) s[0])) {
         return false;

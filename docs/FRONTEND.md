@@ -118,10 +118,10 @@ webui/tests/            the laws, under vitest and happy-dom
 ```
 
 A file in `commands/`, `modules/`, `tools/` or `protocols/` registers itself by existing, as one in
-`rendering/commands/` or `rendering/modules/` does, in the same configuration. A command
-imports the engine, `lib/types.ts` and `lib/config.ts` only and reaches everything else through its
-`Context`; a module or a tool is where the configuration meets the page, it imports what it drives in
-`lib/`. A plugin declared wrong or twice stops the page at load, never later.
+`rendering/commands/` or `rendering/modules/` does, in the same configuration. A command imports the
+engine, `lib/types.ts` and `lib/config.ts` only and reaches everything else through its `Context`; a
+module or a tool is where the configuration meets the page, it imports what it drives in `lib/`. A
+plugin declared wrong or twice stops the page at load, never later.
 
 ## The engine
 
@@ -342,8 +342,8 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - The model opens a way out only once the user agrees, every time, whatever command spells the
   change: a url given a value, a tool opened; closing never asks.
 - A question offers always only for a call, and says what it gives.
-- The thinking and the reply render as Markdown unless set `plain`; `rendering` takes these two blocks
-  only.
+- The thinking and the reply render as Markdown unless set `plain`; `rendering` takes these two
+  blocks only.
 - No reply and no sheet makes the page load from elsewhere: images, fonts, media and styles come
   from the page itself, checked in Chromium.
 - The images of a call go to the model with its result, every round, when the list of its endpoint

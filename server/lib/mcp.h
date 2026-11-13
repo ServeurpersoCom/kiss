@@ -56,6 +56,13 @@ std::vector<mcp_tool> mcp_tools(const remote & r, api_stop & stop);
 // from a server never listed
 std::vector<mcp_tool> mcp_kept(const remote & r);
 
+// the request a server sends for the user to answer, and the one mode of it
+// KiSS answers; what the response of the user says, with its content or without
+constexpr const char * MCP_ELICITATION = "elicitation/create";
+constexpr const char * MCP_FORM_MODE   = "form";
+constexpr const char * MCP_ACCEPT      = "accept";
+constexpr const char * MCP_CANCEL      = "cancel";
+
 // forgets every server the configuration no longer names, its tools with it
 void mcp_forget(const words_t & named);
 

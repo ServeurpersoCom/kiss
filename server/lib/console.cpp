@@ -53,6 +53,9 @@ static const int BACKSPACE = 127;
 
 // the words that stop the server, the console's own: the engine never reads
 // them, so no MCP client stops it
+// the milliseconds between two looks at whether the process ends
+static const int TICK_MS = 100;
+
 static const words_t QUIT = { "exit", "quit" };
 
 // the prompt names the server, as a router names its host: forge#
@@ -170,7 +173,7 @@ static void show(const std::string & text) {
 // the next byte typed, -1 once stdin ends or the process does, each wait
 // short so that no byte awaited holds the process
 static int typed() {
-    while (!term_wait(100)) {
+    while (!term_wait(TICK_MS)) {
         if (quit_ending()) {
             return -1;
         }

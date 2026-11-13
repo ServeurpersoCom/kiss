@@ -3,6 +3,7 @@
 	import type { Verdict } from '../../engine/engine.js';
 	import { always, answers } from '../../engine/engine.js';
 	import { app, askOf, choose, deliver } from '../../lib/state.svelte.js';
+	import { NEWLINE } from '../../lib/config.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };
 	const KIB = 1024;
@@ -53,7 +54,7 @@
 				<pre>{ask.request.args}</pre>
 			{:else}
 				<div class="head">Allow this change?</div>
-				<pre>{ask.request.lines.join('\n')}</pre>
+				<pre>{ask.request.lines.join(NEWLINE)}</pre>
 			{/if}
 			{#if grants}
 				<div class="note">Always {grants}</div>
@@ -81,10 +82,10 @@
 			</div>
 		{:else if ask.kind === 'confirm'}
 			<!-- a question, then the lines of what it asks, as the grant shows them -->
-			{@const [head, ...lines] = ask.question.split('\n')}
+			{@const [head, ...lines] = ask.question.split(NEWLINE)}
 			<div class="head">{head}</div>
 			{#if lines.length}
-				<pre>{lines.join('\n')}</pre>
+				<pre>{lines.join(NEWLINE)}</pre>
 			{/if}
 			<div class="answers">
 				<button {@attach focused} onclick={() => ask.settle(true)}>OK</button>

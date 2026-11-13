@@ -25,6 +25,7 @@
 #include "engine/keychain.h"
 #include "engine/text.h"
 #include "lib/api.h"
+#include "lib/http.h"
 #include "lib/log.h"
 #include "lib/quit.h"
 #include "lib/remote.h"
@@ -125,10 +126,15 @@ static void refuse(httplib::Response & res,
     const std::string text = seal_text(why, r.secrets);
     log_error("Proxy", "Route proxy/%s: %s", route.c_str(), text.c_str());
     res.status = status;
-    res.set_content(text + "\n", "text/plain");
+    res.set_content(text + "\n", TEXT_TYPE);
 }
 
 // sends out on the thread of the relay, through a client of its stop
+// a request this server stops before its answer goes
+static void stopping(httplib::Response & res, const route_conf & r, const std::string & route) {
+    refuse(res, r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+}
+
 static void relayed(const std::shared_ptr<relay_t> &         relay,
                     const std::shared_ptr<httplib::Client> & client,
                     httplib::Request                         out) {
@@ -137,7 +143,7 @@ static void relayed(const std::shared_ptr<relay_t> &         relay,
             std::lock_guard<std::mutex> lock(relay->mutex);
             relay->head     = head;
             relay->headed   = true;
-            relay->streamed = starts_with(lower(head.get_header_value("Content-Type")), "text/event-stream");
+            relay->streamed = starts_with(lower(head.get_header_value("Content-Type")), EVENTS_TYPE);
             relay->moved.notify_all();
             return true;
         };
@@ -172,12 +178,12 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
     const auto r = route_of(route);
     if (!r) {
         res.status = httplib::StatusCode::NotFound_404;
-        res.set_content("no proxy route \"" + route + "\"\n", "text/plain");
+        res.set_content("no proxy route \"" + route + "\"\n", TEXT_TYPE);
         return;
     }
     const auto relay = std::make_shared<relay_t>();
     if (relay->stop.stopped) {
-        refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+        stopping(res, *r, route);
         return;
     }
     std::string                      base;
@@ -230,7 +236,7 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         return;
     }
     if (!relay->headed && relay->stop.stopped) {
-        refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+        stopping(res, *r, route);
         return;
     }
     if (!relay->headed) {
@@ -269,7 +275,7 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
             return;
         }
         if (relay->error != httplib::Error::Success && relay->stop.stopped) {
-            refuse(res, *r, route, httplib::StatusCode::ServiceUnavailable_503, "the server stops");
+            stopping(res, *r, route);
             return;
         }
         if (relay->error != httplib::Error::Success) {

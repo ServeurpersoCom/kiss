@@ -3,7 +3,7 @@ import { Server, createMcpHandler } from '@modelcontextprotocol/server';
 import type { Conversation } from '../src/lib/types.js';
 import type { Grant, Library, Verdict } from '../src/engine/engine.js';
 import { append, fresh, named, parse, serialize } from '../src/lib/conversation.js';
-import { localTime, storeName } from '../src/lib/config.js';
+import { NEWLINE, localTime, storeName } from '../src/lib/config.js';
 import { ALWAYS, ONCE, REFUSE, always, answers } from '../src/engine/engine.js';
 
 type Engine = typeof import('../src/engine/run.js');
@@ -235,7 +235,7 @@ describe('a batch that asks the user', () => {
 		let save = (_: boolean) => {};
 		const offer = (name: string, text: string) =>
 			new Promise<boolean>((settle) => {
-				offered.push(name + '\n' + text);
+				offered.push(name + NEWLINE + text);
 				save = settle;
 			});
 		const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 9, 14, 0, 38));
@@ -247,7 +247,7 @@ describe('a batch that asks the user', () => {
 		const told = (await r).text;
 		clock.mockRestore();
 		expect(offered).toHaveLength(1);
-		expect(told).toBe(`! exported 1 conversation to ${offered[0].split('\n')[0]}`);
+		expect(told).toBe(`! exported 1 conversation to ${offered[0].split(NEWLINE)[0]}`);
 		expect(offered[0]).not.toContain('cd34-2');
 	});
 
@@ -371,8 +371,8 @@ describe('a filter', () => {
 	it('takes the rest of the line as its pattern, as IOS does, and the output comes whole', async () => {
 		const k = await page();
 		const urls = Array.from({ length: 250 }, (_, i) => `set endpoints url e${i} http://e/v${i}`);
-		await k.run(urls.join('\n'), 'user');
-		const all = (await k.run('show running-config', 'llm')).text.split('\n');
+		await k.run(urls.join(NEWLINE), 'user');
+		const all = (await k.run('show running-config', 'llm')).text.split(NEWLINE);
 		expect(all).toHaveLength(250);
 		const run = async (filter: string) =>
 			(await k.run(`show running-config | ${filter}`, 'llm')).text;
@@ -402,15 +402,15 @@ describe('show running-config', () => {
 			'set display tool-calls open',
 			'set endpoints url a http://a/v1'
 		];
-		expect((await k.run(lines.join('\n'), 'user')).ok).toBe(true);
+		expect((await k.run(lines.join(NEWLINE), 'user')).ok).toBe(true);
 		expect(k.settings.get('chat system-prompt')).toBe('a|b "c"\nd');
 		expect(k.settings.get('display tool-calls')).toBe('open');
 		const shown = (await k.run('show running-config', 'user')).text;
 		const fresh = await page();
 		const sets = shown
-			.split('\n')
+			.split(NEWLINE)
 			.filter((l) => !l.startsWith('!'))
-			.join('\n');
+			.join(NEWLINE);
 		expect((await fresh.run(sets, 'user')).ok).toBe(true);
 		expect((await fresh.run('show running-config', 'user')).text).toBe(shown);
 	});
@@ -421,7 +421,7 @@ describe('show running-config', () => {
 		const all = (await k.run('show run al', 'user')).text;
 		const { modules } = await import('../src/engine/registry.js');
 		const each = await Promise.all(modules.map((m) => k.run(`show ${m.name}`, 'user')));
-		expect(all).toBe(each.map((r) => r.text).join('\n'));
+		expect(all).toBe(each.map((r) => r.text).join(NEWLINE));
 		expect(all).toContain('set display tool-calls open\n');
 		expect(all).toContain('set display thinking inference\n');
 		expect((await k.run('show running-config x', 'user')).text).toBe(
@@ -446,7 +446,9 @@ describe('the display', () => {
 		expect(k.settings.get('display rendering', 'thinking')).toBe('markdown');
 		expect(k.settings.get('display rendering', 'reply')).toBe('markdown');
 		expect((await k.run('show display rendering', 'user')).text).toBe(
-			['set display rendering thinking markdown', 'set display rendering reply markdown'].join('\n')
+			['set display rendering thinking markdown', 'set display rendering reply markdown'].join(
+				NEWLINE
+			)
 		);
 		expect((await k.run('set display rendering tools plain', 'user')).text).toContain(
 			'unknown display rendering "tools"'
@@ -489,7 +491,7 @@ describe('a proxy', () => {
 				'set endpoints proxy hf kiss',
 				'set endpoints protocol claude messages',
 				'set endpoints proxy claude kiss'
-			].join('\n'),
+			].join(NEWLINE),
 			'user'
 		);
 		expect((await k.run('show models', 'user')).text).toContain('hf/m');
@@ -570,7 +572,7 @@ describe('the headers of a server', () => {
 				'set endpoints url c http://c/v1',
 				'set endpoints key c sk-c',
 				'set endpoints protocol c messages'
-			].join('\n'),
+			].join(NEWLINE),
 			'user'
 		);
 		await k.run('show models', 'user');
@@ -596,7 +598,7 @@ describe('the headers of a server', () => {
 				'set endpoints url b http://b/v1',
 				'set endpoints key a sk-a',
 				"set endpoints headers a 'anthropic-dangerous-direct-browser-access: true; x-id: 7'"
-			].join('\n'),
+			].join(NEWLINE),
 			'user'
 		);
 		await k.run('show models', 'user');
@@ -953,7 +955,7 @@ describe('the conversations', () => {
 		const list = [talk('bbbbbbbb-2', 'Two words', 2), talk('aaaaaaaa-1', 'one', 1)];
 		const r = await k.run('show conversations', 'llm', { ...shelf(list), conversation: list[1] });
 		expect(r.text).toBe(
-			[`! bbbbbbbb ${localTime(2)} "Two words"`, `! * aaaaaaaa ${localTime(1)} one`].join('\n')
+			[`! bbbbbbbb ${localTime(2)} "Two words"`, `! * aaaaaaaa ${localTime(1)} one`].join(NEWLINE)
 		);
 		expect((await k.run('show conversations', 'llm', shelf([]))).text).toBe(
 			'! no conversation yet'
@@ -1020,7 +1022,7 @@ describe('the conversations', () => {
 		const file = serialize([talk('bbbbbbbb-2', 'New', 2), here]);
 		const list = [here];
 		expect((await k.run('import', 'llm', shelf(list, file))).text).toBe(
-			['+ bbbbbbbb New', '! aaaaaaaa Here is already here'].join('\n')
+			['+ bbbbbbbb New', '! aaaaaaaa Here is already here'].join(NEWLINE)
 		);
 		expect(list.map((c) => c.id)).toEqual(['bbbbbbbb-2', 'aaaaaaaa-1']);
 		expect((await k.run('import', 'llm', shelf(list, '{"kiss":"save"}'))).text).toBe(
@@ -1233,7 +1235,7 @@ describe('a copy', () => {
 			vi.fn(async () => Response.json({ error: { message: 'version required' } }, { status: 400 }))
 		);
 		// an endpoint that fails warns once, by endpoints, never again by chat
-		const warnings = (await k.run('copy running-config a', 'user')).text.split('\n').slice(1);
+		const warnings = (await k.run('copy running-config a', 'user')).text.split(NEWLINE).slice(1);
 		expect(warnings).toHaveLength(1);
 		expect(warnings[0]).toMatch(/^! endpoints a: .* version required, endpoints b: /);
 	});
@@ -1286,7 +1288,7 @@ describe('a copy', () => {
 				'set chat system-prompt green',
 				'! endpoints key m is set',
 				'set endpoints url m http://m/v1'
-			].join('\n')
+			].join(NEWLINE)
 		);
 		expect((await k.run('show saves c | include url', 'user')).text).toBe(
 			'set endpoints url m http://m/v1'
@@ -1341,7 +1343,7 @@ describe('show', () => {
 				'set endpoints retry-pause y 2',
 				'set endpoints timeout y 120',
 				'set endpoints url y http://y/v1'
-			].join('\n')
+			].join(NEWLINE)
 		);
 		expect((await k.run('show endpoints url', 'user')).text).toBe(
 			'set endpoints url x http://x/v1\nset endpoints url y http://y/v1'
@@ -1437,7 +1439,7 @@ describe('erase and copy', () => {
 				'- set chat system-prompt ""',
 				'+ set chat system-prompt old',
 				'+ set endpoints url a http://a/v1'
-			].join('\n')
+			].join(NEWLINE)
 		);
 		expect((await later.run('show endpoints protocol a', 'user')).text).toBe(
 			'set endpoints protocol a chat'
@@ -1609,7 +1611,7 @@ describe('every key', () => {
 					for (const value of tries.filter((v) => v !== def.default)) {
 						const l = `set ${m.name} ${name}${item} ${JSON.stringify(value)}`;
 						const r = await k.run(l, 'user');
-						if (r.ok && r.text.split('\n').some((o) => o.startsWith('+ '))) return l;
+						if (r.ok && r.text.split(NEWLINE).some((o) => o.startsWith('+ '))) return l;
 					}
 				})();
 				if (!line) untaken.push(`${m.name} ${name}${item}`);
@@ -1622,11 +1624,11 @@ describe('every key', () => {
 	it('pastes back after no as show running-config writes it, and goes alone, or a rule of its module says why', async () => {
 		const k = await full();
 		const running = (await k.run('show running-config', 'user')).text;
-		const lines = running.split('\n').filter((l) => l.startsWith('set '));
+		const lines = running.split(NEWLINE).filter((l) => l.startsWith('set '));
 		for (const line of lines) {
 			const r = await k.run(`no ${line.slice('set '.length)}`, 'user');
 			if (r.ok) {
-				const after = (await k.run('show running-config', 'user')).text.split('\n');
+				const after = (await k.run('show running-config', 'user')).text.split(NEWLINE);
 				expect(after).not.toContain(line);
 				expect(lines.filter((l) => l !== line && !after.includes(l))).toEqual([]);
 				await k.run(line, 'user');

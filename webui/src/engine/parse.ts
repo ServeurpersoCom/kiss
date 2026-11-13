@@ -1,9 +1,10 @@
 import { COMMENT_PREFIX, PIPE } from './text.js';
+import { NEWLINE, SPACE, TAB } from '../lib/config.js';
 
 // one command per line; blank lines and comments are skipped
 export function splitLines(text: string): string[] {
 	return text
-		.split('\n')
+		.split(NEWLINE)
 		.map((line) => line.trim())
 		.filter((line) => line && !line.startsWith(COMMENT_PREFIX));
 }
@@ -22,7 +23,7 @@ const ESCAPES: Record<string, string> = {
 };
 
 function blank(c: string): boolean {
-	return c === ' ' || c === '\t';
+	return c === SPACE || c === TAB;
 }
 
 // splits a line on blanks; a token opening with a double quote takes JSON

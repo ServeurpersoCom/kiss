@@ -52,7 +52,7 @@ int term_read() {
 // 80 columns, the width of a terminal by default, when it tells none
 int term_width() {
     winsize ws;
-    return ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 ? ws.ws_col : 80;
+    return ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0 ? ws.ws_col : TERM_WIDTH;
 }
 
 #endif

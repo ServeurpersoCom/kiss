@@ -8,6 +8,7 @@
 
 #include "mcp/mcp.h"
 
+#include "lib/json.h"
 #include "lib/log.h"
 #include "mcp/jsonrpc.h"
 #include "mcp/methods.h"
@@ -34,18 +35,21 @@ static bool modern_request(const httplib::Request & req,
                            const std::string &      method,
                            yyjson_val *             params) {
     if (req.get_header_value("MCP-Protocol-Version").empty()) {
-        jsonrpc_error(res, 400, id, JSONRPC_HEADER_MISMATCH, "a request of this era carries MCP-Protocol-Version");
+        jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
+                      "a request of this era carries MCP-Protocol-Version");
         return false;
     }
     if (req.get_header_value("Mcp-Method") != method) {
-        jsonrpc_error(res, 400, id, JSONRPC_HEADER_MISMATCH, "Mcp-Method disagrees with the method " + method);
+        jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
+                      "Mcp-Method disagrees with the method " + method);
         return false;
     }
     if (method == "tools/call") {
         yyjson_val *      name   = yyjson_obj_get(params, "name");
         const std::string called = yyjson_is_str(name) ? yyjson_get_str(name) : "";
         if (req.get_header_value("Mcp-Name") != called) {
-            jsonrpc_error(res, 400, id, JSONRPC_HEADER_MISMATCH, "Mcp-Name disagrees with the tool " + called);
+            jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
+                          "Mcp-Name disagrees with the tool " + called);
             return false;
         }
     }
@@ -61,22 +65,23 @@ static void connected(const httplib::Request & req, yyjson_val * info) {
 }
 
 void mcp_post(const httplib::Request & req, httplib::Response & res, const std::string & version) {
-    const std::shared_ptr<yyjson_doc> body(yyjson_read(req.body.c_str(), req.body.size(), 0), yyjson_doc_free);
+    const json_doc body = json_read(req.body);
     if (!body) {
-        jsonrpc_error(res, 400, nullptr, JSONRPC_PARSE_ERROR, "the body is not JSON");
+        jsonrpc_error(res, httplib::StatusCode::BadRequest_400, nullptr, JSONRPC_PARSE_ERROR, "the body is not JSON");
         return;
     }
 
     yyjson_val * root = yyjson_doc_get_root(body.get());
     if (!yyjson_is_obj(root)) {
-        jsonrpc_error(res, 400, nullptr, JSONRPC_INVALID_REQUEST,
+        jsonrpc_error(res, httplib::StatusCode::BadRequest_400, nullptr, JSONRPC_INVALID_REQUEST,
                       "the body is not one JSON-RPC request or notification");
         return;
     }
     yyjson_val * method_val = yyjson_obj_get(root, "method");
     yyjson_val * id         = yyjson_obj_get(root, "id");
     if (!yyjson_is_str(method_val)) {
-        jsonrpc_error(res, 400, id, JSONRPC_INVALID_REQUEST, "the server sends no request, so it takes no response");
+        jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_INVALID_REQUEST,
+                      "the server sends no request, so it takes no response");
         return;
     }
     const std::string method = yyjson_get_str(method_val);
@@ -89,17 +94,19 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
 
     if (modern) {
         if (!yyjson_is_str(claim)) {
-            jsonrpc_error(res, 400, id, JSONRPC_INVALID_PARAMS, std::string(PROTOCOL_VERSION_META) + " is a string");
+            jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_INVALID_PARAMS,
+                          std::string(PROTOCOL_VERSION_META) + " is a string");
             return;
         }
         const std::string requested = yyjson_get_str(claim);
         if (!header.empty() && header != requested) {
-            jsonrpc_error(res, 400, id, JSONRPC_HEADER_MISMATCH,
+            jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_HEADER_MISMATCH,
                           "MCP-Protocol-Version " + header + " disagrees with the envelope " + requested);
             return;
         }
         if (!modern_version(requested)) {
-            jsonrpc_error(res, 400, id, JSONRPC_UNSUPPORTED_VERSION, "unsupported protocol version " + requested,
+            jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_UNSUPPORTED_VERSION,
+                          "unsupported protocol version " + requested,
                           [&](yyjson_mut_doc * doc, yyjson_mut_val * data) {
                               yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc, data, "supported");
                               for (const char * v : MODERN_VERSIONS) {
@@ -110,13 +117,13 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
             return;
         }
     } else if (modern_version(header)) {
-        jsonrpc_error(res, 400, id, JSONRPC_INVALID_PARAMS,
+        jsonrpc_error(res, httplib::StatusCode::BadRequest_400, id, JSONRPC_INVALID_PARAMS,
                       "MCP-Protocol-Version " + header + " needs the envelope in params._meta");
         return;
     }
 
     if (!id) {
-        res.status = 202;
+        res.status = httplib::StatusCode::Accepted_202;
         return;
     }
     if (modern && !modern_request(req, res, id, method, params)) {
@@ -140,6 +147,7 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
     } else if (method == "resources/list") {
         method_resources_list(res, id, modern);
     } else {
-        jsonrpc_error(res, modern ? 404 : 200, id, JSONRPC_METHOD_NOT_FOUND, "unknown method " + method);
+        jsonrpc_error(res, modern ? httplib::StatusCode::NotFound_404 : httplib::StatusCode::OK_200, id,
+                      JSONRPC_METHOD_NOT_FOUND, "unknown method " + method);
     }
 }

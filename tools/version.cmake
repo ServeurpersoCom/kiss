@@ -1,5 +1,5 @@
 # Generate version.h with the current git commit hash and date.
-# Only rewrites the file if the content changed (avoids rebuild cascade).
+# Rewrites the file only when its content changes, so nothing else rebuilds.
 # Usage: cmake -DSRC_DIR=... -DOUTPUT=... -P version.cmake
 
 execute_process(

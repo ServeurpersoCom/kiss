@@ -2,6 +2,7 @@ import type { Conversation } from './types.js';
 import { DB_NAME, DB_STORE, DB_VERSION, storeName } from './config.js';
 import { secrets } from '../engine/keychain.js';
 import { seal } from '../engine/seal.js';
+import { newest } from './conversation.js';
 
 // one IndexedDB connection for the whole page, opened on first use and
 // opened again after a failure
@@ -41,7 +42,7 @@ function tx<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBReque
 // newest first
 export async function listConversations(): Promise<Conversation[]> {
 	const all = await tx<Conversation[]>('readonly', (s) => s.getAll());
-	return all.sort((a, b) => b.updated - a.updated);
+	return all.sort(newest);
 }
 
 // writes in one transaction: all of them or none

@@ -1,7 +1,6 @@
 import type { ConfigReader, Held, Key, KeyWords, Known, Module, Schema, Value } from './engine.js';
-import { Incomplete } from './text.js';
-import { NAME_PATTERN } from '../lib/config.js';
-import { REMOVED, comment } from './text.js';
+import { Incomplete, REMOVED, comment } from './text.js';
+import { NAME_PATTERN, NEWLINE, SPACE } from '../lib/config.js';
 import { choose, didYouMean, pick } from './near.js';
 
 const URL_PROTOCOLS = ['http:', 'https:'];
@@ -14,10 +13,15 @@ export function stored(key: string, name?: string): string {
 	return name ? `${key} ${name}` : key;
 }
 
+// the module of a key, its first word
+export function moduleOf(key: string): string {
+	return key.split(SPACE)[0];
+}
+
 // the key and the item name of a stored key
 export function unstore(stored: string): [string, string | undefined] {
-	const words = stored.split(' ');
-	return [words.slice(0, 2).join(' '), words[2]];
+	const words = stored.split(SPACE);
+	return [words.slice(0, 2).join(SPACE), words[2]];
 }
 
 function check(def: Key, raw: string): Value {
@@ -43,7 +47,7 @@ function check(def: Key, raw: string): Value {
 			// a value may be any prefix that names one value only, as IOS reads
 			// it, and is kept whole
 			const value = raw ? pick(raw, def.values ?? [], 'value') : undefined;
-			if (!value) throw new Error(`"${raw}" is not one of ${def.values?.join(' ')}`);
+			if (!value) throw new Error(`"${raw}" is not one of ${def.values?.join(SPACE)}`);
 			return value;
 		}
 		case 'url': {
@@ -66,7 +70,7 @@ function check(def: Key, raw: string): Value {
 
 // what is wrong with the declaration of a key, if anything
 function audit(key: string, def: Key): string | null {
-	if (!key.split(' ').every((w) => WORD.test(w))) return `"${key}": bad key name`;
+	if (!key.split(SPACE).every((w) => WORD.test(w))) return `"${key}": bad key name`;
 	if (def.kind === 'enum' && !def.values?.length) return `${key}: enum without values`;
 	if (def.guard && def.kind !== 'enum' && def.kind !== 'url' && def.kind !== 'string')
 		return `${key}: guard on no url, string or enum`;
@@ -101,7 +105,7 @@ export class KeySchema implements Schema {
 			if (def.of && !names.includes(def.of)) problems.push(`${key}: of ${def.of} names no module`);
 		}
 		const found = problems.filter((p) => p !== null);
-		if (found.length) throw new Error(['bad keys', ...found].join('\n'));
+		if (found.length) throw new Error(['bad keys', ...found].join(NEWLINE));
 	}
 
 	find(key: string): Key | undefined {
@@ -130,7 +134,7 @@ export class KeySchema implements Schema {
 		const names = [...this.modules.keys()].sort();
 		const module = pick(word, names, 'key');
 		if (word.includes('.')) {
-			throw new Error(`unknown key "${word}", did you mean ${word.split('.').join(' ')}`);
+			throw new Error(`unknown key "${word}", did you mean ${word.split('.').join(SPACE)}`);
 		}
 		if (!module) throw new Error(`unknown key "${word}"` + didYouMean(word, names));
 		return module;

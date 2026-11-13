@@ -1,5 +1,5 @@
 import type { Assistant, Call, Message, Outcome, Request, Tool, ToolContext } from './types.js';
-import type { Endpoint } from './api.js';
+import type { Endpoint, Retrying } from './api.js';
 import { ALWAYS, REFUSE } from '../engine/engine.js';
 import { chat, describe, pick } from './api.js';
 import { PRESERVE, TRIGGER, compacted, folding } from './compaction.js';
@@ -137,7 +137,7 @@ async function summarize(
 	kept: number,
 	signal: AbortSignal,
 	p: Pulse,
-	retrying: (status: number, attempt: number, attempts: number) => void
+	retrying: Retrying
 ): Promise<void> {
 	mark(p, 'compacting', endpoint.name, performance.now());
 	reply.rounds.push({ reasoning: '', text: '', calls: [], kept, folding: true });
@@ -202,7 +202,7 @@ export async function turn(
 			// writing while the request streams
 			const history = [...messages, { ...reply, rounds: [...reply.rounds] }];
 			const { endpoint, request, tools, trigger, preserve } = await setup(history, signal, p, down);
-			const retrying = (status: number, attempt: number, attempts: number) =>
+			const retrying: Retrying = (status, attempt, attempts) =>
 				retry(p, endpoint.name, status, attempt, attempts, performance.now());
 			const fold =
 				asked || (trigger !== null && context !== undefined && context >= trigger)

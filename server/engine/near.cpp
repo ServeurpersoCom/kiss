@@ -32,15 +32,15 @@ static size_t distance(const std::string & a, const std::string & b) {
 std::string did_you_mean(const std::string & word, const words_t & candidates, const std::string & head) {
     const size_t max  = std::max<size_t>(1, word.size() / TYPO_LETTERS_PER_EDIT);
     size_t       best = max + 1;
-    std::string  near;
+    std::string  nearest;
     for (const std::string & c : candidates) {
         const size_t d = distance(lower(word), lower(c));
         if (d < best) {
-            best = d;
-            near = c;
+            best    = d;
+            nearest = c;
         }
     }
-    return near.empty() ? "" : ", did you mean " + head + near;
+    return nearest.empty() ? "" : ", did you mean " + head + nearest;
 }
 
 std::string pick(const std::string & word, const words_t & words, const std::string & what) {

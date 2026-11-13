@@ -18,6 +18,13 @@ std::string lower(std::string s) {
     return s;
 }
 
+std::string capital(std::string s) {
+    if (!s.empty() && s[0] >= 'a' && s[0] <= 'z') {
+        s[0] = (char) (s[0] - 'a' + 'A');
+    }
+    return s;
+}
+
 bool starts_with(const std::string & s, const std::string & prefix) {
     return s.compare(0, prefix.size(), prefix) == 0;
 }

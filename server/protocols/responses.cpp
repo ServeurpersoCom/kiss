@@ -5,7 +5,7 @@
 
 #include "engine/keychain.h"
 #include "lib/api.h"
-#include "yyjson.h"
+#include "lib/json.h"
 
 #include <memory>
 
@@ -16,23 +16,13 @@ static const char * const SUMMARY   = "auto";
 // the parts of a summary as they read one after the other
 static const char * const PARTS     = "\n\n";
 
-using doc_t = std::shared_ptr<yyjson_doc>;
-
-static doc_t parsed(const std::string & json) {
-    return doc_t(yyjson_read(json.data(), json.size(), 0), yyjson_doc_free);
-}
-
 static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
     yyjson_mut_obj_add_strncpy(d, o, key, v.data(), v.size());
 }
 
 static yyjson_mut_val * value_of(yyjson_mut_doc * d, const std::string & json) {
-    const doc_t v = parsed(json);
+    const json_doc v = json_read(json);
     return v ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) : yyjson_mut_null(d);
-}
-
-static std::string text_of(yyjson_val * v) {
-    return yyjson_is_str(v) ? std::string(yyjson_get_str(v), yyjson_get_len(v)) : "";
 }
 
 // an item of the input
@@ -57,14 +47,14 @@ static void history(yyjson_mut_doc * d, yyjson_mut_val * list, const std::vector
             continue;
         }
         for (const conversation_round & r : e.rounds) {
-            const doc_t  kept  = r.opaque && r.opaque->protocol == NAME ? parsed(r.opaque->items) : nullptr;
-            yyjson_val * items = kept ? yyjson_doc_get_root(kept.get()) : nullptr;
-            std::string  phase;
-            size_t       i, n;
-            yyjson_val * k;
+            const json_doc kept  = r.opaque && r.opaque->protocol == NAME ? json_read(r.opaque->items) : nullptr;
+            yyjson_val *   items = kept ? yyjson_doc_get_root(kept.get()) : nullptr;
+            std::string    phase;
+            size_t         i, n;
+            yyjson_val *   k;
             yyjson_arr_foreach(items, i, n, k) {
                 if (yyjson_equals_str(yyjson_obj_get(k, "type"), "message")) {
-                    phase = text_of(yyjson_obj_get(k, "phase"));
+                    phase = json_text(yyjson_obj_get(k, "phase"));
                 }
             }
             yyjson_arr_foreach(items, i, n, k) {
@@ -115,9 +105,9 @@ static std::string parameter(const api_request & r, const char * name) {
 }
 
 static std::string body(const api_request & r) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_doc *                      d    = doc.get();
-    yyjson_mut_val *                      root = yyjson_mut_obj(d);
+    const json_mut   doc  = json_new();
+    yyjson_mut_doc * d    = doc.get();
+    yyjson_mut_val * root = yyjson_mut_obj(d);
     yyjson_mut_doc_set_root(d, root);
     add_text(d, root, "model", r.model);
     if (!r.system.empty()) {
@@ -152,8 +142,7 @@ static std::string body(const api_request & r) {
     yyjson_mut_obj_add_str(d, reasoning, "summary", SUMMARY);
     yyjson_mut_obj_add_false(d, root, "store");
     yyjson_mut_obj_add_true(d, root, "stream");
-    const std::shared_ptr<char> text(yyjson_mut_write(d, 0, nullptr), free);
-    return text.get();
+    return json_write(d);
 }
 
 static void headers(httplib::Headers &) {}
@@ -162,33 +151,34 @@ static void headers(httplib::Headers &) {}
 // item kept once done, whole, and the phase of a message; the tokens counted,
 // generated and of the prompt, come with the end
 static std::optional<api_delta> read_event(const std::string & data) {
-    const doc_t doc = parsed(data);
+    const json_doc doc = json_read(data);
     if (!doc) {
         throw std::runtime_error("not JSON");
     }
     yyjson_val *      e     = yyjson_doc_get_root(doc.get());
     yyjson_val *      it    = yyjson_obj_get(e, "item");
-    const std::string type  = text_of(yyjson_obj_get(e, "type"));
-    const std::string kind  = text_of(yyjson_obj_get(it, "type"));
+    const std::string type  = json_text(yyjson_obj_get(e, "type"));
+    const std::string kind  = json_text(yyjson_obj_get(it, "type"));
     const int         index = (int) yyjson_get_int(yyjson_obj_get(e, "output_index"));
     api_delta         out;
     if (type == "response.output_item.added") {
         if (kind != "function_call") {
             return std::nullopt;
         }
-        out.calls.push_back({ index, text_of(yyjson_obj_get(it, "call_id")), text_of(yyjson_obj_get(it, "name")), "" });
+        out.calls.push_back(
+            { index, json_text(yyjson_obj_get(it, "call_id")), json_text(yyjson_obj_get(it, "name")), "" });
         return out;
     }
     if (type == "response.function_call_arguments.delta") {
-        out.calls.push_back({ index, "", "", text_of(yyjson_obj_get(e, "delta")) });
+        out.calls.push_back({ index, "", "", json_text(yyjson_obj_get(e, "delta")) });
         return out;
     }
     if (type == "response.output_text.delta") {
-        out.content = text_of(yyjson_obj_get(e, "delta"));
+        out.content = json_text(yyjson_obj_get(e, "delta"));
         return out;
     }
     if (type == "response.reasoning_summary_text.delta" || type == "response.reasoning_text.delta") {
-        out.reasoning = text_of(yyjson_obj_get(e, "delta"));
+        out.reasoning = json_text(yyjson_obj_get(e, "delta"));
         return out;
     }
     if (type == "response.reasoning_summary_part.added") {
@@ -199,20 +189,20 @@ static std::optional<api_delta> read_event(const std::string & data) {
         return out;
     }
     if (type == "response.output_item.done") {
-        const std::string phase = text_of(yyjson_obj_get(it, "phase"));
+        const std::string phase = json_text(yyjson_obj_get(it, "phase"));
         if (kind == "reasoning") {
-            const std::shared_ptr<char> text(yyjson_val_write(it, 0, nullptr), free);
-            out.opaque = text.get();
+            const std::string text = json_write(it);
+            out.opaque             = text;
             return out;
         }
         if (kind == "message" && !phase.empty()) {
-            const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-            yyjson_mut_val *                      o = yyjson_mut_obj(made.get());
+            const json_mut   made = json_new();
+            yyjson_mut_val * o    = yyjson_mut_obj(made.get());
             yyjson_mut_doc_set_root(made.get(), o);
             yyjson_mut_obj_add_str(made.get(), o, "type", "message");
             add_text(made.get(), o, "phase", phase);
-            const std::shared_ptr<char> text(yyjson_mut_write(made.get(), 0, nullptr), free);
-            out.opaque = text.get();
+            const std::string text = json_write(made);
+            out.opaque             = text;
             return out;
         }
         return std::nullopt;
@@ -232,11 +222,11 @@ static std::optional<api_delta> read_event(const std::string & data) {
         return out;
     }
     if (type == "response.failed") {
-        out.error = text_of(yyjson_obj_get(yyjson_obj_get(yyjson_obj_get(e, "response"), "error"), "message"));
+        out.error = json_text(yyjson_obj_get(yyjson_obj_get(yyjson_obj_get(e, "response"), "error"), "message"));
         return out;
     }
     if (type == "error") {
-        out.error = text_of(yyjson_obj_get(e, "message"));
+        out.error = json_text(yyjson_obj_get(e, "message"));
         return out;
     }
     return std::nullopt;

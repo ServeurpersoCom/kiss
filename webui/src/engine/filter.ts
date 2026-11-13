@@ -1,5 +1,6 @@
 import { comment } from './text.js';
 import { choose } from './near.js';
+import { NEWLINE } from '../lib/config.js';
 
 type Lines = (lines: string[]) => string[];
 
@@ -36,5 +37,5 @@ export function compileFilter(spec: string): (text: string) => string {
 		throw new Error(`"${pattern}" is not a pattern`);
 	}
 	const lines = FILTERS[name](re);
-	return (text) => lines(text ? text.split('\n') : []).join('\n');
+	return (text) => lines(text ? text.split(NEWLINE) : []).join(NEWLINE);
 }

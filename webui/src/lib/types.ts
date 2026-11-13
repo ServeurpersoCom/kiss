@@ -60,7 +60,7 @@ export type Assistant = Extract<Message, { role: 'assistant' }>;
 
 // where a message sits in the tree of its conversation: its own id, the
 // entry it follows, none for a first one, and when it entered, in milliseconds
-export interface Link {
+interface Link {
 	id: string;
 	parent: string | null;
 	time: number;

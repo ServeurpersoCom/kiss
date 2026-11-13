@@ -5,13 +5,14 @@
 	import { clock } from '../clock.svelte.js';
 	import Icon from './Icon.svelte';
 	import Dialog from './Dialog.svelte';
+	import { newest } from '../../lib/conversation.js';
 
 	const PINNED = 'Pinned';
 
 	// the conversations, the last changed first: the pinned ones, then the others
 	// by the day they last changed
 	const groups = $derived.by(() => {
-		const sorted = [...app.conversations].sort((a, b) => b.updated - a.updated);
+		const sorted = [...app.conversations].sort(newest);
 		const pinned = sorted.filter((c) => c.pinned);
 		const out = pinned.length ? [{ name: PINNED, conversations: pinned }] : [];
 		for (const c of sorted.filter((c) => !c.pinned)) {

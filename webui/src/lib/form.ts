@@ -1,6 +1,7 @@
 import type { InputRequest } from '@modelcontextprotocol/client';
 import type { ToolContext } from './types.js';
 import { learn } from '../engine/keychain.js';
+import { NEWLINE } from './config.js';
 
 // the one input a server may ask of KiSS: a form whose fields are secrets,
 // text each typed in the masked field of the page, or yes or no, the user
@@ -43,7 +44,7 @@ export async function fill(
 	for (const [field, schema] of fields) {
 		if (schema.type === YES_FIELD) {
 			if (field !== yes[0]) continue;
-			if (!(await ctx.confirm(note || [`Allow this change of ${server}?`, ...yes].join('\n'))))
+			if (!(await ctx.confirm(note || [`Allow this change of ${server}?`, ...yes].join(NEWLINE))))
 				return { action: CANCEL };
 			for (const each of yes) content[each] = true;
 			continue;

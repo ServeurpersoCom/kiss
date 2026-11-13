@@ -5,7 +5,7 @@
 	import type { Known } from '../../engine/engine.js';
 	import { extend } from '../../engine/complete.js';
 	import Icon from './Icon.svelte';
-	import { SLASH } from '../../lib/config.js';
+	import { NEWLINE, SLASH, SPACE } from '../../lib/config.js';
 	import { PAGE_COMMANDS, act, attached } from '../../lib/sync.js';
 
 	// a key typed elsewhere than in a field reaches the composer, unless a modal
@@ -45,7 +45,7 @@
 	let hints: string[] = $state([]);
 	let typed = 0;
 	$effect(() => {
-		const line = cli && !text.includes('\n') ? text.slice(SLASH.length) : null;
+		const line = cli && !text.includes(NEWLINE) ? text.slice(SLASH.length) : null;
 		const n = ++typed;
 		if (line === null) return void (hints = []);
 		if (!attached())
@@ -103,7 +103,7 @@
 	function onwindowkeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || e.isComposing) return;
 		if (e.key === 'Escape') return halt();
-		if (e.key.length !== 1 || e.key === ' ' || e.metaKey || (e.ctrlKey && !e.altKey)) return;
+		if (e.key.length !== 1 || e.key === SPACE || e.metaKey || (e.ctrlKey && !e.altKey)) return;
 		if ((e.target as Element).closest?.(EDITABLE) || document.querySelector(MODAL)) return;
 		field.focus();
 	}

@@ -177,30 +177,7 @@ std::string place_read(const place &                 p,
         return p.broken;
     }
     if (p.shell.empty()) {
-        const fs::path        path = file_path(p.cwd, given);
-        std::error_code       ec;
-        const fs::file_status st = fs::status(path, ec);
-        if (ec || !fs::exists(st)) {
-            return "No such file or directory: " + path.u8string();
-        }
-        if (!fs::is_regular_file(st)) {
-            return "Not a regular file: " + path.u8string();
-        }
-        FILE * f = utf8_fopen(path.u8string().c_str(), "rb");
-        if (!f) {
-            return std::string("Cannot read the file: ") + strerror(errno);
-        }
-        char buf[FILE_CHUNK];
-        for (size_t got; (got = fread(buf, 1, sizeof(buf), f)) > 0;) {
-            bytes.append(buf, got);
-            if (bytes.size() > limit) {
-                fclose(f);
-                return "File larger than " + std::to_string(limit) + " bytes";
-            }
-        }
-        const bool failed = ferror(f) != 0;
-        fclose(f);
-        return failed ? "Cannot read the file" : "";
+        return file_bytes(file_path(p.cwd, given), limit, bytes);
     }
     const std::string n      = std::to_string(limit);
     const std::string script = "p=" + quoted(given) + "\n" + FAIL +

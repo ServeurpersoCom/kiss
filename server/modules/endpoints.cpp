@@ -9,13 +9,7 @@
 
 // the protocol an item speaks, as its key falls back to the header of it
 static std::string fallback(const engine_reader & config, const std::string & name) {
-    const std::string speaks = config.get("endpoints protocol", name).value_or("");
-    for (const protocol * p : api_protocols()) {
-        if (speaks == p->name) {
-            return p->key;
-        }
-    }
-    return api_protocols()[0]->key;
+    return api_protocol(config.get("endpoints protocol", name).value_or(""))->key;
 }
 
 static std::string validate(const engine_reader & config) {

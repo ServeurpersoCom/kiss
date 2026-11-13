@@ -1,5 +1,5 @@
 import type { Command } from '../engine/engine.js';
-import { ID_SHOWN, titled } from '../lib/config.js';
+import { ID_SHOWN, NEWLINE, titled } from '../lib/config.js';
 import { comment } from '../engine/text.js';
 import { splitLines } from '../engine/parse.js';
 
@@ -32,7 +32,7 @@ export default {
 			const out = await ctx.lines!(text);
 			return [comment(`ran ${n} ${n === 1 ? 'line' : 'lines'} of the file`), out]
 				.filter((l) => l)
-				.join('\n');
+				.join(NEWLINE);
 		}
 		const { added, skipped } = await ctx.conversations.unpack(text);
 		if (!added.length && !skipped.length) throw new Error('the file holds no conversation');
@@ -41,6 +41,6 @@ export default {
 		return [
 			...added.map((c) => `+ ${line(c.id, c.title)}`),
 			...skipped.map((c) => comment(`${line(c.id, c.title)} is already here`))
-		].join('\n');
+		].join(NEWLINE);
 	}
 } satisfies Command;

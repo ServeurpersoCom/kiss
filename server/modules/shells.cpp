@@ -4,23 +4,15 @@
 // out, as the log and show shells say
 
 #include "engine/engine.h"
+#include "engine/parse.h"
 #include "engine/text.h"
 #include "lib/job.h"
 #include "lib/log.h"
 
 // a shell names a tool, so its name is a word a tool name takes
-static bool tool_word(const std::string & s) {
-    for (char c : s) {
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
-            return false;
-        }
-    }
-    return !s.empty();
-}
-
 static std::string validate(const engine_reader & config) {
     for (const std::string & shell : config.names("shells")) {
-        if (!tool_word(shell)) {
+        if (!plain_word(shell, "_-")) {
             return "shells " + shell + ": a shell name takes a-z, 0-9, _ and - only, as a tool name does";
         }
         if (!config.get("shells command", shell)) {
@@ -71,10 +63,8 @@ static engine_module make_shells() {
     output.reset   = "65536";
 
     engine_module m;
-    m.name = "shells";
-    m.keys.push_back(command);
-    m.keys.push_back(timeout);
-    m.keys.push_back(output);
+    m.name     = "shells";
+    m.keys     = { command, timeout, output };
     m.validate = validate;
     m.apply    = apply;
     m.notes    = notes;

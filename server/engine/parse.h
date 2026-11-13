@@ -22,5 +22,9 @@ std::pair<std::string, std::optional<std::string>> split_filter(const std::strin
 // a value as a line writes it: bare when it reads back so, else a JSON string
 std::string quote(const std::string & v);
 
+// a word of a-z, 0-9 and the marks given, as a path or the name of a tool
+// takes it
+bool plain_word(const std::string & s, const char * marks);
+
 // a name of an item: a word of its own, as a server writes the name of a tool
 bool item_name(const std::string & s);

@@ -14,6 +14,8 @@ import type { ConfigReader } from '../engine/engine.js';
 import {
 	MCP_CONNECT_TIMEOUT_MS,
 	NAME,
+	NEWLINE,
+	SECOND_MS,
 	SERVED_SEPARATOR,
 	SYSTEM,
 	TOOL_NAME_PATTERN,
@@ -115,7 +117,7 @@ function outcome(result: CallToolResult): Outcome {
 			lines.push(`Image ${block.mimeType}, ${bytes(block.data)} bytes`);
 		} else lines.push(capital(`${block.type} content`));
 	}
-	return { ok: !result.isError, text: lines.join('\n'), ...(images.length ? { images } : {}) };
+	return { ok: !result.isError, text: lines.join(NEWLINE), ...(images.length ? { images } : {}) };
 }
 
 // a call to a tool of a server, asked again with the answers of the user each
@@ -127,7 +129,11 @@ async function called(
 	client: Client,
 	params: CallToolRequest['params']
 ): Promise<Outcome> {
-	const options = { signal: ctx.signal, timeout: remote.timeout * 1000, allowInputRequired: true };
+	const options = {
+		signal: ctx.signal,
+		timeout: remote.timeout * SECOND_MS,
+		allowInputRequired: true
+	};
 	let result: CallToolResult | InputRequiredResult = await client.callTool(params, options);
 	while (isInputRequiredResult(result)) {
 		const inputs = Object.entries(result.inputRequests ?? {});

@@ -3,6 +3,7 @@ import { ALL, RUNNING_CONFIG, beyond, comment } from '../engine/text.js';
 import { listed } from './copy.js';
 import show from './show.js';
 import { pick } from '../engine/near.js';
+import { NEWLINE } from '../lib/config.js';
 
 // IOS show running-config: what the session and the site set over the
 // factory configuration, as the lines that set it; all, every key of every
@@ -18,10 +19,10 @@ export default {
 	async run(ctx, all) {
 		if (all) {
 			const shown = await Promise.all(ctx.modules.map((m) => show.run(ctx, { module: m.name })));
-			return shown.join('\n');
+			return shown.join(NEWLINE);
 		}
 		const lines = listed(ctx, RUNNING_CONFIG);
-		return lines.length ? lines.join('\n') : comment('every key is at its default');
+		return lines.length ? lines.join(NEWLINE) : comment('every key is at its default');
 	},
 	complete(_ctx, args) {
 		return args.length ? [] : [ALL];

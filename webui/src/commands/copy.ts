@@ -1,7 +1,6 @@
 import type { Command, Context, Held } from '../engine/engine.js';
-import { Incomplete } from '../engine/text.js';
-import { CONVERSATIONS, NAME_PATTERN } from '../lib/config.js';
-import { RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
+import { Incomplete, RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
+import { CONVERSATIONS, NAME_PATTERN, NEWLINE } from '../lib/config.js';
 import { choose, pick } from '../engine/near.js';
 import { unstore } from '../engine/schema.js';
 
@@ -95,7 +94,7 @@ export default {
 		const warnings = from === RUNNING_CONFIG ? await checks(ctx) : [];
 		if (to === STARTUP_CONFIG) ctx.archive.boot(copied);
 		else ctx.archive.save(to, copied);
-		return [`copied ${from} to ${to}`, ...warnings].map(comment).join('\n');
+		return [`copied ${from} to ${to}`, ...warnings].map(comment).join(NEWLINE);
 	},
 	complete(ctx, args) {
 		const names = configs(ctx);

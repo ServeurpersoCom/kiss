@@ -151,6 +151,9 @@ std::string conversation_latest(const conversation & c, const std::string & id);
 // parent in their order, the leaf moving to its parent when it is the leaf
 void conversation_drop(conversation & c, const std::string & id);
 
+// an id as a line shows it, its first letters
+std::string conversation_shown(const std::string & id);
+
 // a title as show and erase write it after an id, quoted as a value, nothing
 // for none
 std::string conversation_titled(const std::string & title);

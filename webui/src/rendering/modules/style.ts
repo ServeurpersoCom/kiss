@@ -1,5 +1,6 @@
 import type { Key, Module } from '../../engine/engine.js';
 import page from '../tokens.css?raw';
+import { NEWLINE, SPACE } from '../../lib/config.js';
 
 // the properties a token takes the values of, the first its default fits
 const PROPERTIES = ['color', 'width', 'font-family'];
@@ -50,10 +51,10 @@ export default {
 			const value = config.get(`style ${key}`)!;
 			return value === def.default ? [] : [`--${key}: ${value};`];
 		});
-		set.textContent = `:root { ${tokens.join(' ')} }`;
+		set.textContent = `:root { ${tokens.join(SPACE)} }`;
 		sheet.textContent = config
 			.names('style')
 			.map((name) => String(config.get('style sheet', name)))
-			.join('\n');
+			.join(NEWLINE);
 	}
 } satisfies Module;

@@ -6,7 +6,8 @@
 #include "engine/keychain.h"
 #include "engine/seal.h"
 #include "engine/text.h"
-#include "yyjson.h"
+#include "lib/http.h"
+#include "lib/json.h"
 
 #include <algorithm>
 #include <chrono>
@@ -25,15 +26,24 @@ const std::vector<const protocol *> & api_protocols() {
     return all;
 }
 
+// the status of an endpoint overloaded, which HTTP does not name
+static const int OVERLOADED = 529;
+
 // the statuses of an endpoint busy or down for a while: a timeout, too many
 // requests, a server or gateway error, overloaded
-static const int          TRANSIENT[] = { 408, 429, 500, 502, 503, 504, 529 };
+static const int          TRANSIENT[] = { httplib::StatusCode::RequestTimeout_408,
+                                          httplib::StatusCode::TooManyRequests_429,
+                                          httplib::StatusCode::InternalServerError_500,
+                                          httplib::StatusCode::BadGateway_502,
+                                          httplib::StatusCode::ServiceUnavailable_503,
+                                          httplib::StatusCode::GatewayTimeout_504,
+                                          OVERLOADED };
 // the commands that fix an endpoint which refuses the key, or is no LLM
 static const char * const KEY_FIX     = "set endpoints key <name> <key>";
 static const char * const URL_FIX     = "set endpoints url <name> <url>";
 static const char * const DATA        = "data:";
 
-static const protocol * protocol_named(const std::string & name) {
+const protocol * api_protocol(const std::string & name) {
     for (const protocol * p : api_protocols()) {
         if (name == p->name) {
             return p;
@@ -46,7 +56,7 @@ std::vector<endpoint> api_endpoints(const engine_reader & config) {
     std::vector<endpoint> out;
     for (const std::string & name : config.names("endpoints")) {
         endpoint e;
-        e.speaks  = protocol_named(config.get("endpoints protocol", name).value_or(""));
+        e.speaks  = api_protocol(config.get("endpoints protocol", name).value_or(""));
         e.server  = remote_of(config, "endpoints", name, e.speaks->key);
         e.retries = std::stoi(config.get("endpoints max-retries", name).value_or("0"));
         e.pause   = std::stod(config.get("endpoints retry-pause", name).value_or("0"));
@@ -116,10 +126,9 @@ std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, s
     if (!client->is_valid()) {
         throw api_error(r.url + " cannot be reached: a bad port, or https on a build without TLS", URL_FIX);
     }
-    const time_t seconds = (time_t) r.timeout;
-    const long   micros  = (long) ((r.timeout - (double) seconds) * 1e6);
-    client->set_connection_timeout(seconds, micros);
-    client->set_read_timeout(seconds, micros);
+    const std::chrono::duration<double> timeout(r.timeout);
+    client->set_connection_timeout(timeout);
+    client->set_read_timeout(timeout);
     client->set_interrupt([&stop] { return stop.stopped.load(); });
     std::lock_guard<std::mutex> lock(stop.mutex);
     stop.clients.erase(std::remove_if(stop.clients.begin(), stop.clients.end(),
@@ -178,21 +187,24 @@ static std::string joined(const std::string & base, const char * path) {
 // the server's own JSON error message, else its text, else the HTTP status
 // text, with the command that fixes it when the configuration is the cause
 static api_error failure(const endpoint & e, int status, const std::string & type, const std::string & body) {
-    std::string                       message = httplib::status_message(status);
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(body.data(), body.size(), 0), yyjson_doc_free);
-    yyjson_val *                      said =
+    std::string    message = httplib::status_message(status);
+    const json_doc doc     = json_read(body);
+    yyjson_val *   said =
         doc ? yyjson_obj_get(yyjson_obj_get(yyjson_doc_get_root(doc.get()), "error"), "message") : nullptr;
     if (yyjson_is_str(said)) {
         message = yyjson_get_str(said);
-    } else if (starts_with(type, "text/plain") && !trim(body).empty()) {
+    } else if (starts_with(type, TEXT_TYPE) && !trim(body).empty()) {
         message = trim(body);
     }
-    const std::string fix = status == 401 || status == 403 ? KEY_FIX : status == 404 ? URL_FIX : "";
+    const std::string fix =
+        status == httplib::StatusCode::Unauthorized_401 || status == httplib::StatusCode::Forbidden_403 ? KEY_FIX :
+        status == httplib::StatusCode::NotFound_404                                                     ? URL_FIX :
+                                                                                                          "";
     return api_error(e.server.url + " answers " + std::to_string(status) + " " + message, fix);
 }
 
 // the models an endpoint serves, by id, each as its list writes it, JSON
-static std::vector<std::pair<std::string, std::string>> api_list(const endpoint & e, api_stop & stop) {
+static api_named api_list(const endpoint & e, api_stop & stop) {
     std::string      base;
     const auto       client = api_client(e.server, stop, base);
     httplib::Request req;
@@ -201,27 +213,27 @@ static std::vector<std::pair<std::string, std::string>> api_list(const endpoint 
     req.headers               = sent(e);
     const httplib::Result res = client->send(req);
     if (stop.stopped) {
-        throw api_error("Stopped");
+        throw api_error(TURN_STOPPED);
     }
     if (!res) {
         throw api_error(e.server.url + " does not answer", URL_FIX);
     }
     const std::string type = res->get_header_value("Content-Type");
-    if (res->status != 200) {
+    if (res->status != httplib::StatusCode::OK_200) {
         throw failure(e, res->status, type, res->body);
     }
     if (type.find("json") == std::string::npos) {
         throw api_error(e.server.url + " answers a web page, not an LLM", URL_FIX);
     }
-    std::vector<std::pair<std::string, std::string>> out;
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(res->body.data(), res->body.size(), 0), yyjson_doc_free);
-    size_t                            i, n;
-    yyjson_val *                      m;
+    api_named      out;
+    const json_doc doc = json_read(res->body);
+    size_t         i, n;
+    yyjson_val *   m;
     yyjson_arr_foreach(yyjson_obj_get(yyjson_doc_get_root(doc.get()), "data"), i, n, m) {
         yyjson_val * id = yyjson_obj_get(m, "id");
         if (yyjson_is_str(id)) {
-            const std::shared_ptr<char> json(yyjson_val_write(m, 0, nullptr), free);
-            out.emplace_back(yyjson_get_str(id), json.get());
+            const std::string json = json_write(m);
+            out.emplace_back(yyjson_get_str(id), json);
         }
     }
     return out;
@@ -236,10 +248,10 @@ std::vector<std::string> api_models(const endpoint & e, api_stop & stop) {
 }
 
 std::string api_describe(const endpoint & e, const std::string & model, api_stop & stop) {
-    static std::mutex                                                              m;
-    static std::map<std::string, std::vector<std::pair<std::string, std::string>>> lists;
-    const std::string                                id = joined(e.server.url, e.speaks->models) + " " + e.server.value;
-    std::vector<std::pair<std::string, std::string>> all;
+    static std::mutex                       m;
+    static std::map<std::string, api_named> lists;
+    const std::string                       id = joined(e.server.url, e.speaks->models) + " " + e.server.value;
+    api_named                               all;
     {
         std::lock_guard<std::mutex> lock(m);
         const auto                  it = lists.find(id);
@@ -267,7 +279,7 @@ std::pair<endpoint, std::string> api_pick(const std::vector<endpoint> & all,
         throw api_error("no endpoint yet", URL_FIX);
     }
     if (chosen.empty()) {
-        const auto models = all.size() == 1 ? api_list(all[0], stop) : decltype(api_list(all[0], stop)){};
+        const auto models = all.size() == 1 ? api_list(all[0], stop) : api_named{};
         if (models.size() != 1) {
             throw api_error("chat model is not set", "set chat model <endpoint/model>");
         }
@@ -300,7 +312,7 @@ void api_chat(const endpoint &                               e,
         req.path    = joined(base, e.speaks->path);
         req.headers = sent(e);
         req.body    = body;
-        req.set_header("Content-Type", "application/json");
+        req.set_header("Content-Type", JSON_TYPE);
         int                status = 0;
         std::string        type, refused;
         api_events         events;
@@ -309,7 +321,7 @@ void api_chat(const endpoint &                               e,
         req.response_handler = [&](const httplib::Response & res) {
             status = res.status;
             type   = res.get_header_value("Content-Type");
-            return !(status == 200 && type.find("html") != std::string::npos);
+            return !(status == httplib::StatusCode::OK_200 && type.find("html") != std::string::npos);
         };
         // each event of the stream a delta as it comes, the stream read until
         // its last; anything they throw ends the request, thrown again once
@@ -331,7 +343,7 @@ void api_chat(const endpoint &                               e,
             return !ended;
         };
         req.content_receiver = [&](const char * piece, size_t n, size_t, size_t) {
-            if (status != 200) {
+            if (status != httplib::StatusCode::OK_200) {
                 refused.append(piece, n);
                 return true;
             }
@@ -344,7 +356,7 @@ void api_chat(const endpoint &                               e,
         };
         const httplib::Result res = client->send(req);
         if (stop.stopped) {
-            throw api_error("Stopped");
+            throw api_error(TURN_STOPPED);
         }
         if (broke) {
             std::rethrow_exception(broke);
@@ -355,10 +367,10 @@ void api_chat(const endpoint &                               e,
         if (status == 0) {
             throw api_error(e.server.url + " does not answer: " + httplib::to_string(res.error()), URL_FIX);
         }
-        if (status == 200 && type.find("html") != std::string::npos) {
+        if (status == httplib::StatusCode::OK_200 && type.find("html") != std::string::npos) {
             throw api_error(e.server.url + " answers a web page, not an LLM", URL_FIX);
         }
-        if (status == 200) {
+        if (status == httplib::StatusCode::OK_200) {
             throw api_error(std::string("the stream ended before ") + e.speaks->last);
         }
         const bool passes = std::find(std::begin(TRANSIENT), std::end(TRANSIENT), status) != std::end(TRANSIENT);
@@ -369,7 +381,7 @@ void api_chat(const endpoint &                               e,
         std::unique_lock<std::mutex> lock(stop.mutex);
         g_woken.wait_for(lock, std::chrono::duration<double>(e.pause), [&] { return stop.stopped.load(); });
         if (stop.stopped) {
-            throw api_error("Stopped");
+            throw api_error(TURN_STOPPED);
         }
     }
 }

@@ -2,16 +2,27 @@ import type { Assistant, Conversation } from './types.js';
 import type { Grant, Library, Verdict } from '../engine/engine.js';
 import { app, pose as posing, type Asking, type Posed } from './app.svelte.js';
 import { REFUSE } from '../engine/engine.js';
-import { CONFIG_EXTENSION, FILE_EXTENSION, SLASH, TITLE_LENGTH, capital } from './config.js';
+import {
+	CONFIG_EXTENSION,
+	FILE_EXTENSION,
+	JSON_TYPE,
+	SLASH,
+	SPACE,
+	TEXT_TYPE,
+	TITLE_LENGTH,
+	capital
+} from './config.js';
 import { deleteConversations, listConversations, putConversations } from './db.js';
 import { prune } from './drafts.js';
 import { turn } from './agent.js';
 import {
+	TURN_STOPPED,
 	append,
 	drop,
 	fresh,
 	latest,
 	named,
+	newest,
 	parse,
 	path,
 	serialize,
@@ -68,7 +79,7 @@ async function load(): Promise<void> {
 	if (attached()) return;
 	const opened = app.conversations;
 	app.conversations = [...opened, ...stored.filter((c) => !opened.some((o) => o.id === c.id))].sort(
-		(a, b) => b.updated - a.updated
+		newest
 	);
 	prune(app.conversations.map((c) => c.id));
 	follow();
@@ -78,8 +89,7 @@ async function load(): Promise<void> {
 // model, its questions asked in the conversation of its turn and answered no
 // once the run stops
 function serving(id: string, lines: string, signal: AbortSignal) {
-	const grant = (request: Grant): Promise<Verdict> =>
-		pose(id, (settle) => ({ kind: 'grant', request, settle }));
+	const grant = granting(id);
 	signal.addEventListener('abort', () => refuse(id), { once: true });
 	return run(lines, 'llm', { ...reach(id), signal, grant });
 }
@@ -129,7 +139,7 @@ export async function remove(ids: readonly string[]): Promise<void> {
 // the browser saves a file, conversations as JSON, a configuration as text; it
 // does so on a gesture of the user only
 export function deliver(name: string, text: string): void {
-	const type = name.endsWith(FILE_EXTENSION) ? 'application/json' : 'text/plain';
+	const type = name.endsWith(FILE_EXTENSION) ? JSON_TYPE : TEXT_TYPE;
 	const url = URL.createObjectURL(new Blob([text], { type }));
 	const a = document.createElement('a');
 	a.href = url;
@@ -165,9 +175,7 @@ const library: Library = {
 	async unpack(text) {
 		const found = fresh(parse(text), app.conversations);
 		await putConversations(found.added);
-		app.conversations = [...found.added, ...app.conversations].sort(
-			(a, b) => b.updated - a.updated
-		);
+		app.conversations = [...found.added, ...app.conversations].sort(newest);
 		return found;
 	},
 	find: (prefix) => named(app.conversations, prefix),
@@ -194,7 +202,7 @@ function current(title: string): Conversation {
 // what went wrong, with the command that fixes it when the endpoint is the
 // cause, as the page tells it, its first letter capital
 function explain(error: Error): string {
-	if (error.name === 'AbortError') return 'Stopped';
+	if (error.name === 'AbortError') return TURN_STOPPED;
 	if (error instanceof EndpointError && error.fix)
 		return capital(`${error.message} -> ${error.fix}`);
 	return capital(error.message);
@@ -211,7 +219,7 @@ export async function send(text: string): Promise<boolean> {
 // whether a CLI line is one an attached page runs itself
 function own(input: string): boolean {
 	try {
-		return PAGE_COMMANDS.includes(resolve(input.trim().split(/\s+/)).command.path.join(' '));
+		return PAGE_COMMANDS.includes(resolve(input.trim().split(/\s+/)).command.path.join(SPACE));
 	} catch {
 		return false;
 	}
@@ -356,8 +364,7 @@ async function answer(conversation: Conversation, from: string, compact = false)
 	// turn and titling the conversation it answers in, its questions coming
 	// from it
 	const { signal } = controller;
-	const grant = (request: Grant): Promise<Verdict> =>
-		pose(id, (settle) => ({ kind: 'grant', request, settle }));
+	const grant = granting(id);
 	const tools = {
 		signal,
 		cli: (lines: string) => run(lines, 'llm', { ...reach(id), signal, conversation, grant }),
@@ -384,6 +391,12 @@ async function answer(conversation: Conversation, from: string, compact = false)
 
 // a question to the user from a conversation; the time it stands leaves the
 // clock of the turn that asks
+// asks the user of a conversation to let the model make a change
+const granting =
+	(id: string) =>
+	(request: Grant): Promise<Verdict> =>
+		pose(id, (settle) => ({ kind: 'grant', request, settle }));
+
 function pose<T>(from: string, ask: (settle: (answer: T) => void) => Asking): Promise<T> {
 	return posing(from, ask, (ms) => {
 		const p = pulses.get(from);

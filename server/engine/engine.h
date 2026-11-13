@@ -136,8 +136,10 @@ struct engine_result {
     bool                    compact = false;
 };
 
-// the values the user typed, by stored key: proxies key deepwiki
-using engine_typed = std::map<std::string, std::string>;
+// the values the user typed, by stored key: proxies key deepwiki, a yes
+// typed ENGINE_YES
+using engine_typed                = std::map<std::string, std::string>;
+constexpr const char * ENGINE_YES = "true";
 
 // the platform this server runs on: linux, macos or windows
 const char * engine_platform();

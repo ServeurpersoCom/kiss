@@ -6,6 +6,7 @@
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
+#include "lib/json.h"
 #include "lib/listener.h"
 #include "lib/log.h"
 #include "lib/proxy.h"
@@ -14,7 +15,6 @@
 #include "server/client.conf.hpp"
 #include "tools/public/index.html.gz.hpp"
 #include "version.h"
-#include "yyjson.h"
 
 #include <filesystem>
 #include <fstream>
@@ -30,9 +30,12 @@ static const char * const ROUTE_PATH = R"(/proxy/([a-z0-9_-]+)(/.*)?)";
 
 // the stream of the conversations, a WebSocket pinged every PING_SECONDS, and
 // the path of an action, captured
+// what opens the header that carries the key of the server
+static const char * const BEARER_PREFIX = "Bearer ";
+
 static const char * const EVENTS_PATH  = "/conversations/events";
 static const time_t       PING_SECONDS = 15;
-static const std::string  ACTION_PATH  = std::string("/conversations/(") + SYNC_ACTIONS + ")";
+static const std::string  ACTION_PATH  = "/conversations/(" + sync_actions() + ")";
 
 // the name and the port of a Host header: example.com:8089, [::1]:8089
 static void host_header(const std::string & value, std::string & name, std::string & port) {
@@ -76,7 +79,8 @@ static bool host_allowed(const httplib::Request & req, const bound_t & on) {
 static bool authorized(const httplib::Request & req, const bound_t & on, std::string & why) {
     if (engine_get("server key")) {
         const std::string bearer = req.get_header_value("Authorization");
-        if (bearer.compare(0, 7, "Bearer ") != 0 || !keychain_admits(bearer.substr(7))) {
+        if (bearer.compare(0, strlen(BEARER_PREFIX), BEARER_PREFIX) != 0 ||
+            !keychain_admits(bearer.substr(strlen(BEARER_PREFIX)))) {
             why = "the key is missing or wrong";
             return false;
         }
@@ -99,9 +103,9 @@ static bool admitted(const httplib::Request & req, const bound_t & on, httplib::
         return true;
     }
     log_error("HTTP", "Refused %s: %s", req.remote_addr.c_str(), why.c_str());
-    res.status = 401;
+    res.status = httplib::StatusCode::Unauthorized_401;
     res.set_header("WWW-Authenticate", "Bearer");
-    res.set_content(why + "\n", "text/plain");
+    res.set_content(why + "\n", TEXT_TYPE);
     return false;
 }
 
@@ -123,19 +127,15 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     const bound_t on = { host, port };
     server.set_socket_options([](socket_t sock) {
         int one = 1;
-#if defined(_WIN32)
         setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char *) &one, sizeof(one));
-#else
-        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-#endif
     });
 
     server.set_pre_routing_handler([on](const httplib::Request & req, httplib::Response & res) {
         if (!host_allowed(req, on)) {
             log_error("HTTP", "Refused %s: Host %s names no loopback address of this server", req.remote_addr.c_str(),
                       req.get_header_value("Host").c_str());
-            res.status = 403;
-            res.set_content("Host names no loopback address of this server\n", "text/plain");
+            res.status = httplib::StatusCode::Forbidden_403;
+            res.set_content("Host names no loopback address of this server\n", TEXT_TYPE);
             return httplib::Server::HandlerResponse::Handled;
         }
         return httplib::Server::HandlerResponse::Unhandled;
@@ -144,8 +144,8 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     // the page, gzipped at build time; the browser inflates it
     server.Get("/", [](const httplib::Request & req, httplib::Response & res) {
         if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
-            res.status = 406;
-            res.set_content("the page needs a browser that reads gzip\n", "text/plain");
+            res.status = httplib::StatusCode::NotAcceptable_406;
+            res.set_content("the page needs a browser that reads gzip\n", TEXT_TYPE);
             return;
         }
         res.set_header("Content-Encoding", "gzip");
@@ -169,7 +169,7 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
 
     server.Options("/mcp", [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        res.status = 204;
+        res.status = httplib::StatusCode::NoContent_204;
         res.set_header("Access-Control-Allow-Methods", "POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers",
                        "Authorization, Content-Type, Accept, MCP-Protocol-Version, Mcp-Method, Mcp-Name");
@@ -185,7 +185,7 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     // the server keeps no session: no stream to open, none to close
     const auto refuse = [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        res.status = 405;
+        res.status = httplib::StatusCode::MethodNotAllowed_405;
         res.set_header("Allow", "POST");
     };
     server.Get("/mcp", refuse);
@@ -195,7 +195,7 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     // it asks to, and reads every header the server answers, a session too
     server.Options(ROUTE_PATH, [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        res.status = 204;
+        res.status = httplib::StatusCode::NoContent_204;
         res.set_header("Access-Control-Allow-Methods", "POST, GET, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", req.get_header_value("Access-Control-Request-Headers"));
     });
@@ -214,7 +214,7 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     // and the actions of its user
     const auto preflight = [](const httplib::Request & req, httplib::Response & res) {
         cors(req, res);
-        res.status = 204;
+        res.status = httplib::StatusCode::NoContent_204;
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Authorization, Content-Type");
     };
@@ -226,9 +226,9 @@ void http_routes(httplib::Server & server, const std::string & host, int port) {
     server.set_websocket_max_missed_pongs(2);
     server.WebSocket(EVENTS_PATH, [on](const httplib::Request & req, httplib::ws::WebSocket & ws) {
         sync_events(req, ws, [&req, &on](const std::string & headers) {
-            const std::shared_ptr<yyjson_doc> doc(yyjson_read(headers.data(), headers.size(), 0), yyjson_doc_free);
-            yyjson_val *                      key   = yyjson_obj_get(yyjson_doc_get_root(doc.get()), "Authorization");
-            httplib::Request                  keyed = req;
+            const json_doc   doc   = json_read(headers);
+            yyjson_val *     key   = yyjson_obj_get(yyjson_doc_get_root(doc.get()), "Authorization");
+            httplib::Request keyed = req;
             keyed.headers.erase("Authorization");
             keyed.set_header("Authorization", yyjson_is_str(key) ? yyjson_get_str(key) : "");
             std::string why;

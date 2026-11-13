@@ -5,25 +5,26 @@
 #include "lib/prompts.h"
 
 #include "engine/schema.h"
+#include "lib/json.h"
 #include "lib/log.h"
+#include "lib/tools.h"
 #include "server/prompts.json.hpp"
 #include "webui/src/prompts.json.hpp"
-#include "yyjson.h"
 
 #include <cstdlib>
 #include <memory>
 
-static std::shared_ptr<yyjson_doc> read(const unsigned char * json, unsigned int len) {
-    return std::shared_ptr<yyjson_doc>(yyjson_read(reinterpret_cast<const char *>(json), len, 0), yyjson_doc_free);
+static json_doc read(const unsigned char * json, unsigned int len) {
+    return json_read(std::string(reinterpret_cast<const char *>(json), len));
 }
 
 static yyjson_val * root() {
-    static const std::shared_ptr<yyjson_doc> doc = read(server_prompts_json, server_prompts_json_len);
+    static const json_doc doc = read(server_prompts_json, server_prompts_json_len);
     return yyjson_doc_get_root(doc.get());
 }
 
 static yyjson_val * page() {
-    static const std::shared_ptr<yyjson_doc> doc = read(webui_src_prompts_json, webui_src_prompts_json_len);
+    static const json_doc doc = read(webui_src_prompts_json, webui_src_prompts_json_len);
     return yyjson_doc_get_root(doc.get());
 }
 
@@ -47,17 +48,11 @@ static std::string marked(std::string out, const prompt_marks & marks) {
 }
 
 static std::string schema(yyjson_val * tool) {
-    size_t                      len = 0;
-    const std::shared_ptr<char> json(yyjson_val_write(yyjson_obj_get(tool, "input"), 0, &len), free);
-    return std::string(json.get(), len);
-}
-
-static std::string text(yyjson_val * v) {
-    return std::string(yyjson_get_str(v), yyjson_get_len(v));
+    return json_write(yyjson_obj_get(tool, "input"));
 }
 
 std::string prompts_description(const std::string & tool, const prompt_marks & marks) {
-    return marked(text(yyjson_obj_get(entry(root(), "tools", tool), "description")), marks);
+    return marked(json_text(yyjson_obj_get(entry(root(), "tools", tool), "description")), marks);
 }
 
 std::string prompts_input(const std::string & tool) {
@@ -65,19 +60,19 @@ std::string prompts_input(const std::string & tool) {
 }
 
 std::string prompts_page_description(const prompt_marks & marks) {
-    return marked(text(yyjson_obj_get(entry(page(), "tools", "config"), "description")), marks);
+    return marked(json_text(yyjson_obj_get(entry(page(), "tools", TOOL_CONFIG), "description")), marks);
 }
 
 std::string prompts_page_input() {
-    return schema(entry(page(), "tools", "config"));
+    return schema(entry(page(), "tools", TOOL_CONFIG));
 }
 
 std::string prompts_module(const std::string & module) {
-    return text(entry(root(), "modules", module));
+    return json_text(entry(root(), "modules", module));
 }
 
 std::string prompts_compaction(const std::string & name) {
-    return text(entry(page(), "compaction", name));
+    return json_text(entry(page(), "compaction", name));
 }
 
 std::string prompts_check() {

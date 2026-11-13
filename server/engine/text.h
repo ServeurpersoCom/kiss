@@ -26,6 +26,8 @@ struct incomplete {};
 std::string comment(const std::string & text);
 
 std::string lower(std::string s);
+// a text as a line to the user opens: command -> Command
+std::string capital(std::string s);
 bool        starts_with(const std::string & s, const std::string & prefix);
 std::string join(const words_t & words, const char * sep);
 words_t     split(const std::string & text, char sep);

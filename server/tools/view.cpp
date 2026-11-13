@@ -22,6 +22,9 @@ namespace fs = std::filesystem;
 // the milliseconds between two ticks
 static const int TICK_MS = 1000;
 
+// the pixels of a megapixel
+static const size_t MEGAPIXEL = 1000000;
+
 struct viewer {
     place        at;
     size_t       output;
@@ -291,7 +294,7 @@ static std::vector<tool> view_tool(const engine_reader & config) {
     v.at             = place_of(config);
     v.output         = (size_t) std::stoull(config.get("files max-output").value_or("0"));
     v.load           = (size_t) std::stoull(config.get("files max-load").value_or("0"));
-    v.limits.pixels  = (size_t) std::stoull(config.get("files max-megapixels").value_or("0")) * 1000000;
+    v.limits.pixels  = (size_t) std::stoull(config.get("files max-megapixels").value_or("0")) * MEGAPIXEL;
     v.limits.side    = std::stoi(config.get("files max-dimension").value_or("0"));
     v.limits.quality = std::stoi(config.get("files jpeg-quality").value_or("0"));
 

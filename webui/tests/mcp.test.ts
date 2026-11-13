@@ -9,6 +9,7 @@ import type { Grant, Verdict } from '../src/engine/engine.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/engine/engine.js';
 import { line, pulse } from '../src/lib/pulse.js';
 import { STOPPED, settled } from '../src/lib/conversation.js';
+import { NEWLINE } from '../src/lib/config.js';
 
 interface Body {
 	messages: { role: string; content: string }[];
@@ -332,7 +333,7 @@ describe('an MCP server', () => {
 			'set mcp url a http://a/mcp\nset mcp url b http://b/mcp\nset mcp url c http://c/mcp',
 			'user'
 		);
-		const lines = (await p.engine.run('show version', 'user')).text.split('\n');
+		const lines = (await p.engine.run('show version', 'user')).text.split(NEWLINE);
 		expect(lines[0]).toBe('! KiSS Operating System');
 		expect(lines[1]).toMatch(/^! page /);
 		expect(lines.slice(2)).toEqual([
@@ -991,7 +992,7 @@ describe('an MCP server', () => {
 				'set tools use a/wait consent',
 				'! unavailable',
 				'set tools use b/old consent'
-			].join('\n')
+			].join(NEWLINE)
 		);
 	});
 

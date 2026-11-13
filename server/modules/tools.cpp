@@ -17,7 +17,6 @@
 #include <thread>
 
 // off, the model never sees the tool; consent, each call asks the user; on
-static const char * const USES[] = { "off", "consent", "on" };
 
 // the tools of this server, then the one the pages serve, then those of every
 // MCP server at once, by server, each asked in a thread of its own, one that
@@ -70,8 +69,8 @@ static engine_module make_tools() {
 
     engine_key use("use", ENGINE_ENUM);
     use.named  = true;
-    use.values = words_t(std::begin(USES), std::end(USES));
-    use.reset  = "consent";
+    use.values = words_t(std::begin(TOOL_USES), std::end(TOOL_USES));
+    use.reset  = USE_CONSENT;
     use.guard  = true;
 
     engine_module m;

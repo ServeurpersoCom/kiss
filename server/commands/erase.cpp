@@ -57,7 +57,7 @@ static step_t compile_erase(const words_t & args) {
         words_t out;
         for (const conversation & c : gone) {
             ctx.forget.push_back(c.id);
-            out.push_back("- " + c.id.substr(0, ID_SHOWN) + conversation_titled(c.title));
+            out.push_back("- " + conversation_shown(c.id) + conversation_titled(c.title));
         }
         return join(out, "\n");
     };

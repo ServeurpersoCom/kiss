@@ -135,8 +135,12 @@ server/lib/term.h          the terminal of the console, per OS: raw mode, a key,
 server/lib/log.cpp|h       the log: [Module] Line
 server/lib/job.cpp|h       spawn, pipes, tree kill, per OS
 server/lib/output.cpp|h    UTF-8 repair and head plus tail truncation
+server/lib/json.h          the JSON the server reads and writes, over yyjson
+server/lib/base64.cpp|h    bytes as base64 text and back
 server/lib/file.cpp|h      the files the tools on files reach: a path, a text loaded whole, a write
                            in place, a string found; a file the server keeps, replaced whole
+server/lib/place.cpp|h     the place the tools on files act on: this machine, or the one a shell
+                           reaches
 server/lib/conversation.cpp|h
                            the conversations as a file, read as the page reads it
 server/lib/library.cpp|h   the conversations of the server, a file each in conversations/, and
@@ -144,6 +148,8 @@ server/lib/library.cpp|h   the conversations of the server, a file each in conve
 server/lib/sync.cpp|h      the Conversations API: the stream of events and the actions of a page
 server/lib/agent.cpp|h     the agent: a turn per conversation, on its own thread
 server/lib/pulse.cpp|h     the clock of a turn, the twin of pulse.ts of the page
+server/lib/compaction.cpp|h
+                           the compaction of a history, the twin of compaction.ts of the page
 server/lib/api.cpp|h       the client of the endpoints: the model list, a reply streamed
 server/lib/mcp.cpp|h       the client of the MCP servers the agent calls
 server/lib/remote.cpp|h    a server an item names: its url, key and headers, and their rules
@@ -153,6 +159,9 @@ server/lib/tools.cpp|h     the tools the server serves, each source registered b
 server/lib/prompts.cpp|h   the texts of prompts.json and of the page, read once
 server/lib/utf8.h          the UTF-8 boundary of Windows: argv, fopen
 server/lib/quit.cpp|h      the end of the process: the work in flight stopped, its threads joined
+server/tests/factory.h     the factory configuration a law runs on, on a port free on the machine
+server/tests/engine.cpp    the laws of the engine, built and run with the server, twins of those of
+                           the page
 server/tests/seal.cpp      the laws of the seal, built and run with the server, a broken law failing
                            the build
 server/tests/files.cpp     the laws of lib/file.cpp, built and run the same way
@@ -165,6 +174,13 @@ server/tests/mcp.cpp       the laws of lib/mcp.cpp against a server of the test,
                            same way
 server/tests/agent.cpp     the laws of lib/agent.cpp, a turn against an endpoint and MCP servers of
                            the test, built and run the same way
+server/tests/compaction.cpp
+                           the laws of lib/compaction.cpp, twins of those of the page, built and run
+                           the same way
+server/tests/place.cpp     the laws of lib/place.cpp, this machine and a POSIX shell answering the
+                           same, built and run the same way
+server/tests/http.cpp      the laws of the admission of a request, against the server listening on
+                           loopback, built and run the same way
 server/server.conf         the factory configuration the binary embeds
 server/client.conf         the client.conf the server serves when its directory has none
 vendor/                    cpp-httplib, LibreSSL for the TLS of Windows, yyjson, stb
@@ -188,8 +204,8 @@ their implementations compile once in `vendor/stb/stb.c`, the decoder reading PN
 only.
 
 There is no process library in the vendors. sheredom/subprocess.h, which llama.cpp uses, offers no
-process group on POSIX and no Job Object nor suspended start on Windows, so it kills the direct child
-only and grandchildren outlive a timeout. `job.cpp` owns that layer.
+process group on POSIX and no Job Object nor suspended start on Windows, so it kills the direct
+child only and grandchildren outlive a timeout. `job.cpp` owns that layer.
 
 ## Configuration
 
@@ -210,16 +226,16 @@ configuration and applies the modules whose keys changed. A failure at any step 
 
 The commands are those of the page that fit a server, with the same words and the same answers:
 `set`, `no`, `show <module>`, `show running-config [all]`, `show startup-config`, `show diff`
-between the running-config and the startup-config, `show version`, `copy` between them, `write
-memory`, or `write` alone, IOS's way to save, and `erase running-config`, back to the factory
+between the running-config and the startup-config, `show version`, `copy` between them,
+`write memory`, or `write` alone, IOS's way to save, and `erase running-config`, back to the factory
 configuration, or `erase startup-config`, `server.conf` gone so the server starts on the factory
 configuration; `show conversations`, and `erase conversations`, every one but the pinned ones, or
-`erase <id>`, one by its id, a prefix being enough; and one of its own, `show logging`. `copy`, `write` and `erase` run alone, on a line
-of their own, as on the page, so a batch never both writes and erases `server.conf`. A save or an
-erase of `server.conf` happens once the batch holds, so a batch that fails or waits for the user
-writes nothing. A line takes a filter
-after a pipe, `begin`, `count`, `exclude` or `include`, as IOS does. A secret never prints: `show`
-writes `! server key is set`.
+`erase <id>`, one by its id, a prefix being enough; and one of its own, `show logging`. `copy`,
+`write` and `erase` run alone, on a line of their own, as on the page, so a batch never both writes
+and erases `server.conf`. A save or an erase of `server.conf` happens once the batch holds, so a
+batch that fails or waits for the user writes nothing. A line takes a filter after a pipe, `begin`,
+`count`, `exclude` or `include`, as IOS does. A secret never prints: `show` writes
+`! server key is set`.
 
 Two roles send batches. The administrator writes `server.conf` and the command line. An MCP client
 runs the config tool, whose lines a model may write, so it writes no value of a secret: `set` of a
@@ -595,10 +611,10 @@ in the order it likes, so KiSS shows `description` on a folded call by its name,
 `display preview-argument description` is its default, which `tools preview-argument <tool>`
 overrides for one tool. The schema of a tool is its law, as JSON Schema reads it: a key outside it,
 a required key missing, a string property given something else, or a string shorter than its
-`minLength` refuses the call before it runs, with `Unknown argument <key>`, `<Key> argument
-required` or `<Key> argument is not a string`, so a misnamed argument never runs as if it were absent.
-A string the tool needs is never empty because its schema says `minLength` 1, and a string that may
-be empty says nothing.
+`minLength` refuses the call before it runs, with `Unknown argument <key>`,
+`<Key> argument required` or `<Key> argument is not a string`, so a misnamed argument never runs as
+if it were absent. A string the tool needs is never empty because its schema says `minLength` 1, and
+a string that may be empty says nothing.
 
 A result is plain text in sentences, no prompt and no `!`: the CLI is the config tool alone. The
 model wrote the call and keeps it in its context, so a result never echoes it.
@@ -631,14 +647,14 @@ config tool of the agent runs its batch in one and the batch hands the request b
 back a write: a line the user sends is followed by a turn that writes the summary alone, in an entry
 holding `compaction` that a retry writes again after whatever it follows, and a batch of the model
 folds the history before its next request. A summary the output limit cuts fails its turn, every
-protocol telling the cut: `finish_reason` length, `stop_reason` max_tokens or `response.incomplete`. The console
-and every MCP client run without a conversation, so `compact` refuses there. The summary of a line
-sends the bytes of the page too, read from the golden `webui/tests/compact.jsonl`.
+protocol telling the cut: `finish_reason` length, `stop_reason` max_tokens or `response.incomplete`.
+The console and every MCP client run without a conversation, so `compact` refuses there. The summary
+of a line sends the bytes of the page too, read from the golden `webui/tests/compact.jsonl`.
 
-The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`,
-as a router names its interfaces: `forge_server_bash` is how a client sees it, and the configuration of the
-machine, which no other machine reads, names it `bash`. So the factory configuration turns them on
-for every machine, `set tools use bash on`, and a tool of another server stays in `consent`.
+The agent calls the tools of the server directly, each by its own name, `bash`, `view`, `config`, as
+a router names its interfaces: `forge_server_bash` is how a client sees it, and the configuration of
+the machine, which no other machine reads, names it `bash`. So the factory configuration turns them
+on for every machine, `set tools use bash on`, and a tool of another server stays in `consent`.
 
 It calls the tools of the MCP servers the `mcp` module names as well, after the tools of the server,
 each by the name its server gives it, or by `<server>_<name>` once a tool before holds that name.
@@ -667,16 +683,18 @@ withdraws it and ends the turn. Every question carries its number, `question`, a
 names it, so a page that sees one question follow another sets the first aside, and an answer to a
 question that stands no more settles nothing. A call in `consent` poses
 `{"set":["<id>","asking"],"value":{"kind":"call","tool":...,"args":...}}`, which
-`POST /conversations/answer {"id":...,"question":...,"verdict":"once"|"always"|"refuse"}` settles: `always` runs
-`set tools use <tool> on`, `refuse` answers `The user refused the call`. A tool that asks the user
-to fill a form poses `{"set":["<id>","asking"],"value":{"kind":"form","server":...,"input":...}}`,
-the MCP input request of an `elicitation/create` form: the `config` tool of the server, a secret to
-type or a url to let, under the hostname of the server, or a tool of an MCP server of the 2026-07-28
-era whose call answers `input_required`, under the name of that server. `POST /conversations/answer
-{"id":...,"question":...,"response":{"action":"accept","content":{...}}}` settles it, the call running again with
-the response, or `{"action":"cancel"}`, which answers `The user answered nothing`. A form whose
-fields are other than text or yes fails the call unasked. Every text the user types in a form of an
-MCP server is sealed out of every outcome from then on, as the keychain seals its secrets.
+`POST /conversations/answer {"id":...,"question":...,"verdict":"once"|"always"|"refuse"}` settles:
+`always` runs `set tools use <tool> on`, `refuse` answers `The user refused the call`. A tool that
+asks the user to fill a form poses
+`{"set":["<id>","asking"],"value":{"kind":"form","server":...,"input":...}}`, the MCP input request
+of an `elicitation/create` form: the `config` tool of the server, a secret to type or a url to let,
+under the hostname of the server, or a tool of an MCP server of the 2026-07-28 era whose call
+answers `input_required`, under the name of that server.
+`POST /conversations/answer {"id":...,"question":...,"response":{"action":"accept","content":{...}}}`
+settles it, the call running again with the response, or `{"action":"cancel"}`, which answers
+`The user answered nothing`. A form whose fields are other than text or yes fails the call unasked.
+Every text the user types in a form of an MCP server is sealed out of every outcome from then on, as
+the keychain seals its secrets.
 
 While a page is attached, the agent calls the config tool of the pages as well, `client_config`, one
 tool for all of them, in `consent` until `set tools use client_config on`: a page is a machine of
@@ -829,9 +847,10 @@ The appended last line returns the exit code of a native program that ends the s
 empty script valid. The bootstrap uses single quotes only, so it fits in a double quoted value.
 
 The contract holds on Windows PowerShell 5.1, the floor of KiSS, as measured by `shells.ps1` on
-Windows 10 19045 and Windows 11 26100: multiline blocks, here strings, CRLF scripts, UTF-8 in and out
-including `Write-Host` and native programs, `exit N`, `throw`, parse errors, stderr merged without
-CLIXML, a native program reading stdin to its end, 20000 lines, and a timeout ending the whole tree.
+Windows 10 19045 and Windows 11 26100: multiline blocks, here strings, CRLF scripts, UTF-8 in and
+out including `Write-Host` and native programs, `exit N`, `throw`, parse errors, stderr merged
+without CLIXML, a native program reading stdin to its end, 20000 lines, and a timeout ending the
+whole tree.
 
 ### Processes
 
@@ -925,8 +944,8 @@ The server is stateless and speaks both eras on `POST /mcp`:
 
 - 2026-07-28: every request carries its envelope in `_meta`, and the headers `MCP-Protocol-Version`
   and `Mcp-Method` must match the body; `server/discover` answers.
-- 2025-11-25: `initialize` answers without `Mcp-Session-Id`. Any other version a client asks for gets
-  2025-11-25, as the protocol states.
+- 2025-11-25: `initialize` answers without `Mcp-Session-Id`. Any other version a client asks for
+  gets 2025-11-25, as the protocol states.
 
 Notifications get 202, `GET` and `DELETE` get 405. Methods: `tools/list`, `tools/call`,
 `resources/list`, `ping`.
@@ -939,13 +958,14 @@ its version, and as its description the line it gives of itself in `show version
 
 The server proxies the servers its `proxies` module names, MCP servers and LLM endpoints alike, each
 at `proxy/<name>` of the server, so a page reaches a server it could not: one without CORS, one only
-this machine sees, or one whose key stays on the server. The server holds the route, `set proxies url
-hf https://router.huggingface.co/v1` and `set proxies key hf`, and the page reaches it by the item of
-the same name, `set endpoints proxy hf backend` or `set mcp proxy deepwiki backend`, its own url and
-key waiting unused while it goes through; the model may add a route through the config tool, the user letting its url
-and typing its key, the form naming where each goes. `resources/list` publishes every route as
-`kiss:proxy/<name>`, its `_meta` `kiss/keyed` telling whether it holds a key, so the page checks the
-route before it sends an item there. `show proxies` writes after each route where a client reaches it,
+this machine sees, or one whose key stays on the server. The server holds the route,
+`set proxies url hf https://router.huggingface.co/v1` and `set proxies key hf`, and the page reaches
+it by the item of the same name, `set endpoints proxy hf backend` or
+`set mcp proxy deepwiki backend`, its own url and key waiting unused while it goes through; the
+model may add a route through the config tool, the user letting its url and typing its key, the form
+naming where each goes. `resources/list` publishes every route as `kiss:proxy/<name>`, its `_meta`
+`kiss/keyed` telling whether it holds a key, so the page checks the route before it sends an item
+there. `show proxies` writes after each route where a client reaches it,
 `! proxy/hf proxies https://router.huggingface.co/v1`.
 
 The proxy speaks HTTP and knows no protocol: a request to `proxy/<name>/<rest>` goes to the url of
@@ -972,10 +992,10 @@ of the build reaches answers 424 too. A server that cannot be reached, or that c
 the length it announced, answers 502; a request this server stops before its answer goes answers
 503. A route the configuration does not name answers 404. The request out goes on a thread of its
 own, which hands the answer of this server the head of its answer, then its body as it comes; a
-client that leaves lets it go. A server that hides its own key some other way, deeper than the JSON a page decodes or
-in pieces across events, betrays a key it holds, which no filter stops, so a key goes only to a
-server trusted with it. The client speaks HTTPS: LibreSSL built with the binary on Windows, the
-system OpenSSL elsewhere.
+client that leaves lets it go. A server that hides its own key some other way, deeper than the JSON
+a page decodes or in pieces across events, betrays a key it holds, which no filter stops, so a key
+goes only to a server trusted with it. The client speaks HTTPS: LibreSSL built with the binary on
+Windows, the system OpenSSL elsewhere.
 
 ## HTTP and security
 

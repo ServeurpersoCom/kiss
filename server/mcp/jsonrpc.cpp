@@ -2,20 +2,14 @@
 
 #include "mcp/jsonrpc.h"
 
+#include "lib/http.h"
+#include "lib/json.h"
+
 #include <cstdlib>
 
-static std::string text(yyjson_mut_doc * doc) {
-    size_t            len  = 0;
-    char *            json = yyjson_mut_write(doc, 0, &len);
-    const std::string out  = json ? std::string(json, len) : "{}";
-    free(json);
-    yyjson_mut_doc_free(doc);
-    return out;
-}
-
-static void send(httplib::Response & res, int status, yyjson_mut_doc * doc) {
+static void send(httplib::Response & res, int status, const json_mut & made) {
     res.status = status;
-    res.set_content(text(doc), "application/json");
+    res.set_content(json_write(made), JSON_TYPE);
 }
 
 static yyjson_mut_val * response(yyjson_mut_doc * doc, yyjson_val * id) {
@@ -32,7 +26,8 @@ void jsonrpc_error(httplib::Response &   res,
                    int                   code,
                    const std::string &   message,
                    const jsonrpc_build & data) {
-    yyjson_mut_doc * doc  = yyjson_mut_doc_new(nullptr);
+    const json_mut   made = json_new();
+    yyjson_mut_doc * doc  = made.get();
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * err  = yyjson_mut_obj_add_obj(doc, root, "error");
     yyjson_mut_obj_add_int(doc, err, "code", code);
@@ -40,29 +35,30 @@ void jsonrpc_error(httplib::Response &   res,
     if (data) {
         data(doc, yyjson_mut_obj_add_obj(doc, err, "data"));
     }
-    send(res, status, doc);
+    send(res, status, made);
 }
 
 // a result, its resultType when the era has one
-static yyjson_mut_doc * result(yyjson_val * id, const char * type, const jsonrpc_build & body) {
-    yyjson_mut_doc * doc  = yyjson_mut_doc_new(nullptr);
+static json_mut result(yyjson_val * id, const char * type, const jsonrpc_build & body) {
+    const json_mut   made = json_new();
+    yyjson_mut_doc * doc  = made.get();
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * out  = yyjson_mut_obj_add_obj(doc, root, "result");
     if (type) {
         yyjson_mut_obj_add_str(doc, out, "resultType", type);
     }
     body(doc, out);
-    return doc;
+    return made;
 }
 
 void jsonrpc_result(httplib::Response & res, yyjson_val * id, bool modern, const jsonrpc_build & body) {
-    send(res, 200, result(id, modern ? "complete" : nullptr, body));
+    send(res, httplib::StatusCode::OK_200, result(id, modern ? "complete" : nullptr, body));
 }
 
 std::string jsonrpc_result_json(yyjson_val * id, bool modern, const jsonrpc_build & body) {
-    return text(result(id, modern ? "complete" : nullptr, body));
+    return json_write(result(id, modern ? "complete" : nullptr, body));
 }
 
 std::string jsonrpc_input_required_json(yyjson_val * id, const jsonrpc_build & body) {
-    return text(result(id, "input_required", body));
+    return json_write(result(id, "input_required", body));
 }

@@ -74,13 +74,13 @@ static step compile(const std::string & text, bool alone, const layer & target) 
 
 // the key an item names where it sends its secrets by
 static const char * const URL_KEY = "url";
+
 // what the user answers to let a url
-static const char * const YES     = "true";
 
 // the url of the item of a stored key, in the draft, when its module has one
 static std::string url_of(const layer & draft, const std::string & s) {
     const auto        parts  = unstore(s);
-    const std::string module = parts.first.substr(0, parts.first.find(' '));
+    const std::string module = module_of(parts.first);
     if (parts.second.empty() || !find_key(module + " " + URL_KEY)) {
         return "";
     }
@@ -92,7 +92,7 @@ static std::set<std::pair<std::string, std::string>> urls(const layer & l) {
     std::set<std::pair<std::string, std::string>> out;
     for (const auto & kv : l) {
         const auto        parts  = unstore(kv.first);
-        const std::string module = parts.first.substr(0, parts.first.find(' '));
+        const std::string module = module_of(parts.first);
         if (!parts.second.empty() && parts.first == module + " " + URL_KEY && kv.second) {
             out.insert({ kv.first, *kv.second });
         }
@@ -110,11 +110,11 @@ static std::vector<engine_ask> unlet(const layer & before, const layer & draft, 
     std::vector<engine_ask> out;
     for (const auto & u : urls(draft)) {
         const auto let = typed.find(u.first);
-        if (known.count(u) || (let != typed.end() && let->second == YES)) {
+        if (known.count(u) || (let != typed.end() && let->second == ENGINE_YES)) {
             continue;
         }
         const auto        parts  = unstore(u.first);
-        const std::string module = parts.first.substr(0, parts.first.find(' '));
+        const std::string module = module_of(parts.first);
         engine_ask        ask{ u.first, u.second, true, {}, "" };
         for (const engine_key & k : find_module(module)->keys) {
             const std::string s    = stored(module + " " + k.name, parts.second);
@@ -167,7 +167,7 @@ static std::vector<engine_ask> unguarded(const layer & before, const layer & dra
         const auto [key, item] = unstore(s);
         const engine_key * def = find_key(key);
         const auto         let = typed.find(s);
-        if (!def || !def->guard || (let != typed.end() && let->second == YES)) {
+        if (!def || !def->guard || (let != typed.end() && let->second == ENGINE_YES)) {
             continue;
         }
         const auto value = to.reveal(key, item);
@@ -188,7 +188,7 @@ static std::vector<engine_ask> asked(const layer & draft, const words_t & keys) 
 
 bool engine_confirmed(context & ctx, const std::string & key, const std::string & question) {
     const auto yes = ctx.typed.find(key);
-    if (ctx.role != ENGINE_MCP || (yes != ctx.typed.end() && yes->second == YES)) {
+    if (ctx.role != ENGINE_MCP || (yes != ctx.typed.end() && yes->second == ENGINE_YES)) {
         return true;
     }
     ctx.questions.push_back({ key, "", true, {}, question });
@@ -204,6 +204,9 @@ bool engine_save(context & ctx) {
     return true;
 }
 
+// what a batch that fails says last
+static const char * const NOTHING_APPLIED = "nothing applied";
+
 static engine_result failed(std::optional<size_t> line, bool alone, const std::string & message) {
     const std::string where = !line || alone ? "" : "line " + std::to_string(*line + 1) + ": ";
     std::string       text  = ERROR_PREFIX + where;
@@ -214,7 +217,7 @@ static engine_result failed(std::optional<size_t> line, bool alone, const std::s
         }
     }
     if (!alone) {
-        text += std::string("\n") + ERROR_PREFIX + "nothing applied";
+        text += std::string("\n") + ERROR_PREFIX + NOTHING_APPLIED;
     }
     return { false, text, {} };
 }
@@ -357,7 +360,7 @@ static std::string refusal(const std::string & text) {
     words_t           out;
     for (const std::string & l : split(text, '\n')) {
         const std::string s = starts_with(l, prefix) ? l.substr(prefix.size()) : l;
-        if (s != "nothing applied") {
+        if (s != NOTHING_APPLIED) {
             out.push_back(s);
         }
     }
@@ -492,7 +495,7 @@ void engine_start(const std::string & path, const std::string & version) {
 // configuration as it is, outside the lock, as they ask over the network, and
 // kept a few seconds for that configuration, as completion asks them on every
 // word typed
-static const auto SOURCED_KEPT = std::chrono::seconds(10);
+static const int SOURCED_KEPT_S = 10;
 
 struct sourced_t {
     layer                                 at;
@@ -510,7 +513,23 @@ static layer running_now() {
 }
 
 static bool fresh(const sourced_t & k, const layer & now) {
-    return !k.groups.empty() && k.at == now && std::chrono::steady_clock::now() - k.when < SOURCED_KEPT;
+    return !k.groups.empty() && k.at == now &&
+           std::chrono::steady_clock::now() - k.when < std::chrono::seconds(SOURCED_KEPT_S);
+}
+
+// the groups the sources of a module serve for a configuration; a source that
+// throws fails its module, so an item stays refused
+static std::vector<engine_group> groups_of(
+    const std::string &                                                     name,
+    const std::function<std::vector<engine_group>(const engine_reader &)> & items,
+    const layer &                                                           now) {
+    try {
+        return items(reader(now));
+    } catch (const std::exception & e) {
+        return {
+            { name, {}, e.what() }
+        };
+    }
 }
 
 // the groups the sources serve for the configuration as it runs, asked now
@@ -524,20 +543,12 @@ static std::vector<engine_group> sourced(const engine_module & m) {
             return it->second.groups;
         }
     }
-    std::vector<engine_group> groups;
-    try {
-        groups = m.items(reader(now));
-    } catch (const std::exception & e) {
-        // a source that throws fails its module, so an item stays refused
-        groups = {
-            { m.name, {}, e.what() }
-        };
-    }
-    std::lock_guard<std::mutex> lock(g_sourced_mutex);
-    sourced_t &                 k = g_sourced[m.name];
-    k.at                          = now;
-    k.when                        = std::chrono::steady_clock::now();
-    k.groups                      = groups;
+    const std::vector<engine_group> groups = groups_of(m.name, m.items, now);
+    std::lock_guard<std::mutex>     lock(g_sourced_mutex);
+    sourced_t &                     k = g_sourced[m.name];
+    k.at                              = now;
+    k.when                            = std::chrono::steady_clock::now();
+    k.groups                          = groups;
     return groups;
 }
 
@@ -552,16 +563,8 @@ static std::vector<engine_group> sourced_now(const engine_module & m) {
     if (!fresh(k, now) && !k.asking) {
         k.asking = true;
         quit_thread([name = m.name, items = m.items, now] {
-            std::vector<engine_group> groups;
-            try {
-                groups = items(reader(now));
-            } catch (const std::exception & e) {
-                // a source that throws fails its module
-                groups = {
-                    { name, {}, e.what() }
-                };
-            }
-            std::lock_guard<std::mutex> held(g_sourced_mutex);
+            const std::vector<engine_group> groups = groups_of(name, items, now);
+            std::lock_guard<std::mutex>     held(g_sourced_mutex);
             g_sourced[name] = { now, std::chrono::steady_clock::now(), groups, false };
         });
     }

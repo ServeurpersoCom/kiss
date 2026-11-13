@@ -19,7 +19,7 @@ std::string file_refused(const std::string & given) {
     return given.find('\0') == std::string::npos ? "" : "Path holds a NUL byte";
 }
 
-std::string file_load(const fs::path & path, size_t limit, std::string & text) {
+std::string file_bytes(const fs::path & path, size_t limit, std::string & text) {
     std::error_code       ec;
     const fs::file_status st = fs::status(path, ec);
     if (ec || !fs::exists(st)) {
@@ -43,8 +43,13 @@ std::string file_load(const fs::path & path, size_t limit, std::string & text) {
     }
     const bool failed = ferror(f) != 0;
     fclose(f);
-    if (failed) {
-        return "Cannot read the file";
+    return failed ? "Cannot read the file" : "";
+}
+
+std::string file_load(const fs::path & path, size_t limit, std::string & text) {
+    const std::string why = file_bytes(path, limit, text);
+    if (!why.empty()) {
+        return why;
     }
     if (memchr(text.data(), '\0', std::min(text.size(), FILE_CHUNK))) {
         return "Binary file";

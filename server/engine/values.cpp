@@ -73,7 +73,7 @@ words_t layer_lines(const layer & l, bool secrets) {
 // names its item
 static std::optional<std::string> held(const reader & config, const std::string & key, const std::string & item) {
     if (!item.empty()) {
-        const words_t names = config.names(key.substr(0, key.find(' ')));
+        const words_t names = config.names(module_of(key));
         if (std::find(names.begin(), names.end(), item) == names.end()) {
             return std::nullopt;
         }

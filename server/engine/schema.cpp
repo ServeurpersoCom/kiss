@@ -20,6 +20,10 @@ std::pair<std::string, std::string> unstore(const std::string & s) {
     return { w[0] + " " + w[1], w.size() > 2 ? w[2] : "" };
 }
 
+std::string module_of(const std::string & key) {
+    return key.substr(0, key.find(' '));
+}
+
 static std::vector<engine_module> & registry() {
     static std::vector<engine_module> modules;
     return modules;
@@ -41,7 +45,7 @@ const engine_module * find_module(const std::string & name) {
 
 const engine_key * find_key(const std::string & key) {
     const size_t          space = key.find(' ');
-    const engine_module * m     = find_module(key.substr(0, space));
+    const engine_module * m     = find_module(module_of(key));
     if (!m || space == std::string::npos) {
         return nullptr;
     }

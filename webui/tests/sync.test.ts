@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigReader } from '../src/engine/engine.js';
 import { learn } from '../src/engine/keychain.js';
-import { ATTACHED_STORAGE_KEY, storeName } from '../src/lib/config.js';
+import { ATTACHED_STORAGE_KEY, NEWLINE, storeName } from '../src/lib/config.js';
 import { app } from '../src/lib/app.svelte.js';
 import { restore } from '../src/lib/state.svelte.js';
 import {
@@ -377,7 +377,10 @@ describe('the conversations of a KiSS server', () => {
 			value: { protocol: 1, now: 0, conversations: [conversation('a', 'A', 1)] }
 		};
 		s.say(
-			JSON.stringify(first) + '\n' + JSON.stringify({ set: ['a', 'pinned'], value: true }) + '\n'
+			JSON.stringify(first) +
+				NEWLINE +
+				JSON.stringify({ set: ['a', 'pinned'], value: true }) +
+				NEWLINE
 		);
 		await vi.waitFor(() => expect(app.conversations[0]?.pinned).toBe(true));
 		for (let i = 0; i < 4; i++) {

@@ -25,7 +25,7 @@ tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const s
             if (!a.question.empty()) {
                 told.push_back(a.question);
             } else if (a.yes) {
-                const std::string module = parts.first.substr(0, parts.first.find(' '));
+                const std::string module = module_of(parts.first);
                 const std::string with   = a.along.empty() ? "" : ", " + join(a.along, ", ") + " with it";
                 told.push_back(module == "proxies" ? "let proxy/" + parts.second + " proxy " + a.to + with :
                                                      "let " + module + " " + parts.second + " reach " + a.to + with);

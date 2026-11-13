@@ -1,14 +1,23 @@
 import type { Outcome } from '../lib/types.js';
 import type { ConfigReader, Context, Held, Key, Known, Role, Scope, Value } from './engine.js';
-import { Incomplete } from './text.js';
+import {
+	ERROR_PREFIX,
+	Incomplete,
+	NO,
+	NOTHING_APPLIED,
+	NO_MATCH,
+	REMOVED,
+	SET,
+	beyond,
+	comment
+} from './text.js';
 import { REFUSE } from './engine.js';
-import { FACTORY_FILE, SITE_CONFIG_URL } from '../lib/config.js';
-import { ERROR_PREFIX, REMOVED, beyond, comment } from './text.js';
+import { FACTORY_FILE, NEWLINE, SITE_CONFIG_URL, SPACE } from '../lib/config.js';
 import factoryText from '../../client.conf?raw';
 import { splitFilter, splitLines, tokenize } from './parse.js';
 import { FILTER_NAMES, compileFilter } from './filter.js';
 import { commands, modules, resolve } from './registry.js';
-import { KeySchema, stored, unstore } from './schema.js';
+import { KeySchema, moduleOf, stored, unstore } from './schema.js';
 import { Values } from './values.js';
 import { SaveArchive } from './archive.js';
 import { complete, partialWord } from './complete.js';
@@ -29,25 +38,25 @@ function layer(
 	for (const line of splitLines(text)) {
 		try {
 			const { command, args } = resolve(tokenize(line));
-			const path = command.path.join(' ');
-			if (path === 'no' && factory) {
+			const path = command.path.join(SPACE);
+			if (path === NO && factory) {
 				const plan = command.parse!(schema, args) as
 					{ module: string; item: string } | { key: string; name?: string };
 				const keys = [...factory.keys()].filter((k) => {
 					const [key, name] = unstore(k);
 					return 'item' in plan
-						? name === plan.item && key.startsWith(plan.module + ' ')
+						? name === plan.item && key.startsWith(plan.module + SPACE)
 						: k === stored(plan.key, plan.name);
 				});
 				if (!keys.length) throw new Error(`the factory configuration sets nothing it takes back`);
 				for (const k of keys) values.set(k, null);
 				continue;
 			}
-			if (path !== 'set')
-				throw new Error(`${file} holds ${factory ? 'set and no' : 'set'} lines only`);
+			if (path !== SET)
+				throw new Error(`${file} holds ${factory ? `${SET} and ${NO}` : SET} lines only`);
 			const { key, name, rest } = schema.read(args);
 			if (!rest.length) throw new Error(`${key} misses its value`);
-			values.set(stored(key, name), schema.parse(key, rest.join(' ')));
+			values.set(stored(key, name), schema.parse(key, rest.join(SPACE)));
 		} catch (e) {
 			problems.push(`${line}: ${(e as Error).message}`);
 		}
@@ -58,7 +67,7 @@ function layer(
 // the factory configuration the page carries, what differs from the reset
 // value of a key; a line it refuses or a rule it breaks stops the page at once
 const [factory, broken] = layer(factoryText, FACTORY_FILE);
-if (broken.length) throw new Error([FACTORY_FILE, ...broken].join('\n'));
+if (broken.length) throw new Error([FACTORY_FILE, ...broken].join(NEWLINE));
 // what the site configuration gives, below every save
 const site = new Map<string, Held>();
 const running = new Values(schema, site, factory);
@@ -78,7 +87,7 @@ function secrets(): string[] {
 	const out: string[] = [];
 	for (const [key, def] of schema.list()) {
 		if (def.kind !== 'secret') continue;
-		const names = def.named ? running.names(key.split(' ')[0]) : [undefined];
+		const names = def.named ? running.names(moduleOf(key)) : [undefined];
 		for (const name of names) {
 			const value = running.reveal(key, name);
 			if (value !== undefined) out.push(String(value));
@@ -105,7 +114,7 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 	const filter = spec === undefined ? undefined : compileFilter(spec);
 	try {
 		const { command, args } = resolve(words);
-		const path = command.path.join(' ');
+		const path = command.path.join(SPACE);
 		if (!command.roles.includes(ctx.role)) {
 			throw new Error(`${path} is reserved to the ${command.roles.join(' and ')}`);
 		}
@@ -118,8 +127,8 @@ function compile(ctx: Context, text: string, alone: boolean): Step {
 	} catch (e) {
 		if (!(e instanceof Incomplete)) throw e;
 		const next = complete(ctx, words, '');
-		if (!alone) throw new Error(`"${head}" misses words, it may go on with: ${next.join(' ')}`);
-		return { run: () => comment(next.join(' ')), filter };
+		if (!alone) throw new Error(`"${head}" misses words, it may go on with: ${next.join(SPACE)}`);
+		return { run: () => comment(next.join(SPACE)), filter };
 	}
 }
 
@@ -163,7 +172,7 @@ function enter(
 	const blocks = new Map<string, string[]>();
 	for (const k of [...values.keys()].sort()) {
 		const [key, name] = unstore(k);
-		const block = name === undefined ? key : `${key.split(' ')[0]} ${name}`;
+		const block = name === undefined ? key : `${moduleOf(key)} ${name}`;
 		blocks.set(block, [...(blocks.get(block) ?? []), k]);
 	}
 	const why = new Map<string, string>();
@@ -286,6 +295,30 @@ export async function run(text: string, role: Role, scope: Scope = {}): Promise<
 	}
 }
 
+// what the steps print, in order, each through its filter, or the step that
+// fails, by its index, with why; a question still to ask and a stop pass
+// through
+async function played(
+	steps: Step[],
+	ctx: Context
+): Promise<string[] | { at: number; message: string }> {
+	const out: string[] = [];
+	for (const [at, step] of steps.entries()) {
+		let text: string;
+		try {
+			text = await step.run(ctx);
+		} catch (e) {
+			if (e instanceof Wait) throw e;
+			ctx.signal?.throwIfAborted();
+			return { at, message: (e as Error).message };
+		}
+		ctx.signal?.throwIfAborted();
+		if (step.filter) text = step.filter(text) || comment(NO_MATCH);
+		if (text) out.push(text);
+	}
+	return out;
+}
+
 async function batch(
 	text: string,
 	role: Role,
@@ -320,27 +353,15 @@ async function batch(
 				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
 			}
 		});
-		const out: string[] = [];
-		for (const [i, step] of steps.entries()) {
-			let text: string;
-			try {
-				text = await step.run(ctx);
-			} catch (e) {
-				if (e instanceof Wait) throw e;
-				signal?.throwIfAborted();
-				throw new Error(`file line ${i + 1}: ${(e as Error).message}`);
-			}
-			signal?.throwIfAborted();
-			if (step.filter) text = step.filter(text) || comment('no line matches');
-			if (text) out.push(text);
-		}
-		return out.join('\n');
+		const out = await played(steps, ctx);
+		if (!Array.isArray(out)) throw new Error(`file line ${out.at + 1}: ${out.message}`);
+		return out.join(NEWLINE);
 	};
 	const fail = (i: number | null, message: string): Outcome => {
 		const where = i === null || alone ? '' : `line ${i + 1}: `;
-		const out = [ERROR_PREFIX + where + message.replaceAll('\n', '\n' + ERROR_PREFIX)];
-		if (!alone) out.push(ERROR_PREFIX + 'nothing applied');
-		return { ok: false, text: out.join('\n') };
+		const out = [ERROR_PREFIX + where + message.replaceAll(NEWLINE, NEWLINE + ERROR_PREFIX)];
+		if (!alone) out.push(ERROR_PREFIX + NOTHING_APPLIED);
+		return { ok: false, text: out.join(NEWLINE) };
 	};
 	const steps: Step[] = [];
 	for (const [i, line] of lines.entries()) {
@@ -350,26 +371,14 @@ async function batch(
 			return fail(i, (e as Error).message);
 		}
 	}
-	const out: string[] = [];
-	for (const [i, step] of steps.entries()) {
-		let text: string;
-		try {
-			text = await step.run(ctx);
-		} catch (e) {
-			if (e instanceof Wait) throw e;
-			signal?.throwIfAborted();
-			return fail(i, (e as Error).message);
-		}
-		signal?.throwIfAborted();
-		if (step.filter) text = step.filter(text) || comment('no line matches');
-		if (text) out.push(text);
-	}
+	const out = await played(steps, ctx);
+	if (!Array.isArray(out)) return fail(out.at, out.message);
 	const broken: string[] = [];
 	for (const m of modules) {
 		const reason = m.validate?.(draft, modules);
 		if (reason) broken.push(`${m.name}: ${reason}`);
 	}
-	if (broken.length) return fail(null, broken.join('\n'));
+	if (broken.length) return fail(null, broken.join(NEWLINE));
 	// the layers below the session are shared, so the registers a batch can
 	// move are those the session layer changes
 	const changed = draft.changed(running);
@@ -377,7 +386,7 @@ async function batch(
 	// every url in it, and of the running configuration for the model
 	const source = role === 'user' ? draft : running;
 	for (const m of modules) {
-		if (!m.verify || !changed.some((k) => k.startsWith(m.name + ' '))) continue;
+		if (!m.verify || !changed.some((k) => k.startsWith(m.name + SPACE))) continue;
 		const reason = await m.verify(draft, running, source).catch((e: Error) => e.message);
 		signal?.throwIfAborted();
 		if (reason) return fail(null, `${m.name}: ${reason}`);
@@ -402,9 +411,9 @@ async function batch(
 	}
 	running.assign(draft);
 	for (const m of modules) {
-		if (changed.some((k) => k.startsWith(m.name + ' '))) m.apply?.(running);
+		if (changed.some((k) => k.startsWith(m.name + SPACE))) m.apply?.(running);
 	}
-	const said = [...out, ...diff].join('\n') || (ctx.compact ? '' : comment('no change'));
+	const said = [...out, ...diff].join(NEWLINE) || (ctx.compact ? '' : comment('no change'));
 	return ctx.compact ? { ok: true, text: said, compact: true } : { ok: true, text: said };
 }
 
@@ -428,7 +437,7 @@ async function state(
 	const out: Record<string, Value> = {};
 	for (const k of keys) {
 		const [key, name] = unstore(k);
-		const module = key.split(' ')[0];
+		const module = moduleOf(key);
 		if (name !== undefined && !config.names(module).includes(name)) {
 			if (!(await listed(module)).includes(name)) continue;
 		}
@@ -443,11 +452,11 @@ async function state(
 function along(draft: ConfigReader, to: Record<string, Value | undefined>): string[] {
 	return Object.keys(to).flatMap((k) => {
 		const [key, name] = unstore(k);
-		const module = key.split(' ')[0];
+		const module = moduleOf(key);
 		if (schema.find(key)?.kind !== 'url' || to[k] === undefined) return [];
 		return schema
 			.list()
-			.filter(([s, def]) => def.kind === 'secret' && s.startsWith(module + ' '))
+			.filter(([s, def]) => def.kind === 'secret' && s.startsWith(module + SPACE))
 			.filter(([s]) => draft.get(s, name) !== undefined)
 			.map(([s]) => comment(`${stored(s, name)} goes with it`));
 	});
@@ -494,7 +503,7 @@ async function guard(
 // read keeps what comes before its first quote, where a value may open
 export function redact(text: string): string {
 	return text
-		.split('\n')
+		.split(NEWLINE)
 		.map((l) => {
 			let words: string[];
 			try {
@@ -504,14 +513,14 @@ export function redact(text: string): string {
 			}
 			try {
 				const { command, args } = resolve(words);
-				if (command.path.join(' ') !== 'set') return l;
+				if (command.path.join(SPACE) !== SET) return l;
 				const { key, def, name, rest } = schema.read(args);
-				return def.kind === 'secret' && rest.length ? `set ${stored(key, name)} ${REMOVED}` : l;
+				return def.kind === 'secret' && rest.length ? `${SET} ${stored(key, name)} ${REMOVED}` : l;
 			} catch {
 				return l;
 			}
 		})
-		.join('\n');
+		.join(NEWLINE);
 }
 
 // the context a line completes in: the running configuration, the items the

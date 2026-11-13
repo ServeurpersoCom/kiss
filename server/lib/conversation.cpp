@@ -6,7 +6,7 @@
 
 #include "engine/parse.h"
 #include "engine/seal.h"
-#include "yyjson.h"
+#include "lib/json.h"
 
 #include <algorithm>
 #include <chrono>
@@ -22,6 +22,12 @@
 
 // the marker a file opens on, naming what it holds
 static const char * const MARK = "kiss";
+
+// a role as a file names it
+static const char * const USER      = "user";
+static const char * const ASSISTANT = "assistant";
+static const char * const CLI       = "cli";
+
 // the root of a place named in an error
 static const char * const ROOT = "file";
 
@@ -182,18 +188,17 @@ static const check_t & file() {
             return all;
         };
         const fields_t messages = {
-            { "user", object(with({ { "role", constant("user") }, { "text", string } })) },
-            { "assistant", object(with({ { "role", constant("assistant") }, { "rounds", array(round) } }),
+            { USER, object(with({ { "role", constant(USER) }, { "text", string } })) },
+            { ASSISTANT, object(with({ { "role", constant(ASSISTANT) }, { "rounds", array(round) } }),
              { { "error", string }, { "stats", stats }, { "compaction", yes } }) },
-            { "cli",
-             object(with(
-                  { { "role", constant("cli") }, { "input", string }, { "output", string }, { "ok", boolean } })) },
+            { CLI, object(with(
+                       { { "role", constant(CLI) }, { "input", string }, { "output", string }, { "ok", boolean } })) },
         };
         const check_t entry = [messages](yyjson_val * v, const std::string & at) {
             yyjson_val *    role    = yyjson_is_obj(v) ? yyjson_obj_get(v, "role") : nullptr;
             const check_t * variant = yyjson_is_str(role) ? field(messages, yyjson_get_str(role)) : nullptr;
             if (!variant) {
-                wrong(at + ".role", "not one of user assistant cli");
+                wrong(at + ".role", std::string("not one of ") + USER + " " + ASSISTANT + " " + CLI);
             }
             (*variant)(v, at);
         };
@@ -214,10 +219,6 @@ static const check_t & file() {
     return checked;
 }
 
-static std::string text_of(yyjson_val * v) {
-    return std::string(yyjson_get_str(v), yyjson_get_len(v));
-}
-
 // a tree: every id once, every parent an entry before its child, so no cycle,
 // and a leaf that ends a branch, none only when there is no entry
 static void tree(yyjson_val * c, const std::string & at) {
@@ -229,33 +230,33 @@ static void tree(yyjson_val * c, const std::string & at) {
     yyjson_val *          e;
     yyjson_arr_foreach(entries, i, n, e) {
         const std::string where = at + ".entries[" + std::to_string(i) + "]";
-        const std::string id    = text_of(yyjson_obj_get(e, "id"));
+        const std::string id    = json_text(yyjson_obj_get(e, "id"));
         yyjson_val *      p     = yyjson_obj_get(e, "parent");
         if (seen.count(id)) {
             wrong(where + ".id", "used twice");
         }
         if (yyjson_is_str(p)) {
-            if (!seen.count(text_of(p))) {
+            if (!seen.count(json_text(p))) {
                 wrong(where + ".parent", "names no entry before it");
             }
-            parents.insert(text_of(p));
+            parents.insert(json_text(p));
         }
         seen.insert(id);
     }
-    if (yyjson_is_null(leaf) ? n > 0 : !seen.count(text_of(leaf))) {
+    if (yyjson_is_null(leaf) ? n > 0 : !seen.count(json_text(leaf))) {
         wrong(at + ".leaf", "names no entry");
     }
-    if (yyjson_is_str(leaf) && parents.count(text_of(leaf))) {
+    if (yyjson_is_str(leaf) && parents.count(json_text(leaf))) {
         wrong(at + ".leaf", "ends no branch");
     }
 }
 
 static std::string field_text(yyjson_val * o, const char * key) {
-    return text_of(yyjson_obj_get(o, key));
+    return json_text(yyjson_obj_get(o, key));
 }
 
 static std::optional<std::string> link_of(yyjson_val * v) {
-    return yyjson_is_str(v) ? std::optional<std::string>(text_of(v)) : std::nullopt;
+    return yyjson_is_str(v) ? std::optional<std::string>(json_text(v)) : std::nullopt;
 }
 
 static conversation_call call_of(yyjson_val * v) {
@@ -281,8 +282,8 @@ static conversation_round round_of(yyjson_val * v) {
         r.calls.push_back(call_of(x));
     }
     if (yyjson_val * o = yyjson_obj_get(v, "opaque")) {
-        const std::shared_ptr<char> items(yyjson_val_write(yyjson_obj_get(o, "items"), 0, nullptr), free);
-        r.opaque = conversation_opaque{ field_text(o, "protocol"), items.get() };
+        const std::string items = json_write(yyjson_obj_get(o, "items"));
+        r.opaque                = conversation_opaque{ field_text(o, "protocol"), items };
     }
     if (yyjson_val * kept = yyjson_obj_get(v, "kept")) {
         r.kept = (int) yyjson_get_num(kept);
@@ -296,7 +297,7 @@ static conversation_entry entry_of(yyjson_val * v) {
     e.parent               = link_of(yyjson_obj_get(v, "parent"));
     e.time                 = yyjson_get_num(yyjson_obj_get(v, "time"));
     const std::string role = field_text(v, "role");
-    e.role                 = role == "user" ? ROLE_USER : role == "assistant" ? ROLE_ASSISTANT : ROLE_CLI;
+    e.role                 = role == USER ? ROLE_USER : role == ASSISTANT ? ROLE_ASSISTANT : ROLE_CLI;
     size_t       i, n;
     yyjson_val * x;
     switch (e.role) {
@@ -308,7 +309,7 @@ static conversation_entry entry_of(yyjson_val * v) {
                 e.rounds.push_back(round_of(x));
             }
             if (yyjson_val * error = yyjson_obj_get(v, "error")) {
-                e.error = text_of(error);
+                e.error = json_text(error);
             }
             e.compaction = yyjson_obj_get(v, "compaction") != nullptr;
             if (yyjson_val * stats = yyjson_obj_get(v, "stats")) {
@@ -330,7 +331,7 @@ static conversation_entry entry_of(yyjson_val * v) {
 }
 
 std::vector<conversation> conversation_parse(const std::string & text) {
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(text.data(), text.size(), 0), yyjson_doc_free);
+    const json_doc doc = json_read(text);
     if (!doc) {
         throw std::runtime_error("not JSON");
     }
@@ -342,7 +343,7 @@ std::vector<conversation> conversation_parse(const std::string & text) {
     yyjson_val *              c;
     yyjson_arr_foreach(yyjson_obj_get(root, "conversations"), i, n, c) {
         const std::string at = std::string(ROOT) + ".conversations[" + std::to_string(i) + "]";
-        const std::string id = text_of(yyjson_obj_get(c, "id"));
+        const std::string id = json_text(yyjson_obj_get(c, "id"));
         if (seen.count(id)) {
             wrong(at + ".id", "used twice");
         }
@@ -366,8 +367,8 @@ std::vector<conversation> conversation_parse(const std::string & text) {
 
 // a number as the page writes it: whole as an integer, else as a float
 static yyjson_mut_val * number_val(yyjson_mut_doc * d, double v) {
-    const int64_t whole = static_cast<int64_t>(v);
-    return static_cast<double>(whole) == v ? yyjson_mut_sint(d, whole) : yyjson_mut_real(d, v);
+    const int64_t whole = (int64_t) v;
+    return (double) whole == v ? yyjson_mut_sint(d, whole) : yyjson_mut_real(d, v);
 }
 
 static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
@@ -414,8 +415,7 @@ static yyjson_mut_val * round_val(yyjson_mut_doc * d, const conversation_round &
     if (r.opaque) {
         yyjson_mut_val * opaque = yyjson_mut_obj_add_obj(d, o, "opaque");
         add_text(d, opaque, "protocol", r.opaque->protocol);
-        const std::shared_ptr<yyjson_doc> items(yyjson_read(r.opaque->items.data(), r.opaque->items.size(), 0),
-                                                yyjson_doc_free);
+        const json_doc items = json_read(r.opaque->items);
         yyjson_mut_obj_add_val(d, opaque, "items", yyjson_val_mut_copy(d, yyjson_doc_get_root(items.get())));
     }
     if (r.kept) {
@@ -428,12 +428,12 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
     yyjson_mut_val * o = yyjson_mut_obj(d);
     switch (e.role) {
         case ROLE_USER:
-            yyjson_mut_obj_add_str(d, o, "role", "user");
+            yyjson_mut_obj_add_str(d, o, "role", USER);
             add_text(d, o, "text", e.text);
             break;
         case ROLE_ASSISTANT:
             {
-                yyjson_mut_obj_add_str(d, o, "role", "assistant");
+                yyjson_mut_obj_add_str(d, o, "role", ASSISTANT);
                 yyjson_mut_val * rounds = yyjson_mut_obj_add_arr(d, o, "rounds");
                 for (const conversation_round & r : e.rounds) {
                     yyjson_mut_arr_append(rounds, round_val(d, r));
@@ -456,7 +456,7 @@ static yyjson_mut_val * entry_val(yyjson_mut_doc * d, const conversation_entry &
                 break;
             }
         case ROLE_CLI:
-            yyjson_mut_obj_add_str(d, o, "role", "cli");
+            yyjson_mut_obj_add_str(d, o, "role", CLI);
             add_text(d, o, "input", e.input);
             add_text(d, o, "output", e.output);
             yyjson_mut_obj_add_bool(d, o, "ok", e.ok);
@@ -487,30 +487,30 @@ static yyjson_mut_val * conversation_val(yyjson_mut_doc * d, const conversation 
 // a value written as JSON, every secret sealed as decoded
 static std::string sealed(yyjson_mut_doc * d, yyjson_mut_val * root, const words_t & secrets) {
     yyjson_mut_doc_set_root(d, root);
-    const std::shared_ptr<char> text(yyjson_mut_write(d, 0, nullptr), free);
-    std::string                 out;
-    seal_json(text.get(), secrets, out);
+    const std::string text = json_write(d);
+    std::string       out;
+    seal_json(text, secrets, out);
     return out;
 }
 
 std::string conversation_json(const conversation & c, const words_t & secrets) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    const json_mut doc = json_new();
     return sealed(doc.get(), conversation_val(doc.get(), c), secrets);
 }
 
 std::string conversation_round_json(const conversation_round & r, const words_t & secrets) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    const json_mut doc = json_new();
     return sealed(doc.get(), round_val(doc.get(), r), secrets);
 }
 
 std::string conversation_call_json(const conversation_call & c, const words_t & secrets) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
+    const json_mut doc = json_new();
     return sealed(doc.get(), call_val(doc.get(), c), secrets);
 }
 
 std::string conversation_file(const std::vector<conversation> & conversations, const words_t & secrets) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_val *                      root = yyjson_mut_obj(doc.get());
+    const json_mut   doc  = json_new();
+    yyjson_mut_val * root = yyjson_mut_obj(doc.get());
     yyjson_mut_obj_add_str(doc.get(), root, MARK, CONVERSATIONS);
     yyjson_mut_val * list = yyjson_mut_obj_add_arr(doc.get(), root, "conversations");
     for (const conversation & c : conversations) {
@@ -637,6 +637,10 @@ void conversation_drop(conversation & c, const std::string & id) {
     if (c.leaf == id) {
         c.leaf = parent;
     }
+}
+
+std::string conversation_shown(const std::string & id) {
+    return id.substr(0, ID_SHOWN);
 }
 
 std::string conversation_titled(const std::string & title) {

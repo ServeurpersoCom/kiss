@@ -6,7 +6,7 @@
 
 #include "engine/keychain.h"
 #include "lib/api.h"
-#include "yyjson.h"
+#include "lib/json.h"
 
 #include <memory>
 
@@ -15,10 +15,10 @@ static const char * const DONE = "[DONE]";
 // whether the model takes images: its list names what it takes as input, as
 // llama-server and Hugging Face do, or says nothing
 static bool sees(const std::string & info) {
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(info.data(), info.size(), 0), yyjson_doc_free);
-    yyjson_val *                      input =
+    const json_doc doc = json_read(info);
+    yyjson_val *   input =
         doc ? yyjson_obj_get(yyjson_obj_get(yyjson_doc_get_root(doc.get()), "architecture"), "input_modalities") :
-                                   nullptr;
+                nullptr;
     if (!yyjson_is_arr(input)) {
         return true;
     }
@@ -98,12 +98,12 @@ static void history(yyjson_mut_doc *                        d,
 
 // one system message, first, as every template takes it
 static std::string body(const api_request & r) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_doc *                      d    = doc.get();
-    yyjson_mut_val *                      root = yyjson_mut_obj(d);
+    const json_mut   doc  = json_new();
+    yyjson_mut_doc * d    = doc.get();
+    yyjson_mut_val * root = yyjson_mut_obj(d);
     yyjson_mut_doc_set_root(d, root);
     for (const auto & p : r.parameters) {
-        const std::shared_ptr<yyjson_doc> v(yyjson_read(p.second.data(), p.second.size(), 0), yyjson_doc_free);
+        const json_doc v = json_read(p.second);
         yyjson_mut_obj_add_val(d, root, p.first.c_str(), yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())));
     }
     add_text(d, root, "model", r.model);
@@ -119,17 +119,12 @@ static std::string body(const api_request & r) {
         yyjson_mut_val * f = yyjson_mut_obj_add_obj(d, tool, "function");
         add_text(d, f, "name", t.name);
         add_text(d, f, "description", t.description);
-        const std::shared_ptr<yyjson_doc> input(yyjson_read(t.input.data(), t.input.size(), 0), yyjson_doc_free);
+        const json_doc input = json_read(t.input);
         yyjson_mut_obj_add_val(d, f, "parameters", yyjson_val_mut_copy(d, yyjson_doc_get_root(input.get())));
     }
     yyjson_mut_obj_add_true(d, root, "stream");
     yyjson_mut_obj_add_true(d, yyjson_mut_obj_add_obj(d, root, "stream_options"), "include_usage");
-    const std::shared_ptr<char> text(yyjson_mut_write(d, 0, nullptr), free);
-    return text.get();
-}
-
-static std::string text_of(yyjson_val * v) {
-    return yyjson_is_str(v) ? std::string(yyjson_get_str(v), yyjson_get_len(v)) : "";
+    return json_write(d);
 }
 
 static std::optional<api_delta> read_event(const std::string & data) {
@@ -138,14 +133,14 @@ static std::optional<api_delta> read_event(const std::string & data) {
         d.end = true;
         return d;
     }
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(data.data(), data.size(), 0), yyjson_doc_free);
+    const json_doc doc = json_read(data);
     if (!doc) {
         throw std::runtime_error("not JSON");
     }
     yyjson_val * root  = yyjson_doc_get_root(doc.get());
     yyjson_val * error = yyjson_obj_get(root, "error");
     if (error) {
-        d.error = text_of(yyjson_obj_get(error, "message"));
+        d.error = json_text(yyjson_obj_get(error, "message"));
         return d;
     }
     yyjson_val * usage  = yyjson_obj_get(yyjson_obj_get(root, "usage"), "completion_tokens");
@@ -161,15 +156,15 @@ static std::optional<api_delta> read_event(const std::string & data) {
     if (!delta) {
         return d.usage ? std::optional<api_delta>(d) : std::nullopt;
     }
-    d.cut       = text_of(yyjson_obj_get(choice, "finish_reason")) == "length";
-    d.content   = text_of(yyjson_obj_get(delta, "content"));
-    d.reasoning = text_of(yyjson_obj_get(delta, "reasoning_content"));
+    d.cut       = json_text(yyjson_obj_get(choice, "finish_reason")) == "length";
+    d.content   = json_text(yyjson_obj_get(delta, "content"));
+    d.reasoning = json_text(yyjson_obj_get(delta, "reasoning_content"));
     size_t       i, n;
     yyjson_val * c;
     yyjson_arr_foreach(yyjson_obj_get(delta, "tool_calls"), i, n, c) {
         yyjson_val * f = yyjson_obj_get(c, "function");
-        d.calls.push_back({ (int) yyjson_get_int(yyjson_obj_get(c, "index")), text_of(yyjson_obj_get(c, "id")),
-                            text_of(yyjson_obj_get(f, "name")), text_of(yyjson_obj_get(f, "arguments")) });
+        d.calls.push_back({ (int) yyjson_get_int(yyjson_obj_get(c, "index")), json_text(yyjson_obj_get(c, "id")),
+                            json_text(yyjson_obj_get(f, "name")), json_text(yyjson_obj_get(f, "arguments")) });
     }
     return d;
 }

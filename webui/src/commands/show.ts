@@ -1,7 +1,7 @@
 import type { Command, Context, Group } from '../engine/engine.js';
-import { Incomplete } from '../engine/text.js';
-import { beyond, comment } from '../engine/text.js';
+import { Incomplete, beyond, comment } from '../engine/text.js';
 import { choose } from '../engine/near.js';
+import { NEWLINE, SPACE } from '../lib/config.js';
 
 // show chat, show tools use, show tools use bash_tool, and show tools bash_tool:
 // the word after a collection names a key as schema.keyAfter reads it, else an item
@@ -16,7 +16,7 @@ interface Plan {
 function lines(ctx: Context, plan: Plan, name: string | undefined): string[] {
 	const out: string[] = [];
 	for (const [key, def] of ctx.schema.list()) {
-		if (!key.startsWith(plan.module + ' ') || (plan.key && key !== plan.key)) continue;
+		if (!key.startsWith(plan.module + SPACE) || (plan.key && key !== plan.key)) continue;
 		if (!!def.named !== (name !== undefined)) continue;
 		const head = name ? `${key} ${name}` : key;
 		const value = ctx.config.get(key, name);
@@ -69,7 +69,7 @@ export default {
 		const known = [...new Set([...set, ...groups.flatMap((g) => g.names)])];
 		const name = plan.name && choose(plan.name, known, plan.module);
 		const out = name ? lines(ctx, plan, name) : lines(ctx, plan, undefined);
-		if (name) return out.join('\n') || comment(`no ${plan.module} ${name} yet`);
+		if (name) return out.join(NEWLINE) || comment(`no ${plan.module} ${name} yet`);
 		if (!items) out.push(...set.flatMap((n) => lines(ctx, plan, n)));
 		else {
 			const listed = new Set(groups.flatMap((g) => g.names));
@@ -81,7 +81,7 @@ export default {
 			};
 			out.push(...grouped(groups, body));
 		}
-		return out.join('\n') || comment(`no ${plan.module} yet`);
+		return out.join(NEWLINE) || comment(`no ${plan.module} yet`);
 	},
 	complete(ctx, args) {
 		return ctx.schema.next(ctx.config, args, false, true, ctx.known);

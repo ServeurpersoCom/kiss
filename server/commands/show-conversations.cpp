@@ -5,6 +5,8 @@
 #include "engine/run.h"
 #include "lib/library.h"
 
+#include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <ctime>
 
@@ -12,7 +14,8 @@ static const char * const MARK = "* ";
 
 // a date to the minute, in the time of the machine
 static std::string local_time(double ms) {
-    const std::time_t t = static_cast<std::time_t>(ms / 1000);
+    using namespace std::chrono;
+    const std::time_t t = system_clock::to_time_t(system_clock::time_point(milliseconds((int64_t) ms)));
     std::tm           tm{};
 #if defined(_WIN32)
     localtime_s(&tm, &t);
@@ -33,7 +36,7 @@ static step_t compile_show_conversations(const words_t & args) {
         library_each([&](const conversation & c) {
             const std::string mark = c.id == ctx.conversation ? MARK : "";
             out.push_back(
-                comment(mark + c.id.substr(0, ID_SHOWN) + " " + local_time(c.updated) + conversation_titled(c.title)));
+                comment(mark + conversation_shown(c.id) + " " + local_time(c.updated) + conversation_titled(c.title)));
         });
         return out.empty() ? comment("no conversation yet") : join(out, "\n");
     };

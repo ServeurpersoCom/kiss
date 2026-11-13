@@ -9,8 +9,8 @@
 #include <string>
 
 // the actions a page sends, POST /conversations/<action>, beside the stream
-// /conversations/events
-constexpr const char * SYNC_ACTIONS = "send|command|complete|edit|retry|stop|answer|pin|browse|drop|erase";
+// /conversations/events: their names, as the pattern of a path takes them
+std::string sync_actions();
 
 // events, over a WebSocket: once admit finds nothing to refuse in the first
 // message of the page, every conversation with the protocol, then what
@@ -36,4 +36,4 @@ void sync_events(const httplib::Request &                                req,
 // 204 once applied, else why not: 400 a body that does not hold, 404 a
 // conversation or an entry unknown, 409 a turn that runs or a question that
 // does not stand, 500 a file not written
-void sync_action(const httplib::Request & req, httplib::Response & res, const std::string & action);
+void sync_action(const httplib::Request & req, httplib::Response & res, const std::string & name);

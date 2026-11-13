@@ -11,6 +11,7 @@ import served from './bodies.jsonl?raw';
 import compaction from './compaction.jsonl?raw';
 import compact from './compact.jsonl?raw';
 import prompts from '../src/prompts.json';
+import { NEWLINE } from '../src/lib/config.js';
 
 interface Body {
 	tools: { function: { name: string } }[];
@@ -744,7 +745,7 @@ describe('the twins of the server', () => {
 		messages: [],
 		...over
 	});
-	const bodies = served.trim().split('\n');
+	const bodies = served.trim().split(NEWLINE);
 
 	it('write the very bodies the protocols of the server write', () => {
 		const sees = (yes: boolean) => ({
@@ -858,7 +859,9 @@ describe('a history compacted', () => {
 		const p = await page([counted('S', 20, 5), counted('done', 130, 10)], COMPACT, [{ id: 'x' }]);
 		const { turn } = await import('../src/lib/agent.js');
 		await turn(before, p.reply, p.tools, p.stop.signal, pulse(performance.now()));
-		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(compaction.trim().split('\n'));
+		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(
+			compaction.trim().split(NEWLINE)
+		);
 		expect(p.reply.rounds.map((r) => [r.text, r.kept])).toEqual([
 			['S', 2],
 			['done', undefined]
@@ -996,7 +999,7 @@ describe('a compaction asked', () => {
 		const p = await page([counted('S', 20, 5)], ONE, [{ id: 'x' }]);
 		const { turn } = await import('../src/lib/agent.js');
 		await turn(before, p.reply, p.tools, p.stop.signal, pulse(0), true);
-		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(compact.trim().split('\n'));
+		expect(p.bodies.map((b) => JSON.stringify(b.messages))).toEqual(compact.trim().split(NEWLINE));
 		expect(p.reply.rounds.map((r) => [r.text, r.kept])).toEqual([['S', 1]]);
 		expect(p.reply.stats).not.toHaveProperty('context');
 	});

@@ -19,6 +19,9 @@
 // between the endpoint and its model in the item of a model: e/m
 constexpr const char * MODEL_SEPARATOR = "/";
 
+// what a turn, a request or a call the user stopped says
+constexpr const char * TURN_STOPPED = "Stopped";
+
 // what an endpoint answered wrong, with the command that fixes it when the
 // configuration is the cause
 struct api_error : std::runtime_error {
@@ -26,6 +29,10 @@ struct api_error : std::runtime_error {
 
     std::string fix;
 };
+
+// names, each with the JSON it goes with: the parameters of a model, the
+// models an endpoint lists
+using api_named = std::vector<std::pair<std::string, std::string>>;
 
 // a tool as a request offers it: its name, what it does, the JSON schema of
 // its arguments
@@ -39,12 +46,12 @@ struct api_tool {
 // tools, the parameters set for the model, each a JSON value, and what its
 // endpoint lists of the model, JSON, empty when the protocol reads none
 struct api_request {
-    std::string                                      model;
-    std::string                                      system;
-    std::vector<conversation_entry>                  messages;
-    std::vector<api_tool>                            tools;
-    std::vector<std::pair<std::string, std::string>> parameters;
-    std::string                                      info;
+    std::string                     model;
+    std::string                     system;
+    std::vector<conversation_entry> messages;
+    std::vector<api_tool>           tools;
+    api_named                       parameters;
+    std::string                     info;
 };
 
 // a piece of a call as the stream gives it, by its index
@@ -92,6 +99,9 @@ struct protocol {
 
 // the protocols of the server
 const std::vector<const protocol *> & api_protocols();
+
+// the protocol a name names, the first one when it names none
+const protocol * api_protocol(const std::string & name);
 
 // an endpoint: a remote server, the protocol it speaks, the times a reply is
 // asked again and the seconds between two of them

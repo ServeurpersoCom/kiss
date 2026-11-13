@@ -1,5 +1,5 @@
 import type { Command } from '../engine/engine.js';
-import { SYSTEM } from '../lib/config.js';
+import { NEWLINE, SYSTEM } from '../lib/config.js';
 import { comment } from '../engine/text.js';
 import { served } from '../lib/mcp.js';
 
@@ -12,6 +12,6 @@ export default {
 		const servers = (await served(ctx.running, new Map())).flatMap((s) =>
 			s.system ? [s.system] : []
 		);
-		return [SYSTEM, `page ${__KISS_VERSION__}`, ...servers].map(comment).join('\n');
+		return [SYSTEM, `page ${__KISS_VERSION__}`, ...servers].map(comment).join(NEWLINE);
 	}
 } satisfies Command;

@@ -2,7 +2,7 @@
 
 #include "lib/pulse.h"
 
-#include "yyjson.h"
+#include "lib/json.h"
 
 #include <chrono>
 #include <cmath>
@@ -74,8 +74,8 @@ std::string pulse_json(const pulse & p) {
     const auto   at    = [&](double t) {
         return (int64_t) std::llround(t + shift);
     };
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_val *                      o = yyjson_mut_obj(doc.get());
+    const json_mut   doc = json_new();
+    yyjson_mut_val * o   = yyjson_mut_obj(doc.get());
     yyjson_mut_doc_set_root(doc.get(), o);
     yyjson_mut_obj_add_int(doc.get(), o, "round", p.round);
     yyjson_mut_obj_add_strcpy(doc.get(), o, "phase", p.phase.c_str());
@@ -92,6 +92,5 @@ std::string pulse_json(const pulse & p) {
         yyjson_mut_obj_add_int(doc.get(), o, "last", at(p.last));
     }
     yyjson_mut_obj_add_int(doc.get(), o, "tokens", (int64_t) std::llround(p.tokens));
-    const std::shared_ptr<char> text(yyjson_mut_write(doc.get(), 0, nullptr), free);
-    return text.get();
+    return json_write(doc);
 }

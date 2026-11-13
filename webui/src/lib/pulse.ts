@@ -1,5 +1,5 @@
 import type { Stats } from './types.js';
-import { capital } from './config.js';
+import { SECOND_MS, capital } from './config.js';
 
 // what a turn does now, as the system spends it: preparing a round, its model
 // and its tools, waiting for the endpoint, asking it again, streaming its
@@ -120,7 +120,7 @@ export function stats(p: Pulse, now: number): Stats | undefined {
 const number = (n: number): string => Math.round(n).toLocaleString('en-US');
 const ms = (n: number): string => `${number(n)} ms`;
 const tokens = (n: number): string => `${number(n)} ${n === 1 ? 'token' : 'tokens'}`;
-const rate = (n: number, time: number): string => `${((n * 1000) / time).toFixed(1)} t/s`;
+const rate = (n: number, time: number): string => `${((n * SECOND_MS) / time).toFixed(1)} t/s`;
 
 // what each phase reads as, before the name it holds
 const PHASES: Record<Phase, string> = {

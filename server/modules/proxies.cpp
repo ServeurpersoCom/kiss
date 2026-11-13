@@ -5,6 +5,7 @@
 
 #include "engine/engine.h"
 #include "engine/keychain.h"
+#include "engine/parse.h"
 #include "engine/text.h"
 #include "lib/log.h"
 #include "lib/remote.h"
@@ -14,18 +15,9 @@
 static const char * const PROXY_TIMEOUT = "300";
 
 // a route is a path of this server, so its name is a word a path takes
-static bool route_word(const std::string & s) {
-    for (char c : s) {
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
-            return false;
-        }
-    }
-    return !s.empty();
-}
-
 static std::string validate(const engine_reader & config) {
     for (const std::string & route : config.names("proxies")) {
-        if (!route_word(route)) {
+        if (!plain_word(route, "_-")) {
             return "proxies " + route + ": a route name takes a-z, 0-9, _ and - only, as a path does";
         }
     }
@@ -66,12 +58,8 @@ static engine_module make_proxies() {
     timeout.reset   = PROXY_TIMEOUT;
 
     engine_module m;
-    m.name = "proxies";
-    m.keys.push_back(url);
-    m.keys.push_back(key);
-    m.keys.push_back(auth);
-    m.keys.push_back(headers);
-    m.keys.push_back(timeout);
+    m.name     = "proxies";
+    m.keys     = { url, key, auth, headers, timeout };
     m.validate = validate;
     m.apply    = apply;
     m.notes    = notes;

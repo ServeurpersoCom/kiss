@@ -12,9 +12,10 @@
 
 #include "engine/run.h"
 #include "engine/text.h"
+#include "lib/http.h"
+#include "lib/json.h"
 #include "lib/log.h"
 #include "lib/tools.h"
-#include "yyjson.h"
 
 #include <algorithm>
 #include <cctype>
@@ -25,8 +26,8 @@
 
 static const char * const PROTOCOL_VERSION  = "2025-06-18";
 static const char * const MODERN_VERSION    = "2026-07-28";
-static const char * const ELICITATION       = "elicitation/create";
-static const char * const FORM_MODE         = "form";
+// the name this client gives of itself
+static const char * const CLIENT_NAME       = "kiss";
 static const char * const SESSION_ID_HEADER = "Mcp-Session-Id";
 static const char * const VERSION_HEADER    = "MCP-Protocol-Version";
 
@@ -49,8 +50,6 @@ static std::string signature(const remote & r) {
     return r.url + "\n" + r.headers + "\n" + r.value;
 }
 
-using doc_t = std::shared_ptr<yyjson_doc>;
-
 // a server that does not answer at all, as a request that reached it would
 struct unreached : api_error {
     using api_error::api_error;
@@ -58,12 +57,12 @@ struct unreached : api_error {
 
 // the answer of a request with id: JSON, or the event of that id in a stream
 // of events; the session id the server gives, if any
-static doc_t post(const remote &           r,
-                  const std::string &      body,
-                  const httplib::Headers & era,
-                  api_stop &               stop,
-                  std::string &            given,
-                  bool                     notification) {
+static json_doc post(const remote &           r,
+                     const std::string &      body,
+                     const httplib::Headers & era,
+                     api_stop &               stop,
+                     std::string &            given,
+                     bool                     notification) {
     std::string      path;
     const auto       client = api_client(r, stop, path);
     httplib::Request req;
@@ -71,8 +70,8 @@ static doc_t post(const remote &           r,
     req.path    = path;
     req.headers = remote_headers(r);
     req.body    = body;
-    req.set_header("Content-Type", "application/json");
-    req.set_header("Accept", "application/json, text/event-stream");
+    req.set_header("Content-Type", JSON_TYPE);
+    req.set_header("Accept", std::string(JSON_TYPE) + ", " + EVENTS_TYPE);
     for (const auto & h : era) {
         req.headers.insert(h);
     }
@@ -80,12 +79,12 @@ static doc_t post(const remote &           r,
     bool        streamed = false;
     std::string all;
     api_events  events;
-    doc_t       found;
+    json_doc    found;
     req.response_handler = [&](const httplib::Response & res) {
         status   = res.status;
         given    = res.get_header_value(SESSION_ID_HEADER);
-        streamed = starts_with(lower(res.get_header_value("Content-Type")), "text/event-stream");
-        return !(notification && status < 300);
+        streamed = starts_with(lower(res.get_header_value("Content-Type")), EVENTS_TYPE);
+        return !(notification && status < httplib::StatusCode::MultipleChoices_300);
     };
     // the first event that holds an answer, a result or an error
     req.content_receiver = [&](const char * piece, size_t n, size_t, size_t) {
@@ -94,7 +93,7 @@ static doc_t post(const remote &           r,
             return true;
         }
         return events.feed(piece, n, [&](const std::string & event) {
-            doc_t        d(yyjson_read(event.data(), event.size(), 0), yyjson_doc_free);
+            json_doc     d    = json_read(event);
             yyjson_val * root = d ? yyjson_doc_get_root(d.get()) : nullptr;
             if (yyjson_obj_get(root, "result") || yyjson_obj_get(root, "error")) {
                 found = d;
@@ -104,30 +103,25 @@ static doc_t post(const remote &           r,
     };
     const httplib::Result res = client->send(req);
     if (stop.stopped) {
-        throw api_error("Stopped");
+        throw api_error(TURN_STOPPED);
     }
     if (status == 0) {
         throw unreached(r.url + " does not answer: " + httplib::to_string(res.error()));
     }
-    if (notification && status < 300) {
+    if (notification && status < httplib::StatusCode::MultipleChoices_300) {
         return nullptr;
     }
     if (found) {
         return found;
     }
-    if (status >= 300) {
+    if (status >= httplib::StatusCode::MultipleChoices_300) {
         throw api_error(r.url + " answers " + std::to_string(status) + " " + trim(all));
     }
-    doc_t d(yyjson_read(all.data(), all.size(), 0), yyjson_doc_free);
+    json_doc d = json_read(all);
     if (!d) {
         throw api_error(r.url + " sent an answer that does not read");
     }
     return d;
-}
-
-static std::string json_of(yyjson_val * v) {
-    const std::shared_ptr<char> text(yyjson_val_write(v, 0, nullptr), free);
-    return text ? text.get() : "{}";
 }
 
 // the headers of a request of the session after its handshake: those of the
@@ -156,16 +150,16 @@ static httplib::Headers era_headers(const session & s, const std::string & metho
 // a JSON-RPC request, its result, its params an object, the envelope of the
 // 2026-07-28 era in their _meta when the session speaks it: the version, the
 // client and the forms it shows; throws the error the server answers
-static doc_t request(const remote &      r,
-                     const session &     s,
-                     const std::string & method,
-                     const std::string & params,
-                     api_stop &          stop,
-                     std::string &       given,
-                     const std::string & name = "") {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    const doc_t                           parsed(yyjson_read(params.data(), params.size(), 0), yyjson_doc_free);
-    yyjson_mut_val *                      root = yyjson_mut_obj(doc.get());
+static json_doc request(const remote &      r,
+                        const session &     s,
+                        const std::string & method,
+                        const std::string & params,
+                        api_stop &          stop,
+                        std::string &       given,
+                        const std::string & name = "") {
+    const json_mut   doc    = json_new();
+    const json_doc   parsed = json_read(params);
+    yyjson_mut_val * root   = yyjson_mut_obj(doc.get());
     yyjson_mut_doc_set_root(doc.get(), root);
     yyjson_mut_obj_add_str(doc.get(), root, "jsonrpc", "2.0");
     yyjson_mut_obj_add_int(doc.get(), root, "id", 1);
@@ -177,23 +171,19 @@ static doc_t request(const remote &      r,
         yyjson_mut_val *  meta    = yyjson_mut_obj_add_obj(doc.get(), p, "_meta");
         yyjson_mut_obj_add_str(doc.get(), meta, "io.modelcontextprotocol/protocolVersion", MODERN_VERSION);
         yyjson_mut_val * info = yyjson_mut_obj_add_obj(doc.get(), meta, "io.modelcontextprotocol/clientInfo");
-        yyjson_mut_obj_add_str(doc.get(), info, "name", "kiss");
+        yyjson_mut_obj_add_str(doc.get(), info, "name", CLIENT_NAME);
         yyjson_mut_obj_add_strncpy(doc.get(), info, "version", version.data(), version.size());
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc.get(), meta, "io.modelcontextprotocol/clientCapabilities");
-        yyjson_mut_obj_add_obj(doc.get(), yyjson_mut_obj_add_obj(doc.get(), caps, "elicitation"), FORM_MODE);
+        yyjson_mut_obj_add_obj(doc.get(), yyjson_mut_obj_add_obj(doc.get(), caps, "elicitation"), MCP_FORM_MODE);
     }
-    const std::shared_ptr<char> body(yyjson_mut_write(doc.get(), 0, nullptr), free);
-    doc_t                       d   = post(r, body.get(), era_headers(s, method, name), stop, given, false);
-    yyjson_val *                err = yyjson_obj_get(yyjson_doc_get_root(d.get()), "error");
+    const std::string body = json_write(doc);
+    json_doc          d    = post(r, body, era_headers(s, method, name), stop, given, false);
+    yyjson_val *      err  = yyjson_obj_get(yyjson_doc_get_root(d.get()), "error");
     if (err) {
         yyjson_val * message = yyjson_obj_get(err, "message");
         throw api_error(r.url + " " + method + ": " + (yyjson_is_str(message) ? yyjson_get_str(message) : "error"));
     }
     return d;
-}
-
-static std::string text_of(yyjson_val * v) {
-    return yyjson_is_str(v) ? std::string(yyjson_get_str(v), yyjson_get_len(v)) : "";
 }
 
 // whether a server speaks the 2026-07-28 era: its answer to server/discover
@@ -202,9 +192,9 @@ static std::string text_of(yyjson_val * v) {
 static bool speaks_modern(const remote & r, api_stop & stop) {
     session     probe{ signature(r), true, true, "", {} };
     std::string given;
-    doc_t       d;
+    json_doc    d;
     try {
-        d = request(r, probe, "server/discover", "{}", stop, given);
+        d = request(r, probe, "server/discover", JSON_OBJECT, stop, given);
     } catch (const unreached &) {
         throw;
     } catch (const std::exception &) {
@@ -239,23 +229,25 @@ static session opened(const remote & r, api_stop & stop) {
     if (!s.modern) {
         request(r, s, "initialize",
                 std::string("{\"protocolVersion\":\"") + PROTOCOL_VERSION +
-                    "\",\"capabilities\":{},\"clientInfo\":{\"name\":\"kiss\",\"version\":\"" + engine_version() +
-                    "\"}}",
+                    "\",\"capabilities\":{},\"clientInfo\":{\"name\":\"" + CLIENT_NAME + "\",\"version\":\"" +
+                    engine_version() + "\"}}",
                 stop, given);
         s.id = given;
         post(r, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", era_headers(s, "", ""), stop, given,
              true);
     }
     for (std::string cursor;;) {
-        const doc_t d = request(r, s, "tools/list", cursor.empty() ? "{}" : "{\"cursor\":" + cursor + "}", stop, given);
+        const json_doc d =
+            request(r, s, "tools/list", cursor.empty() ? JSON_OBJECT : "{\"cursor\":" + cursor + "}", stop, given);
         yyjson_val * result = yyjson_obj_get(yyjson_doc_get_root(d.get()), "result");
         size_t       i, n;
         yyjson_val * t;
         yyjson_arr_foreach(yyjson_obj_get(result, "tools"), i, n, t) {
+            yyjson_val * schema = yyjson_obj_get(t, "inputSchema");
             s.tools.push_back({ r.name,
-                                text_of(yyjson_obj_get(t, "name")),
-                                text_of(yyjson_obj_get(t, "description")),
-                                json_of(yyjson_obj_get(t, "inputSchema")),
+                                json_text(yyjson_obj_get(t, "name")),
+                                json_text(yyjson_obj_get(t, "description")),
+                                schema ? json_write(schema) : JSON_OBJECT,
                                 {},
                                 {} });
         }
@@ -263,7 +255,7 @@ static session opened(const remote & r, api_stop & stop) {
         if (!yyjson_is_str(next)) {
             break;
         }
-        cursor = json_of(next);
+        cursor = json_write(next);
     }
     log_info("MCP", "Server %s serves %zu tools in the %s era", r.name.c_str(), s.tools.size(),
              s.modern ? MODERN_VERSION : PROTOCOL_VERSION);
@@ -329,9 +321,9 @@ std::vector<mcp_tool> mcp_kept(const remote & r) {
 // form whose fields are text or yes, as the page answers it
 static std::string unanswered(yyjson_val * input) {
     yyjson_val *      params = yyjson_obj_get(input, "params");
-    const std::string method = text_of(yyjson_obj_get(input, "method"));
-    const std::string mode   = text_of(yyjson_obj_get(params, "mode"));
-    if (method != ELICITATION || (!mode.empty() && mode != FORM_MODE)) {
+    const std::string method = json_text(yyjson_obj_get(input, "method"));
+    const std::string mode   = json_text(yyjson_obj_get(params, "mode"));
+    if (method != MCP_ELICITATION || (!mode.empty() && mode != MCP_FORM_MODE)) {
         return "asks for " + method + " " + mode + ", which KiSS does not answer";
     }
     yyjson_val * fields = yyjson_obj_get(yyjson_obj_get(params, "requestedSchema"), "properties");
@@ -342,7 +334,7 @@ static std::string unanswered(yyjson_val * input) {
     yyjson_val * key;
     yyjson_val * field;
     yyjson_obj_foreach(fields, i, n, key, field) {
-        const std::string type = text_of(yyjson_obj_get(field, "type"));
+        const std::string type = json_text(yyjson_obj_get(field, "type"));
         if (type != "string" && type != "boolean") {
             return std::string("asks for ") + yyjson_get_str(key) + ", a field KiSS does not answer: only text or yes";
         }
@@ -356,21 +348,21 @@ mcp_outcome mcp_call(const remote &      r,
                      api_stop &          stop,
                      const mcp_answer &  answer) {
     try {
-        const session                         s = opened(r, stop);
-        std::string                           given;
-        const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-        yyjson_mut_val *                      root = yyjson_mut_obj(doc.get());
+        const session    s = opened(r, stop);
+        std::string      given;
+        const json_mut   doc  = json_new();
+        yyjson_mut_val * root = yyjson_mut_obj(doc.get());
         yyjson_mut_doc_set_root(doc.get(), root);
         yyjson_mut_obj_add_strncpy(doc.get(), root, "name", name.data(), name.size());
-        const doc_t parsed(yyjson_read(args.data(), args.size(), 0), yyjson_doc_free);
+        const json_doc parsed = json_read(args);
         yyjson_mut_obj_add_val(
             doc.get(), root, "arguments",
             parsed ? yyjson_val_mut_copy(doc.get(), yyjson_doc_get_root(parsed.get())) : yyjson_mut_obj(doc.get()));
         for (;;) {
-            const std::shared_ptr<char> body(yyjson_mut_write(doc.get(), 0, nullptr), free);
-            const doc_t                 d      = request(r, s, "tools/call", body.get(), stop, given, name);
-            yyjson_val *                result = yyjson_obj_get(yyjson_doc_get_root(d.get()), "result");
-            if (text_of(yyjson_obj_get(result, "resultType")) == "input_required") {
+            const std::string body   = json_write(doc);
+            const json_doc    d      = request(r, s, "tools/call", body, stop, given, name);
+            yyjson_val *      result = yyjson_obj_get(yyjson_doc_get_root(d.get()), "result");
+            if (json_text(yyjson_obj_get(result, "resultType")) == "input_required") {
                 // the call again, with what the user answered to each input
                 yyjson_val * inputs = yyjson_obj_get(result, "inputRequests");
                 if (!yyjson_obj_size(inputs)) {
@@ -387,8 +379,8 @@ mcp_outcome mcp_call(const remote &      r,
                     if (!why.empty()) {
                         throw api_error(r.url + " " + why);
                     }
-                    const std::string response = answer(json_of(input));
-                    const doc_t       answered(yyjson_read(response.data(), response.size(), 0), yyjson_doc_free);
+                    const std::string response = answer(json_write(input));
+                    const json_doc    answered = json_read(response);
                     // the key copied into the call, as the answer it holds: the
                     // answer of the server it comes from is gone before the call
                     // goes again
@@ -407,12 +399,12 @@ mcp_outcome mcp_call(const remote &      r,
             size_t       i, n;
             yyjson_val * part;
             yyjson_arr_foreach(yyjson_obj_get(result, "content"), i, n, part) {
-                const std::string type = text_of(yyjson_obj_get(part, "type"));
+                const std::string type = json_text(yyjson_obj_get(part, "type"));
                 if (type == "text") {
-                    out.text += (out.text.empty() ? "" : "\n") + text_of(yyjson_obj_get(part, "text"));
+                    out.text += (out.text.empty() ? "" : "\n") + json_text(yyjson_obj_get(part, "text"));
                 } else if (type == "image") {
                     out.images.push_back(
-                        { text_of(yyjson_obj_get(part, "mimeType")), text_of(yyjson_obj_get(part, "data")) });
+                        { json_text(yyjson_obj_get(part, "mimeType")), json_text(yyjson_obj_get(part, "data")) });
                 }
             }
             return out;

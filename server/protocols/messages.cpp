@@ -7,7 +7,7 @@
 // API, never refused; the twin of messages.ts of the page
 
 #include "lib/api.h"
-#include "yyjson.h"
+#include "lib/json.h"
 
 #include <map>
 #include <memory>
@@ -23,25 +23,19 @@ static const char * const THINKING =
 // the field of the list that holds the most tokens a model writes
 static const char * const MAX_TOKENS = "max_tokens";
 
-using doc_t = std::shared_ptr<yyjson_doc>;
-
-static doc_t parsed(const std::string & json) {
-    return doc_t(yyjson_read(json.data(), json.size(), 0), yyjson_doc_free);
-}
-
 static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
     yyjson_mut_obj_add_strncpy(d, o, key, v.data(), v.size());
 }
 
 // a JSON text as a value of the document, null when it reads as none
 static yyjson_mut_val * value_of(yyjson_mut_doc * d, const std::string & json) {
-    const doc_t v = parsed(json);
+    const json_doc v = json_read(json);
     return v ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) : yyjson_mut_null(d);
 }
 
 // the arguments of a call as an object, none when they read as anything else
 static yyjson_mut_val * input(yyjson_mut_doc * d, const std::string & args) {
-    const doc_t v = parsed(args);
+    const json_doc v = json_read(args);
     return v && yyjson_is_obj(yyjson_doc_get_root(v.get())) ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) :
                                                               yyjson_mut_obj(d);
 }
@@ -49,8 +43,8 @@ static yyjson_mut_val * input(yyjson_mut_doc * d, const std::string & args) {
 // whether the model takes images, which it does unless its list says
 // otherwise, and whether it thinks as adaptive thinking asks, the same
 static bool supported(const std::string & info, const char * path) {
-    const doc_t  doc = parsed(info);
-    yyjson_val * v   = doc ? yyjson_ptr_get(yyjson_doc_get_root(doc.get()), path) : nullptr;
+    const json_doc doc = json_read(info);
+    yyjson_val *   v   = doc ? yyjson_ptr_get(yyjson_doc_get_root(doc.get()), path) : nullptr;
     return !yyjson_is_false(v);
 }
 
@@ -90,13 +84,13 @@ static void history(yyjson_mut_doc *                        d,
             continue;
         }
         for (const conversation_round & r : e.rounds) {
-            const bool kept = r.opaque && r.opaque->protocol == NAME && r.opaque->items != "[]";
+            const bool kept = r.opaque && r.opaque->protocol == NAME && r.opaque->items != JSON_LIST;
             if (kept || !r.text.empty() || !r.calls.empty()) {
                 yyjson_mut_val * content = turn(d, list, "assistant");
                 if (kept) {
-                    const doc_t  items = parsed(r.opaque->items);
-                    size_t       i, n;
-                    yyjson_val * item;
+                    const json_doc items = json_read(r.opaque->items);
+                    size_t         i, n;
+                    yyjson_val *   item;
                     yyjson_arr_foreach(yyjson_doc_get_root(items.get()), i, n, item) {
                         yyjson_mut_arr_append(content, yyjson_val_mut_copy(d, item));
                     }
@@ -151,20 +145,20 @@ static std::string parameter(const api_request & r, const char * name) {
 static std::string body(const api_request & r) {
     std::string max = parameter(r, "max_tokens");
     if (max.empty()) {
-        const doc_t  info   = parsed(r.info);
-        yyjson_val * listed = info ? yyjson_obj_get(yyjson_doc_get_root(info.get()), MAX_TOKENS) : nullptr;
+        const json_doc info   = json_read(r.info);
+        yyjson_val *   listed = info ? yyjson_obj_get(yyjson_doc_get_root(info.get()), MAX_TOKENS) : nullptr;
         if (listed && !yyjson_is_null(listed)) {
-            const std::shared_ptr<char> text(yyjson_val_write(listed, 0, nullptr), free);
-            max = text.get();
+            const std::string text = json_write(listed);
+            max                    = text;
         }
     }
     if (max.empty()) {
         throw api_error(std::string(NAME) + " needs models max_tokens",
                         "set models max_tokens <endpoint/model> <tokens>");
     }
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_doc *                      d    = doc.get();
-    yyjson_mut_val *                      root = yyjson_mut_obj(d);
+    const json_mut   doc  = json_new();
+    yyjson_mut_doc * d    = doc.get();
+    yyjson_mut_val * root = yyjson_mut_obj(d);
     yyjson_mut_doc_set_root(d, root);
     add_text(d, root, "model", r.model);
     yyjson_mut_obj_add_val(d, root, "max_tokens", value_of(d, max));
@@ -198,8 +192,7 @@ static std::string body(const api_request & r) {
         }
     }
     yyjson_mut_obj_add_true(d, root, "stream");
-    const std::shared_ptr<char> text(yyjson_mut_write(d, 0, nullptr), free);
-    return text.get();
+    return json_write(d);
 }
 
 // the betas of the endpoint join the one the binding of thinking needs, as
@@ -213,15 +206,6 @@ static void headers(httplib::Headers & h) {
     const std::string theirs = it == h.end() ? "" : it->second;
     h.erase(BETA);
     h.emplace(BETA, theirs.empty() ? std::string(BINDING) : std::string(BINDING) + "," + theirs);
-}
-
-static std::string text_of(yyjson_val * v) {
-    return yyjson_is_str(v) ? std::string(yyjson_get_str(v), yyjson_get_len(v)) : "";
-}
-
-static std::string json_of(yyjson_val * v) {
-    const std::shared_ptr<char> text(yyjson_val_write(v, 0, nullptr), free);
-    return text.get();
 }
 
 // a thinking block as it streams: its text and its signature
@@ -238,12 +222,12 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
     auto thinking = std::make_shared<std::map<int, thought>>();
     auto prompt   = std::make_shared<std::optional<double>>();
     return [thinking, prompt](const std::string & data) -> std::optional<api_delta> {
-        const doc_t doc = parsed(data);
+        const json_doc doc = json_read(data);
         if (!doc) {
             throw std::runtime_error("not JSON");
         }
         yyjson_val *      e     = yyjson_doc_get_root(doc.get());
-        const std::string type  = text_of(yyjson_obj_get(e, "type"));
+        const std::string type  = json_text(yyjson_obj_get(e, "type"));
         const int         index = (int) yyjson_get_int(yyjson_obj_get(e, "index"));
         api_delta         out;
         if (type == "message_start") {
@@ -258,44 +242,44 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
         }
         if (type == "content_block_start") {
             yyjson_val *      b    = yyjson_obj_get(e, "content_block");
-            const std::string kind = text_of(yyjson_obj_get(b, "type"));
+            const std::string kind = json_text(yyjson_obj_get(b, "type"));
             if (kind == "thinking") {
                 (*thinking)[index] = {};
             }
             if (kind == "redacted_thinking") {
-                out.opaque = json_of(b);
+                out.opaque = json_write(b);
                 return out;
             }
             if (kind == "tool_use") {
                 out.calls.push_back(
-                    { index, text_of(yyjson_obj_get(b, "id")), text_of(yyjson_obj_get(b, "name")), "" });
+                    { index, json_text(yyjson_obj_get(b, "id")), json_text(yyjson_obj_get(b, "name")), "" });
                 return out;
             }
-            if (kind == "text" && !text_of(yyjson_obj_get(b, "text")).empty()) {
-                out.content = text_of(yyjson_obj_get(b, "text"));
+            if (kind == "text" && !json_text(yyjson_obj_get(b, "text")).empty()) {
+                out.content = json_text(yyjson_obj_get(b, "text"));
                 return out;
             }
             return std::nullopt;
         }
         if (type == "content_block_delta") {
             yyjson_val *      delta = yyjson_obj_get(e, "delta");
-            const std::string kind  = text_of(yyjson_obj_get(delta, "type"));
+            const std::string kind  = json_text(yyjson_obj_get(delta, "type"));
             if (kind == "text_delta") {
-                out.content = text_of(yyjson_obj_get(delta, "text"));
+                out.content = json_text(yyjson_obj_get(delta, "text"));
                 return out;
             }
             if (kind == "input_json_delta") {
-                out.calls.push_back({ index, "", "", text_of(yyjson_obj_get(delta, "partial_json")) });
+                out.calls.push_back({ index, "", "", json_text(yyjson_obj_get(delta, "partial_json")) });
                 return out;
             }
             const auto block = thinking->find(index);
             if (block != thinking->end() && kind == "thinking_delta") {
-                out.reasoning = text_of(yyjson_obj_get(delta, "thinking"));
+                out.reasoning = json_text(yyjson_obj_get(delta, "thinking"));
                 block->second.thinking += out.reasoning;
                 return out;
             }
             if (block != thinking->end() && kind == "signature_delta") {
-                block->second.signature += text_of(yyjson_obj_get(delta, "signature"));
+                block->second.signature += json_text(yyjson_obj_get(delta, "signature"));
             }
             return std::nullopt;
         }
@@ -304,19 +288,19 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
             if (block == thinking->end()) {
                 return std::nullopt;
             }
-            const std::shared_ptr<yyjson_mut_doc> made(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-            yyjson_mut_val *                      o = yyjson_mut_obj(made.get());
+            const json_mut   made = json_new();
+            yyjson_mut_val * o    = yyjson_mut_obj(made.get());
             yyjson_mut_doc_set_root(made.get(), o);
             yyjson_mut_obj_add_str(made.get(), o, "type", "thinking");
             add_text(made.get(), o, "thinking", block->second.thinking);
             add_text(made.get(), o, "signature", block->second.signature);
-            const std::shared_ptr<char> text(yyjson_mut_write(made.get(), 0, nullptr), free);
-            out.opaque = text.get();
+            const std::string text = json_write(made);
+            out.opaque             = text;
             return out;
         }
         if (type == "message_delta") {
             yyjson_val * usage = yyjson_obj_get(yyjson_obj_get(e, "usage"), "output_tokens");
-            out.cut            = text_of(yyjson_obj_get(yyjson_obj_get(e, "delta"), "stop_reason")) == "max_tokens";
+            out.cut            = json_text(yyjson_obj_get(yyjson_obj_get(e, "delta"), "stop_reason")) == "max_tokens";
             if (!yyjson_is_num(usage)) {
                 return out.cut ? std::optional<api_delta>(out) : std::nullopt;
             }
@@ -331,7 +315,7 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
             return out;
         }
         if (type == "error") {
-            out.error = text_of(yyjson_obj_get(yyjson_obj_get(e, "error"), "message"));
+            out.error = json_text(yyjson_obj_get(yyjson_obj_get(e, "error"), "message"));
             return out;
         }
         return std::nullopt;

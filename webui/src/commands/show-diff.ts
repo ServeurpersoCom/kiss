@@ -1,8 +1,8 @@
 import type { Command } from '../engine/engine.js';
-import { Incomplete } from '../engine/text.js';
-import { beyond, comment } from '../engine/text.js';
+import { Incomplete, beyond, comment } from '../engine/text.js';
 import { choose } from '../engine/near.js';
 import { configs, effective } from './copy.js';
+import { NEWLINE } from '../lib/config.js';
 
 export default {
 	path: ['show', 'diff'],
@@ -17,7 +17,7 @@ export default {
 	run(ctx, words) {
 		const [from, to] = words.map((w) => choose(w, configs(ctx), 'configuration'));
 		const lines = ctx.schema.diff(effective(ctx, from), effective(ctx, to));
-		return lines.length ? lines.join('\n') : comment('no difference');
+		return lines.length ? lines.join(NEWLINE) : comment('no difference');
 	},
 	complete(ctx, args) {
 		return args.length < 2 ? configs(ctx) : [];

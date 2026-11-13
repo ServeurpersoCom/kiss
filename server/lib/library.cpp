@@ -6,8 +6,8 @@
 
 #include "engine/seal.h"
 #include "lib/file.h"
+#include "lib/json.h"
 #include "lib/log.h"
-#include "yyjson.h"
 
 #include <algorithm>
 #include <chrono>
@@ -214,14 +214,6 @@ void library_remove(const words_t & ids) {
     }
 }
 
-// a string as JSON
-static std::string quoted(const std::string & s) {
-    const std::shared_ptr<yyjson_mut_doc> doc(yyjson_mut_doc_new(nullptr), yyjson_mut_doc_free);
-    yyjson_mut_doc_set_root(doc.get(), yyjson_mut_strncpy(doc.get(), s.data(), s.size()));
-    const std::shared_ptr<char> text(yyjson_mut_write(doc.get(), 0, nullptr), free);
-    return text.get();
-}
-
 static std::string set_event(const std::string & path, const std::string & value) {
     return "{\"set\":[" + path + "],\"value\":" + value + "}\n";
 }
@@ -232,17 +224,15 @@ static std::string add_value(const std::string & path, const std::string & value
 
 static std::string add_text(const std::string & path, const std::string & text, const words_t & secrets) {
     std::string sealed;
-    seal_json(quoted(text), secrets, sealed);
+    seal_json(json_quote(text), secrets, sealed);
     return "{\"add\":[" + path + "],\"text\":" + sealed + "}\n";
 }
 
 // the items the protocol of a round keeps, as the round writes them
 static std::string opaque_json(const conversation_round & r, const words_t & secrets) {
-    const std::string                 json = conversation_round_json(r, secrets);
-    const std::shared_ptr<yyjson_doc> doc(yyjson_read(json.data(), json.size(), 0), yyjson_doc_free);
-    const std::shared_ptr<char>       text(
-        yyjson_val_write(yyjson_obj_get(yyjson_doc_get_root(doc.get()), "opaque"), 0, nullptr), free);
-    return text.get();
+    const std::string json = conversation_round_json(r, secrets);
+    const json_doc    doc  = json_read(json);
+    return json_write(yyjson_obj_get(yyjson_doc_get_root(doc.get()), "opaque"));
 }
 
 // the shape of a round, and of an entry, as they stand
@@ -338,11 +328,11 @@ static library_held whole(const held & h) {
 static std::string turn_of(const held & h, library_held & mine) {
     std::string out;
     if (mine.turn != h.turn) {
-        out += set_event(quoted(h.c.id) + ",\"turn\"", h.turn.empty() ? "null" : h.turn);
+        out += set_event(json_quote(h.c.id) + ",\"turn\"", h.turn.empty() ? "null" : h.turn);
         mine.turn = h.turn;
     }
     if (mine.asking != h.asking) {
-        out += set_event(quoted(h.c.id) + ",\"asking\"", h.asking.empty() ? "null" : h.asking);
+        out += set_event(json_quote(h.c.id) + ",\"asking\"", h.asking.empty() ? "null" : h.asking);
         mine.asking = h.asking;
     }
     return out;
@@ -371,7 +361,7 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
     for (const held & h : g_held) {
         const auto it = f.held.find(h.c.id);
         if (it == f.held.end() || it->second.structure != h.structure) {
-            out += set_event(quoted(h.c.id), conversation_json(h.c, secrets));
+            out += set_event(json_quote(h.c.id), conversation_json(h.c, secrets));
             f.held[h.c.id] = whole(h);
             out += turn_of(h, f.held[h.c.id]);
             continue;
@@ -383,7 +373,7 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
         it->second.version = h.version;
         for (size_t i = 0; i < h.c.entries.size(); i++) {
             if (h.c.entries[i].id == h.live) {
-                out += grown(h.c.entries[i], it->second.shape, quoted(h.c.id) + ",\"entries\"," + std::to_string(i),
+                out += grown(h.c.entries[i], it->second.shape, json_quote(h.c.id) + ",\"entries\"," + std::to_string(i),
                              secrets);
             }
         }
@@ -393,7 +383,7 @@ std::string library_follow(library_follower & f, int wait_ms, const words_t & se
             ++it;
             continue;
         }
-        out += set_event(quoted(it->first), "null");
+        out += set_event(json_quote(it->first), "null");
         it = f.held.erase(it);
     }
     return out;

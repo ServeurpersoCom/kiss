@@ -11,6 +11,8 @@
 std::string                         stored(const std::string & key, const std::string & item);
 // the key and the item name of a stored key
 std::pair<std::string, std::string> unstore(const std::string & s);
+// the module of a key, its first word
+std::string                         module_of(const std::string & key);
 
 const std::vector<engine_module> & schema_modules();
 const engine_module *              find_module(const std::string & name);

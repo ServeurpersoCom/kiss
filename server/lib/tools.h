@@ -41,6 +41,13 @@ struct tool_outcome {
 // called every second while a tool runs, false once the client is gone
 using tool_tick = std::function<bool()>;
 
+// how a tool is used, from the most closed to the most open: never, once the
+// user lets each call, always
+constexpr const char * TOOL_USES[] = { "off", "consent", "on" };
+constexpr const char * USE_OFF     = TOOL_USES[0];
+constexpr const char * USE_CONSENT = TOOL_USES[1];
+constexpr const char * USE_ON      = TOOL_USES[2];
+
 // the tool the CLI of this server is reached by
 constexpr const char * TOOL_CONFIG = "config";
 

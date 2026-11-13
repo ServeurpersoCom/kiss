@@ -44,12 +44,7 @@ static engine_module make_files() {
 
     engine_module m;
     m.name = "files";
-    m.keys.push_back(shell);
-    m.keys.push_back(output);
-    m.keys.push_back(load);
-    m.keys.push_back(megapixels);
-    m.keys.push_back(dimension);
-    m.keys.push_back(quality);
+    m.keys = { shell, output, load, megapixels, dimension, quality };
     return m;
 }
 

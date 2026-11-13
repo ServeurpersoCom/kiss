@@ -1,5 +1,7 @@
 import type { Command } from '../engine/engine.js';
 import { choose } from '../engine/near.js';
+import { moduleOf } from '../engine/schema.js';
+import { NO } from '../engine/text.js';
 
 // no endpoints prod names an item of a collection, no chat model a key; a
 // key takes the line show running-config writes, whatever value follows it; a
@@ -8,7 +10,7 @@ import { choose } from '../engine/near.js';
 type Plan = { module: string; item: string } | { key: string; name?: string };
 
 export default {
-	path: ['no'],
+	path: [NO],
 	roles: ['user', 'llm'],
 	module: true,
 	parse(schema, args) {
@@ -26,7 +28,7 @@ export default {
 		if ('item' in plan) {
 			ctx.config.drop(plan.module, choose(plan.item, ctx.config.names(plan.module), plan.module));
 		} else {
-			const [module] = plan.key.split(' ');
+			const module = moduleOf(plan.key);
 			const name = plan.name && choose(plan.name, ctx.config.names(module), module);
 			ctx.config.takeBack(plan.key, name);
 		}

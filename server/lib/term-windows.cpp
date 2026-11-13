@@ -105,7 +105,7 @@ int term_read() {
 // 80 columns, the width of a terminal by default, when it tells none
 int term_width() {
     CONSOLE_SCREEN_BUFFER_INFO info;
-    return GetConsoleScreenBufferInfo(g_out, &info) ? info.srWindow.Right - info.srWindow.Left + 1 : 80;
+    return GetConsoleScreenBufferInfo(g_out, &info) ? info.srWindow.Right - info.srWindow.Left + 1 : TERM_WIDTH;
 }
 
 #endif

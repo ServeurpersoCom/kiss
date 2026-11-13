@@ -15,11 +15,11 @@ export type Value = string;
 // of the layers below it, as IOS keeps no ip http server
 export type Held = Value | null;
 
-export type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret' | 'css';
+type Kind = 'string' | 'number' | 'enum' | 'url' | 'secret' | 'css';
 
 // what the user answers when the model asks for a change or a call: this time,
 // from now on, or not
-export const VERDICTS = ['once', 'always', 'refuse'] as const;
+const VERDICTS = ['once', 'always', 'refuse'] as const;
 export type Verdict = (typeof VERDICTS)[number];
 export const [ONCE, ALWAYS, REFUSE] = VERDICTS;
 
@@ -250,7 +250,7 @@ export interface Scope {
 
 // a conversation as a batch sees it: its id and its title, and nothing of its
 // entries
-export interface Titled {
+interface Titled {
 	readonly id: string;
 	title: string;
 }

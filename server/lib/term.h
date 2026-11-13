@@ -15,5 +15,6 @@ bool term_wait(int ms);
 // the next byte typed, -1 once stdin ends
 int term_read();
 
-// the columns of the terminal
-int term_width();
+// the columns of the terminal, TERM_WIDTH when it tells none
+constexpr int TERM_WIDTH = 80;
+int           term_width();
