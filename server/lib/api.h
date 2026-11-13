@@ -54,6 +54,21 @@ struct api_request {
     std::string                     info;
 };
 
+// the JSON of a parameter of a request, empty when it holds none of the name
+inline std::string api_parameter(const api_request & r, const char * name) {
+    for (const auto & p : r.parameters) {
+        if (p.first == name) {
+            return p.second;
+        }
+    }
+    return "";
+}
+
+// an image as a data URL
+inline std::string api_data_url(const conversation_image & image) {
+    return "data:" + image.mime + ";base64," + image.data;
+}
+
 // a piece of a call as the stream gives it, by its index
 struct api_call_piece {
     int         index = 0;

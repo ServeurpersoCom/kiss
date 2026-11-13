@@ -163,7 +163,7 @@ static json_doc request(const remote &      r,
     yyjson_mut_doc_set_root(doc.get(), root);
     yyjson_mut_obj_add_str(doc.get(), root, "jsonrpc", "2.0");
     yyjson_mut_obj_add_int(doc.get(), root, "id", 1);
-    yyjson_mut_obj_add_strncpy(doc.get(), root, "method", method.data(), method.size());
+    json_put(doc.get(), root, "method", method);
     yyjson_mut_val * p = yyjson_val_mut_copy(doc.get(), yyjson_doc_get_root(parsed.get()));
     yyjson_mut_obj_add_val(doc.get(), root, "params", p);
     if (s.modern) {
@@ -172,7 +172,7 @@ static json_doc request(const remote &      r,
         yyjson_mut_obj_add_str(doc.get(), meta, "io.modelcontextprotocol/protocolVersion", MODERN_VERSION);
         yyjson_mut_val * info = yyjson_mut_obj_add_obj(doc.get(), meta, "io.modelcontextprotocol/clientInfo");
         yyjson_mut_obj_add_str(doc.get(), info, "name", CLIENT_NAME);
-        yyjson_mut_obj_add_strncpy(doc.get(), info, "version", version.data(), version.size());
+        json_put(doc.get(), info, "version", version);
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc.get(), meta, "io.modelcontextprotocol/clientCapabilities");
         yyjson_mut_obj_add_obj(doc.get(), yyjson_mut_obj_add_obj(doc.get(), caps, "elicitation"), MCP_FORM_MODE);
     }
@@ -335,7 +335,7 @@ static std::string unanswered(yyjson_val * input) {
     yyjson_val * field;
     yyjson_obj_foreach(fields, i, n, key, field) {
         const std::string type = json_text(yyjson_obj_get(field, "type"));
-        if (type != "string" && type != "boolean") {
+        if (type != MCP_TEXT_FIELD && type != MCP_YES_FIELD) {
             return std::string("asks for ") + yyjson_get_str(key) + ", a field KiSS does not answer: only text or yes";
         }
     }
@@ -353,7 +353,7 @@ mcp_outcome mcp_call(const remote &      r,
         const json_mut   doc  = json_new();
         yyjson_mut_val * root = yyjson_mut_obj(doc.get());
         yyjson_mut_doc_set_root(doc.get(), root);
-        yyjson_mut_obj_add_strncpy(doc.get(), root, "name", name.data(), name.size());
+        json_put(doc.get(), root, "name", name);
         const json_doc parsed = json_read(args);
         yyjson_mut_obj_add_val(
             doc.get(), root, "arguments",

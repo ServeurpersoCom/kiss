@@ -112,7 +112,7 @@ static bool text_field(yyjson_val * body, const char * key, std::string & out) {
     if (!yyjson_is_str(v)) {
         return false;
     }
-    out = std::string(yyjson_get_str(v), yyjson_get_len(v));
+    out = json_text(v);
     return true;
 }
 

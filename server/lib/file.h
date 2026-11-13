@@ -20,6 +20,11 @@ std::string file_refused(const std::string & given);
 // of what keeps it from loading, empty when it loads
 std::string file_bytes(const std::filesystem::path & path, size_t limit, std::string & bytes);
 
+// what a file that is no text says, and whether its first chunk tells so, by
+// a NUL
+constexpr const char * FILE_BINARY = "Binary file";
+bool                   file_binary(const std::string & text);
+
 // the whole of a text file of at most limit bytes, a NUL in its first chunk
 // telling a binary; the message of what keeps it from loading, empty when
 // it loads

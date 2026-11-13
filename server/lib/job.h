@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+// what a job, a walk or a read the client left says
+constexpr const char * CANCELLED = "Cancelled";
+
 struct job_result {
     std::string output;
     size_t      total     = 0;

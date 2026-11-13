@@ -63,6 +63,10 @@ constexpr const char * MCP_FORM_MODE   = "form";
 constexpr const char * MCP_ACCEPT      = "accept";
 constexpr const char * MCP_CANCEL      = "cancel";
 
+// the fields of a form KiSS answers: a text, a yes
+constexpr const char * MCP_TEXT_FIELD = "string";
+constexpr const char * MCP_YES_FIELD  = "boolean";
+
 // forgets every server the configuration no longer names, its tools with it
 void mcp_forget(const words_t & named);
 

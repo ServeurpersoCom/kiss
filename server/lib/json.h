@@ -30,6 +30,17 @@ inline std::string json_text(yyjson_val * v) {
     return yyjson_is_str(v) ? std::string(yyjson_get_str(v), yyjson_get_len(v)) : "";
 }
 
+// a text under a key of an object being built
+inline void json_put(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & text) {
+    yyjson_mut_obj_add_strncpy(d, o, key, text.data(), text.size());
+}
+
+// a JSON text as a value of a document being built, null when it reads as none
+inline yyjson_mut_val * json_value(yyjson_mut_doc * d, const std::string & text) {
+    const json_doc v = json_read(text);
+    return v ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) : yyjson_mut_null(d);
+}
+
 // the JSON string that writes a text
 inline std::string json_quote(const std::string & s);
 

@@ -1,5 +1,5 @@
 import type { Command } from '../engine/engine.js';
-import { Incomplete } from '../engine/text.js';
+import { Incomplete, hint } from '../engine/text.js';
 import { NEWLINE, SPACE, TITLE_LENGTH } from '../lib/config.js';
 
 export default {
@@ -24,6 +24,6 @@ export default {
 	},
 	complete(ctx, args) {
 		const title = ctx.conversation?.title;
-		return args.length ? [] : [...(title ? [title] : []), '<title>'];
+		return args.length ? [] : [...(title ? [title] : []), hint('title')];
 	}
 } satisfies Command<string>;

@@ -132,7 +132,7 @@ static std::string ran(const std::string & output, bool ok) {
     const json_mut   made = json_new();
     yyjson_mut_val * out  = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), out);
-    yyjson_mut_obj_add_strncpy(made.get(), out, "output", output.data(), output.size());
+    json_put(made.get(), out, "output", output);
     yyjson_mut_obj_add_bool(made.get(), out, "ok", ok);
     return json_write(made);
 }
@@ -460,7 +460,7 @@ static std::string fill(turn_t & self, const std::string & server, const std::st
     yyjson_mut_val * q    = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), q);
     yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_FORM);
-    yyjson_mut_obj_add_strncpy(made.get(), q, "server", server.data(), server.size());
+    json_put(made.get(), q, "server", server);
     yyjson_mut_obj_add_val(made.get(), q, "input", yyjson_val_mut_copy(made.get(), yyjson_doc_get_root(in.get())));
     log_info("Agent", "%s asks the user to fill a form of %s", conversation_shown(self.id).c_str(), server.c_str());
     return ask(self, made.get(), ASK_FORM);
@@ -519,13 +519,13 @@ static tool_outcome run_client(turn_t & self, yyjson_val * args) {
     yyjson_mut_val * q     = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), q);
     yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_RUN);
-    yyjson_mut_obj_add_strncpy(made.get(), q, "lines", yyjson_get_str(lines), yyjson_get_len(lines));
+    json_put(made.get(), q, "lines", json_text(lines));
     log_info("Agent", "%s asks the pages to run a call", conversation_shown(self.id).c_str());
     const std::string answer = ask(self, made.get(), ASK_RUN);
     const json_doc    doc    = json_read(answer);
     yyjson_val *      root   = yyjson_doc_get_root(doc.get());
     yyjson_val *      output = yyjson_obj_get(root, "output");
-    return { yyjson_get_bool(yyjson_obj_get(root, "ok")), std::string(yyjson_get_str(output), yyjson_get_len(output)) };
+    return { yyjson_get_bool(yyjson_obj_get(root, "ok")), json_text(output) };
 }
 
 // a call runs and its outcome enters it: a call reaches a tool not off as the
@@ -594,8 +594,8 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
         yyjson_mut_val * q    = yyjson_mut_obj(made.get());
         yyjson_mut_doc_set_root(made.get(), q);
         yyjson_mut_obj_add_str(made.get(), q, "kind", ASK_CALL);
-        yyjson_mut_obj_add_strncpy(made.get(), q, "tool", called.name.data(), called.name.size());
-        yyjson_mut_obj_add_strncpy(made.get(), q, "args", called.args.data(), called.args.size());
+        json_put(made.get(), q, "tool", called.name);
+        json_put(made.get(), q, "args", called.args);
         log_info("Agent", "%s asks the user for %s", conversation_shown(self.id).c_str(), called.name.c_str());
         const std::string verdict = ask(self, made.get(), ASK_CALL);
         log_info("Agent", "%s %s: %s", conversation_shown(self.id).c_str(), called.name.c_str(), verdict.c_str());
@@ -995,7 +995,7 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
     const json_mut   made = json_new();
     yyjson_mut_val * args = yyjson_mut_obj(made.get());
     yyjson_mut_doc_set_root(made.get(), args);
-    yyjson_mut_obj_add_strncpy(made.get(), args, "lines", input.data(), input.size());
+    json_put(made.get(), args, "lines", input);
     const std::shared_ptr<yyjson_doc> doc(yyjson_mut_doc_imut_copy(made.get(), nullptr), yyjson_doc_free);
     conversation_entry                e;
     e.role       = ROLE_CLI;

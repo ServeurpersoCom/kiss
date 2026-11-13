@@ -3,6 +3,7 @@
 // written over, on the place of the tools on files
 
 #include "lib/file.h"
+#include "lib/json.h"
 #include "lib/output.h"
 #include "lib/place.h"
 #include "lib/prompts.h"
@@ -11,11 +12,13 @@
 
 #include <algorithm>
 
+static const char * const NAME = "create_file";
+
 static tool_outcome create_file(const place & at, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *      named = yyjson_obj_get(args, "path");
     yyjson_val *      body  = yyjson_obj_get(args, "file_text");
-    const std::string given(yyjson_get_str(named), yyjson_get_len(named));
-    const std::string text(yyjson_get_str(body), yyjson_get_len(body));
+    const std::string given = json_text(named);
+    const std::string text  = json_text(body);
     if (!file_refused(given).empty()) {
         return { false, file_refused(given) };
     }
@@ -35,13 +38,12 @@ static std::vector<tool> create_file_tool(const engine_reader & config) {
     const place at = place_of(config);
 
     tool t;
-    t.suffix = "create_file";
-    t.description =
-        prompts_description("create_file", {
-                                               { "hostname", config.get("server hostname").value_or("") }
+    t.suffix      = NAME;
+    t.description = prompts_description(NAME, {
+                                                  { "hostname", config.get("server hostname").value_or("") }
     });
-    t.input = prompts_input("create_file");
-    t.run   = [at](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+    t.input       = prompts_input(NAME);
+    t.run         = [at](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
         return create_file(at, args, tick);
     };
     return { t };

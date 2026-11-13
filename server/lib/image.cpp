@@ -14,18 +14,24 @@
 #include <memory>
 #include <vector>
 
+// the types of image view reads
+static const char * const PNG  = "image/png";
+static const char * const JPEG = "image/jpeg";
+static const char * const GIF  = "image/gif";
+static const char * const WEBP = "image/webp";
+
 std::string image_type(const std::string & head) {
     if (head.compare(0, 8, "\x89PNG\r\n\x1a\n") == 0) {
-        return "image/png";
+        return PNG;
     }
     if (head.compare(0, 3, "\xff\xd8\xff") == 0) {
-        return "image/jpeg";
+        return JPEG;
     }
     if (head.compare(0, 6, "GIF87a") == 0 || head.compare(0, 6, "GIF89a") == 0) {
-        return "image/gif";
+        return GIF;
     }
     if (head.size() >= 12 && head.compare(0, 4, "RIFF") == 0 && head.compare(8, 4, "WEBP") == 0) {
-        return "image/webp";
+        return WEBP;
     }
     return "";
 }
@@ -99,20 +105,20 @@ static bool jpeg_header(const std::string & s, int & w, int & h, int & orientati
 // and its EXIF orientation, 1 but for a JPEG that records another
 static bool declared_size(const std::string & s, const std::string & mime, int & w, int & h, int & orientation) {
     orientation = 1;
-    if (mime == "image/png") {
+    if (mime == PNG) {
         w = (int) (at(s, 16) << 24 | at(s, 17) << 16 | at(s, 18) << 8 | at(s, 19));
         h = (int) (at(s, 20) << 24 | at(s, 21) << 16 | at(s, 22) << 8 | at(s, 23));
         return w > 0 && h > 0;
     }
-    if (mime == "image/gif") {
+    if (mime == GIF) {
         w = (int) (at(s, 6) | at(s, 7) << 8);
         h = (int) (at(s, 8) | at(s, 9) << 8);
         return w > 0 && h > 0;
     }
-    if (mime == "image/jpeg") {
+    if (mime == JPEG) {
         return jpeg_header(s, w, h, orientation);
     }
-    return mime == "image/webp" && webp_size(s, w, h);
+    return mime == WEBP && webp_size(s, w, h);
 }
 
 // the pixel of the source an upright pixel shows, as orientation turns or
@@ -178,12 +184,12 @@ image_sent image_fit(const std::string & bytes, const image_limits & limits) {
     const bool fits      = std::max(w, h) <= limits.side;
 
     // a WebP goes as it is, view decoding none
-    if (out.source_mime == "image/webp" && !fits) {
+    if (out.source_mime == WEBP && !fits) {
         out.error = "WebP of " + std::to_string(w) + "x" + std::to_string(h) + ", longer than " +
                     std::to_string(limits.side) + " px, and view resizes no WebP";
         return out;
     }
-    if (out.source_mime == "image/webp" || (out.source_mime == "image/jpeg" && orientation == 1 && fits)) {
+    if (out.source_mime == WEBP || (out.source_mime == JPEG && orientation == 1 && fits)) {
         out.data   = bytes;
         out.mime   = out.source_mime;
         out.width  = w;
@@ -238,13 +244,12 @@ image_sent image_fit(const std::string & bytes, const image_limits & limits) {
     }
     // a PNG that needs no change goes as it is when its JPEG weighs more,
     // lossless and lighter, a drawing or a screenshot most of the time
-    if (out.source_mime == "image/png" && orientation == 1 && fits && !out.transparent &&
-        bytes.size() <= out.data.size()) {
+    if (out.source_mime == PNG && orientation == 1 && fits && !out.transparent && bytes.size() <= out.data.size()) {
         out.data = bytes;
         out.mime = out.source_mime;
         return out;
     }
-    out.mime = "image/jpeg";
+    out.mime = JPEG;
     out.made = true;
     return out;
 }

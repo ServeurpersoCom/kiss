@@ -25,6 +25,10 @@ static const int DRAIN_MS = 2000;
 // the milliseconds between two ticks
 static const int TICK_MS = 1000;
 
+// the milliseconds a look at the pipes waits, and the bytes one read takes
+static const int    POLL_MS   = 100;
+static const size_t PIPE_SIZE = 65536;
+
 // a pipe no other spawn inherits, since tool calls run side by side
 static bool pipe_private(int fd[2]) {
 #    if defined(__APPLE__)
@@ -135,12 +139,12 @@ job_result job_run(const std::string &           line,
             { out[0], POLLIN,  0 },
             { in_fd,  POLLOUT, 0 },
         };
-        const int n = poll(fds, in_fd >= 0 ? 2 : 1, 100);
+        const int n = poll(fds, in_fd >= 0 ? 2 : 1, POLL_MS);
         if (n < 0 && errno != EINTR) {
             break;
         }
         if (fds[0].revents & (POLLIN | POLLHUP)) {
-            char          buf[65536];
+            char          buf[PIPE_SIZE];
             const ssize_t got = read(out[0], buf, sizeof(buf));
             if (got == 0) {
                 break;

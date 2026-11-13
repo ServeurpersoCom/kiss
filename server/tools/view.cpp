@@ -4,6 +4,8 @@
 #include "lib/base64.h"
 #include "lib/file.h"
 #include "lib/image.h"
+#include "lib/job.h"
+#include "lib/json.h"
 #include "lib/output.h"
 #include "lib/place.h"
 #include "lib/prompts.h"
@@ -24,6 +26,14 @@ static const int TICK_MS = 1000;
 
 // the pixels of a megapixel
 static const size_t MEGAPIXEL = 1000000;
+
+// the bytes a size counts by: 1024 make a K, 1024 K an M
+static const uintmax_t KILO = 1024;
+
+// the directory of packages a listing never opens
+static const char * const PACKAGES = PACKAGES;
+
+static const char * const NAME = "view";
 
 struct viewer {
     place        at;
@@ -50,14 +60,14 @@ struct ticker {
 
 // a size as du -h writes it: 512, 4.0K, 12K, 1.5M
 static std::string human(uintmax_t n) {
-    if (n < 1024) {
+    if (n < KILO) {
         return std::to_string(n);
     }
     const char * units = "KMGTPE";
-    double       v     = (double) n / 1024;
+    double       v     = (double) n / KILO;
     int          u     = 0;
-    while (v >= 1024 && u < 5) {
-        v /= 1024;
+    while (v >= KILO && u < 5) {
+        v /= KILO;
         u++;
     }
     char buf[32];
@@ -77,7 +87,7 @@ static bool shown(const fs::path & rel) {
         if (!s.empty() && s[0] == '.') {
             return false;
         }
-        if (s == "node_modules" && s != last) {
+        if (s == PACKAGES && s != last) {
             return false;
         }
     }
@@ -98,7 +108,7 @@ static tool_outcome listing(const viewer & v, const std::string & given, ticker 
             if (e.depth <= 1 && shown(rel)) {
                 sizes.emplace(rel.generic_u8string(), 0);
             } else if (e.depth <= 1 && rel.filename().u8string()[0] == '.' && shown(rel.parent_path()) &&
-                       rel.parent_path().filename() != "node_modules") {
+                       rel.parent_path().filename() != PACKAGES) {
                 hidden++;
             }
             if (!e.regular) {
@@ -156,7 +166,7 @@ file(const reader & read, uintmax_t size, const viewer & v, long long first, lon
         char        buf[FILE_CHUNK];
         for (size_t got; (got = read(buf, sizeof(buf))) > 0;) {
             if (!t.alive()) {
-                return { false, "Cancelled" };
+                return { false, CANCELLED };
             }
             data.append(buf, got);
         }
@@ -172,8 +182,8 @@ file(const reader & read, uintmax_t size, const viewer & v, long long first, lon
         }
         return r;
     }
-    if (memchr(head.data(), '\0', head.size())) {
-        return { false, "Binary file" };
+    if (file_binary(head)) {
+        return { false, FILE_BINARY };
     }
 
     output_buffer kept(v.output);
@@ -190,7 +200,7 @@ file(const reader & read, uintmax_t size, const viewer & v, long long first, lon
     };
     while (!chunk.empty()) {
         if (!t.alive()) {
-            return { false, "Cancelled" };
+            return { false, CANCELLED };
         }
         for (size_t at = 0;;) {
             const size_t nl = chunk.find('\n', at);
@@ -223,7 +233,7 @@ file(const reader & read, uintmax_t size, const viewer & v, long long first, lon
 
 static tool_outcome view(const viewer & v, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *      named = yyjson_obj_get(args, "path");
-    const std::string given(yyjson_get_str(named), yyjson_get_len(named));
+    const std::string given = json_text(named);
     if (!file_refused(given).empty()) {
         return { false, file_refused(given) };
     }
@@ -299,11 +309,11 @@ static std::vector<tool> view_tool(const engine_reader & config) {
     v.limits.quality = std::stoi(config.get("files jpeg-quality").value_or("0"));
 
     tool t;
-    t.suffix      = "view";
-    t.description = prompts_description("view", {
-                                                    { "hostname", config.get("server hostname").value_or("") }
+    t.suffix      = NAME;
+    t.description = prompts_description(NAME, {
+                                                  { "hostname", config.get("server hostname").value_or("") }
     });
-    t.input       = prompts_input("view");
+    t.input       = prompts_input(NAME);
     t.run         = [v](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
         return view(v, args, tick);
     };

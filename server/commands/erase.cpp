@@ -57,14 +57,14 @@ static step_t compile_erase(const words_t & args) {
         words_t out;
         for (const conversation & c : gone) {
             ctx.forget.push_back(c.id);
-            out.push_back("- " + conversation_shown(c.id) + conversation_titled(c.title));
+            out.push_back(GONE_PREFIX + conversation_shown(c.id) + conversation_titled(c.title));
         }
         return join(out, "\n");
     };
 }
 
 static words_t next_erase(const completing & c) {
-    return c.args.empty() ? words_t{ CONVERSATIONS, RUNNING_CONFIG, STARTUP_CONFIG, "<id>" } : words_t{};
+    return c.args.empty() ? words_t{ CONVERSATIONS, RUNNING_CONFIG, STARTUP_CONFIG, hint("id") } : words_t{};
 }
 
 static command make_erase() {

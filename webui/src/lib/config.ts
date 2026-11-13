@@ -37,6 +37,12 @@ export const capital = (text: string): string =>
 export const NEWLINE = '\n';
 export const SPACE = ' ';
 export const TAB = '\t';
+// what parts two paragraphs
+export const PARAGRAPH = NEWLINE + NEWLINE;
+// the keys the page reads by their name
+export const KEY_ENTER = 'Enter';
+export const KEY_ESCAPE = 'Escape';
+export const KEY_TAB = 'Tab';
 // the content types the page sends and saves
 export const JSON_TYPE = 'application/json';
 export const TEXT_TYPE = 'text/plain';
@@ -134,6 +140,8 @@ export const CONVERSATIONS = 'conversations';
 export const CONVERSATION = 'conversation';
 // the length an id shows, unique among a few thousand conversations
 export const ID_SHOWN = 8;
+// an id as a line shows it, its first letters
+export const shown = (id: string): string => id.slice(0, ID_SHOWN);
 export const FILE_EXTENSION = '.json';
 export const CONFIG_EXTENSION = '.conf';
 const UNSAFE_NAME = /[\\/:*?"<>|]/g;

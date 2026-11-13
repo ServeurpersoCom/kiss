@@ -30,7 +30,7 @@ struct reader {
 
 static DWORD WINAPI read_all(void * p) {
     const reader * r = (const reader *) p;
-    char           buf[65536];
+    char           buf[PIPE_SIZE];
     DWORD          got = 0;
     while (ReadFile(r->pipe, buf, sizeof(buf), &got, NULL) && got > 0) {
         r->kept->add(buf, got);

@@ -112,7 +112,7 @@ void mcp_post(const httplib::Request & req, httplib::Response & res, const std::
                               for (const char * v : MODERN_VERSIONS) {
                                   yyjson_mut_arr_add_str(doc, list, v);
                               }
-                              yyjson_mut_obj_add_strncpy(doc, data, "requested", requested.c_str(), requested.size());
+                              json_put(doc, data, "requested", requested);
                           });
             return;
         }

@@ -1,6 +1,6 @@
 import type { Command } from '../engine/engine.js';
-import { ID_SHOWN, NEWLINE, titled } from '../lib/config.js';
-import { comment } from '../engine/text.js';
+import { NEWLINE, shown, titled } from '../lib/config.js';
+import { COME_PREFIX, comment } from '../engine/text.js';
 import { splitLines } from '../engine/parse.js';
 
 // whether a text reads as JSON
@@ -37,9 +37,9 @@ export default {
 		const { added, skipped } = await ctx.conversations.unpack(text);
 		if (!added.length && !skipped.length) throw new Error('the file holds no conversation');
 		const line = (id: string, title: string) =>
-			id.slice(0, ID_SHOWN) + titled(title, (v) => ctx.schema.quote(v));
+			shown(id) + titled(title, (v) => ctx.schema.quote(v));
 		return [
-			...added.map((c) => `+ ${line(c.id, c.title)}`),
+			...added.map((c) => `${COME_PREFIX}${line(c.id, c.title)}`),
 			...skipped.map((c) => comment(`${line(c.id, c.title)} is already here`))
 		].join(NEWLINE);
 	}

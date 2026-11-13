@@ -2,6 +2,7 @@
 // command on stdin, the merged output back with the exit code and the duration
 
 #include "lib/job.h"
+#include "lib/json.h"
 #include "lib/prompts.h"
 #include "lib/tools.h"
 #include "yyjson.h"
@@ -9,6 +10,9 @@
 #include <chrono>
 
 // a shell as its tool runs it
+// the texts every shell tool shares, by this name in prompts.json
+static const char * const NAME = "shells";
+
 struct shell {
     std::string command;
     std::string cwd;
@@ -26,8 +30,7 @@ static tool_outcome ended(tool_outcome r, const std::string & outcome, log_level
 static tool_outcome run(const shell & s, yyjson_val * args, const tool_tick & tick) {
     yyjson_val *     command = yyjson_obj_get(args, "command");
     const auto       t0      = std::chrono::steady_clock::now();
-    const job_result r       = job_run(s.command, s.cwd, std::string(yyjson_get_str(command), yyjson_get_len(command)),
-                                       s.timeout, s.output, tick);
+    const job_result r       = job_run(s.command, s.cwd, json_text(command), s.timeout, s.output, tick);
     const long long  ms =
         (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
@@ -39,7 +42,7 @@ static tool_outcome run(const shell & s, yyjson_val * args, const tool_tick & ti
         text += '\n';
     }
     if (r.cancelled) {
-        return ended({ false, text + "Cancelled" }, "cancelled", LOG_INFO);
+        return ended({ false, text + CANCELLED }, "cancelled", LOG_INFO);
     }
     if (r.timed_out) {
         const std::string after = std::to_string(s.timeout) + " s";
@@ -67,11 +70,11 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
         tool t;
         t.suffix      = name;
         t.description = prompts_description(
-            "shells", {
-                          { "shell",    name                                       },
-                          { "hostname", config.get("server hostname").value_or("") }
+            NAME, {
+                      { "shell",    name                                       },
+                      { "hostname", config.get("server hostname").value_or("") }
         });
-        t.input = prompts_input("shells");
+        t.input = prompts_input(NAME);
         t.run   = [s](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
             return run(s, args, tick);
         };

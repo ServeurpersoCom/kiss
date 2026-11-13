@@ -1,5 +1,12 @@
 import type { Command, Context, Held } from '../engine/engine.js';
-import { Incomplete, RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
+import {
+	Incomplete,
+	RUNNING_CONFIG,
+	STARTUP_CONFIG,
+	beyond,
+	comment,
+	hint
+} from '../engine/text.js';
 import { CONVERSATIONS, NAME_PATTERN, NEWLINE } from '../lib/config.js';
 import { choose, pick } from '../engine/near.js';
 import { unstore } from '../engine/schema.js';
@@ -98,6 +105,6 @@ export default {
 	},
 	complete(ctx, args) {
 		const names = configs(ctx);
-		return args.length === 0 ? names : args.length === 1 ? [...names, '<name>'] : [];
+		return args.length === 0 ? names : args.length === 1 ? [...names, hint('name')] : [];
 	}
 } satisfies Command<string[]>;

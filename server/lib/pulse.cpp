@@ -79,7 +79,7 @@ std::string pulse_json(const pulse & p) {
     yyjson_mut_doc_set_root(doc.get(), o);
     yyjson_mut_obj_add_int(doc.get(), o, "round", p.round);
     yyjson_mut_obj_add_strcpy(doc.get(), o, "phase", p.phase.c_str());
-    yyjson_mut_obj_add_strncpy(doc.get(), o, "name", p.name.data(), p.name.size());
+    json_put(doc.get(), o, "name", p.name);
     yyjson_mut_obj_add_int(doc.get(), o, "status", p.status);
     yyjson_mut_obj_add_int(doc.get(), o, "attempt", p.attempt);
     yyjson_mut_obj_add_int(doc.get(), o, "attempts", p.attempts);

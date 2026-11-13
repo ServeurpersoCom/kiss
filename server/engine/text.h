@@ -11,6 +11,9 @@ constexpr const char * COMMENT_PREFIX = "!";
 // what a secret reads where it would show
 constexpr const char * REMOVED        = "<removed>";
 constexpr const char * ERROR_PREFIX   = "% ";
+// what opens a line of a change: what goes, then what comes
+constexpr const char * GONE_PREFIX    = "- ";
+constexpr const char * COME_PREFIX    = "+ ";
 constexpr const char * PIPE           = "|";
 constexpr const char * RUNNING_CONFIG = "running-config";
 constexpr const char * STARTUP_CONFIG = "startup-config";
@@ -24,6 +27,11 @@ struct incomplete {};
 
 // a line of output that is not a command: a heading, a note, a warning
 std::string comment(const std::string & text);
+
+// a word that names what to type where a completion lists it, <name>, and
+// whether a word is one
+std::string hint(const std::string & what);
+bool        hinted(const std::string & word);
 
 std::string lower(std::string s);
 // a text as a line to the user opens: command -> Command

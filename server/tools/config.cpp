@@ -3,6 +3,7 @@
 
 #include "engine/schema.h"
 #include "engine/text.h"
+#include "lib/json.h"
 #include "lib/prompts.h"
 #include "lib/tools.h"
 #include "yyjson.h"
@@ -15,8 +16,7 @@
 // the batch; it runs again with what they answered
 tool_outcome tools_config(yyjson_val * args, const engine_typed & typed, const std::string & conversation) {
     yyjson_val *        lines = yyjson_obj_get(args, "lines");
-    const engine_result r =
-        engine_run(std::string(yyjson_get_str(lines), yyjson_get_len(lines)), ENGINE_MCP, typed, conversation);
+    const engine_result r     = engine_run(json_text(lines), ENGINE_MCP, typed, conversation);
     if (!r.asks.empty()) {
         words_t keys, told;
         for (const engine_ask & a : r.asks) {
@@ -56,12 +56,12 @@ static std::vector<tool> config_tool(const engine_reader & config) {
     }
     tool t;
     t.suffix      = TOOL_CONFIG;
-    t.description = prompts_description("config", {
-                                                      { "hostname", config.get("server hostname").value_or("") },
-                                                      { "platform", engine_platform() },
-                                                      { "modules", join(modules, "; ") }
+    t.description = prompts_description(TOOL_CONFIG, {
+                                                         { "hostname", config.get("server hostname").value_or("") },
+                                                         { "platform", engine_platform() },
+                                                         { "modules", join(modules, "; ") }
     });
-    t.input       = prompts_input("config");
+    t.input       = prompts_input(TOOL_CONFIG);
     t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick &) {
         return tools_config(args, typed, "");
     };

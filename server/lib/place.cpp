@@ -75,7 +75,7 @@ static std::string run(const place &                 p,
         return "Cannot start " + p.shell + ": " + r.error;
     }
     if (r.cancelled) {
-        return "Cancelled";
+        return CANCELLED;
     }
     if (r.timed_out) {
         return "Killed after " + std::to_string(p.timeout) + " s";
@@ -308,7 +308,7 @@ std::string place_walk(const place &                                    p,
         }
         for (const fs::recursive_directory_iterator end; !ec && it != end; it.increment(ec)) {
             if (!tick()) {
-                return "Cancelled";
+                return CANCELLED;
             }
             place_entry     e;
             std::error_code fe;
@@ -321,7 +321,7 @@ std::string place_walk(const place &                                    p,
                 e.size    = 0;
             }
             if (!each(e)) {
-                return "Cancelled";
+                return CANCELLED;
             }
         }
         return "";
@@ -350,7 +350,7 @@ std::string place_walk(const place &                                    p,
         e.regular = record[0] == 'f';
         e.size    = e.regular ? *count(record.substr(2, sp - 2)) : 0;
         if (!each(e)) {
-            return "Cancelled";
+            return CANCELLED;
         }
     }
     return "";

@@ -1,7 +1,9 @@
 import type { Outcome } from '../lib/types.js';
 import type { ConfigReader, Context, Held, Key, Known, Role, Scope, Value } from './engine.js';
 import {
+	COME_PREFIX,
 	ERROR_PREFIX,
+	GONE_PREFIX,
 	Incomplete,
 	NO,
 	NOTHING_APPLIED,
@@ -405,8 +407,8 @@ async function batch(
 	}
 	const diff = schema.diff(before, after);
 	if (conversation && titled && titled.title !== conversation.title) {
-		if (conversation.title) diff.push(`- title ${schema.quote(conversation.title)}`);
-		diff.push(`+ title ${schema.quote(titled.title)}`);
+		if (conversation.title) diff.push(`${GONE_PREFIX}title ${schema.quote(conversation.title)}`);
+		diff.push(`${COME_PREFIX}title ${schema.quote(titled.title)}`);
 		conversation.title = titled.title;
 	}
 	running.assign(draft);

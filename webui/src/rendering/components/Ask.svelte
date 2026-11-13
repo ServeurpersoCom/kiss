@@ -3,7 +3,7 @@
 	import type { Verdict } from '../../engine/engine.js';
 	import { always, answers } from '../../engine/engine.js';
 	import { app, askOf, choose, deliver } from '../../lib/state.svelte.js';
-	import { NEWLINE } from '../../lib/config.js';
+	import { KEY_ENTER, NEWLINE } from '../../lib/config.js';
 
 	const LABELS: Record<Verdict, string> = { once: 'Once', always: 'Always', refuse: 'Refuse' };
 	const KIB = 1024;
@@ -40,7 +40,7 @@
 	}
 
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') give(value);
+		if (e.key === KEY_ENTER) give(value);
 	}
 </script>
 

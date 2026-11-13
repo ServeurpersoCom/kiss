@@ -250,7 +250,7 @@ words_t schema_next(const engine_reader & config,
         if (def->named && words.size() == 2) {
             words_t names = all(module);
             if (value) {
-                names.push_back("<name>");
+                names.push_back(hint("name"));
             }
             return names;
         }
@@ -260,7 +260,7 @@ words_t schema_next(const engine_reader & config,
         if (def->kind == ENGINE_ENUM) {
             return def->values;
         }
-        static const char * const kinds[] = { "<string>", "<number>", "<enum>", "<secret>" };
+        static const char * const kinds[] = { "string", "number", "enum", "secret" };
         words_t                   next;
         const auto current = def->kind == ENGINE_SECRET ? std::nullopt : config.get(key, def->named ? words[2] : "");
         if (current && !current->empty()) {
@@ -273,7 +273,7 @@ words_t schema_next(const engine_reader & config,
                 }
             }
         }
-        next.push_back(kinds[def->kind]);
+        next.push_back(hint(kinds[def->kind]));
         return next;
     } catch (const std::runtime_error &) {
         return {};

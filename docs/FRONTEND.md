@@ -110,10 +110,11 @@ webui/src/tools/        one file per tool, registered by existing: config, the C
 webui/src/protocols/    one file per protocol an endpoint speaks: chat, messages, responses
 webui/src/lib/          the page side: agent, api, mcp, form, state, sync, conversation, db
 webui/src/rendering/    how the page shows what it holds: App.svelte, components/, thread,
-                        message, round, ask, dialog, composer, sidebar, markdown/, the remark
-                        and rehype stack and its incremental renderer, tokens.css, the tokens
-                        of the page, read as the keys of style, and modules/ and commands/ of
-                        the configuration that drive it: display, style, show css
+                        message, round, ask, dialog, composer, sidebar, fit.ts, a field as tall
+                        as its lines, markdown/, the remark and rehype stack and its incremental
+                        renderer, tokens.css, the tokens of the page, read as the keys of style,
+                        and modules/ and commands/ of the configuration that drive it: display,
+                        style, show css
 webui/tests/            the laws, under vitest and happy-dom
 ```
 

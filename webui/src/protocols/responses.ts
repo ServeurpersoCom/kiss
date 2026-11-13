@@ -1,6 +1,7 @@
 import type { Message, Protocol } from '../lib/types.js';
 import { dataUrl } from '../lib/remote.js';
 import { BEARER } from '../engine/keychain.js';
+import { PARAGRAPH } from '../lib/config.js';
 
 // the Responses API of OpenAI, stateless: the history goes whole as items
 // every round, nothing stored on the server; the reasoning streams as its
@@ -11,7 +12,6 @@ const NAME = 'responses';
 const CARRIED = ['temperature', 'top_p'] as const;
 const SUMMARY = 'auto';
 // the parts of a summary as they read one after the other
-const PARTS = '\n\n';
 
 type Item = Record<string, unknown>;
 
@@ -105,7 +105,7 @@ export default {
 			case 'response.reasoning_text.delta':
 				return { reasoning: e.delta };
 			case 'response.reasoning_summary_part.added':
-				return e.summary_index > 0 ? { reasoning: PARTS } : undefined;
+				return e.summary_index > 0 ? { reasoning: PARAGRAPH } : undefined;
 			case 'response.output_item.done':
 				if (item.type === 'reasoning') return { opaque: item };
 				if (item.type === 'message' && item.phase) {

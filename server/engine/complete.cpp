@@ -8,10 +8,6 @@
 #include <iterator>
 #include <set>
 
-static bool hint(const std::string & word) {
-    return word[0] == '<';
-}
-
 words_t complete(const words_t &       words,
                  const std::string &   partial,
                  const engine_reader & config,
@@ -36,11 +32,11 @@ words_t complete(const words_t &       words,
     }
     words_t out;
     for (const std::string & f : found) {
-        if (hint(f) ? partial.empty() : starts_with(lower(f), lower(partial))) {
+        if (hinted(f) ? partial.empty() : starts_with(lower(f), lower(partial))) {
             out.push_back(f);
         }
     }
-    std::stable_partition(out.begin(), out.end(), [](const std::string & s) { return !hint(s); });
+    std::stable_partition(out.begin(), out.end(), [](const std::string & s) { return !hinted(s); });
     return out;
 }
 
@@ -51,7 +47,8 @@ std::string partial_word(const std::string & text) {
 
 std::string extend(const std::string & text, const words_t & found) {
     words_t words;
-    std::copy_if(found.begin(), found.end(), std::back_inserter(words), [](const std::string & f) { return !hint(f); });
+    std::copy_if(found.begin(), found.end(), std::back_inserter(words),
+                 [](const std::string & f) { return !hinted(f); });
     if (words.empty()) {
         return text;
     }

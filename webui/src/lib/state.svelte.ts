@@ -50,6 +50,8 @@ export const pulseOf = (id: string): Pulse | undefined => pulses.get(id) ?? turn
 
 // what asks the user from the page itself, in no conversation: the key of a
 // server the page reaches, a command the page runs while attached
+// whether the model answers in the open conversation now
+export const answering = (): boolean => !!app.current && app.current.id in app.replies;
 const PAGE = '';
 
 // the question a conversation shows, the first it or the page asks, if any
@@ -272,7 +274,7 @@ export async function unlock(): Promise<void> {
 export async function edit(id: string, text: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
 	if (!app.current || entry?.role !== 'user' || entry.text === text) return;
-	if (app.current.id in app.replies) return;
+	if (answering()) return;
 	if (attached()) return void (await act('edit', { id: app.current.id, entry: id, text }));
 	await enter(app.current, entry.parent, text);
 }
@@ -283,7 +285,7 @@ export async function edit(id: string, text: string): Promise<void> {
 // follows none, its command dismissed at the root, writing nothing
 export async function retry(id: string): Promise<void> {
 	const entry = app.current?.entries.find((e) => e.id === id);
-	if (!app.current || !entry || app.current.id in app.replies) return;
+	if (!app.current || !entry || answering()) return;
 	if (attached()) return void (await act('retry', { id: app.current.id, entry: id }));
 	if (entry.role === 'user') await answer(app.current, id);
 	if (entry.role === 'assistant' && entry.parent) {
@@ -305,7 +307,7 @@ export async function dismiss(id: string): Promise<void> {
 
 // another version shows, as it was last written in
 export async function browse(id: string): Promise<void> {
-	if (!app.current || app.current.id in app.replies) return;
+	if (!app.current || answering()) return;
 	if (attached()) return void (await act('browse', { id: app.current.id, entry: id }));
 	app.current.leaf = latest(app.current, id);
 	await save(app.current);

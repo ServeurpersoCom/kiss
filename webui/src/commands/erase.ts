@@ -1,6 +1,14 @@
 import type { Command, Context } from '../engine/engine.js';
-import { Incomplete, RUNNING_CONFIG, STARTUP_CONFIG, beyond, comment } from '../engine/text.js';
-import { CONVERSATIONS, ID_SHOWN, NEWLINE, titled } from '../lib/config.js';
+import {
+	GONE_PREFIX,
+	Incomplete,
+	RUNNING_CONFIG,
+	STARTUP_CONFIG,
+	beyond,
+	comment,
+	hint
+} from '../engine/text.js';
+import { CONVERSATIONS, NEWLINE, shown, titled } from '../lib/config.js';
 import { configs, named, target } from './copy.js';
 
 // what erase names, a prefix being enough: every conversation but the pinned
@@ -62,10 +70,10 @@ export default {
 		if (!yes) throw new Error('the user erased nothing');
 		await library.remove(list.map((c) => c.id));
 		return list
-			.map((c) => `- ${c.id.slice(0, ID_SHOWN)}${titled(c.title, (v) => ctx.schema.quote(v))}`)
+			.map((c) => `${GONE_PREFIX}${shown(c.id)}${titled(c.title, (v) => ctx.schema.quote(v))}`)
 			.join(NEWLINE);
 	},
 	complete(ctx, args) {
-		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), '<id>'];
+		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), hint('id')];
 	}
 } satisfies Command<Plan>;

@@ -43,10 +43,10 @@ static void server_info(yyjson_mut_doc *    doc,
                         const std::string & name,
                         const std::string & version) {
     const std::string component = engine_component(name, version);
-    yyjson_mut_obj_add_strncpy(doc, info, "name", name.c_str(), name.size());
+    json_put(doc, info, "name", name);
     yyjson_mut_obj_add_str(doc, info, "title", ENGINE_SYSTEM);
-    yyjson_mut_obj_add_strncpy(doc, info, "version", version.c_str(), version.size());
-    yyjson_mut_obj_add_strncpy(doc, info, "description", component.c_str(), component.size());
+    json_put(doc, info, "version", version);
+    json_put(doc, info, "description", component);
 }
 
 // the tools and the server hostname of one same configuration
@@ -87,7 +87,7 @@ void method_initialize(httplib::Response & res, yyjson_val * id, yyjson_val * pa
         }
     }
     jsonrpc_result(res, id, false, [&](yyjson_mut_doc * doc, yyjson_mut_val * out) {
-        yyjson_mut_obj_add_strncpy(doc, out, "protocolVersion", chosen.c_str(), chosen.size());
+        json_put(doc, out, "protocolVersion", chosen);
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc, out, "capabilities");
         yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, caps, "tools"), "listChanged", false);
         yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, caps, "resources"), "listChanged", false);
@@ -103,8 +103,8 @@ void method_tools_list(httplib::Response & res, yyjson_val * id, bool modern) {
         for (const tool & t : tools) {
             const std::string name = tools_served(server, t);
             yyjson_mut_val *  item = yyjson_mut_arr_add_obj(doc, list);
-            yyjson_mut_obj_add_strncpy(doc, item, "name", name.c_str(), name.size());
-            yyjson_mut_obj_add_strncpy(doc, item, "description", t.description.c_str(), t.description.size());
+            json_put(doc, item, "name", name);
+            json_put(doc, item, "description", t.description);
             const json_doc schema = json_read(t.input);
             yyjson_mut_obj_add_val(doc, item, "inputSchema",
                                    yyjson_val_mut_copy(doc, yyjson_doc_get_root(schema.get())));
@@ -130,8 +130,8 @@ void method_resources_list(httplib::Response & res, yyjson_val * id, bool modern
         for (const auto & [name, keyed] : routes) {
             const std::string uri  = std::string(ROUTE_URI) + name;
             yyjson_mut_val *  item = yyjson_mut_arr_add_obj(doc, list);
-            yyjson_mut_obj_add_strncpy(doc, item, "uri", uri.c_str(), uri.size());
-            yyjson_mut_obj_add_strncpy(doc, item, "name", name.c_str(), name.size());
+            json_put(doc, item, "uri", uri);
+            json_put(doc, item, "name", name);
             yyjson_mut_obj_add_bool(doc, yyjson_mut_obj_add_obj(doc, item, "_meta"), ROUTE_KEYED_META, keyed);
         }
         if (modern) {
@@ -161,13 +161,13 @@ static std::string call_json(yyjson_val * id, bool modern, const tool_outcome & 
             const std::string text  = seal_text(r.text, keychain_known());
             yyjson_mut_val *  block = yyjson_mut_arr_add_obj(doc, content);
             yyjson_mut_obj_add_str(doc, block, "type", "text");
-            yyjson_mut_obj_add_strncpy(doc, block, "text", text.c_str(), text.size());
+            json_put(doc, block, "text", text);
         }
         if (!r.image.empty()) {
             yyjson_mut_val * block = yyjson_mut_arr_add_obj(doc, content);
             yyjson_mut_obj_add_str(doc, block, "type", "image");
-            yyjson_mut_obj_add_strncpy(doc, block, "data", r.image.c_str(), r.image.size());
-            yyjson_mut_obj_add_strncpy(doc, block, "mimeType", r.mime.c_str(), r.mime.size());
+            json_put(doc, block, "data", r.image);
+            json_put(doc, block, "mimeType", r.mime);
         }
         yyjson_mut_obj_add_bool(doc, out, "isError", !r.ok);
     });

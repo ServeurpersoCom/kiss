@@ -1,5 +1,5 @@
 import type { ConfigReader, Held, Key, KeyWords, Known, Module, Schema, Value } from './engine.js';
-import { Incomplete, REMOVED, comment } from './text.js';
+import { COME_PREFIX, GONE_PREFIX, Incomplete, NO, REMOVED, SET, comment, hint } from './text.js';
 import { NAME_PATTERN, NEWLINE, SPACE } from '../lib/config.js';
 import { choose, didYouMean, pick } from './near.js';
 
@@ -203,14 +203,14 @@ export class KeySchema implements Schema {
 			const def = this.find(key)!;
 			if (def.named && words.length === 2) {
 				if (def.names) return [...def.names(this.all)];
-				return value ? [...all(module), '<name>'] : all(module);
+				return value ? [...all(module), hint('name')] : all(module);
 			}
 			if (!value || words.length !== (def.named ? 3 : 2)) return [];
 			if (def.kind === 'enum') return [...(def.values ?? [])];
 			const current = def.kind === 'secret' ? undefined : config.get(key, words[2]);
 			return [
 				...new Set([...(current ? [this.quote(current)] : []), ...(def.of ? all(def.of) : [])]),
-				`<${def.property ?? def.kind}>`
+				hint(def.property ?? def.kind)
 			];
 		} catch {
 			return [];
@@ -238,8 +238,8 @@ export class KeySchema implements Schema {
 				lines.push(comment(`${k} changed`));
 				continue;
 			}
-			if (from[k] !== undefined) lines.push('- ' + this.line(k, from[k]));
-			if (to[k] !== undefined) lines.push('+ ' + this.line(k, to[k]));
+			if (from[k] !== undefined) lines.push(GONE_PREFIX + this.line(k, from[k]));
+			if (to[k] !== undefined) lines.push(COME_PREFIX + this.line(k, to[k]));
 		}
 		return lines;
 	}
@@ -250,7 +250,7 @@ export class KeySchema implements Schema {
 
 	// the line that sets a key, a secret with its value, or takes it back
 	set(stored: string, value: Held): string {
-		return value === null ? `no ${stored}` : `set ${stored} ${this.quote(value)}`;
+		return value === null ? `${NO} ${stored}` : `${SET} ${stored} ${this.quote(value)}`;
 	}
 
 	// the line that shows a key, a secret out of view

@@ -9,6 +9,14 @@ std::string comment(const std::string & text) {
     return std::string(COMMENT_PREFIX) + " " + text;
 }
 
+std::string hint(const std::string & what) {
+    return "<" + what + ">";
+}
+
+bool hinted(const std::string & word) {
+    return !word.empty() && word[0] == '<';
+}
+
 std::string lower(std::string s) {
     for (char & c : s) {
         if (c >= 'A' && c <= 'Z') {

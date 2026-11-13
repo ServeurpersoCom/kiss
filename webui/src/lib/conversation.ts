@@ -1,7 +1,7 @@
 import type { Conversation, Entry, Message, Round } from './types.js';
 import { secrets } from '../engine/keychain.js';
 import { seal } from '../engine/seal.js';
-import { NEWLINE, SPACE } from './config.js';
+import { NEWLINE, PARAGRAPH, SPACE } from './config.js';
 
 // conversations as a file: a marker naming what it holds, then the
 // conversations as the browser stores them, ids included
@@ -22,7 +22,7 @@ export function source(m: Message): string {
 				.filter((r) => r.kept === undefined)
 				.map((r) => r.text)
 				.filter((text) => text)
-				.join('\n\n');
+				.join(PARAGRAPH);
 		case 'cli':
 			return m.output;
 	}

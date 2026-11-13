@@ -16,15 +16,6 @@ static const char * const SUMMARY   = "auto";
 // the parts of a summary as they read one after the other
 static const char * const PARTS     = "\n\n";
 
-static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
-    yyjson_mut_obj_add_strncpy(d, o, key, v.data(), v.size());
-}
-
-static yyjson_mut_val * value_of(yyjson_mut_doc * d, const std::string & json) {
-    const json_doc v = json_read(json);
-    return v ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) : yyjson_mut_null(d);
-}
-
 // an item of the input
 static yyjson_mut_val * item(yyjson_mut_doc * d, yyjson_mut_val * list, const char * type) {
     yyjson_mut_val * i = yyjson_mut_arr_add_obj(d, list);
@@ -41,7 +32,7 @@ static void history(yyjson_mut_doc * d, yyjson_mut_val * list, const std::vector
         if (e.role == ROLE_USER) {
             yyjson_mut_val * m = yyjson_mut_arr_add_obj(d, list);
             yyjson_mut_obj_add_str(d, m, "role", "user");
-            add_text(d, m, "content", e.text);
+            json_put(d, m, "content", e.text);
         }
         if (e.role != ROLE_ASSISTANT) {
             continue;
@@ -65,43 +56,32 @@ static void history(yyjson_mut_doc * d, yyjson_mut_val * list, const std::vector
             if (!r.text.empty()) {
                 yyjson_mut_val * m = yyjson_mut_arr_add_obj(d, list);
                 yyjson_mut_obj_add_str(d, m, "role", "assistant");
-                add_text(d, m, "content", r.text);
+                json_put(d, m, "content", r.text);
                 if (!phase.empty()) {
-                    add_text(d, m, "phase", phase);
+                    json_put(d, m, "phase", phase);
                 }
             }
             for (const conversation_call & c : r.calls) {
                 yyjson_mut_val * call = item(d, list, "function_call");
-                add_text(d, call, "call_id", c.id);
-                add_text(d, call, "name", c.name);
-                add_text(d, call, "arguments", c.args);
+                json_put(d, call, "call_id", c.id);
+                json_put(d, call, "name", c.name);
+                json_put(d, call, "arguments", c.args);
             }
             for (const conversation_call & c : r.calls) {
                 yyjson_mut_val * out = item(d, list, "function_call_output");
-                add_text(d, out, "call_id", c.id);
+                json_put(d, out, "call_id", c.id);
                 if (c.images.empty()) {
-                    add_text(d, out, "output", c.result);
+                    json_put(d, out, "output", c.result);
                     continue;
                 }
                 yyjson_mut_val * parts = yyjson_mut_obj_add_arr(d, out, "output");
-                add_text(d, item(d, parts, "input_text"), "text", c.result);
+                json_put(d, item(d, parts, "input_text"), "text", c.result);
                 for (const conversation_image & image : c.images) {
-                    add_text(d, item(d, parts, "input_image"), "image_url",
-                             "data:" + image.mime + ";base64," + image.data);
+                    json_put(d, item(d, parts, "input_image"), "image_url", api_data_url(image));
                 }
             }
         }
     }
-}
-
-// the value of a parameter of the model, JSON, empty when it is not set
-static std::string parameter(const api_request & r, const char * name) {
-    for (const auto & p : r.parameters) {
-        if (p.first == name) {
-            return p.second;
-        }
-    }
-    return "";
 }
 
 static std::string body(const api_request & r) {
@@ -109,35 +89,35 @@ static std::string body(const api_request & r) {
     yyjson_mut_doc * d    = doc.get();
     yyjson_mut_val * root = yyjson_mut_obj(d);
     yyjson_mut_doc_set_root(d, root);
-    add_text(d, root, "model", r.model);
+    json_put(d, root, "model", r.model);
     if (!r.system.empty()) {
-        add_text(d, root, "instructions", r.system);
+        json_put(d, root, "instructions", r.system);
     }
     history(d, yyjson_mut_obj_add_arr(d, root, "input"), r.messages);
     if (!r.tools.empty()) {
         yyjson_mut_val * tools = yyjson_mut_obj_add_arr(d, root, "tools");
         for (const api_tool & t : r.tools) {
             yyjson_mut_val * tool = item(d, tools, "function");
-            add_text(d, tool, "name", t.name);
-            add_text(d, tool, "description", t.description);
-            yyjson_mut_obj_add_val(d, tool, "parameters", value_of(d, t.input));
+            json_put(d, tool, "name", t.name);
+            json_put(d, tool, "description", t.description);
+            yyjson_mut_obj_add_val(d, tool, "parameters", json_value(d, t.input));
             yyjson_mut_obj_add_false(d, tool, "strict");
         }
     }
     for (const char * k : CARRIED) {
-        const std::string v = parameter(r, k);
+        const std::string v = api_parameter(r, k);
         if (!v.empty()) {
-            yyjson_mut_obj_add_val(d, root, k, value_of(d, v));
+            yyjson_mut_obj_add_val(d, root, k, json_value(d, v));
         }
     }
-    const std::string max = parameter(r, "max_tokens");
+    const std::string max = api_parameter(r, "max_tokens");
     if (!max.empty()) {
-        yyjson_mut_obj_add_val(d, root, "max_output_tokens", value_of(d, max));
+        yyjson_mut_obj_add_val(d, root, "max_output_tokens", json_value(d, max));
     }
     yyjson_mut_val *  reasoning = yyjson_mut_obj_add_obj(d, root, "reasoning");
-    const std::string effort    = parameter(r, "reasoning_effort");
+    const std::string effort    = api_parameter(r, "reasoning_effort");
     if (!effort.empty()) {
-        yyjson_mut_obj_add_val(d, reasoning, "effort", value_of(d, effort));
+        yyjson_mut_obj_add_val(d, reasoning, "effort", json_value(d, effort));
     }
     yyjson_mut_obj_add_str(d, reasoning, "summary", SUMMARY);
     yyjson_mut_obj_add_false(d, root, "store");
@@ -191,8 +171,7 @@ static std::optional<api_delta> read_event(const std::string & data) {
     if (type == "response.output_item.done") {
         const std::string phase = json_text(yyjson_obj_get(it, "phase"));
         if (kind == "reasoning") {
-            const std::string text = json_write(it);
-            out.opaque             = text;
+            out.opaque = json_write(it);
             return out;
         }
         if (kind == "message" && !phase.empty()) {
@@ -200,9 +179,8 @@ static std::optional<api_delta> read_event(const std::string & data) {
             yyjson_mut_val * o    = yyjson_mut_obj(made.get());
             yyjson_mut_doc_set_root(made.get(), o);
             yyjson_mut_obj_add_str(made.get(), o, "type", "message");
-            add_text(made.get(), o, "phase", phase);
-            const std::string text = json_write(made);
-            out.opaque             = text;
+            json_put(made.get(), o, "phase", phase);
+            out.opaque = json_write(made);
             return out;
         }
         return std::nullopt;

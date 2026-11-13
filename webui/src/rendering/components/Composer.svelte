@@ -1,12 +1,14 @@
 <script lang="ts">
-	import { app, askOf, send, stop } from '../../lib/state.svelte.js';
+	import { answering, app, askOf, send, stop } from '../../lib/state.svelte.js';
 	import { NEW_DRAFT, draftOf, keep } from '../../lib/drafts.js';
 	import { known, suggest } from '../../engine/run.js';
 	import type { Known } from '../../engine/engine.js';
 	import { extend } from '../../engine/complete.js';
 	import Icon from './Icon.svelte';
-	import { NEWLINE, SLASH, SPACE } from '../../lib/config.js';
+	import { KEY_ENTER, KEY_ESCAPE, KEY_TAB, NEWLINE, SLASH, SPACE } from '../../lib/config.js';
 	import { PAGE_COMMANDS, act, attached } from '../../lib/sync.js';
+	import { hinted } from '../../engine/text.js';
+	import { fit } from '../fit.js';
 
 	// a key typed elsewhere than in a field reaches the composer, unless a modal
 	// stands over the page; a touch screen opens no keyboard by itself
@@ -73,13 +75,12 @@
 
 	// the field as tall as its lines, from the first paint on
 	function resize() {
-		field.style.height = 'auto';
-		field.style.height = field.scrollHeight + 'px';
+		fit(field);
 	}
 	$effect(resize);
 
 	// whether the model answers in the open conversation now
-	const busy = $derived(!!app.current && app.current.id in app.replies);
+	const busy = $derived(answering());
 
 	// a slash command runs even while the model answers, a message waits
 	function submit() {
@@ -102,7 +103,7 @@
 	// and Option types characters on macOS
 	function onwindowkeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || e.isComposing) return;
-		if (e.key === 'Escape') return halt();
+		if (e.key === KEY_ESCAPE) return halt();
 		if (e.key.length !== 1 || e.key === SPACE || e.metaKey || (e.ctrlKey && !e.altKey)) return;
 		if ((e.target as Element).closest?.(EDITABLE) || document.querySelector(MODAL)) return;
 		field.focus();
@@ -111,12 +112,12 @@
 	// on a CLI line Tab completes, and keeps the keyboard in the field when
 	// nothing is left to complete; elsewhere it moves the focus as usual
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Tab' && !e.shiftKey && text.startsWith(SLASH)) {
+		if (e.key === KEY_TAB && !e.shiftKey && text.startsWith(SLASH)) {
 			e.preventDefault();
 			if (hints.length) take(hints);
 			return;
 		}
-		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+		if (e.key === KEY_ENTER && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			submit();
 		}
@@ -128,7 +129,7 @@
 {#if hints.length}
 	<div class="hints">
 		{#each hints as hint (hint)}
-			<button type="button" class:placeholder={hint.startsWith('<')} onclick={() => take([hint])}>
+			<button type="button" class:placeholder={hinted(hint)} onclick={() => take([hint])}>
 				{hint}
 			</button>
 		{/each}

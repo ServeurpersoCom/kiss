@@ -32,10 +32,6 @@ static bool sees(const std::string & info) {
     return false;
 }
 
-static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
-    yyjson_mut_obj_add_strncpy(d, o, key, v.data(), v.size());
-}
-
 static yyjson_mut_val * message(yyjson_mut_doc * d, yyjson_mut_val * list, const char * role) {
     yyjson_mut_val * m = yyjson_mut_arr_add_obj(d, list);
     yyjson_mut_obj_add_str(d, m, "role", role);
@@ -51,33 +47,33 @@ static void history(yyjson_mut_doc *                        d,
                     bool                                    images) {
     for (const conversation_entry & e : messages) {
         if (e.role == ROLE_USER) {
-            add_text(d, message(d, list, "user"), "content", e.text);
+            json_put(d, message(d, list, "user"), "content", e.text);
         }
         if (e.role != ROLE_ASSISTANT) {
             continue;
         }
         for (const conversation_round & r : e.rounds) {
             yyjson_mut_val * a = message(d, list, "assistant");
-            add_text(d, a, "content", r.text);
+            json_put(d, a, "content", r.text);
             if (!r.reasoning.empty()) {
-                add_text(d, a, "reasoning_content", r.reasoning);
+                json_put(d, a, "reasoning_content", r.reasoning);
             }
             if (!r.calls.empty()) {
                 yyjson_mut_val * calls = yyjson_mut_obj_add_arr(d, a, "tool_calls");
                 for (const conversation_call & c : r.calls) {
                     yyjson_mut_val * call = yyjson_mut_arr_add_obj(d, calls);
-                    add_text(d, call, "id", c.id);
+                    json_put(d, call, "id", c.id);
                     yyjson_mut_obj_add_str(d, call, "type", "function");
                     yyjson_mut_val * f = yyjson_mut_obj_add_obj(d, call, "function");
-                    add_text(d, f, "name", c.name);
-                    add_text(d, f, "arguments", c.args);
+                    json_put(d, f, "name", c.name);
+                    json_put(d, f, "arguments", c.args);
                 }
             }
             std::vector<const conversation_image *> seen;
             for (const conversation_call & c : r.calls) {
                 yyjson_mut_val * t = message(d, list, "tool");
-                add_text(d, t, "tool_call_id", c.id);
-                add_text(d, t, "content", c.result);
+                json_put(d, t, "tool_call_id", c.id);
+                json_put(d, t, "content", c.result);
                 for (const conversation_image & i : c.images) {
                     seen.push_back(&i);
                 }
@@ -89,8 +85,7 @@ static void history(yyjson_mut_doc *                        d,
             for (const conversation_image * i : seen) {
                 yyjson_mut_val * part = yyjson_mut_arr_add_obj(d, content);
                 yyjson_mut_obj_add_str(d, part, "type", "image_url");
-                add_text(d, yyjson_mut_obj_add_obj(d, part, "image_url"), "url",
-                         "data:" + i->mime + ";base64," + i->data);
+                json_put(d, yyjson_mut_obj_add_obj(d, part, "image_url"), "url", api_data_url(*i));
             }
         }
     }
@@ -103,13 +98,12 @@ static std::string body(const api_request & r) {
     yyjson_mut_val * root = yyjson_mut_obj(d);
     yyjson_mut_doc_set_root(d, root);
     for (const auto & p : r.parameters) {
-        const json_doc v = json_read(p.second);
-        yyjson_mut_obj_add_val(d, root, p.first.c_str(), yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())));
+        yyjson_mut_obj_add_val(d, root, p.first.c_str(), json_value(d, p.second));
     }
-    add_text(d, root, "model", r.model);
+    json_put(d, root, "model", r.model);
     yyjson_mut_val * messages = yyjson_mut_obj_add_arr(d, root, "messages");
     if (!r.system.empty()) {
-        add_text(d, message(d, messages, "system"), "content", r.system);
+        json_put(d, message(d, messages, "system"), "content", r.system);
     }
     history(d, messages, r.messages, sees(r.info));
     yyjson_mut_val * tools = yyjson_mut_obj_add_arr(d, root, "tools");
@@ -117,10 +111,9 @@ static std::string body(const api_request & r) {
         yyjson_mut_val * tool = yyjson_mut_arr_add_obj(d, tools);
         yyjson_mut_obj_add_str(d, tool, "type", "function");
         yyjson_mut_val * f = yyjson_mut_obj_add_obj(d, tool, "function");
-        add_text(d, f, "name", t.name);
-        add_text(d, f, "description", t.description);
-        const json_doc input = json_read(t.input);
-        yyjson_mut_obj_add_val(d, f, "parameters", yyjson_val_mut_copy(d, yyjson_doc_get_root(input.get())));
+        json_put(d, f, "name", t.name);
+        json_put(d, f, "description", t.description);
+        yyjson_mut_obj_add_val(d, f, "parameters", json_value(d, t.input));
     }
     yyjson_mut_obj_add_true(d, root, "stream");
     yyjson_mut_obj_add_true(d, yyjson_mut_obj_add_obj(d, root, "stream_options"), "include_usage");

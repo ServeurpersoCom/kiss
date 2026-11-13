@@ -250,8 +250,7 @@ static words_t suggest(const std::string & typed) {
 // the words of the candidates, no <hint>
 static words_t words(const words_t & found) {
     words_t out;
-    std::copy_if(found.begin(), found.end(), std::back_inserter(out),
-                 [](const std::string & f) { return f[0] != '<'; });
+    std::copy_if(found.begin(), found.end(), std::back_inserter(out), [](const std::string & f) { return !hinted(f); });
     return out;
 }
 

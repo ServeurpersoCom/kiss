@@ -5,12 +5,12 @@ import {
 	CONVERSATION,
 	CONVERSATIONS,
 	FILE_EXTENSION,
-	ID_SHOWN,
 	NEWLINE,
 	fileName,
-	localTime
+	localTime,
+	shown
 } from '../lib/config.js';
-import { beyond, comment } from '../engine/text.js';
+import { beyond, comment, hint } from '../engine/text.js';
 import { configs, listed, named, target } from './copy.js';
 
 // what export names: the conversation the batch was sent in, or a word, a
@@ -46,7 +46,7 @@ function packed(ctx: Context, plan: Plan, minute: string): File {
 	const title =
 		plan === CONVERSATIONS
 			? `${CONVERSATIONS} ${minute}`
-			: `${CONVERSATION} ${list[0].title || list[0].id.slice(0, ID_SHOWN)}`;
+			: `${CONVERSATION} ${list[0].title || shown(list[0].id)}`;
 	const name = fileName(title, FILE_EXTENSION);
 	const n = list.length;
 	const told = `exported ${n} ${n === 1 ? 'conversation' : 'conversations'} to ${name}`;
@@ -81,6 +81,6 @@ export default {
 		return comment(file.told);
 	},
 	complete(ctx, args) {
-		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), '<id>'];
+		return args.length ? [] : [CONVERSATIONS, ...configs(ctx), hint('id')];
 	}
 } satisfies Command<Plan>;

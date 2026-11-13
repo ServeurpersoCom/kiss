@@ -23,16 +23,6 @@ static const char * const THINKING =
 // the field of the list that holds the most tokens a model writes
 static const char * const MAX_TOKENS = "max_tokens";
 
-static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
-    yyjson_mut_obj_add_strncpy(d, o, key, v.data(), v.size());
-}
-
-// a JSON text as a value of the document, null when it reads as none
-static yyjson_mut_val * value_of(yyjson_mut_doc * d, const std::string & json) {
-    const json_doc v = json_read(json);
-    return v ? yyjson_val_mut_copy(d, yyjson_doc_get_root(v.get())) : yyjson_mut_null(d);
-}
-
 // the arguments of a call as an object, none when they read as anything else
 static yyjson_mut_val * input(yyjson_mut_doc * d, const std::string & args) {
     const json_doc v = json_read(args);
@@ -78,7 +68,7 @@ static void history(yyjson_mut_doc *                        d,
                     bool                                    images) {
     for (const conversation_entry & e : messages) {
         if (e.role == ROLE_USER) {
-            add_text(d, block(d, turn(d, list, "user"), "text"), "text", e.text);
+            json_put(d, block(d, turn(d, list, "user"), "text"), "text", e.text);
         }
         if (e.role != ROLE_ASSISTANT) {
             continue;
@@ -96,12 +86,12 @@ static void history(yyjson_mut_doc *                        d,
                     }
                 }
                 if (!r.text.empty()) {
-                    add_text(d, block(d, content, "text"), "text", r.text);
+                    json_put(d, block(d, content, "text"), "text", r.text);
                 }
                 for (const conversation_call & c : r.calls) {
                     yyjson_mut_val * b = block(d, content, "tool_use");
-                    add_text(d, b, "id", c.id);
-                    add_text(d, b, "name", c.name);
+                    json_put(d, b, "id", c.id);
+                    json_put(d, b, "name", c.name);
                     yyjson_mut_obj_add_val(d, b, "input", input(d, c.args));
                 }
             }
@@ -111,18 +101,18 @@ static void history(yyjson_mut_doc *                        d,
             yyjson_mut_val * results = turn(d, list, "user");
             for (const conversation_call & c : r.calls) {
                 yyjson_mut_val * b = block(d, results, "tool_result");
-                add_text(d, b, "tool_use_id", c.id);
+                json_put(d, b, "tool_use_id", c.id);
                 if (images && !c.images.empty()) {
                     yyjson_mut_val * parts = yyjson_mut_obj_add_arr(d, b, "content");
-                    add_text(d, block(d, parts, "text"), "text", c.result);
+                    json_put(d, block(d, parts, "text"), "text", c.result);
                     for (const conversation_image & i : c.images) {
                         yyjson_mut_val * source = yyjson_mut_obj_add_obj(d, block(d, parts, "image"), "source");
                         yyjson_mut_obj_add_str(d, source, "type", "base64");
-                        add_text(d, source, "media_type", i.mime);
-                        add_text(d, source, "data", i.data);
+                        json_put(d, source, "media_type", i.mime);
+                        json_put(d, source, "data", i.data);
                     }
                 } else {
-                    add_text(d, b, "content", c.result);
+                    json_put(d, b, "content", c.result);
                 }
                 if (c.ok == false) {
                     yyjson_mut_obj_add_true(d, b, "is_error");
@@ -132,24 +122,13 @@ static void history(yyjson_mut_doc *                        d,
     }
 }
 
-// the value of a parameter of the model, JSON, empty when it is not set
-static std::string parameter(const api_request & r, const char * name) {
-    for (const auto & p : r.parameters) {
-        if (p.first == name) {
-            return p.second;
-        }
-    }
-    return "";
-}
-
 static std::string body(const api_request & r) {
-    std::string max = parameter(r, "max_tokens");
+    std::string max = api_parameter(r, MAX_TOKENS);
     if (max.empty()) {
         const json_doc info   = json_read(r.info);
         yyjson_val *   listed = info ? yyjson_obj_get(yyjson_doc_get_root(info.get()), MAX_TOKENS) : nullptr;
         if (listed && !yyjson_is_null(listed)) {
-            const std::string text = json_write(listed);
-            max                    = text;
+            max = json_write(listed);
         }
     }
     if (max.empty()) {
@@ -160,24 +139,24 @@ static std::string body(const api_request & r) {
     yyjson_mut_doc * d    = doc.get();
     yyjson_mut_val * root = yyjson_mut_obj(d);
     yyjson_mut_doc_set_root(d, root);
-    add_text(d, root, "model", r.model);
-    yyjson_mut_obj_add_val(d, root, "max_tokens", value_of(d, max));
+    json_put(d, root, "model", r.model);
+    yyjson_mut_obj_add_val(d, root, "max_tokens", json_value(d, max));
     for (const char * k : CARRIED) {
-        const std::string v = parameter(r, k);
+        const std::string v = api_parameter(r, k);
         if (!v.empty()) {
-            yyjson_mut_obj_add_val(d, root, k, value_of(d, v));
+            yyjson_mut_obj_add_val(d, root, k, json_value(d, v));
         }
     }
     if (supported(r.info, "/capabilities/thinking/types/adaptive/supported")) {
-        yyjson_mut_obj_add_val(d, root, "thinking", value_of(d, THINKING));
+        yyjson_mut_obj_add_val(d, root, "thinking", json_value(d, THINKING));
     }
-    const std::string effort = parameter(r, "reasoning_effort");
+    const std::string effort = api_parameter(r, "reasoning_effort");
     if (!effort.empty()) {
-        yyjson_mut_obj_add_val(d, yyjson_mut_obj_add_obj(d, root, "output_config"), "effort", value_of(d, effort));
+        yyjson_mut_obj_add_val(d, yyjson_mut_obj_add_obj(d, root, "output_config"), "effort", json_value(d, effort));
     }
     yyjson_mut_obj_add_str(d, yyjson_mut_obj_add_obj(d, root, "cache_control"), "type", "ephemeral");
     if (!r.system.empty()) {
-        add_text(d, root, "system", r.system);
+        json_put(d, root, "system", r.system);
     }
     history(d, yyjson_mut_obj_add_arr(d, root, "messages"), r.messages,
             supported(r.info, "/capabilities/image_input/supported"));
@@ -185,9 +164,9 @@ static std::string body(const api_request & r) {
         yyjson_mut_val * tools = yyjson_mut_obj_add_arr(d, root, "tools");
         for (const api_tool & t : r.tools) {
             yyjson_mut_val * tool = yyjson_mut_arr_add_obj(d, tools);
-            add_text(d, tool, "name", t.name);
-            add_text(d, tool, "description", t.description);
-            yyjson_mut_obj_add_val(d, tool, "input_schema", value_of(d, t.input));
+            json_put(d, tool, "name", t.name);
+            json_put(d, tool, "description", t.description);
+            yyjson_mut_obj_add_val(d, tool, "input_schema", json_value(d, t.input));
             yyjson_mut_obj_add_true(d, tool, "eager_input_streaming");
         }
     }
@@ -292,10 +271,9 @@ static std::function<std::optional<api_delta>(const std::string &)> reader() {
             yyjson_mut_val * o    = yyjson_mut_obj(made.get());
             yyjson_mut_doc_set_root(made.get(), o);
             yyjson_mut_obj_add_str(made.get(), o, "type", "thinking");
-            add_text(made.get(), o, "thinking", block->second.thinking);
-            add_text(made.get(), o, "signature", block->second.signature);
-            const std::string text = json_write(made);
-            out.opaque             = text;
+            json_put(made.get(), o, "thinking", block->second.thinking);
+            json_put(made.get(), o, "signature", block->second.signature);
+            out.opaque = json_write(made);
             return out;
         }
         if (type == "message_delta") {

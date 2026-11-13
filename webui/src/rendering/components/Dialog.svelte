@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { KEY_ENTER, KEY_ESCAPE } from '../../lib/config.js';
+
 	// a question the user confirms or cancels over the page: Enter or OK
 	// confirms, Escape, Cancel or a click outside the card cancels
 	let {
@@ -27,9 +29,9 @@
 			if (!card?.contains(e.target as Node)) cancel();
 		};
 		const onkeydown = (e: KeyboardEvent) => {
-			if (e.key !== 'Escape' && e.key !== 'Enter') return;
+			if (e.key !== KEY_ESCAPE && e.key !== KEY_ENTER) return;
 			e.preventDefault();
-			if (e.key === 'Escape') cancel();
+			if (e.key === KEY_ESCAPE) cancel();
 			else confirm();
 		};
 		document.addEventListener('mousedown', onmousedown);

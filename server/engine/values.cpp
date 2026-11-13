@@ -96,10 +96,10 @@ words_t diff(const layer & from, const layer & to) {
             continue;
         }
         if (a) {
-            lines.push_back("- " + show_line(s, *a));
+            lines.push_back(GONE_PREFIX + show_line(s, *a));
         }
         if (b) {
-            lines.push_back("+ " + show_line(s, *b));
+            lines.push_back(COME_PREFIX + show_line(s, *b));
         }
     }
     return lines;

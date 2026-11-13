@@ -46,15 +46,16 @@ std::string file_bytes(const fs::path & path, size_t limit, std::string & text) 
     return failed ? "Cannot read the file" : "";
 }
 
+bool file_binary(const std::string & text) {
+    return memchr(text.data(), '\0', std::min(text.size(), FILE_CHUNK)) != nullptr;
+}
+
 std::string file_load(const fs::path & path, size_t limit, std::string & text) {
     const std::string why = file_bytes(path, limit, text);
     if (!why.empty()) {
         return why;
     }
-    if (memchr(text.data(), '\0', std::min(text.size(), FILE_CHUNK))) {
-        return "Binary file";
-    }
-    return "";
+    return file_binary(text) ? FILE_BINARY : "";
 }
 
 std::string file_write(const fs::path & path, const std::string & bytes) {

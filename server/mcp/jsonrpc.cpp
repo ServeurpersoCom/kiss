@@ -31,7 +31,7 @@ void jsonrpc_error(httplib::Response &   res,
     yyjson_mut_val * root = response(doc, id);
     yyjson_mut_val * err  = yyjson_mut_obj_add_obj(doc, root, "error");
     yyjson_mut_obj_add_int(doc, err, "code", code);
-    yyjson_mut_obj_add_strncpy(doc, err, "message", message.c_str(), message.size());
+    json_put(doc, err, "message", message);
     if (data) {
         data(doc, yyjson_mut_obj_add_obj(doc, err, "data"));
     }

@@ -3,11 +3,12 @@
 	import Round from './Round.svelte';
 	import Status from './Status.svelte';
 	import Icon from './Icon.svelte';
-	import { CLI, COPIED_MS, SLASH, ago, stamp } from '../../lib/config.js';
+	import { CLI, COPIED_MS, KEY_ENTER, KEY_ESCAPE, SLASH, ago, stamp } from '../../lib/config.js';
 	import { clock } from '../clock.svelte.js';
 	import { source } from '../../lib/conversation.js';
-	import { app, browse, dismiss, edit, pulseOf, retry } from '../../lib/state.svelte.js';
+	import { answering, app, browse, dismiss, edit, pulseOf, retry } from '../../lib/state.svelte.js';
 	import { summary } from '../../lib/pulse.js';
+	import { fit } from '../fit.js';
 
 	// versions: the entries beside this one, itself among them, oldest first;
 	// live: the turn the model writes now; last: the message the thread ends on
@@ -20,7 +21,7 @@
 
 	const at = $derived(versions.findIndex((v) => v.id === message.id));
 	// whether the model answers in the open conversation now
-	const busy = $derived(!!app.current && app.current.id in app.replies);
+	const busy = $derived(answering());
 	// the clock of the turn written now, hidden while a question of it stands,
 	// as the time the user takes is none of the system
 	const pulse = $derived(live && app.current ? pulseOf(app.current.id) : undefined);
@@ -43,9 +44,7 @@
 
 	// the field as tall as its lines
 	function resize() {
-		if (!field) return;
-		field.style.height = 'auto';
-		field.style.height = field.scrollHeight + 'px';
+		if (field) fit(field);
 	}
 
 	$effect(() => {
@@ -68,10 +67,10 @@
 
 	// Escape cancels the edit and goes no further
 	function onkeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
+		if (e.key === KEY_ESCAPE) {
 			e.preventDefault();
 			cancel();
-		} else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+		} else if (e.key === KEY_ENTER && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			save();
 		}

@@ -74,14 +74,14 @@ void tools_form(yyjson_mut_doc * doc, yyjson_mut_val * input, const tool_outcome
     yyjson_mut_obj_add_str(doc, input, "method", MCP_ELICITATION);
     yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc, input, "params");
     yyjson_mut_obj_add_str(doc, params, "mode", MCP_FORM_MODE);
-    yyjson_mut_obj_add_strncpy(doc, params, "message", asked.text.c_str(), asked.text.size());
+    json_put(doc, params, "message", asked.text);
     yyjson_mut_val * schema = yyjson_mut_obj_add_obj(doc, params, "requestedSchema");
     yyjson_mut_obj_add_str(doc, schema, "type", "object");
     yyjson_mut_val * properties = yyjson_mut_obj_add_obj(doc, schema, "properties");
     yyjson_mut_val * required   = yyjson_mut_obj_add_arr(doc, schema, "required");
     for (const engine_ask & a : asked.asks) {
         yyjson_mut_val * field = yyjson_mut_obj_add_obj(doc, properties, a.key.c_str());
-        yyjson_mut_obj_add_str(doc, field, "type", a.yes ? "boolean" : "string");
+        yyjson_mut_obj_add_str(doc, field, "type", a.yes ? MCP_YES_FIELD : MCP_TEXT_FIELD);
         yyjson_mut_arr_add_strcpy(doc, required, a.key.c_str());
     }
 }

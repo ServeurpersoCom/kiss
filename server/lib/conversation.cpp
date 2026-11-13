@@ -372,7 +372,7 @@ static yyjson_mut_val * number_val(yyjson_mut_doc * d, double v) {
 }
 
 static void add_text(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::string & v) {
-    yyjson_mut_obj_add_strncpy(d, o, key, v.data(), v.size());
+    json_put(d, o, key, v);
 }
 
 static void add_link(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, const std::optional<std::string> & v) {

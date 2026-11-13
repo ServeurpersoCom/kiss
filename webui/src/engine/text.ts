@@ -1,4 +1,12 @@
 import { SPACE } from '../lib/config.js';
+// what opens a line of a change: what goes, then what comes
+export const GONE_PREFIX = '- ';
+export const COME_PREFIX = '+ ';
+// a word that names what to type where a completion lists it, <name>, and
+// whether a word is one
+const HINT_OPEN = '<';
+export const hint = (what: string): string => `${HINT_OPEN}${what}>`;
+export const hinted = (word: string): boolean => word.startsWith(HINT_OPEN);
 // the words of the engine: the constants of the grammar, the notes a line
 // prints and the errors it raises
 
