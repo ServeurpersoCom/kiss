@@ -256,6 +256,7 @@ static session opened(const remote & r, api_stop & stop) {
                                 text_of(yyjson_obj_get(t, "name")),
                                 text_of(yyjson_obj_get(t, "description")),
                                 json_of(yyjson_obj_get(t, "inputSchema")),
+                                {},
                                 {} });
         }
         yyjson_val * next = yyjson_obj_get(result, "nextCursor");
