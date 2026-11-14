@@ -8,8 +8,8 @@
 #ifndef CPPHTTPLIB_HTTPLIB_H
 #define CPPHTTPLIB_HTTPLIB_H
 
-#define CPPHTTPLIB_VERSION "0.64.0"
-#define CPPHTTPLIB_VERSION_NUM "0x004000"
+#define CPPHTTPLIB_VERSION "0.66.0"
+#define CPPHTTPLIB_VERSION_NUM "0x004200"
 
 #ifdef _WIN32
 #if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0A00
@@ -1029,18 +1029,27 @@ inline std::string resolve_relative_location(const std::string &location,
   // A ':' in the first segment means the value has a scheme.
   if (location.find(':') < location.find_first_of("/?#")) { return location; }
 
-  if (location[0] == '#') { return base.substr(0, base.find('#')) + location; }
+  // A path starting with "//" would be re-parsed as an authority. Prefix "/."
+  // (as the URL Standard does); remove_dot_segments strips it later.
+  auto on_this_host = [](std::string path) -> std::string {
+    if (path.compare(0, 2, "//") == 0) { path.insert(0, "/."); }
+    return path;
+  };
+
+  if (location[0] == '#') {
+    return on_this_host(base.substr(0, base.find('#')) + location);
+  }
 
   auto base_path = base.substr(0, base.find_first_of("?#"));
-  if (location[0] == '?') { return base_path + location; }
+  if (location[0] == '?') { return on_this_host(base_path + location); }
 
   if (base_path.empty() || base_path[0] != '/') { base_path = "/"; }
   auto merged = base_path.substr(0, base_path.rfind('/') + 1) + location;
 
   // Remove "." and ".." segments from the merged path.
   auto path_end = (std::min)(merged.find_first_of("?#"), merged.size());
-  return remove_dot_segments(merged.substr(0, path_end)) +
-         merged.substr(path_end);
+  return on_this_host(remove_dot_segments(merged.substr(0, path_end)) +
+                      merged.substr(path_end));
 }
 
 } // namespace detail
@@ -1335,7 +1344,7 @@ public:
   size_type erase(const std::string &key) {
     auto before = entries_.size();
     entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
-                                  [&](const value_type &entry) {
+                                  [key](const value_type &entry) {
                                     return keys_equal(entry.first, key);
                                   }),
                    entries_.end());
@@ -4558,8 +4567,6 @@ public:
   void stop();
 
 private:
-  bool parse_sse_line(const std::string &line, SSEMessage &msg, int &retry_ms,
-                      bool &has_data, bool &has_id);
   void run_event_loop();
   void dispatch_event(const SSEMessage &msg);
   bool should_reconnect(int count) const;
@@ -4593,6 +4600,40 @@ private:
 };
 
 } // namespace sse
+
+namespace detail {
+
+// Interprets an event stream fed in chunks of any size
+class SSEParser {
+public:
+  using EventHandler = std::function<void(const sse::SSEMessage &msg)>;
+  using IdHandler = std::function<void(const std::string &id)>;
+  using RetryHandler = std::function<void(int retry_ms)>;
+
+  SSEParser(EventHandler on_event, IdHandler on_id, RetryHandler on_retry,
+            size_t max_event_length = CPPHTTPLIB_SSE_MAX_EVENT_LENGTH);
+
+  // Returns false once the line and the event still waiting for their end
+  // exceed max_event_length. 0 means no limit.
+  bool parse(const char *buf, size_t n);
+
+private:
+  void parse_line(const std::string &line);
+
+  EventHandler on_event_;
+  IdHandler on_id_;
+  RetryHandler on_retry_;
+  size_t max_event_length_;
+
+  std::string buffer_;
+  sse::SSEMessage msg_;
+  bool has_data_ = false;
+  bool has_id_ = false;
+  bool first_line_ = true;
+  bool after_cr_ = false;
+};
+
+} // namespace detail
 
 namespace ws {
 
