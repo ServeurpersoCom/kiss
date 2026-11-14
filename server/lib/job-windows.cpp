@@ -26,10 +26,13 @@ static const DWORD PIPE_SIZE = 65536;
 static const UINT KILLED = 1;
 
 // the output of the command, read by a thread of its own until the pipe ends,
-// kept under guard while the job gives its lines
+// kept under guard, with the lines it completes for the job to give when the
+// job gives them
 struct reader {
     HANDLE          pipe;
     output_buffer * kept;
+    output_lines *  live;
+    std::string *   ready;
     std::mutex *    guard;
 };
 
@@ -40,6 +43,9 @@ static DWORD WINAPI read_all(void * p) {
     while (ReadFile(r->pipe, buf, sizeof(buf), &got, NULL) && got > 0) {
         std::lock_guard<std::mutex> lock(*r->guard);
         r->kept->add(buf, got);
+        if (r->live) {
+            *r->ready += r->live->add(buf, got);
+        }
     }
     return 0;
 }
@@ -118,7 +124,8 @@ job_result job_run(const std::string &           line,
                    int                           timeout_s,
                    size_t                        budget,
                    const std::function<bool()> & tick,
-                   const job_lines &             lines) {
+                   const job_lines &             lines,
+                   size_t                        shown) {
     job_result        r;
     const std::string program = job_find(line);
     if (program.empty()) {
@@ -191,25 +198,31 @@ job_result job_run(const std::string &           line,
     r.started = true;
 
     output_buffer kept(budget, oem_decode);
+    output_lines  live(shown, oem_decode);
+    std::string   ready;
     std::mutex    guard;
-    reader        rd      = { out_parent, &kept, &guard };
-    HANDLE        reading = CreateThread(NULL, 0, read_all, &rd, 0, NULL);
-    writer        wr      = { in_parent, &input };
-    HANDLE        writing = CreateThread(NULL, 0, write_all, &wr, 0, NULL);
+    reader        rd   = { out_parent, &kept, lines ? &live : nullptr, &ready, &guard };
+    // the lines the reader completed, given on this thread
+    const auto    give = [&] {
+        std::string given;
+        {
+            std::lock_guard<std::mutex> lock(guard);
+            given.swap(ready);
+        }
+        if (!given.empty()) {
+            lines(given);
+        }
+    };
+    HANDLE reading = CreateThread(NULL, 0, read_all, &rd, 0, NULL);
+    writer wr      = { in_parent, &input };
+    HANDLE writing = CreateThread(NULL, 0, write_all, &wr, 0, NULL);
 
     using clock          = std::chrono::steady_clock;
     const auto deadline  = clock::now() + std::chrono::seconds(timeout_s);
     auto       next_tick = clock::now() + std::chrono::milliseconds(TICK_MS);
     while (WaitForSingleObject(pi.hProcess, POLL_MS) == WAIT_TIMEOUT) {
         if (lines) {
-            std::string fresh;
-            {
-                std::lock_guard<std::mutex> lock(guard);
-                fresh = kept.fresh();
-            }
-            if (!fresh.empty()) {
-                lines(fresh);
-            }
+            give();
         }
         const auto now = clock::now();
         if (now >= deadline) {
@@ -234,10 +247,7 @@ job_result job_run(const std::string &           line,
     }
     // the lines the command wrote as it ended, the reader done with them
     if (lines) {
-        const std::string fresh = kept.fresh();
-        if (!fresh.empty()) {
-            lines(fresh);
-        }
+        give();
     }
     CancelSynchronousIo(writing);
     WaitForSingleObject(writing, INFINITE);

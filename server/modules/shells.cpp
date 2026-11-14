@@ -55,16 +55,9 @@ static engine_module make_shells() {
     timeout.integer = true;
     timeout.reset   = "290";
 
-    // the head and the tail of the output share the budget
-    engine_key output("max-output", ENGINE_NUMBER);
-    output.named   = true;
-    output.min     = 2;
-    output.integer = true;
-    output.reset   = "65536";
-
     engine_module m;
     m.name     = "shells";
-    m.keys     = { command, timeout, output };
+    m.keys     = { command, timeout };
     m.validate = validate;
     m.apply    = apply;
     m.notes    = notes;

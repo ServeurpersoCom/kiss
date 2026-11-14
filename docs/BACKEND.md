@@ -41,10 +41,8 @@ modules
   shells
     command <item> <line>           bash, zsh, powershell, pwsh, where found
     timeout <item> <seconds>        290
-    max-output <item> <bytes>       65536
   files
     shell <item>                    none, the tools on files on this machine
-    max-output <bytes>              65536, the text view returns
     max-load <bytes>                52428800, a file loaded whole
     max-megapixels <count>          100, decoded at most
     max-dimension <pixels>          1920, the longest side sent
@@ -86,6 +84,8 @@ modules
     timeout <item> <seconds>        310, a call takes at most
   tools
     max-rounds <count>              1000
+    max-output <bytes>              65536, the text of a call the model reads
+    max-shown <bytes>               4194304, the output a call shows while it runs
     use <tool> off|consent|on       consent, the tools of the server on
 
 tools
@@ -319,9 +319,7 @@ therefore lists every candidate shell and each machine serves the ones it has.
 | `server log-buffer`        | number | bytes of the last lines of the log `show logging` keeps         |
 | `shells command <item>`    | string | command line that runs a script read on stdin                   |
 | `shells timeout <item>`    | number | seconds a call may run                                          |
-| `shells max-output <item>` | number | bytes of output a call returns                                  |
 | `files shell`              | string | the shell whose machine the tools on files act on, none here    |
-| `files max-output`         | number | bytes of text `view` returns, its head and its tail             |
 | `files max-load`           | number | bytes of a file a tool loads whole, an image or a text to edit  |
 | `files max-megapixels`     | number | megapixels an image may declare before it is decoded            |
 | `files max-dimension`      | number | the longest side of an image sent, in pixels                    |
@@ -347,8 +345,8 @@ set shells command powershell powershell -NoProfile -NonInteractive -Command "<b
 set shells command pwsh pwsh -NoProfile -NonInteractive -Command "<boot>"
 ```
 
-Every shell runs at the reset values of its other keys, `timeout` 290 seconds and `max-output` 65536
-bytes, until a line sets its own. `<boot>` stands for the PowerShell bootstrap below, written in
+Every shell runs at the reset value of its other key, `timeout` 290 seconds, until a line sets its
+own. `<boot>` stands for the PowerShell bootstrap below, written in
 full in the file. A machine that must not serve a shell of the factory configuration takes it back,
 `no shells command powershell`.
 
@@ -753,7 +751,7 @@ every other tool off in KiSS, a machine is open to the model for reading only.
   inflates holds the memory of the machine. A photo of 50 MB reaches the model in a few hundred KB,
   well within the 5 MiB a request may weigh on the Hugging Face router.
 - A text file comes back with numbered lines, `N<tab>line`, then `300 lines`, or `Lines 10-20 of
-  300` for a range. Past `files max-output`, the head and the tail stay, as for a shell. On the
+  300` for a range. Past `tools max-output`, the head and the tail stay, as for a shell. On the
   machine of the server the file streams through, so its size costs time and never memory; through
   `files shell` it loads whole, up to `files max-load` bytes.
 - Another binary file, one with a NUL byte near its start, is refused with `Binary file`.
@@ -882,13 +880,17 @@ of the SDK abort that stream on a cancel. A client that does not accept SSE gets
 tree ends once its socket closes.
 
 A client of the 2026-07-28 era that declares `partialResults` among its capabilities and names a
-`partialResultToken` in the `_meta` of its call also gets the output of a shell as it comes, whole
-lines of the head, each a `notifications/tools/partial_result` on that stream before the result
+`partialResultToken` in the `_meta` of its call also gets the output of a shell as it comes, its
+whole lines up to `tools max-shown` bytes, then a line that says the rest shows once the call ends,
+each a `notifications/tools/partial_result` on that stream before the result
 ([SEP-2998](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2998)), its secrets
-sealed as the result seals them. The result stays whole: a client that drops every partial result
-misses nothing. The agent of the server takes them the same way from the MCP servers it calls, and
-shows them, and the output of its own shells, in the call while it runs: a page following the
-conversation reads them as the text the call gains, the result taking their place.
+sealed as the result seals them. The result keeps `tools max-output` bytes, its head and its tail: a
+client that drops every partial result misses nothing of it. The agent of the server takes them the
+same way from the MCP servers it calls, up to `tools max-shown` bytes, and shows them, and the
+output of its own shells, in the call while it runs: a page following the conversation reads them
+as the text the call gains, the result taking their place. What an MCP server answers reaches the
+model within `tools max-output` bytes, and a call stopped once sent keeps what it showed within
+them, then the line that says it stopped.
 
 A reverse proxy notices a client gone at its own pace: through Apache the tree ends a few seconds
 after the Stop.

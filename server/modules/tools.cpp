@@ -65,6 +65,19 @@ static engine_module make_tools() {
     rounds.integer = true;
     rounds.reset   = "1000";
 
+    // the bytes of the text of a call the model reads, its head and its tail
+    // sharing them, the bytes between counted
+    engine_key output("max-output", ENGINE_NUMBER);
+    output.min     = 2;
+    output.integer = true;
+    output.reset   = "65536";
+
+    // the bytes of the output a call shows while it runs
+    engine_key shown("max-shown", ENGINE_NUMBER);
+    shown.min     = 0;
+    shown.integer = true;
+    shown.reset   = "4194304";
+
     // off, the model never sees the tool; consent, each call asks the user;
     // on, it runs
     engine_key use("use", ENGINE_ENUM);
@@ -75,7 +88,7 @@ static engine_module make_tools() {
 
     engine_module m;
     m.name  = "tools";
-    m.keys  = { rounds, use };
+    m.keys  = { rounds, output, shown, use };
     m.items = items;
     return m;
 }

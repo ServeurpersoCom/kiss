@@ -306,7 +306,7 @@ static tool_outcome view(const viewer & v, yyjson_val * args, const tool_tick & 
 static std::vector<tool> view_tool(const engine_reader & config) {
     viewer v;
     v.at             = place_of(config);
-    v.output         = (size_t) std::stoull(*config.get("files max-output"));
+    v.output         = (size_t) std::stoull(*config.get("tools max-output"));
     v.load           = (size_t) std::stoull(*config.get("files max-load"));
     v.limits.pixels  = (size_t) std::stoull(*config.get("files max-megapixels")) * MEGAPIXEL;
     v.limits.side    = std::stoi(*config.get("files max-dimension"));

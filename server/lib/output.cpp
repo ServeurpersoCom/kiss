@@ -99,14 +99,38 @@ std::string output_buffer::text() const {
            output_utf8(final, decode);
 }
 
-std::string output_buffer::fresh() {
-    const size_t end = head.rfind('\n');
-    if (end == std::string::npos || end < given) {
+std::string output_bounded(const std::string & text, size_t budget) {
+    output_buffer b(budget);
+    b.add(text.data(), text.size());
+    return b.text();
+}
+
+output_lines::output_lines(size_t most, output_decode runs) : max(most), decode(runs) {}
+
+std::string output_lines::add(const char * data, size_t size) {
+    if (full) {
         return "";
     }
-    const std::string lines = output_utf8(head.substr(given, end + 1 - given), decode);
-    given                   = end + 1;
-    return lines;
+    pending.append(data, size);
+    const size_t room = max - shown;
+    const size_t end  = pending.rfind('\n');
+    // the whole lines that fit, the line that ends the show when the rest
+    // does not: a line past the room, or one still open that already fills it
+    const size_t fits = end == std::string::npos ? std::string::npos :
+                        end < room               ? end :
+                        room == 0                ? std::string::npos :
+                                                   pending.rfind('\n', room - 1);
+    std::string  out  = fits == std::string::npos ? "" : output_utf8(pending.substr(0, fits + 1), decode);
+    if (fits != std::string::npos) {
+        shown += fits + 1;
+        pending.erase(0, fits + 1);
+    }
+    if ((end != std::string::npos && fits != end) || pending.size() > max - shown) {
+        full = true;
+        pending.clear();
+        out += OUTPUT_SHOWN;
+    }
+    return out;
 }
 
 std::string output_counted(long long n, const char * one, const char * many) {

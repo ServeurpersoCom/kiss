@@ -12,6 +12,11 @@ export default {
 	keys: {
 		// the rounds of tool calls a turn takes at most
 		'max-rounds': { kind: 'number', min: 1, integer: true, default: '1000' },
+		// the bytes of the text of a call the model reads, its head and its tail
+		// sharing them, the bytes between counted
+		'max-output': { kind: 'number', min: 2, integer: true, default: '65536' },
+		// the bytes of the output a call shows while it runs
+		'max-shown': { kind: 'number', min: 0, integer: true, default: '4194304' },
 		// off, the model never sees the tool; consent, each call asks the user,
 		// always turning it on; the factory configuration turns the tools of
 		// KiSS on, and their changes ask

@@ -83,6 +83,8 @@ modules
     sheet <name> <css>
   tools                             show tools lists them, by who serves them
     max-rounds <count>              1000
+    max-output <bytes>              65536, the text of a call the model reads
+    max-shown <bytes>               4194304, the output a call shows while it runs
     use <tool> off|consent|on       consent, on for the tools of KiSS, guarded
     preview-argument <tool> <argument>
                                     display preview-argument, the argument of this tool over it
@@ -278,7 +280,7 @@ opens on a URL, written as it is; what a server answers goes as it came.
 | `mcp`       | `url <name>` guarded, `key <name>` secret, `auth-header <name>`, `headers <name>`, `timeout <name>`, `proxy <name>` guarded                                                                |
 | `models`    | `temperature` to `reasoning_effort <endpoint/model>`, `compaction-trigger-tokens <endpoint/model>`, `compaction-preserve-steps <endpoint/model>`                                           |
 | `style`     | `bg` to `sidebar-max`, the tokens of the page, `sheet <name>`                                                                                                                              |
-| `tools`     | `max-rounds`, `use <tool>` guarded when opening, `preview-argument <tool>`                                                                                                                 |
+| `tools`     | `max-rounds`, `max-output`, `max-shown`, `use <tool>` guarded when opening, `preview-argument <tool>`                                                                                      |
 
 ### Laws
 
@@ -615,8 +617,10 @@ A call shows the output of its tool as it comes when its server gives it: KiSS d
 `partialResults` and names a `partialResultToken` in the `_meta` of each call, and a server of the
 2026-07-28 era that streams partial results
 ([SEP-2998](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2998)), a KiSS server
-or mcp.js, sends each piece as it comes; its result takes their place, and only the result reaches
-the model.
+or mcp.js, sends each piece as it comes; the call shows their whole lines up to `tools max-shown`
+bytes, its result takes their place, and only the result reaches the model, within
+`tools max-output` bytes, its head and its tail. A call stopped once sent keeps what it showed
+within them, then the line that says it stopped.
 
 A server is reached directly at its url, or through the route of its name on a KiSS server: `set
 mcp proxy exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, with the key and

@@ -5,6 +5,7 @@ import { chat, describe, pick } from './api.js';
 import { PRESERVE, TRIGGER, compacted, folding } from './compaction.js';
 import { aggregate, connecting } from './mcp.js';
 import { settled } from './conversation.js';
+import { Lines, bounded } from './output.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
 import { CONSENT, OFF, ON, item, tools as own } from './tools.js';
@@ -36,6 +37,9 @@ function object(text: string): Record<string, unknown> | null {
 	}
 }
 
+// the bytes of the text of a call the model reads
+const budget = (): number => Number(settings.get('tools max-output'));
+
 // runs one call and writes its outcome into it; a call reaches a tool not off
 // as the configuration stands when it goes, whatever the round offered; it
 // takes its arguments as its tool keeps them, and is stored as sent before it
@@ -59,12 +63,18 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 	}
 	c.sent = true;
 	await ctx.keep();
+	// whole lines, as many as the call shows
+	const live = new Lines(Number(settings.get('tools max-shown')));
 	const result: Outcome = await tool
-		.run(ctx, args, (text) => (c.result = (c.result ?? '') + text))
+		.run(ctx, args, (text) => {
+			const lines = live.add(text);
+			if (lines) c.result = (c.result ?? '') + lines;
+		})
 		.catch((e: Error) => ({ ok: false, text: e.message }));
 	ctx.signal.throwIfAborted();
 	if (result.images) c.images = result.images;
-	c.result = result.text;
+	// the model reads what a server answers within the budget of a call
+	c.result = own.includes(tool) ? result.text : bounded(result.text, budget());
 	c.ok = result.ok;
 }
 
@@ -269,6 +279,10 @@ export async function turn(
 		}
 		reply.error = `Stopped after ${r} tool rounds`;
 	} finally {
+		// a call stopped once sent keeps what it showed within the budget of a call
+		for (const r of reply.rounds)
+			for (const c of r.calls)
+				if (c.sent && c.ok === undefined) c.result = bounded(c.result ?? '', budget());
 		reply.rounds = settled(reply.rounds);
 		const spent = stats(p, performance.now());
 		if (spent) reply.stats = context === undefined ? spent : { ...spent, context };

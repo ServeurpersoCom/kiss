@@ -21,10 +21,6 @@ struct output_buffer {
     // tail, as valid UTF-8
     std::string text() const;
 
-    // the whole lines of the head no call gave yet, as valid UTF-8, empty when
-    // none; a line the head cuts never comes, the text holds it
-    std::string fresh();
-
     size_t total() const { return count; }
 
     bool truncated() const { return count > head_max + tail.size(); }
@@ -38,8 +34,33 @@ struct output_buffer {
     std::string   tail;
     size_t        start = 0;
     size_t        count = 0;
-    // the bytes of the head fresh gave
-    size_t        given = 0;
+};
+
+// a text as a tool returns it within a budget: whole when it fits, else its
+// head, the line that counts the bytes hidden, and its tail
+std::string output_bounded(const std::string & text, size_t budget);
+
+// the line that ends what an output shows while it runs once it shows max
+// bytes, the rest showing once the call ends
+constexpr const char * OUTPUT_SHOWN = "The rest of the output shows once the call ends\n";
+
+// the whole lines of an output as they come, for whoever shows it while it
+// runs: at most max bytes of them, then the line OUTPUT_SHOWN, then nothing
+struct output_lines {
+    explicit output_lines(size_t max, output_decode decode = nullptr);
+
+    // the lines the bytes complete, as valid UTF-8, empty when none
+    std::string add(const char * data, size_t size);
+
+    std::string add(const std::string & text) { return add(text.data(), text.size()); }
+
+  private:
+    size_t        max;
+    output_decode decode;
+    // the bytes after the last line given
+    std::string   pending;
+    size_t        shown = 0;
+    bool          full  = false;
 };
 
 // a count with its noun as a result tells it: 1 line, 3 lines

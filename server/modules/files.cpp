@@ -16,11 +16,6 @@ static engine_module make_files() {
     shell.admin = true;
     shell.of    = "shells";
 
-    engine_key output("max-output", ENGINE_NUMBER);
-    output.min     = 2;
-    output.integer = true;
-    output.reset   = "65536";
-
     engine_key load("max-load", ENGINE_NUMBER);
     load.min     = 1;
     load.integer = true;
@@ -44,7 +39,7 @@ static engine_module make_files() {
 
     engine_module m;
     m.name = "files";
-    m.keys = { shell, output, load, megapixels, dimension, quality };
+    m.keys = { shell, load, megapixels, dimension, quality };
     return m;
 }
 

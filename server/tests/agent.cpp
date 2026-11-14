@@ -26,6 +26,7 @@
 #include "lib/conversation.h"
 #include "lib/job.h"
 #include "lib/library.h"
+#include "lib/output.h"
 #include "lib/quit.h"
 #include "lib/sync.h"
 #include "lib/tools.h"
@@ -185,6 +186,10 @@ int main() {
                 "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
                     "\",\"arguments\":"
                     "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo 1; sleep 1; echo 2\\\"}\"}}]}" :
+            text == "long" ?
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
+                    "\",\"arguments\":"
+                    "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo 12345; sleep 5\\\"}\"}}]}" :
             text == "page" ?
                 "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"client_config\","
                 "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"show version\\\"}\"}}]}" :
@@ -320,6 +325,40 @@ int main() {
             "a call of a shell shows its output in the call while it runs");
         law(ran && ran->result.rfind("1" + MACHINE_EOL + "2" + MACHINE_EOL + "Exit code 0", 0) == 0,
             "the result of the call takes its place");
+
+        // a call stopped once it showed its output keeps it within the budget
+        // of a call, then the line that says it stopped
+        engine_run("set tools max-output 4", ENGINE_ADMIN);
+        conversation stopped;
+        stopped.id = conversation_uuid();
+        asked.text = "long";
+        conversation_append(stopped, std::nullopt, asked);
+        library_create(stopped, {});
+        const std::string first = stopped.entries[0].id;
+        agent_answer(stopped.id, [&](conversation &) { return first; });
+        std::optional<conversation_call> cut;
+        const auto                       call = [&] {
+            std::optional<conversation_call> out;
+            library_each([&](const conversation & x) {
+                if (x.id == stopped.id && x.entries.size() > 1 && !x.entries[1].rounds.empty() &&
+                    !x.entries[1].rounds[0].calls.empty()) {
+                    out = x.entries[1].rounds[0].calls[0];
+                }
+            });
+            return out;
+        };
+        for (int i = 0; i < 1000 && !(call() && !call()->result.empty()); i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        agent_stop(stopped.id);
+        for (int i = 0; i < 1000 && agent_busy(stopped.id); i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        cut = call();
+        law(cut && cut->ok == false && cut->result == output_bounded("12345" + MACHINE_EOL, 4) + STOPPED,
+            "a call stopped once it showed its output keeps it within the budget of a call: " +
+                (cut ? cut->result : std::string("none")));
+        engine_run("no tools max-output", ENGINE_ADMIN);
     }
 
     // the entries of the conversation, as the library holds them
@@ -398,6 +437,12 @@ int main() {
     law(message("twin"), "a turn calling a tool let always starts");
     law(settled() && called().ok == true && called().result == "config",
         "a tool on by its item runs unasked: " + called().result);
+    // what a server answers reaches the model within the budget of a call
+    engine_run("set tools max-output 2", ENGINE_ADMIN);
+    law(message("twin") && (when([&] { return settled(); }), true) &&
+            called().result == "c\nLong output with 4 bytes hidden from context\ng",
+        "what a server answers past the budget of a call keeps its head and its tail: " + called().result);
+    engine_run("no tools max-output", ENGINE_ADMIN);
     // a question that should not stand is refused, so the laws go on
     agent_grant(c.id, number(), "refuse");
     settled();

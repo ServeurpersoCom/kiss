@@ -23,6 +23,7 @@
 #include "lib/base64.h"
 #include "lib/job.h"
 #include "lib/json.h"
+#include "lib/output.h"
 #include "lib/quit.h"
 #include "lib/tools.h"
 
@@ -141,7 +142,7 @@ int main() {
     }
     {
         // a job prints two lines and the start of a third, waits a second and
-        // ends the third; another prints two lines past its head
+        // ends the third; another prints two lines past what it keeps
 #if defined(_WIN32)
         const std::string streaming =
             "cmd /d /q /c \"echo one& echo two& <nul set /p =thr& ping -n 2 127.0.0.1 > nul& echo ee\"";
@@ -163,12 +164,37 @@ int main() {
             }
             heard += given;
         };
-        const job_result streamed = job_run(streaming, root.u8string(), "", 60, 4096, ALIVE, lines);
+        const job_result streamed = job_run(streaming, root.u8string(), "", 60, 4096, ALIVE, lines, 4096);
         law(first >= 0 && first < 900 && heard == "one" + eol + "two" + eol + "three" + eol && streamed.output == heard,
             "a job gives its whole lines as they come, a line it ends later once it ends");
         heard.clear();
-        const job_result cut = job_run(cutting, root.u8string(), "", 60, 10, ALIVE, lines);
-        law(cut.exit_code == 0 && heard == "one" + eol, "a job gives no line its head cuts");
+        const job_result cut = job_run(cutting, root.u8string(), "", 60, 4, ALIVE, lines, 4096);
+        law(cut.exit_code == 0 && heard == "one" + eol + "two" + eol && cut.output != heard,
+            "a job gives every whole line, past what its budget keeps");
+        heard.clear();
+        job_run(cutting, root.u8string(), "", 60, 4096, ALIVE, lines, 3 + eol.size());
+        law(heard == "one" + eol + OUTPUT_SHOWN,
+            "a job shows its lines up to its bound, then the line that says the rest shows once the call ends");
+    }
+    {
+        // a text within its budget, or its head and its tail, the bytes
+        // between counted
+        law(output_bounded("one\ntwo\n", 64) == "one\ntwo\n" &&
+                output_bounded("one\ntwo\nsix\nten\n", 10) ==
+                    "one\nLong output with 8 bytes hidden from context\nten\n" &&
+                output_bounded("config", 2) == "c\nLong output with 4 bytes hidden from context\ng" &&
+                output_bounded("\xC3\xA9\xC3\xA9\xC3\xA9", 3) ==
+                    "\xEF\xBF\xBD\nLong output with 3 bytes hidden from context\n\xC3\xA9",
+            "a text the model reads is whole within its budget, else its head and its tail");
+        // whole lines as they come, an open one waiting for its end, up to
+        // the bound
+        output_lines open(64);
+        output_lines bound(6);
+        output_lines wide(3);
+        law(open.add("on").empty() && open.add("e\ntw") == "one\n" && open.add("o\n") == "two\n" &&
+                bound.add("one\ntwo\n") == std::string("one\n") + OUTPUT_SHOWN && bound.add("six\n").empty() &&
+                wide.add("abcd") == OUTPUT_SHOWN,
+            "an output shows its whole lines as they come, up to its bound, then the line that says so");
     }
 
     for (const place & at : places) {

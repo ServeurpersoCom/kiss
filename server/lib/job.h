@@ -35,12 +35,14 @@ std::string job_find(const std::string & line);
 using job_lines = std::function<void(const std::string & lines)>;
 
 // runs the command line in cwd with input on its stdin; tick is called every
-// second, false meaning the client is gone; budget bounds the output kept,
-// whose head goes to lines as it comes when there is one
+// second, false meaning the client is gone; budget bounds the output kept;
+// when there is lines, the whole output goes to it as it comes, at most shown
+// bytes of it (output_lines)
 job_result job_run(const std::string &           line,
                    const std::string &           cwd,
                    const std::string &           input,
                    int                           timeout_s,
                    size_t                        budget,
                    const std::function<bool()> & tick,
-                   const job_lines &             lines = nullptr);
+                   const job_lines &             lines = nullptr,
+                   size_t                        shown = 0);

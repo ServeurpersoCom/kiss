@@ -741,6 +741,48 @@ describe('an MCP server', () => {
 		expect(p.bodies[1].messages.at(-1)!.content).toBe('1\n2\nExit code 0');
 	});
 
+	it('gives the model what a server answers within the budget of a call, its head and its tail', async () => {
+		const big: Declared[] = [
+			{ name: 'big', run: async () => ({ content: [{ type: 'text', text: 'config' }] }) }
+		];
+		const p = await page({ a: modern(big) }, [
+			stream([call('big', { description: 'big' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp\nset tools max-output 2', 'user');
+		const t = await p.go();
+		await t.done;
+		const cut = 'c\nLong output with 4 bytes hidden from context\ng';
+		expect(t.reply.rounds[0].calls[0]).toMatchObject({ result: cut, ok: true });
+		expect(p.bodies[1].messages.at(-1)!.content).toBe(cut);
+	});
+
+	it('keeps what a call showed within the budget of a call once it stops', async () => {
+		let reply: Assistant | undefined;
+		const holding: Declared[] = [
+			{
+				name: 'hold',
+				run: (_args, signal, _again, partial) => {
+					partial('12345\n');
+					return new Promise((_, reject) =>
+						signal.addEventListener('abort', () => reject(signal.reason))
+					);
+				}
+			}
+		];
+		const p = await page({ a: modern(holding) }, [stream([call('hold', { description: 'hold' })])]);
+		await p.engine.run('set mcp url a http://a/mcp\nset tools max-output 4', 'user');
+		const t = await p.go();
+		reply = t.reply;
+		await vi.waitFor(() => expect(reply?.rounds[0]?.calls[0]?.result).toBe('12345\n'));
+		t.stop.abort();
+		await expect(t.done).rejects.toThrow();
+		expect(t.reply.rounds[0].calls[0]).toMatchObject({
+			result: '12\nLong output with 4 bytes hidden from context\n' + STOPPED,
+			ok: false
+		});
+	});
+
 	it('that does not answer serves nothing, the save warning of it, the model reading no word of it', async () => {
 		const p = await page({ a: legacy(SHELL) }, [stream([{ content: 'ok' }])]);
 		await p.engine.run('set mcp url a http://a/mcp\nset mcp url gone http://gone/mcp', 'user');

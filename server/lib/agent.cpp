@@ -13,6 +13,7 @@
 #include "lib/library.h"
 #include "lib/log.h"
 #include "lib/mcp.h"
+#include "lib/output.h"
 #include "lib/prompts.h"
 #include "lib/pulse.h"
 #include "lib/quit.h"
@@ -644,17 +645,27 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
             }
             return response;
         };
+        size_t output = 0, shown = 0;
+        engine_with([&](const engine_reader & config) {
+            output = (size_t) std::stoull(*config.get("tools max-output"));
+            shown  = (size_t) std::stoull(*config.get("tools max-shown"));
+        });
         mcp_outcome out;
         try {
-            // a text the user typed in a form of the server is sealed as it
-            // comes too
+            // whole lines, as many as the call shows, a text the user typed in
+            // a form of the server sealed as it comes too
+            output_lines       live(shown);
             const tool_partial sealed = [&](const std::string & text) {
+                const std::string lines = live.add(text);
+                if (lines.empty()) {
+                    return;
+                }
                 words_t typed;
                 {
                     std::lock_guard<std::mutex> lock(g_mutex);
                     typed = g_typed;
                 }
-                partial(seal_text(text, typed));
+                partial(seal_text(lines, typed));
             };
             out = mcp_call(*server, bare, called.args.empty() ? JSON_OBJECT : called.args, self.stop, answer, sealed);
         } catch (const std::exception & e) {
@@ -668,7 +679,8 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
             std::lock_guard<std::mutex> lock(g_mutex);
             typed = g_typed;
         }
-        settle(called.args, seal_text(out.text, typed), out.ok, out.images);
+        // the model reads what the server answers within the budget of a call
+        settle(called.args, seal_text(output_bounded(out.text, output), typed), out.ok, out.images);
         return false;
     }
     if (paged) {
@@ -938,11 +950,21 @@ static void turn(std::string                     id,
     if (spent) {
         spent->context = context;
     }
+    // a call stopped once sent keeps what it showed within the budget of a call
+    size_t output = 0;
+    engine_with([&](const engine_reader & config) { output = (size_t) std::stoull(*config.get("tools max-output")); });
     logged(id, library_change(
                    id,
                    [&](conversation & c) {
                        for (conversation_entry & e : c.entries) {
                            if (e.id == entry) {
+                               for (conversation_round & held : e.rounds) {
+                                   for (conversation_call & call : held.calls) {
+                                       if (call.sent && !call.ok) {
+                                           call.result = output_bounded(call.result, output);
+                                       }
+                                   }
+                               }
                                e.rounds = conversation_settled(e.rounds);
                                e.error  = error;
                                if (spent) {

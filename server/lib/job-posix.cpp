@@ -59,7 +59,8 @@ job_result job_run(const std::string &           line,
                    int                           timeout_s,
                    size_t                        budget,
                    const std::function<bool()> & tick,
-                   const job_lines &             lines) {
+                   const job_lines &             lines,
+                   size_t                        shown) {
     job_result                     r;
     const std::vector<std::string> argv = job_argv(line);
     if (argv.empty()) {
@@ -120,6 +121,7 @@ job_result job_run(const std::string &           line,
 
     fcntl(in[1], F_SETFL, fcntl(in[1], F_GETFL) | O_NONBLOCK);
     output_buffer kept(budget);
+    output_lines  live(shown);
     size_t        written = 0;
     int           in_fd   = in[1];
     if (input.empty()) {
@@ -154,9 +156,9 @@ job_result job_run(const std::string &           line,
             }
             if (got > 0) {
                 kept.add(buf, (size_t) got);
-                const std::string fresh = lines ? kept.fresh() : "";
-                if (!fresh.empty()) {
-                    lines(fresh);
+                const std::string given = lines ? live.add(buf, (size_t) got) : "";
+                if (!given.empty()) {
+                    lines(given);
                 }
             }
         }
