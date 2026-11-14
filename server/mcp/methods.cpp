@@ -229,6 +229,31 @@ struct call_log {
     void gone() const { log_info("MCP", "Call %s: cancelled in %lld ms, the client is gone", tool.c_str(), ms()); }
 };
 
+// the token of the partial results a call of the 2026-07-28 era takes, as its
+// _meta names it, when its client declares partialResults; null otherwise
+static yyjson_val * partial_token(yyjson_val * params) {
+    yyjson_val * meta = yyjson_obj_get(params, "_meta");
+    yyjson_val * caps = yyjson_obj_get(meta, MCP_CAPABILITIES_META);
+    return yyjson_obj_get(caps, MCP_PARTIAL_RESULTS) ? yyjson_obj_get(meta, MCP_PARTIAL_TOKEN) : nullptr;
+}
+
+// a partial result of a call as an SSE event: its token, its number, the text
+// filtered of every secret of the server, as the result is
+static std::string partial_event(yyjson_val * token, uint64_t seq, const std::string & text) {
+    const json_mut   doc  = json_new();
+    yyjson_mut_val * root = yyjson_mut_obj(doc.get());
+    yyjson_mut_doc_set_root(doc.get(), root);
+    yyjson_mut_obj_add_str(doc.get(), root, "jsonrpc", "2.0");
+    yyjson_mut_obj_add_str(doc.get(), root, "method", MCP_PARTIAL_RESULT);
+    yyjson_mut_val * params = yyjson_mut_obj_add_obj(doc.get(), root, "params");
+    yyjson_mut_obj_add_val(doc.get(), params, MCP_PARTIAL_TOKEN, yyjson_val_mut_copy(doc.get(), token));
+    yyjson_mut_obj_add_uint(doc.get(), params, "seq", seq);
+    yyjson_mut_val * block = yyjson_mut_arr_add_obj(doc.get(), yyjson_mut_obj_add_arr(doc.get(), params, "content"));
+    yyjson_mut_obj_add_str(doc.get(), block, "type", "text");
+    json_put(doc.get(), block, "text", seal_text(text, keychain_known()));
+    return "event: message\ndata: " + json_write(doc) + "\n\n";
+}
+
 // whether a client of the 2026-07-28 era shows a form to the user, as the
 // capabilities of its request declare: elicitation with form, or with no mode
 static bool takes_forms(yyjson_val * params) {
@@ -245,9 +270,11 @@ static bool answered(yyjson_val * params, engine_typed & typed) {
     return !form || tools_typed(form, typed);
 }
 
-// a client that takes SSE gets a comment every tick while the tool runs, then
-// the result as one event; the first write that fails ends the tool. Any other
-// client gets the result as JSON, the tool ending once its socket closes.
+// a client that takes SSE gets a comment every tick while the tool runs, the
+// output as it comes when its call of the 2026-07-28 era takes partial
+// results, then the result as one event; the first write that fails ends the
+// tool. Any other client gets the result as JSON, the tool ending once its
+// socket closes.
 // Either ends as the process does. The stream outlives the handler, so it
 // holds the request document. A call that asks the user for secrets comes
 // again with them in its inputResponses.
@@ -274,11 +301,13 @@ void method_tools_call(const httplib::Request &            req,
         engine_typed typed;
         const bool   given = answered(params, typed);
         const bool   forms = modern && takes_forms(params);
-        const auto   run   = [t, args, typed, given, forms](const tool_tick & tick) -> tool_outcome {
+        yyjson_val * token = modern ? partial_token(params) : nullptr;
+        const auto   run   = [t, args, typed, given, forms](const tool_tick &    tick,
+                                                        const tool_partial & partial) -> tool_outcome {
             if (!given) {
                 return { false, "The user answered nothing" };
             }
-            const tool_outcome r = t.run(args, typed, tick);
+            const tool_outcome r = t.run(args, typed, tick, partial);
             if (!r.asks.empty() && !forms) {
                 return { false,
                          "This client shows the user no form: a secret or a url it asks goes in server.conf or on "
@@ -289,7 +318,7 @@ void method_tools_call(const httplib::Request &            req,
         const call_log log{ called };
         log.start(args);
         if (req.get_header_value("Accept").find(EVENTS_TYPE) == std::string::npos) {
-            const tool_outcome r = run([&req]() { return !req.is_connection_closed() && !quit_ending(); });
+            const tool_outcome r = run([&req]() { return !req.is_connection_closed() && !quit_ending(); }, nullptr);
             if (req.is_connection_closed()) {
                 log.gone();
                 return;
@@ -299,22 +328,30 @@ void method_tools_call(const httplib::Request &            req,
             return;
         }
         res.set_header("Cache-Control", "no-cache");
-        res.set_chunked_content_provider(EVENTS_TYPE, [body, run, log, id, modern](size_t, httplib::DataSink & sink) {
-            bool               gone = false;
-            const tool_outcome r    = run([&]() {
-                gone = gone || !sink.write(":\n\n", 3);
-                return !gone && !quit_ending();
+        res.set_chunked_content_provider(
+            EVENTS_TYPE, [body, run, log, id, modern, token](size_t, httplib::DataSink & sink) {
+                bool               gone    = false;
+                uint64_t           seq     = 0;
+                const tool_partial partial = [&](const std::string & text) {
+                    const std::string event = partial_event(token, seq++, text);
+                    gone                    = gone || !sink.write(event.data(), event.size());
+                };
+                const tool_outcome r = run(
+                    [&]() {
+                        gone = gone || !sink.write(":\n\n", 3);
+                        return !gone && !quit_ending();
+                    },
+                    token ? partial : nullptr);
+                if (gone) {
+                    log.gone();
+                    return false;
+                }
+                log.end(r, "by SSE");
+                const std::string event = "event: message\ndata: " + call_json(id, modern, r) + "\n\n";
+                sink.write(event.data(), event.size());
+                sink.done();
+                return true;
             });
-            if (gone) {
-                log.gone();
-                return false;
-            }
-            log.end(r, "by SSE");
-            const std::string event = "event: message\ndata: " + call_json(id, modern, r) + "\n\n";
-            sink.write(event.data(), event.size());
-            sink.done();
-            return true;
-        });
         return;
     }
     log_error("MCP", "Call %s: refused, no such tool", called.c_str());

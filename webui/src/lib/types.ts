@@ -157,7 +157,13 @@ export interface Tool {
 	// the arguments as the conversation keeps them, before the call is sent:
 	// secrets stay out of the history
 	stored?(ctx: ToolContext, args: Record<string, unknown>): object;
-	run(ctx: ToolContext, args: Record<string, unknown>): Promise<Outcome>;
+	// partial takes the output of the call as it comes, shown while it runs,
+	// the outcome taking its place
+	run(
+		ctx: ToolContext,
+		args: Record<string, unknown>,
+		partial: (text: string) => void
+	): Promise<Outcome>;
 }
 
 // what one round asks of a model, whatever protocol carries it: the history

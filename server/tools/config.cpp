@@ -65,7 +65,7 @@ static std::vector<tool> config_tool(const engine_reader & config) {
                                                          { "modules", join(modules, "; ") }
     });
     t.input       = prompts_input(TOOL_CONFIG);
-    t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick & tick) {
+    t.run         = [](yyjson_val * args, const engine_typed & typed, const tool_tick & tick, const tool_partial &) {
         return tools_config(args, typed, "", tick);
     };
     return { t };

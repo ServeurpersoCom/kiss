@@ -60,9 +60,10 @@ void library_remove(const words_t & ids);
 // whose outcome came
 struct library_shape {
     struct call {
-        size_t name = 0;
-        size_t args = 0;
-        bool   done = false;
+        size_t name   = 0;
+        size_t args   = 0;
+        size_t result = 0;
+        bool   done   = false;
     };
 
     struct round {

@@ -1,5 +1,6 @@
 // shells.cpp: one tool per shell whose program is found, named after it: the
-// command on stdin, the merged output back with the exit code and the duration
+// command on stdin, the merged output back with the exit code and the
+// duration, its lines shown as they come
 
 #include "lib/job.h"
 #include "lib/json.h"
@@ -27,10 +28,10 @@ static tool_outcome ended(tool_outcome r, const std::string & outcome, log_level
     return r;
 }
 
-static tool_outcome run(const shell & s, yyjson_val * args, const tool_tick & tick) {
+static tool_outcome run(const shell & s, yyjson_val * args, const tool_tick & tick, const tool_partial & partial) {
     yyjson_val *     command = yyjson_obj_get(args, "command");
     const auto       t0      = std::chrono::steady_clock::now();
-    const job_result r       = job_run(s.command, s.cwd, json_text(command), s.timeout, s.output, tick);
+    const job_result r       = job_run(s.command, s.cwd, json_text(command), s.timeout, s.output, tick, partial);
     const long long  ms =
         (long long) std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
             .count();
@@ -75,8 +76,8 @@ static std::vector<tool> shell_tools(const engine_reader & config) {
                       { "hostname", config.get("server hostname").value_or("") }
         });
         t.input = prompts_input(NAME);
-        t.run   = [s](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
-            return run(s, args, tick);
+        t.run   = [s](yyjson_val * args, const engine_typed &, const tool_tick & tick, const tool_partial & partial) {
+            return run(s, args, tick, partial);
         };
         tools.push_back(t);
     }

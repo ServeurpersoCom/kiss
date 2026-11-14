@@ -9,6 +9,7 @@
 #include "lib/api.h"
 #include "lib/conversation.h"
 #include "lib/remote.h"
+#include "lib/tools.h"
 
 #include <functional>
 #include <set>
@@ -77,6 +78,14 @@ constexpr const char * MCP_VERSION_META      = "io.modelcontextprotocol/protocol
 constexpr const char * MCP_CLIENT_META       = "io.modelcontextprotocol/clientInfo";
 constexpr const char * MCP_CAPABILITIES_META = "io.modelcontextprotocol/clientCapabilities";
 
+// the partial results of a call of the 2026-07-28 era (SEP-2998): the
+// capability a client declares, the key of the _meta of its call that names
+// them, the notification each comes in, its text blocks appended to the
+// output shown so far, the result of the call taking its place
+constexpr const char * MCP_PARTIAL_RESULTS = "partialResults";
+constexpr const char * MCP_PARTIAL_TOKEN   = "partialResultToken";
+constexpr const char * MCP_PARTIAL_RESULT  = "notifications/tools/partial_result";
+
 // forgets every server the configuration no longer names, its tools with it
 void mcp_forget(const words_t & named);
 
@@ -86,10 +95,12 @@ void mcp_forget(const words_t & named);
 using mcp_answer = std::function<std::string(const std::string & input)>;
 
 // a call of a tool of a server, its arguments a JSON object, answer giving
-// what the user answers each time the server asks them; throws why it did not
-// answer
-mcp_outcome mcp_call(const remote &      r,
-                     const std::string & name,
-                     const std::string & args,
-                     api_stop &          stop,
-                     const mcp_answer &  answer);
+// what the user answers each time the server asks them, partial taking the
+// partial results a server of the 2026-07-28 era gives while it runs; throws
+// why it did not answer
+mcp_outcome mcp_call(const remote &       r,
+                     const std::string &  name,
+                     const std::string &  args,
+                     api_stop &           stop,
+                     const mcp_answer &   answer,
+                     const tool_partial & partial);

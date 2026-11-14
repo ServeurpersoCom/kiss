@@ -42,6 +42,11 @@ export const newest = (a: { updated: number }, b: { updated: number }): number =
 // the outcome of a call stopped once sent: its tool may have acted
 export const STOPPED = 'Stopped before it answered: the tool may have acted';
 
+// what a call stopped once sent holds: the output it gave while it ran, then
+// the line that says it stopped
+const stopped = (output = ''): string =>
+	output === '' ? STOPPED : output + (output.endsWith(NEWLINE) ? '' : NEWLINE) + STOPPED;
+
 // what of a turn holds once it stops or leaves the page: the calls that ran,
 // those sent as stopped, with the arguments they went with, the rounds that
 // streamed something, and a summary once it finished; a call never sent never
@@ -52,7 +57,7 @@ export function settled(rounds: readonly Round[]): Round[] {
 			...r,
 			calls: r.calls.flatMap(({ sent, ...c }) => {
 				if (c.ok !== undefined) return [c];
-				return sent ? [{ ...c, result: STOPPED, ok: false }] : [];
+				return sent ? [{ ...c, result: stopped(c.result), ok: false }] : [];
 			})
 		}))
 		.filter((r) =>

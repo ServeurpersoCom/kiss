@@ -464,14 +464,14 @@ static std::string fill(turn_t & self, const std::string & server, const std::st
 // what a tool of this server answers, run again with what the user answers
 // each time it asks them to fill a form, until it asks nothing more; one they
 // cancel answers nothing; throws once stopped
-static tool_outcome run_own(turn_t & self, const tool & t, yyjson_val * args) {
+static tool_outcome run_own(turn_t & self, const tool & t, yyjson_val * args, const tool_partial & partial) {
     const tool_tick tick = [&self] {
         return !self.stop.stopped;
     };
     engine_typed typed;
     // the config tool of this server runs its batch in the conversation
     const auto   go = [&] {
-        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, self.id, tick) : t.run(args, typed, tick);
+        return t.suffix == TOOL_CONFIG ? tools_config(args, typed, self.id, tick) : t.run(args, typed, tick, partial);
     };
     tool_outcome out = go();
     while (!out.asks.empty() && !self.stop.stopped) {
@@ -621,6 +621,12 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
         return false;
     }
     log_info("Agent", "%s calls %s", conversation_shown(self.id).c_str(), called.name.c_str());
+    // the output of the call as it comes, in the call while it runs, so every
+    // page following the conversation shows it; what the call answers takes
+    // its place
+    const tool_partial partial = [&](const std::string & text) {
+        library_grow(self.id, self.entry, [&](conversation_entry & e) { e.rounds[r].calls[c].result += text; });
+    };
     if (server) {
         // every text the user types in a form of the server is sealed from
         // then on
@@ -640,7 +646,17 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
         };
         mcp_outcome out;
         try {
-            out = mcp_call(*server, bare, called.args.empty() ? JSON_OBJECT : called.args, self.stop, answer);
+            // a text the user typed in a form of the server is sealed as it
+            // comes too
+            const tool_partial sealed = [&](const std::string & text) {
+                words_t typed;
+                {
+                    std::lock_guard<std::mutex> lock(g_mutex);
+                    typed = g_typed;
+                }
+                partial(seal_text(text, typed));
+            };
+            out = mcp_call(*server, bare, called.args.empty() ? JSON_OBJECT : called.args, self.stop, answer, sealed);
         } catch (const std::exception & e) {
             if (self.stop.stopped) {
                 throw;
@@ -660,7 +676,7 @@ static bool call(turn_t & self, size_t r, size_t c, const std::vector<mcp_tool> 
         settle(called.args, out.text, out.ok, {});
         return false;
     }
-    const tool_outcome              out = run_own(self, *found, args);
+    const tool_outcome              out = run_own(self, *found, args, partial);
     std::vector<conversation_image> images;
     if (!out.image.empty()) {
         images.push_back({ out.mime, out.image });
@@ -997,7 +1013,7 @@ static void command(std::string id, std::string input, std::shared_ptr<api_stop>
     e.input      = input;
     bool compact = false;
     try {
-        const tool_outcome out = run_own(self, *config, yyjson_doc_get_root(doc.get()));
+        const tool_outcome out = run_own(self, *config, yyjson_doc_get_root(doc.get()), nullptr);
         e.output               = out.text;
         e.ok                   = out.ok;
         compact                = out.compact;

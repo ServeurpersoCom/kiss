@@ -24,6 +24,7 @@
 #include "laws.h"
 #include "lib/api.h"
 #include "lib/conversation.h"
+#include "lib/job.h"
 #include "lib/library.h"
 #include "lib/quit.h"
 #include "lib/sync.h"
@@ -46,6 +47,15 @@
 namespace fs = std::filesystem;
 
 // a call whose client stays
+// the shell every machine of this kind holds, and the end of a line it prints
+#if defined(_WIN32)
+static const std::string MACHINE_SHELL = "powershell";
+static const std::string MACHINE_EOL   = "\r\n";
+#else
+static const std::string MACHINE_SHELL = "bash";
+static const std::string MACHINE_EOL   = "\n";
+#endif
+
 static const auto ALIVE = [] {
     return true;
 };
@@ -162,16 +172,23 @@ int main() {
             return;
         }
         const std::string delta =
-            text == "fold" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"config\","
-                             "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"compact\\\"}\"}}]}" :
-            text == "twin" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":"
-                             "\"twin_config\",\"arguments\":\"{}\"}}]}" :
-            text == "go" ? "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"bash\",\"arguments\":"
-                           "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo hi\\\"}\"}}]}" :
+            text == "fold" ?
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"config\","
+                "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"compact\\\"}\"}}]}" :
+            text == "twin" ?
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":"
+                "\"twin_config\",\"arguments\":\"{}\"}}]}" :
+            text == "go" ?
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"bash\",\"arguments\":"
+                "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo hi\\\"}\"}}]}" :
+            text == "stream" ?
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
+                    "\",\"arguments\":"
+                    "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo 1; sleep 1; echo 2\\\"}\"}}]}" :
             text == "page" ?
-                           "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"client_config\","
-                           "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"show version\\\"}\"}}]}" :
-                           "{\"content\":\"done\"}";
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"client_config\","
+                "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"show version\\\"}\"}}]}" :
+                "{\"content\":\"done\"}";
         res.set_content("data: {\"choices\":[{\"delta\":" + delta + "}]}\n\ndata: [DONE]\n\n", "text/event-stream");
     });
     // an MCP server of the 2025 era serving a tool of the name the server
@@ -265,6 +282,44 @@ int main() {
         law(std::count(listed.begin(), listed.end(), "config") == 1 &&
                 std::count(listed.begin(), listed.end(), "twin_config") == 1,
             "a tool whose name the server holds goes under its server and its name: " + g_tools[0]);
+    }
+
+    // the output of a call of a shell, in the call as it comes, the result
+    // taking its place
+    if (!job_find(MACHINE_SHELL).empty()) {
+        conversation streamed;
+        streamed.id = conversation_uuid();
+        conversation_entry asked;
+        asked.text = "stream";
+        conversation_append(streamed, std::nullopt, asked);
+        library_create(streamed, {});
+        const std::string opening = streamed.entries[0].id;
+        agent_answer(streamed.id, [&](conversation &) { return opening; });
+        std::optional<conversation_call> running;
+        std::optional<conversation_call> ran;
+        const auto                       look = [&] {
+            library_each([&](const conversation & x) {
+                if (x.id == streamed.id && x.entries.size() > 1 && !x.entries[1].rounds.empty() &&
+                    !x.entries[1].rounds[0].calls.empty()) {
+                    const conversation_call & call = x.entries[1].rounds[0].calls[0];
+                    if (!call.ok && !call.result.empty() && !running) {
+                        running = call;
+                    }
+                    if (call.ok) {
+                        ran = call;
+                    }
+                }
+            });
+        };
+        for (int i = 0; i < 1000 && agent_busy(streamed.id); i++) {
+            look();
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        look();
+        law(running && running->result == "1" + MACHINE_EOL,
+            "a call of a shell shows its output in the call while it runs");
+        law(ran && ran->result.rfind("1" + MACHINE_EOL + "2" + MACHINE_EOL + "Exit code 0", 0) == 0,
+            "the result of the call takes its place");
     }
 
     // the entries of the conversation, as the library holds them

@@ -21,6 +21,10 @@ struct output_buffer {
     // tail, as valid UTF-8
     std::string text() const;
 
+    // the whole lines of the head no call gave yet, as valid UTF-8, empty when
+    // none; a line the head cuts never comes, the text holds it
+    std::string fresh();
+
     size_t total() const { return count; }
 
     bool truncated() const { return count > head_max + tail.size(); }
@@ -34,6 +38,8 @@ struct output_buffer {
     std::string   tail;
     size_t        start = 0;
     size_t        count = 0;
+    // the bytes of the head fresh gave
+    size_t        given = 0;
 };
 
 // a count with its noun as a result tells it: 1 line, 3 lines

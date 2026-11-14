@@ -42,6 +42,10 @@ struct tool_outcome {
 // called every second while a tool runs, false once the client is gone
 using tool_tick = std::function<bool()>;
 
+// takes the output of a call as it comes, on the thread that runs the call,
+// for whoever shows it while it runs; what the call answers stays whole
+using tool_partial = std::function<void(const std::string & text)>;
+
 // how a tool is used, from the most closed to the most open: never, once the
 // user lets each call, always
 constexpr const char * TOOL_USES[] = { "off", "consent", "on" };
@@ -60,14 +64,18 @@ tool_outcome tools_config(yyjson_val *         args,
                           const std::string &  conversation,
                           const tool_tick &    tick);
 
+// a call of a tool: typed holds the secrets the user typed when the call is
+// asked again
+using tool_run = std::function<
+    tool_outcome(yyjson_val * args, const engine_typed & typed, const tool_tick & tick, const tool_partial & partial)>;
+
 struct tool {
-    std::string                                                                                        suffix;
-    std::string                                                                                        description;
+    std::string suffix;
+    std::string description;
     // the JSON schema of the arguments, description first, so a model writes
     // why before what and a folded call shows it
-    std::string                                                                                        input;
-    // typed holds the secrets the user typed when the call is asked again
-    std::function<tool_outcome(yyjson_val * args, const engine_typed & typed, const tool_tick & tick)> run;
+    std::string input;
+    tool_run    run;
 };
 
 // a tool name stays within what every model API takes

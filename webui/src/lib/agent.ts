@@ -60,7 +60,7 @@ async function call(tools: readonly Tool[], ctx: ToolContext, c: Call): Promise<
 	c.sent = true;
 	await ctx.keep();
 	const result: Outcome = await tool
-		.run(ctx, args)
+		.run(ctx, args, (text) => (c.result = (c.result ?? '') + text))
 		.catch((e: Error) => ({ ok: false, text: e.message }));
 	ctx.signal.throwIfAborted();
 	if (result.images) c.images = result.images;

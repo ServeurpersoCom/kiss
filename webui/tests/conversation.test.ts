@@ -10,7 +10,9 @@ import {
 	latest,
 	parse,
 	path,
+	STOPPED,
 	serialize,
+	settled,
 	source
 } from '../src/lib/conversation.js';
 
@@ -172,6 +174,24 @@ describe('a slash command closed', () => {
 		drop(c, last.id);
 		expect(c.leaf).toBe(deux.id);
 		expect(path(c)).toEqual(model);
+	});
+});
+
+describe('a call stopped once sent', () => {
+	it('keeps the output it gave, then the line that says it stopped', () => {
+		const stopped = (result?: string) =>
+			settled([
+				{
+					reasoning: '',
+					text: '',
+					calls: [{ id: 'c', name: 'bash', args: '{}', result, sent: true }]
+				}
+			])[0].calls[0];
+		expect(stopped().result).toBe(STOPPED);
+		expect(stopped('').result).toBe(STOPPED);
+		expect(stopped('1\n2\n').result).toBe('1\n2\n' + STOPPED);
+		expect(stopped('1\n2').result).toBe('1\n2\n' + STOPPED);
+		expect(stopped('1\n').ok).toBe(false);
 	});
 });
 

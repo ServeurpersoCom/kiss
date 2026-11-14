@@ -99,6 +99,16 @@ std::string output_buffer::text() const {
            output_utf8(final, decode);
 }
 
+std::string output_buffer::fresh() {
+    const size_t end = head.rfind('\n');
+    if (end == std::string::npos || end < given) {
+        return "";
+    }
+    const std::string lines = output_utf8(head.substr(given, end + 1 - given), decode);
+    given                   = end + 1;
+    return lines;
+}
+
 std::string output_counted(long long n, const char * one, const char * many) {
     return std::to_string(n) + " " + (n == 1 ? one : many);
 }

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+	CLIENT_CAPABILITIES_META_KEY,
 	Server,
 	WebStandardStreamableHTTPServerTransport,
 	createMcpHandler
@@ -21,10 +22,17 @@ interface Again {
 	inputResponses?: Record<string, unknown>;
 }
 
-// a tool as mcp.js declares one: a raw JSON schema with a description argument
+// a tool as mcp.js declares one: a raw JSON schema with a description argument;
+// partial streams a text as the next partial result of its call, or of the
+// call of the next token, when the call asks for them
 interface Declared {
 	name: string;
-	run: (args: Record<string, unknown>, signal: AbortSignal, again: Again) => Promise<object>;
+	run: (
+		args: Record<string, unknown>,
+		signal: AbortSignal,
+		again: Again,
+		partial: (text: string, stray?: boolean) => void
+	) => Promise<object>;
 }
 
 const PNG = 'iVBORw0KGgo=';
@@ -74,7 +82,21 @@ function server(tools: Declared[], info = FIXTURE, routes?: Record<string, boole
 	s.setRequestHandler('tools/call', (req, ctx) => {
 		const tool = tools.find((t) => t.name === req.params.name)!;
 		const again = { inputResponses: ctx.mcpReq.inputResponses };
-		return tool.run(req.params.arguments ?? {}, ctx.mcpReq.signal, again) as never;
+		const token = req.params._meta?.partialResultToken as number | undefined;
+		const envelope: Record<string, object | undefined> = ctx.mcpReq.envelope ?? {};
+		const capabilities = envelope[CLIENT_CAPABILITIES_META_KEY];
+		const asks = token !== undefined && capabilities && 'partialResults' in capabilities;
+		const partial = (text: string, stray = false) =>
+			asks &&
+			void ctx.mcpReq.notify({
+				method: 'notifications/tools/partial_result',
+				params: {
+					partialResultToken: stray ? token + 1 : token,
+					seq: 0,
+					content: [{ type: 'text', text }]
+				}
+			});
+		return tool.run(req.params.arguments ?? {}, ctx.mcpReq.signal, again, partial) as never;
 	});
 	return s;
 }
@@ -689,6 +711,34 @@ describe('an MCP server', () => {
 			images: [{ mime: 'image/png', data: PNG }]
 		});
 		expect(calls[2]).toMatchObject({ result: 'no', ok: false });
+	});
+
+	it('shows the output of a call as it comes, from a 2026 server, its result taking its place', async () => {
+		let reply: Assistant | undefined;
+		const shown = () => reply?.rounds[0]?.calls[0]?.result;
+		const counting: Declared[] = [
+			{
+				name: 'count',
+				run: async (_args, _signal, _again, partial) => {
+					partial('1\n');
+					partial('stray\n', true);
+					await vi.waitFor(() => expect(shown()).toBe('1\n'));
+					partial('2\n');
+					await vi.waitFor(() => expect(shown()).toBe('1\n2\n'));
+					return { content: [{ type: 'text', text: '1\n2\nExit code 0' }] };
+				}
+			}
+		];
+		const p = await page({ a: modern(counting) }, [
+			stream([call('count', { description: 'count' })]),
+			stream([{ content: 'done' }])
+		]);
+		await p.engine.run('set mcp url a http://a/mcp', 'user');
+		const t = await p.go();
+		reply = t.reply;
+		await t.done;
+		expect(t.reply.rounds[0].calls[0]).toMatchObject({ result: '1\n2\nExit code 0', ok: true });
+		expect(p.bodies[1].messages.at(-1)!.content).toBe('1\n2\nExit code 0');
 	});
 
 	it('that does not answer serves nothing, the save warning of it, the model reading no word of it', async () => {

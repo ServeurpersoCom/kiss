@@ -8,13 +8,16 @@
 #    include "utf8.h"
 
 #    include <chrono>
+#    include <mutex>
 #    include <vector>
 
 // the time the output of a job gets to close once it is terminated
 static const DWORD DRAIN_MS = 2000;
 
-// the milliseconds between two ticks
-static const int TICK_MS = 1000;
+// the milliseconds between two ticks, and those a wait on the command lasts,
+// the lines read so far given after each
+static const int   TICK_MS = 1000;
+static const DWORD POLL_MS = 100;
 
 // the bytes each pipe holds
 static const DWORD PIPE_SIZE = 65536;
@@ -22,10 +25,12 @@ static const DWORD PIPE_SIZE = 65536;
 // the exit code a terminated job leaves
 static const UINT KILLED = 1;
 
-// the output of the command, read by a thread of its own until the pipe ends
+// the output of the command, read by a thread of its own until the pipe ends,
+// kept under guard while the job gives its lines
 struct reader {
     HANDLE          pipe;
     output_buffer * kept;
+    std::mutex *    guard;
 };
 
 static DWORD WINAPI read_all(void * p) {
@@ -33,6 +38,7 @@ static DWORD WINAPI read_all(void * p) {
     char           buf[PIPE_SIZE];
     DWORD          got = 0;
     while (ReadFile(r->pipe, buf, sizeof(buf), &got, NULL) && got > 0) {
+        std::lock_guard<std::mutex> lock(*r->guard);
         r->kept->add(buf, got);
     }
     return 0;
@@ -111,7 +117,8 @@ job_result job_run(const std::string &           line,
                    const std::string &           input,
                    int                           timeout_s,
                    size_t                        budget,
-                   const std::function<bool()> & tick) {
+                   const std::function<bool()> & tick,
+                   const job_lines &             lines) {
     job_result        r;
     const std::string program = job_find(line);
     if (program.empty()) {
@@ -184,21 +191,37 @@ job_result job_run(const std::string &           line,
     r.started = true;
 
     output_buffer kept(budget, oem_decode);
-    reader        rd      = { out_parent, &kept };
+    std::mutex    guard;
+    reader        rd      = { out_parent, &kept, &guard };
     HANDLE        reading = CreateThread(NULL, 0, read_all, &rd, 0, NULL);
     writer        wr      = { in_parent, &input };
     HANDLE        writing = CreateThread(NULL, 0, write_all, &wr, 0, NULL);
 
-    using clock         = std::chrono::steady_clock;
-    const auto deadline = clock::now() + std::chrono::seconds(timeout_s);
-    while (WaitForSingleObject(pi.hProcess, TICK_MS) == WAIT_TIMEOUT) {
-        if (clock::now() >= deadline) {
+    using clock          = std::chrono::steady_clock;
+    const auto deadline  = clock::now() + std::chrono::seconds(timeout_s);
+    auto       next_tick = clock::now() + std::chrono::milliseconds(TICK_MS);
+    while (WaitForSingleObject(pi.hProcess, POLL_MS) == WAIT_TIMEOUT) {
+        if (lines) {
+            std::string fresh;
+            {
+                std::lock_guard<std::mutex> lock(guard);
+                fresh = kept.fresh();
+            }
+            if (!fresh.empty()) {
+                lines(fresh);
+            }
+        }
+        const auto now = clock::now();
+        if (now >= deadline) {
             r.timed_out = true;
             break;
         }
-        if (!tick()) {
-            r.cancelled = true;
-            break;
+        if (now >= next_tick) {
+            next_tick = now + std::chrono::milliseconds(TICK_MS);
+            if (!tick()) {
+                r.cancelled = true;
+                break;
+            }
         }
     }
 
@@ -208,6 +231,13 @@ job_result job_run(const std::string &           line,
     if (WaitForSingleObject(reading, DRAIN_MS) == WAIT_TIMEOUT) {
         CancelSynchronousIo(reading);
         WaitForSingleObject(reading, INFINITE);
+    }
+    // the lines the command wrote as it ended, the reader done with them
+    if (lines) {
+        const std::string fresh = kept.fresh();
+        if (!fresh.empty()) {
+            lines(fresh);
+        }
     }
     CancelSynchronousIo(writing);
     WaitForSingleObject(writing, INFINITE);

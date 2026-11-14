@@ -43,7 +43,7 @@ static std::vector<tool> create_file_tool(const engine_reader & config) {
                                                   { "hostname", config.get("server hostname").value_or("") }
     });
     t.input       = prompts_input(NAME);
-    t.run         = [at](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+    t.run         = [at](yyjson_val * args, const engine_typed &, const tool_tick & tick, const tool_partial &) {
         return create_file(at, args, tick);
     };
     return { t };

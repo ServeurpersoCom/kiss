@@ -281,6 +281,18 @@ int main() {
                 texts(conversation_settled({ made("a"), thought, made("b") })) == "[a][b]" &&
                 texts(conversation_settled({ made("a"), made("S", 1), made("") })) == "[a][S]",
             "a summary holds once it finished and wrote its text, alone or followed");
+        const auto stopped_with = [](const std::string & output) {
+            conversation_round r;
+            conversation_call  c;
+            c.sent   = true;
+            c.result = output;
+            r.calls.push_back(c);
+            return conversation_settled({ r })[0].calls[0];
+        };
+        const std::string marker = STOPPED;
+        law(stopped_with("").result == marker && stopped_with("1\n2\n").result == "1\n2\n" + marker &&
+                stopped_with("1\n2").result == "1\n2\n" + marker && stopped_with("1\n").ok == false,
+            "a call stopped once sent keeps the output it gave, then the line that says it stopped");
         const std::string text =
             R"({"kiss":"conversations","conversations":[{"id":"c","title":"t","updated":1,"leaf":"b","entries":[)"
             R"({"id":"a","parent":null,"time":1,"role":"user","text":"one"},{"id":"b","parent":"a","time":2,)"
@@ -382,6 +394,10 @@ int main() {
                 "{\"add\":" + at + "\"rounds\",0,\"text\"],\"text\":\"Hello <removed>\"}\n" + "{\"add\":" + at +
                     "\"rounds\",0,\"calls\"],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":\"{\\\"c\"}}\n",
             "what a string gained comes as text, sealed, a call that comes is pushed whole");
+        library_grow("one", live, [](conversation_entry & e) { e.rounds[0].calls[0].result = "par sk-secret-0001"; });
+        law(library_follow(f, 10, secrets) ==
+                "{\"add\":" + at + "\"rounds\",0,\"calls\",0,\"result\"],\"text\":\"par <removed>\"}\n",
+            "the output a running call gives comes as text, sealed");
         library_grow("one", live, [](conversation_entry & e) {
             e.rounds[0].calls[0].args += "\":1}";
             e.rounds[0].calls[0].result = "done";
@@ -390,7 +406,7 @@ int main() {
         law(library_follow(f, 10, secrets) ==
                 "{\"set\":" + at + "\"rounds\",0,\"calls\",0],\"value\":{\"id\":\"c1\",\"name\":\"bash\",\"args\":" +
                     "\"{\\\"c\\\":1}\",\"result\":\"done\",\"ok\":true}}\n",
-            "a call whose outcome came is set whole");
+            "a call whose outcome came is set whole, its result in place of the output it gave");
         library_follower late;
         library_follow(late, 0, secrets);
         library_grow("one", live, [](conversation_entry & e) { e.rounds[0].text += "!"; });

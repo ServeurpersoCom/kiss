@@ -402,8 +402,9 @@ Each one is held by a test in `tests/`, and each guarantee checked by mutation.
 - Every round of a turn reads the configuration as it stands: what a call changes holds from the
   next round on.
 - A turn keeps, on the page and in the browser, what settled: what streamed, the calls that ended
-  before a stop, and the one a stop or a page closed cut while it ran, with its arguments and as
-  stopped, since the tool may have acted; a call never sent leaves nothing.
+  before a stop, and the one a stop or a page closed cut while it ran, with its arguments, the output
+  it gave and a line that says it stopped, since the tool may have acted; a call never sent leaves
+  nothing.
 - A message copied gives its source: the text typed, the answer without its thinking or calls, the
   output of a command.
 - An edit opens a branch beside the message it edits, the branch edited kept; the thread and the
@@ -609,6 +610,13 @@ needs its tools finds them listed; a round waits only for a server still connect
 names it, `Preparing mcp sandbox - 812 ms`. A server that fails serves the tools it listed last
 for the rest of the turn, each call answering its error, and the next turn tries it again: a server
 that never answers costs one wait a turn, the tools of a turn the same from round to round.
+
+A call shows the output of its tool as it comes when its server gives it: KiSS declares
+`partialResults` and names a `partialResultToken` in the `_meta` of each call, and a server of the
+2026-07-28 era that streams partial results
+([SEP-2998](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2998)), a KiSS server
+or mcp.js, sends each piece as it comes; its result takes their place, and only the result reaches
+the model.
 
 A server is reached directly at its url, or through the route of its name on a KiSS server: `set
 mcp proxy exa backend` reaches `exa` at `proxy/exa` beside the url of `backend`, with the key and

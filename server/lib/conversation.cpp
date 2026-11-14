@@ -379,14 +379,16 @@ static void add_link(yyjson_mut_doc * d, yyjson_mut_val * o, const char * key, c
     }
 }
 
-// a call, its outcome once it ran
+// a call, its outcome once it ran, the output it gave so far while it runs
 static yyjson_mut_val * call_val(yyjson_mut_doc * d, const conversation_call & c) {
     yyjson_mut_val * call = yyjson_mut_obj(d);
     json_put(d, call, "id", c.id);
     json_put(d, call, "name", c.name);
     json_put(d, call, "args", c.args);
-    if (c.ok) {
+    if (c.ok || !c.result.empty()) {
         json_put(d, call, "result", c.result);
+    }
+    if (c.ok) {
         yyjson_mut_obj_add_bool(d, call, "ok", *c.ok);
     }
     if (!c.images.empty()) {
@@ -515,13 +517,19 @@ std::string conversation_file(const std::vector<conversation> & conversations, c
     return sealed(doc.get(), root, secrets) + "\n";
 }
 
+// what a call stopped once sent holds: the output it gave while it ran, then
+// the line that says it stopped
+static std::string stopped(const std::string & output) {
+    return output.empty() ? STOPPED : output + (output.back() == '\n' ? "" : "\n") + STOPPED;
+}
+
 std::vector<conversation_round> conversation_settled(const std::vector<conversation_round> & rounds) {
     std::vector<conversation_round> out;
     for (conversation_round r : rounds) {
         std::vector<conversation_call> calls;
         for (conversation_call c : r.calls) {
             if (!c.ok && c.sent) {
-                c.result = STOPPED;
+                c.result = stopped(c.result);
                 c.ok     = false;
             }
             if (c.ok) {

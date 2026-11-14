@@ -318,7 +318,7 @@ static std::vector<tool> view_tool(const engine_reader & config) {
                                                   { "hostname", config.get("server hostname").value_or("") }
     });
     t.input       = prompts_input(NAME);
-    t.run         = [v](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+    t.run         = [v](yyjson_val * args, const engine_typed &, const tool_tick & tick, const tool_partial &) {
         return view(v, args, tick);
     };
     return { t };

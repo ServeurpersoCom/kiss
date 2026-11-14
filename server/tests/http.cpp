@@ -8,6 +8,8 @@
 #include "factory.h"
 #include "httplib.h"
 #include "laws.h"
+#include "lib/job.h"
+#include "lib/json.h"
 #include "lib/listener.h"
 #include "lib/quit.h"
 
@@ -183,6 +185,22 @@ static std::string heard(long long s) {
     }
 }
 
+// the shell every machine of this kind holds, and the end of a line it prints
+#if defined(_WIN32)
+static const std::string MACHINE_SHELL = "powershell";
+static const std::string MACHINE_EOL   = "\r\n";
+#else
+static const std::string MACHINE_SHELL = "bash";
+static const std::string MACHINE_EOL   = "\n";
+#endif
+
+// a command of that shell that prints two lines then a third it does not end
+#if defined(_WIN32)
+static const std::string TWO_AND_PART = "echo one; echo two; [Console]::Write('three')";
+#else
+static const std::string TWO_AND_PART = "echo one; echo two; printf three";
+#endif
+
 static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list"})";
 
 int main() {
@@ -225,7 +243,55 @@ int main() {
     }) == 401,
         "with no key, another origin is refused");
 
+    // the partial results of a call of the shell of the machine, as the stream
+    // of its answer gives them: their texts joined, or a note of what is wrong
+    const auto partials = [&](const std::string & command, bool asks, const httplib::Headers & key) {
+        const std::string name = engine_get("server hostname").value_or("") + "_server_" + MACHINE_SHELL;
+        const std::string body =
+            R"({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":")" + name +
+            R"(","arguments":{"description":"d","command":)" + json_quote(command) +
+            R"(},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":)"
+            R"({"name":"t","version":"1"},"io.modelcontextprotocol/clientCapabilities":{)" +
+            (asks ? R"("partialResults":{})" : "") + R"(},"partialResultToken":"tok"}}})";
+        httplib::Headers headers = key;
+        headers.insert({ "Accept", "application/json, text/event-stream" });
+        headers.insert({ "MCP-Protocol-Version", "2026-07-28" });
+        headers.insert({ "Mcp-Method", "tools/call" });
+        headers.insert({ "Mcp-Name", name });
+        const auto  res = client.Post("/mcp", headers, body, "application/json");
+        std::string joined;
+        bool        answered = false;
+        for (size_t at = 0; res && (at = res->body.find("data: ", at)) != std::string::npos;) {
+            const size_t   end   = res->body.find('\n', at);
+            const json_doc event = json_read(res->body.substr(at + 6, end - at - 6));
+            yyjson_val *   root  = yyjson_doc_get_root(event.get());
+            yyjson_val *   p     = yyjson_obj_get(root, "params");
+            if (yyjson_obj_get(root, "result")) {
+                answered = true;
+            } else if (answered || json_text(yyjson_obj_get(p, "partialResultToken")) != "tok") {
+                return std::string("a partial result after the result or of another token");
+            } else {
+                joined += json_text(yyjson_obj_get(yyjson_arr_get_first(yyjson_obj_get(p, "content")), "text"));
+            }
+            at = end;
+        }
+        return answered ? joined : std::string("no result");
+    };
+    if (!job_find(MACHINE_SHELL).empty()) {
+        law(partials(TWO_AND_PART, true, {}) == "one" + MACHINE_EOL + "two" + MACHINE_EOL,
+            "a call of a client that takes partial results streams the whole lines of its output before its result");
+        law(partials("echo one", false, {}).empty(), "a call of a client that declares no partial results gets none");
+    }
+
     law(engine_run("set server key sesame", ENGINE_ADMIN).ok, "the administrator sets the key");
+    if (!job_find(MACHINE_SHELL).empty()) {
+        law(partials("echo sesame", true,
+                     {
+                         { "Authorization", "Bearer sesame" }
+        })
+                    .find("sesame") == std::string::npos,
+            "a partial result shows no secret of the server, as its result shows none");
+    }
 
     law(status("/mcp", {}) == 401, "with a key, a client without Origin on loopback needs it");
     law(status("/mcp",

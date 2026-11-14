@@ -127,11 +127,27 @@ int main() {
         }
         const std::string text =
             std::string("got ") + yyjson_get_str(typed) + " " + (yyjson_is_str(state) ? yyjson_get_str(state) : "");
-        res.set_content(
+        const std::string result =
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"resultType\":\"complete\",\"content\":[{"
             "\"type\":\"text\",\"text\":\"" +
-                text + "\"}]}}",
-            "application/json");
+            text + "\"}]}}";
+        // the partial results the call names, then one of another call
+        yyjson_val * token = yyjson_obj_get(meta, "partialResultToken");
+        if (yyjson_obj_get(yyjson_obj_get(meta, "io.modelcontextprotocol/clientCapabilities"), "partialResults") &&
+            yyjson_is_uint(token)) {
+            const auto partial = [](uint64_t named, const std::string & said) {
+                return event(
+                    "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/tools/partial_result\",\"params\":{"
+                    "\"partialResultToken\":" +
+                    std::to_string(named) + ",\"seq\":0,\"content\":[{\"type\":\"text\",\"text\":\"" + said +
+                    "\"},{\"type\":\"image\",\"mimeType\":\"image/png\",\"data\":\"AAAA\"}]}}");
+            };
+            res.set_content(partial(yyjson_get_uint(token), "par ") + partial(yyjson_get_uint(token) + 1, "stray ") +
+                                partial(yyjson_get_uint(token), "tial") + event(result),
+                            "text/event-stream");
+            return;
+        }
+        res.set_content(result, "application/json");
     });
     server.Post("/bad",
                 [](const httplib::Request &, httplib::Response & res) { res.set_content("<html>", "text/html"); });
@@ -153,7 +169,7 @@ int main() {
         asked++;
         return std::string("{\"action\":\"cancel\"}");
     };
-    const mcp_outcome out = mcp_call(r, "a", "{\"x\":1}", stop, none);
+    const mcp_outcome out = mcp_call(r, "a", "{\"x\":1}", stop, none, nullptr);
     law(g_args == "{\"x\":1}", "a call carries its arguments as an object");
     law(!out.ok && out.text == "one\ntwo" && out.images.size() == 1 && out.images[0].mime == "image/png" &&
             out.images[0].data == "AAAA",
@@ -169,14 +185,17 @@ int main() {
         return std::string("{\"action\":\"accept\",\"content\":{\"k\":\"v\"}}");
     };
     const std::vector<mcp_tool> listed = mcp_tools(modern, stop);
-    const mcp_outcome           got    = mcp_call(modern, "s", "{}", stop, typed);
+    std::string                 heard;
+    const mcp_outcome got = mcp_call(modern, "s", "{}", stop, typed, [&](const std::string & text) { heard += text; });
     law(listed.size() == 1 && listed[0].name == "s" && g_modern,
         "a server of the 2026-07-28 era gets its envelope and its headers on every request, and no session");
     law(got.ok && got.text == "got v st" && input.find("\"message\":\"type k\"") != std::string::npos,
         "a call the server asks the user about comes again with their response and the state it gave");
+    law(heard == "par tial",
+        "a call of the 2026-07-28 era takes the text of the partial results it names, as they come, before its result");
     bool refused = false;
     try {
-        mcp_call(modern, "s", "{\"url\":true}", stop, none);
+        mcp_call(modern, "s", "{\"url\":true}", stop, none, nullptr);
     } catch (const std::exception & e) {
         refused = std::string(e.what()).find("which KiSS does not answer") != std::string::npos;
     }
@@ -197,7 +216,7 @@ int main() {
     g_gone      = true;
     bool failed = false;
     try {
-        mcp_call(r, "a", "{}", stop, none);
+        mcp_call(r, "a", "{}", stop, none, nullptr);
     } catch (const std::exception &) {
         failed = true;
     }

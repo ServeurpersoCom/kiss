@@ -711,7 +711,8 @@ is attached`, and the tool leaves the next round.
 The turn writes its answer in the conversation as it streams, the pages that follow it getting each
 piece; the conversation is written to its file before a turn, before each call reaches its tool and
 once the turn ends, as it settled, so a server that stops mid turn starts again on what it held, a
-call sent marked `Stopped before it answered: the tool may have acted`. `POST /conversations/stop`
+call sent keeping the output it gave, then the line `Stopped before it answered: the tool may have
+acted`. `POST /conversations/stop`
 ends a turn at once, its request closed, no call running after it.
 
 ### Shell tools
@@ -879,6 +880,15 @@ every second: proxies keep the connection open, and the first write that fails m
 gone, the user pressed Stop, so the server ends the tree. One mechanism, nothing to track. Both eras
 of the SDK abort that stream on a cancel. A client that does not accept SSE gets plain JSON, and the
 tree ends once its socket closes.
+
+A client of the 2026-07-28 era that declares `partialResults` among its capabilities and names a
+`partialResultToken` in the `_meta` of its call also gets the output of a shell as it comes, whole
+lines of the head, each a `notifications/tools/partial_result` on that stream before the result
+([SEP-2998](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2998)), its secrets
+sealed as the result seals them. The result stays whole: a client that drops every partial result
+misses nothing. The agent of the server takes them the same way from the MCP servers it calls, and
+shows them, and the output of its own shells, in the call while it runs: a page following the
+conversation reads them as the text the call gains, the result taking their place.
 
 A reverse proxy notices a client gone at its own pace: through Apache the tree ends a few seconds
 after the Stop.

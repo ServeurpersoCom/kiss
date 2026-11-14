@@ -27,6 +27,7 @@
 #include "lib/tools.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -138,6 +139,37 @@ int main() {
     } else {
         printf("[Laws] %s: no POSIX shell here, the laws of the server alone\n", g_test);
     }
+    {
+        // a job prints two lines and the start of a third, waits a second and
+        // ends the third; another prints two lines past its head
+#if defined(_WIN32)
+        const std::string streaming =
+            "cmd /d /q /c \"echo one& echo two& <nul set /p =thr& ping -n 2 127.0.0.1 > nul& echo ee\"";
+        const std::string cutting = "cmd /d /q /c \"echo one& echo two\"";
+        const std::string eol     = "\r\n";
+#else
+        const std::string streaming = "sh -c \"printf 'one\\ntwo\\nthr'; sleep 1; echo ee\"";
+        const std::string cutting   = "sh -c \"printf 'one\\ntwo\\n'\"";
+        const std::string eol       = "\n";
+#endif
+        std::string     heard;
+        long long       first = -1;
+        const auto      t0    = std::chrono::steady_clock::now();
+        const job_lines lines = [&](const std::string & given) {
+            if (first < 0) {
+                first = (long long) std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - t0)
+                            .count();
+            }
+            heard += given;
+        };
+        const job_result streamed = job_run(streaming, root.u8string(), "", 60, 4096, ALIVE, lines);
+        law(first >= 0 && first < 900 && heard == "one" + eol + "two" + eol + "three" + eol && streamed.output == heard,
+            "a job gives its whole lines as they come, a line it ends later once it ends");
+        heard.clear();
+        const job_result cut = job_run(cutting, root.u8string(), "", 60, 10, ALIVE, lines);
+        law(cut.exit_code == 0 && heard == "one" + eol, "a job gives no line its head cuts");
+    }
 
     for (const place & at : places) {
         const std::string where = at.shell.empty()        ? "the server: " :
@@ -242,7 +274,7 @@ int main() {
     engine_with([&](const engine_reader & config) { tools = tools_list(config); });
     const auto     view = std::find_if(tools.begin(), tools.end(), [](const tool & t) { return t.suffix == "view"; });
     const json_doc args = json_read("{\"path\":" + json_quote(seen.u8string()) + "}");
-    const tool_outcome listed = view->run(yyjson_doc_get_root(args.get()), {}, ALIVE);
+    const tool_outcome listed = view->run(yyjson_doc_get_root(args.get()), {}, ALIVE, nullptr);
     const auto         ends   = [&](const std::string & tail) {
         return listed.text.size() >= tail.size() &&
                listed.text.compare(listed.text.size() - tail.size(), tail.size(), tail) == 0;

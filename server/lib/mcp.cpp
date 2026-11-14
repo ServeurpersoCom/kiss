@@ -4,7 +4,8 @@
 //
 // A server that answers server/discover with the 2026-07-28 era speaks it:
 // every request carries the envelope in _meta and the headers of that era,
-// and a call that asks the user comes again with what they answered. Any
+// a call that asks the user comes again with what they answered, and a call
+// names the partial results it takes while the tool runs. Any
 // other server answers the initialize handshake of the 2025 era, its session
 // id carried by every request after it.
 
@@ -18,6 +19,7 @@
 #include "lib/tools.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <iterator>
 #include <map>
@@ -28,6 +30,13 @@ static const char * const PROTOCOL_VERSION = "2025-06-18";
 static const char * const MODERN_VERSION   = "2026-07-28";
 // the name this client gives of itself
 static const char * const CLIENT_NAME      = "kiss";
+
+// the token of the partial results of the last call
+static std::atomic<uint64_t> g_partials{ 0 };
+
+// takes the method and the params of each notification a stream gives before
+// the answer
+using noted = std::function<void(const std::string & method, yyjson_val * params)>;
 
 // a session: what it was opened with, whether it stands, the era the server
 // speaks, its id in the 2025 era, and the tools of the server; a session that
@@ -54,13 +63,15 @@ struct unreached : api_error {
 };
 
 // the answer of a request with id: JSON, or the event of that id in a stream
-// of events; the session id the server gives, if any
+// of events, each notification before it to heard when there is one; the
+// session id the server gives, if any
 static json_doc post(const remote &           r,
                      const std::string &      body,
                      const httplib::Headers & era,
                      api_stop &               stop,
                      std::string &            given,
-                     bool                     notification) {
+                     bool                     notification,
+                     const noted &            heard = nullptr) {
     std::string      path;
     const auto       client = api_client(r, stop, path);
     httplib::Request req;
@@ -91,10 +102,13 @@ static json_doc post(const remote &           r,
             return true;
         }
         return events.feed(piece, n, [&](const std::string & event) {
-            json_doc     d    = json_read(event);
-            yyjson_val * root = d ? yyjson_doc_get_root(d.get()) : nullptr;
+            json_doc     d      = json_read(event);
+            yyjson_val * root   = d ? yyjson_doc_get_root(d.get()) : nullptr;
+            yyjson_val * method = yyjson_obj_get(root, "method");
             if (yyjson_obj_get(root, "result") || yyjson_obj_get(root, "error")) {
                 found = d;
+            } else if (heard && yyjson_is_str(method) && !yyjson_obj_get(root, "id")) {
+                heard(yyjson_get_str(method), yyjson_obj_get(root, "params"));
             }
             return !found;
         });
@@ -147,14 +161,16 @@ static httplib::Headers era_headers(const session & s, const std::string & metho
 
 // a JSON-RPC request, its result, its params an object, the envelope of the
 // 2026-07-28 era in their _meta when the session speaks it: the version, the
-// client and the forms it shows; throws the error the server answers
+// client, the forms it shows and the partial results it takes; throws the
+// error the server answers
 static json_doc request(const remote &      r,
                         const session &     s,
                         const std::string & method,
                         const std::string & params,
                         api_stop &          stop,
                         std::string &       given,
-                        const std::string & name = "") {
+                        const std::string & name  = "",
+                        const noted &       heard = nullptr) {
     const json_mut   doc    = json_new();
     const json_doc   parsed = json_read(params);
     yyjson_mut_val * root   = yyjson_mut_obj(doc.get());
@@ -166,16 +182,18 @@ static json_doc request(const remote &      r,
     yyjson_mut_obj_add_val(doc.get(), root, "params", p);
     if (s.modern) {
         const std::string version = engine_version();
-        yyjson_mut_val *  meta    = yyjson_mut_obj_add_obj(doc.get(), p, "_meta");
+        yyjson_mut_val *  held    = yyjson_mut_obj_get(p, "_meta");
+        yyjson_mut_val *  meta    = held ? held : yyjson_mut_obj_add_obj(doc.get(), p, "_meta");
         yyjson_mut_obj_add_str(doc.get(), meta, MCP_VERSION_META, MODERN_VERSION);
         yyjson_mut_val * info = yyjson_mut_obj_add_obj(doc.get(), meta, MCP_CLIENT_META);
         yyjson_mut_obj_add_str(doc.get(), info, "name", CLIENT_NAME);
         json_put(doc.get(), info, "version", version);
         yyjson_mut_val * caps = yyjson_mut_obj_add_obj(doc.get(), meta, MCP_CAPABILITIES_META);
         yyjson_mut_obj_add_obj(doc.get(), yyjson_mut_obj_add_obj(doc.get(), caps, "elicitation"), MCP_FORM_MODE);
+        yyjson_mut_obj_add_obj(doc.get(), caps, MCP_PARTIAL_RESULTS);
     }
     const std::string body = json_write(doc);
-    json_doc          d    = post(r, body, era_headers(s, method, name), stop, given, false);
+    json_doc          d    = post(r, body, era_headers(s, method, name), stop, given, false, heard);
     yyjson_val *      err  = yyjson_obj_get(yyjson_doc_get_root(d.get()), "error");
     if (err) {
         yyjson_val * message = yyjson_obj_get(err, "message");
@@ -340,11 +358,12 @@ static std::string unanswered(yyjson_val * input) {
     return "";
 }
 
-mcp_outcome mcp_call(const remote &      r,
-                     const std::string & name,
-                     const std::string & args,
-                     api_stop &          stop,
-                     const mcp_answer &  answer) {
+mcp_outcome mcp_call(const remote &       r,
+                     const std::string &  name,
+                     const std::string &  args,
+                     api_stop &           stop,
+                     const mcp_answer &   answer,
+                     const tool_partial & partial) {
     try {
         const session    s = opened(r, stop);
         std::string      given;
@@ -356,9 +375,28 @@ mcp_outcome mcp_call(const remote &      r,
         yyjson_mut_obj_add_val(
             doc.get(), root, "arguments",
             parsed ? yyjson_val_mut_copy(doc.get(), yyjson_doc_get_root(parsed.get())) : yyjson_mut_obj(doc.get()));
+        // the text blocks of each partial result of this call, as they come
+        const uint64_t token = ++g_partials;
+        const noted    heard = [&](const std::string & method, yyjson_val * params) {
+            yyjson_val * named = yyjson_obj_get(params, MCP_PARTIAL_TOKEN);
+            if (!partial || method != MCP_PARTIAL_RESULT || !yyjson_is_uint(named) || yyjson_get_uint(named) != token) {
+                return;
+            }
+            size_t       i, n;
+            yyjson_val * part;
+            yyjson_arr_foreach(yyjson_obj_get(params, "content"), i, n, part) {
+                if (json_text(yyjson_obj_get(part, "type")) == "text") {
+                    partial(json_text(yyjson_obj_get(part, "text")));
+                }
+            }
+        };
+        if (s.modern) {
+            yyjson_mut_obj_add_uint(doc.get(), yyjson_mut_obj_add_obj(doc.get(), root, "_meta"), MCP_PARTIAL_TOKEN,
+                                    token);
+        }
         for (;;) {
             const std::string body   = json_write(doc);
-            const json_doc    d      = request(r, s, "tools/call", body, stop, given, name);
+            const json_doc    d      = request(r, s, "tools/call", body, stop, given, name, heard);
             yyjson_val *      result = yyjson_obj_get(yyjson_doc_get_root(d.get()), "result");
             if (json_text(yyjson_obj_get(result, "resultType")) == "input_required") {
                 // the call again, with what the user answered to each input

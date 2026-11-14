@@ -30,11 +30,17 @@ std::vector<std::string> job_argv(const std::string & line);
 // the program a command line starts, as a path, empty when it is found nowhere
 std::string job_find(const std::string & line);
 
+// takes the whole lines of the output as they come, on the thread that runs
+// the job
+using job_lines = std::function<void(const std::string & lines)>;
+
 // runs the command line in cwd with input on its stdin; tick is called every
-// second, false meaning the client is gone; budget bounds the output kept
+// second, false meaning the client is gone; budget bounds the output kept,
+// whose head goes to lines as it comes when there is one
 job_result job_run(const std::string &           line,
                    const std::string &           cwd,
                    const std::string &           input,
                    int                           timeout_s,
                    size_t                        budget,
-                   const std::function<bool()> & tick);
+                   const std::function<bool()> & tick,
+                   const job_lines &             lines = nullptr);

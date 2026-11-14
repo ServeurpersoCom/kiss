@@ -58,7 +58,8 @@ job_result job_run(const std::string &           line,
                    const std::string &           input,
                    int                           timeout_s,
                    size_t                        budget,
-                   const std::function<bool()> & tick) {
+                   const std::function<bool()> & tick,
+                   const job_lines &             lines) {
     job_result                     r;
     const std::vector<std::string> argv = job_argv(line);
     if (argv.empty()) {
@@ -153,6 +154,10 @@ job_result job_run(const std::string &           line,
             }
             if (got > 0) {
                 kept.add(buf, (size_t) got);
+                const std::string fresh = lines ? kept.fresh() : "";
+                if (!fresh.empty()) {
+                    lines(fresh);
+                }
             }
         }
         if (in_fd >= 0 && (fds[1].revents & (POLLOUT | POLLERR | POLLHUP))) {

@@ -91,7 +91,8 @@ export function serve(p: Page): void {
 }
 
 // what an event writes: set replaces what its path names, null removing it;
-// add appends text to a string or a value to a list
+// add appends text to a string, one not there yet starting empty, or a value
+// to a list
 type Event =
 	| { set: (string | number)[]; value: unknown }
 	| { add: (string | number)[]; text?: string; value?: unknown };
@@ -243,7 +244,7 @@ function apply(e: Event): void {
 		if (e.value === null) delete node[last];
 		else node[last] = e.value;
 		if (path.length === 2 && last === 'turn') turned(id, e.value as Turn | null);
-	} else if (e.text !== undefined) node[last] = String(node[last]) + e.text;
+	} else if (e.text !== undefined) node[last] = String(node[last] ?? '') + e.text;
 	else (node[last] as unknown[]).push(e.value);
 	settle(id);
 }

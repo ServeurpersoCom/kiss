@@ -65,7 +65,7 @@ static std::vector<tool> str_replace_tool(const engine_reader & config) {
                                                   { "hostname", config.get("server hostname").value_or("") }
     });
     t.input       = prompts_input(NAME);
-    t.run         = [r](yyjson_val * args, const engine_typed &, const tool_tick & tick) {
+    t.run         = [r](yyjson_val * args, const engine_typed &, const tool_tick & tick, const tool_partial &) {
         return str_replace(r, args, tick);
     };
     return { t };

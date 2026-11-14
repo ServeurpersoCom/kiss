@@ -99,7 +99,7 @@ afterEach(() => {
 });
 
 describe('the conversations of a KiSS server', () => {
-	it('follow the stream: every one, each change whole, what a turn grows, the turn, one gone', async () => {
+	it('follow the stream: every one, each change whole, what a turn grows, a call running, the turn, one gone', async () => {
 		const s = server();
 		const turn = {
 			round: 2,
@@ -133,6 +133,14 @@ describe('the conversations of a KiSS server', () => {
 		s.push({ add: ['a', 'entries', 1, 'rounds', 0, 'text'], text: 'Hel' });
 		s.push({ add: ['a', 'entries', 1, 'rounds', 0, 'text'], text: 'lo' });
 		await vi.waitFor(() => expect(app.replies.a?.rounds[0]?.text).toBe('Hello'));
+		// the output a running call gives, its result not there yet
+		s.push({
+			add: ['a', 'entries', 1, 'rounds', 0, 'calls'],
+			value: { id: 'c1', name: 'bash', args: '{}' }
+		});
+		s.push({ add: ['a', 'entries', 1, 'rounds', 0, 'calls', 0, 'result'], text: '1\n' });
+		s.push({ add: ['a', 'entries', 1, 'rounds', 0, 'calls', 0, 'result'], text: '2\n' });
+		await vi.waitFor(() => expect(app.replies.a?.rounds[0]?.calls[0]?.result).toBe('1\n2\n'));
 		// the moments of the server read on the clock of the page, its moment
 		// NOW the time the first event came
 		const p = turnOf('a')!;

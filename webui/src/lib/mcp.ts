@@ -52,6 +52,22 @@ const kept = new Map<string, { signed: string; tools: Tool[] }>();
 // the HTTP status of a server that takes no request without the right key
 const UNAUTHORIZED = 401;
 
+// the partial results of a call of the 2026-07-28 era (SEP-2998): the
+// capability the page declares, the key of the _meta of a call that names
+// them, the notification each comes in
+const PARTIAL_RESULTS = 'partialResults';
+const PARTIAL_TOKEN = 'partialResultToken';
+const PARTIAL_RESULT = 'notifications/tools/partial_result';
+
+// what the page takes of a server: forms the user fills, and the partial
+// results of a call
+const CAPABILITIES = { elicitation: { form: {} }, [PARTIAL_RESULTS]: {} };
+
+// the token of the last call, and what takes the text of the partial results
+// of each call still running, by its token
+let partials = 0;
+const running = new Map<unknown, (text: string) => void>();
+
 // a route a KiSS server publishes as a resource: kiss:proxy/<name>, its _meta
 // telling whether the route holds a key
 const ROUTE_URI = 'kiss:proxy/';
@@ -82,16 +98,22 @@ function drop(name: string): void {
 }
 
 // a 2026 server speaks its own era, a 2025 one answers the initialize handshake;
-// a server may ask the user for secrets, which a call answers itself
+// a server may ask the user for secrets, which a call answers itself, and give
+// the output of a call as it comes
 function connect(remote: Remote): Promise<Client> {
 	const client = new Client(
 		{ name: 'kiss', title: NAME, version: __KISS_VERSION__ },
 		{
 			versionNegotiation: { mode: 'auto' },
-			capabilities: { elicitation: { form: {} } },
+			capabilities: CAPABILITIES,
 			inputRequired: { autoFulfill: false }
 		}
 	);
+	client.fallbackNotificationHandler = async ({ method, params }) => {
+		const take = method === PARTIAL_RESULT ? running.get(params?.[PARTIAL_TOKEN]) : undefined;
+		const blocks = (params?.content ?? []) as CallToolResult['content'];
+		for (const block of blocks) if (take && block.type === 'text') take(block.text);
+	};
 	const transport = new StreamableHTTPClientTransport(new URL(remote.url, location.href), {
 		requestInit: { headers: headers(remote), redirect: REDIRECT }
 	});
@@ -122,31 +144,40 @@ function outcome(result: CallToolResult): Outcome {
 
 // a call to a tool of a server, asked again with the answers of the user each
 // time the server asks them for secrets; every round asks the user, so one
-// that asks nothing is an error, and a stopped turn asks nothing more
+// that asks nothing is an error, and a stopped turn asks nothing more; the
+// partial results it names go to partial while it runs
 async function called(
 	ctx: ToolContext,
 	remote: Remote,
 	client: Client,
-	params: CallToolRequest['params']
+	params: CallToolRequest['params'],
+	partial: (text: string) => void
 ): Promise<Outcome> {
 	const options = {
 		signal: ctx.signal,
 		timeout: remote.timeout * SECOND_MS,
 		allowInputRequired: true
 	};
-	let result: CallToolResult | InputRequiredResult = await client.callTool(params, options);
-	while (isInputRequiredResult(result)) {
-		const inputs = Object.entries(result.inputRequests ?? {});
-		if (!inputs.length) throw new Error('asks for input and names none');
-		const inputResponses: Record<string, object> = {};
-		for (const [key, input] of inputs) {
-			ctx.signal.throwIfAborted();
-			inputResponses[key] = await fill(ctx, remote.name, input);
+	const token = ++partials;
+	running.set(token, partial);
+	try {
+		const named = { ...params, _meta: { [PARTIAL_TOKEN]: token } };
+		let result: CallToolResult | InputRequiredResult = await client.callTool(named, options);
+		while (isInputRequiredResult(result)) {
+			const inputs = Object.entries(result.inputRequests ?? {});
+			if (!inputs.length) throw new Error('asks for input and names none');
+			const inputResponses: Record<string, object> = {};
+			for (const [key, input] of inputs) {
+				ctx.signal.throwIfAborted();
+				inputResponses[key] = await fill(ctx, remote.name, input);
+			}
+			const again = { ...named, inputResponses, requestState: result.requestState };
+			result = await client.callTool(again as CallToolRequest['params'], options);
 		}
-		const again = { ...params, inputResponses, requestState: result.requestState };
-		result = await client.callTool(again as CallToolRequest['params'], options);
+		return outcome(result);
+	} finally {
+		running.delete(token);
 	}
-	return outcome(result);
 }
 
 // a server as the configuration names it: its name, url, key, headers and
@@ -162,9 +193,9 @@ async function listed(made: Connection, c: Client): Promise<Tool[]> {
 		name: t.name,
 		description: t.description ?? '',
 		input: t.inputSchema,
-		async run(ctx, args) {
+		async run(ctx, args, partial) {
 			try {
-				return await called(ctx, remote, c, { name: t.name, arguments: args });
+				return await called(ctx, remote, c, { name: t.name, arguments: args }, partial);
 			} catch (e) {
 				if (ctx.signal.aborted) throw e;
 				if (connections.get(remote.name) === made) drop(remote.name);

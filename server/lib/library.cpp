@@ -243,7 +243,7 @@ static size_t opaque_of(const conversation_round & r) {
 static library_shape::round round_shape(const conversation_round & r) {
     library_shape::round s{ r.reasoning.size(), r.text.size(), opaque_of(r), {} };
     for (const conversation_call & c : r.calls) {
-        s.calls.push_back({ c.name.size(), c.args.size(), c.ok.has_value() });
+        s.calls.push_back({ c.name.size(), c.args.size(), c.result.size(), c.ok.has_value() });
     }
     return s;
 }
@@ -290,13 +290,13 @@ static std::string grown(const conversation_entry & e,
             const std::string         cp   = rp + ",\"calls\"," + std::to_string(c);
             if (c == sr.calls.size()) {
                 out += add_value(rp + ",\"calls\"", conversation_call_json(call, secrets));
-                sr.calls.push_back({ call.name.size(), call.args.size(), call.ok.has_value() });
+                sr.calls.push_back({ call.name.size(), call.args.size(), call.result.size(), call.ok.has_value() });
                 continue;
             }
             library_shape::call & sc = sr.calls[c];
             if (call.ok && !sc.done) {
                 out += set_event(cp, conversation_call_json(call, secrets));
-                sc = { call.name.size(), call.args.size(), true };
+                sc = { call.name.size(), call.args.size(), call.result.size(), true };
                 continue;
             }
             if (call.name.size() > sc.name) {
@@ -306,6 +306,10 @@ static std::string grown(const conversation_entry & e,
             if (call.args.size() > sc.args) {
                 out += add_text(cp + ",\"args\"", call.args.substr(sc.args), secrets);
                 sc.args = call.args.size();
+            }
+            if (call.result.size() > sc.result) {
+                out += add_text(cp + ",\"result\"", call.result.substr(sc.result), secrets);
+                sc.result = call.result.size();
             }
         }
     }

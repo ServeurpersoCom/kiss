@@ -20,8 +20,9 @@ struct conversation_image {
     std::string data;
 };
 
-// one tool call of a round, with its outcome once it ran; sent, in memory
-// only, once it reaches its tool
+// one tool call of a round, with its outcome once it ran, its result the
+// output it gave so far while it runs; sent, in memory only, once it reaches
+// its tool
 struct conversation_call {
     std::string                     id;
     std::string                     name;
