@@ -950,7 +950,8 @@ static void turn(std::string                     id,
     if (spent) {
         spent->context = context;
     }
-    // a call stopped once sent keeps what it showed within the budget of a call
+    // a call stopped once sent keeps what it showed and the line that says it
+    // stopped, within the budget of a call
     size_t output = 0;
     engine_with([&](const engine_reader & config) { output = (size_t) std::stoull(*config.get("tools max-output")); });
     logged(id, library_change(
@@ -961,7 +962,8 @@ static void turn(std::string                     id,
                                for (conversation_round & held : e.rounds) {
                                    for (conversation_call & call : held.calls) {
                                        if (call.sent && !call.ok) {
-                                           call.result = output_bounded(call.result, output);
+                                           call.result = output_bounded(conversation_stopped(call.result), output);
+                                           call.ok     = false;
                                        }
                                    }
                                }

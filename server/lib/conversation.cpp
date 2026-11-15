@@ -517,9 +517,7 @@ std::string conversation_file(const std::vector<conversation> & conversations, c
     return sealed(doc.get(), root, secrets) + "\n";
 }
 
-// what a call stopped once sent holds: the output it gave while it ran, then
-// the line that says it stopped
-static std::string stopped(const std::string & output) {
+std::string conversation_stopped(const std::string & output) {
     return output.empty() ? STOPPED : output + (output.back() == '\n' ? "" : "\n") + STOPPED;
 }
 
@@ -529,7 +527,7 @@ std::vector<conversation_round> conversation_settled(const std::vector<conversat
         std::vector<conversation_call> calls;
         for (conversation_call c : r.calls) {
             if (!c.ok && c.sent) {
-                c.result = stopped(c.result);
+                c.result = conversation_stopped(c.result);
                 c.ok     = false;
             }
             if (c.ok) {

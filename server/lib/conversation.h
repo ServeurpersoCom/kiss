@@ -121,6 +121,10 @@ std::string conversation_file(const std::vector<conversation> & conversations, c
 // the outcome of a call stopped once sent: its tool may have acted
 constexpr const char * STOPPED = "Stopped before it answered: the tool may have acted";
 
+// what a call stopped once sent holds: the output it gave while it ran, then
+// the line that says it stopped
+std::string conversation_stopped(const std::string & output);
+
 // what of a turn holds once it stops: the calls that ran, those sent as
 // stopped, the rounds that streamed something, and a summary once it
 // finished; a call never sent never ran

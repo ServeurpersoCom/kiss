@@ -4,7 +4,7 @@ import { ALWAYS, REFUSE } from '../engine/engine.js';
 import { chat, describe, pick } from './api.js';
 import { PRESERVE, TRIGGER, compacted, folding } from './compaction.js';
 import { aggregate, connecting } from './mcp.js';
-import { settled } from './conversation.js';
+import { settled, stopped } from './conversation.js';
 import { Lines, bounded } from './output.js';
 import { MODEL_SEPARATOR } from './config.js';
 import { chunk, close, mark, retry, stats, type Pulse } from './pulse.js';
@@ -279,10 +279,14 @@ export async function turn(
 		}
 		reply.error = `Stopped after ${r} tool rounds`;
 	} finally {
-		// a call stopped once sent keeps what it showed within the budget of a call
+		// a call stopped once sent keeps what it showed and the line that says it
+		// stopped, within the budget of a call
 		for (const r of reply.rounds)
 			for (const c of r.calls)
-				if (c.sent && c.ok === undefined) c.result = bounded(c.result ?? '', budget());
+				if (c.sent && c.ok === undefined) {
+					c.result = bounded(stopped(c.result), budget());
+					c.ok = false;
+				}
 		reply.rounds = settled(reply.rounds);
 		const spent = stats(p, performance.now());
 		if (spent) reply.stats = context === undefined ? spent : { ...spent, context };

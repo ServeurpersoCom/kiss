@@ -196,7 +196,8 @@ int main() {
             text == "long" ?
                 "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
                     "\",\"arguments\":"
-                    "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo 12345; sleep 5\\\"}\"}}]}" :
+                    "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"" +
+                    MANY_LINES + "; sleep 5\\\"}\"}}]}" :
             text == "many" ?
                 "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
                     "\",\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"" + MANY_LINES +
@@ -337,9 +338,9 @@ int main() {
         law(ran && ran->result.rfind("1" + MACHINE_EOL + "2" + MACHINE_EOL + "Exit code 0", 0) == 0,
             "the result of the call takes its place");
 
-        // a call stopped once it showed its output keeps it within the budget
-        // of a call, then the line that says it stopped
-        engine_run("set tools max-output 4", ENGINE_ADMIN);
+        // a call stopped once it showed its output keeps it and the line that
+        // says it stopped, within the budget of a call
+        engine_run("set tools max-output 120", ENGINE_ADMIN);
         conversation stopped;
         stopped.id = conversation_uuid();
         asked.text = "long";
@@ -358,16 +359,22 @@ int main() {
             });
             return out;
         };
-        for (int i = 0; i < 1000 && !(call() && !call()->result.empty()); i++) {
+        const size_t printed = 150 * (1 + MACHINE_EOL.size());
+        for (int i = 0; i < 1000 && !(call() && call()->result.size() >= printed); i++) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         agent_stop(stopped.id);
         for (int i = 0; i < 1000 && agent_busy(stopped.id); i++) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        cut = call();
-        law(cut && cut->ok == false && cut->result == output_bounded("12345" + MACHINE_EOL, 4) + STOPPED,
-            "a call stopped once it showed its output keeps it within the budget of a call: " +
+        cut                      = call();
+        const std::string marker = STOPPED;
+        law(cut && cut->ok == false && cut->result.size() <= 120 &&
+                cut->result.find("bytes hidden from context") != std::string::npos &&
+                cut->result.size() >= marker.size() &&
+                cut->result.compare(cut->result.size() - marker.size(), marker.size(), marker) == 0,
+            "a call stopped once it showed its output keeps it and the line that says it stopped, within the "
+            "budget of a call: " +
                 (cut ? cut->result : std::string("none")));
         engine_run("no tools max-output", ENGINE_ADMIN);
 

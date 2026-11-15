@@ -758,13 +758,13 @@ describe('an MCP server', () => {
 		expect(p.bodies[1].messages.at(-1)!.content).toBe(cut);
 	});
 
-	it('keeps what a call showed within the budget of a call once it stops', async () => {
+	it('keeps what a call showed and the line that says it stopped, within the budget of a call', async () => {
 		let reply: Assistant | undefined;
 		const holding: Declared[] = [
 			{
 				name: 'hold',
 				run: (_args, signal, _again, partial) => {
-					partial('12345\n');
+					partial('x\n'.repeat(150));
 					return new Promise((_, reject) =>
 						signal.addEventListener('abort', () => reject(signal.reason))
 					);
@@ -772,16 +772,18 @@ describe('an MCP server', () => {
 			}
 		];
 		const p = await page({ a: modern(holding) }, [stream([call('hold', { description: 'hold' })])]);
-		await p.engine.run('set mcp url a http://a/mcp\nset tools max-output 4', 'user');
+		await p.engine.run('set mcp url a http://a/mcp\nset tools max-output 120', 'user');
 		const t = await p.go();
 		reply = t.reply;
-		await vi.waitFor(() => expect(reply?.rounds[0]?.calls[0]?.result).toBe('12345\n'));
+		await vi.waitFor(() => expect(reply?.rounds[0]?.calls[0]?.result).toBe('x\n'.repeat(150)));
 		t.stop.abort();
 		await expect(t.done).rejects.toThrow();
-		expect(t.reply.rounds[0].calls[0]).toMatchObject({
-			result: bounded('12345\n', 4) + STOPPED,
-			ok: false
-		});
+		const kept = t.reply.rounds[0].calls[0];
+		const result = kept.result ?? '';
+		expect(new TextEncoder().encode(result).length).toBeLessThanOrEqual(120);
+		expect(result).toContain('bytes hidden from context');
+		expect(result.endsWith(STOPPED)).toBe(true);
+		expect(kept.ok).toBe(false);
 	});
 
 	it('that does not answer serves nothing, the save warning of it, the model reading no word of it', async () => {
