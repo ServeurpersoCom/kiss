@@ -177,15 +177,20 @@ int main() {
             "a job shows its lines up to its bound, then the line that says the rest shows once the call ends");
     }
     {
-        // a text within its budget, or its head and its tail, the bytes
-        // between counted
+        // a text within its budget, or its head, the line that counts the
+        // bytes hidden and its tail, the three within the budget, so a text
+        // cut already comes back as it is
+        std::string lines;
+        for (int i = 1; i <= 20; i++) {
+            lines += std::string("line") + (i < 10 ? "0" : "") + std::to_string(i) + "\n";
+        }
+        const std::string cut = output_bounded(lines, 120);
         law(output_bounded("one\ntwo\n", 64) == "one\ntwo\n" &&
-                output_bounded("one\ntwo\nsix\nten\n", 10) ==
-                    "one\nLong output with 8 bytes hidden from context\nten\n" &&
-                output_bounded("config", 2) == "c\nLong output with 4 bytes hidden from context\ng" &&
-                output_bounded("\xC3\xA9\xC3\xA9\xC3\xA9", 3) ==
-                    "\xEF\xBF\xBD\nLong output with 3 bytes hidden from context\n\xC3\xA9",
-            "a text the model reads is whole within its budget, else its head and its tail");
+                cut ==
+                    "line01\nline02\nLong output with 70 bytes hidden from context\nline13\nline14\nline15\n"
+                    "line16\nline17\nline18\nline19\nline20\n" &&
+                cut.size() <= 120 && output_bounded(cut, 120) == cut,
+            "a text the model reads fits its budget, head, hidden bytes and tail, and a cut one stays as it is");
         // whole lines as they come, an open one waiting for its end, up to
         // the bound
         output_lines open(64);

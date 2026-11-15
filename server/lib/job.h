@@ -4,6 +4,8 @@
 // whole job ended on a timeout, a cancel, or once the command exits, so a call
 // leaves nothing running
 
+#include "lib/output.h"
+
 #include <functional>
 #include <string>
 #include <vector>
@@ -12,15 +14,17 @@
 constexpr const char * CANCELLED = "Cancelled";
 
 struct job_result {
-    std::string output;
-    size_t      total     = 0;
-    bool        truncated = false;
-    int         exit_code = -1;
-    bool        started   = false;
-    bool        timed_out = false;
-    bool        cancelled = false;
+    // the output within its budget, and what kept it, for a closing line
+    std::string   output;
+    output_buffer kept{ 0 };
+    size_t        total     = 0;
+    bool          truncated = false;
+    int           exit_code = -1;
+    bool          started   = false;
+    bool          timed_out = false;
+    bool          cancelled = false;
     // why the command did not start
-    std::string error;
+    std::string   error;
 };
 
 // the arguments of a command line: split on blanks, a double quote grouping

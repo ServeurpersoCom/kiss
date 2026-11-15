@@ -47,7 +47,6 @@
 
 namespace fs = std::filesystem;
 
-// a call whose client stays
 // the shell every machine of this kind holds, and the end of a line it prints
 #if defined(_WIN32)
 static const std::string MACHINE_SHELL = "powershell";
@@ -57,6 +56,14 @@ static const std::string MACHINE_SHELL = "bash";
 static const std::string MACHINE_EOL   = "\n";
 #endif
 
+// a command of the shell of the machine that prints many short lines
+#if defined(_WIN32)
+static const std::string MANY_LINES = "1..150 | % { echo x }";
+#else
+static const std::string MANY_LINES = "for i in $(seq 150); do echo x; done";
+#endif
+
+// a call whose client stays
 static const auto ALIVE = [] {
     return true;
 };
@@ -190,6 +197,10 @@ int main() {
                 "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
                     "\",\"arguments\":"
                     "\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"echo 12345; sleep 5\\\"}\"}}]}" :
+            text == "many" ?
+                "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"" + MACHINE_SHELL +
+                    "\",\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"command\\\":\\\"" + MANY_LINES +
+                    "\\\"}\"}}]}" :
             text == "page" ?
                 "{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"client_config\","
                 "\"arguments\":\"{\\\"description\\\":\\\"x\\\",\\\"lines\\\":\\\"show version\\\"}\"}}]}" :
@@ -359,6 +370,33 @@ int main() {
             "a call stopped once it showed its output keeps it within the budget of a call: " +
                 (cut ? cut->result : std::string("none")));
         engine_run("no tools max-output", ENGINE_ADMIN);
+
+        // the result of a shell, the line that closes it included, fits the
+        // budget of a call, so a client that cuts it again changes nothing
+        engine_run("set tools max-output 200", ENGINE_ADMIN);
+        conversation many;
+        many.id    = conversation_uuid();
+        asked.text = "many";
+        conversation_append(many, std::nullopt, asked);
+        library_create(many, {});
+        const std::string opening_many = many.entries[0].id;
+        agent_answer(many.id, [&](conversation &) { return opening_many; });
+        for (int i = 0; i < 1000 && agent_busy(many.id); i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        std::optional<conversation_call> whole;
+        library_each([&](const conversation & x) {
+            if (x.id == many.id && x.entries.size() > 1 && !x.entries[1].rounds.empty() &&
+                !x.entries[1].rounds[0].calls.empty()) {
+                whole = x.entries[1].rounds[0].calls[0];
+            }
+        });
+        law(whole && whole->result.size() <= 200 &&
+                whole->result.find("bytes hidden from context") != std::string::npos &&
+                whole->result.find("Exit code 0") != std::string::npos,
+            "the result of a shell, the line that closes it included, fits the budget of a call: " +
+                (whole ? whole->result : std::string("none")));
+        engine_run("no tools max-output", ENGINE_ADMIN);
     }
 
     // the entries of the conversation, as the library holds them
@@ -439,8 +477,7 @@ int main() {
         "a tool on by its item runs unasked: " + called().result);
     // what a server answers reaches the model within the budget of a call
     engine_run("set tools max-output 2", ENGINE_ADMIN);
-    law(message("twin") && (when([&] { return settled(); }), true) &&
-            called().result == "c\nLong output with 4 bytes hidden from context\ng",
+    law(message("twin") && (when([&] { return settled(); }), true) && called().result == output_bounded("config", 2),
         "what a server answers past the budget of a call keeps its head and its tail: " + called().result);
     engine_run("no tools max-output", ENGINE_ADMIN);
     // a question that should not stand is refused, so the laws go on

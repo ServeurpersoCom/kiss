@@ -10,6 +10,7 @@ import type { Grant, Verdict } from '../src/engine/engine.js';
 import { ALWAYS, ONCE, REFUSE } from '../src/engine/engine.js';
 import { line, pulse } from '../src/lib/pulse.js';
 import { STOPPED, settled } from '../src/lib/conversation.js';
+import { bounded } from '../src/lib/output.js';
 import { NEWLINE } from '../src/lib/config.js';
 
 interface Body {
@@ -752,7 +753,7 @@ describe('an MCP server', () => {
 		await p.engine.run('set mcp url a http://a/mcp\nset tools max-output 2', 'user');
 		const t = await p.go();
 		await t.done;
-		const cut = 'c\nLong output with 4 bytes hidden from context\ng';
+		const cut = bounded('config', 2);
 		expect(t.reply.rounds[0].calls[0]).toMatchObject({ result: cut, ok: true });
 		expect(p.bodies[1].messages.at(-1)!.content).toBe(cut);
 	});
@@ -778,7 +779,7 @@ describe('an MCP server', () => {
 		t.stop.abort();
 		await expect(t.done).rejects.toThrow();
 		expect(t.reply.rounds[0].calls[0]).toMatchObject({
-			result: '12\nLong output with 4 bytes hidden from context\n' + STOPPED,
+			result: bounded('12345\n', 4) + STOPPED,
 			ok: false
 		});
 	});

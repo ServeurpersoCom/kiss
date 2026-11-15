@@ -39,20 +39,19 @@ static tool_outcome run(const shell & s, yyjson_val * args, const tool_tick & ti
     if (!r.started) {
         return ended({ false, "Cannot start " + s.command + ": " + r.error }, "cannot start", LOG_ERROR);
     }
-    std::string text = r.output;
-    if (!text.empty() && text.back() != '\n') {
-        text += '\n';
-    }
+    // the line that tells how the call ended closes the output, within its
+    // budget
+    output_buffer kept = r.kept;
     if (r.cancelled) {
-        return ended({ false, text + CANCELLED }, "cancelled", LOG_INFO);
+        return ended({ false, kept.closed(CANCELLED) }, "cancelled", LOG_INFO);
     }
     if (r.timed_out) {
         const std::string after = std::to_string(s.timeout) + " s";
-        return ended({ false, text + "Killed after " + after }, "killed after " + after, LOG_ERROR);
+        return ended({ false, kept.closed("Killed after " + after) }, "killed after " + after, LOG_ERROR);
     }
     const std::string code = std::to_string(r.exit_code);
-    return ended({ r.exit_code == 0, text + "Exit code " + code + " (" + std::to_string(ms) + " ms)" }, "exit " + code,
-                 LOG_INFO);
+    return ended({ r.exit_code == 0, kept.closed("Exit code " + code + " (" + std::to_string(ms) + " ms)") },
+                 "exit " + code, LOG_INFO);
 }
 
 static std::vector<tool> shell_tools(const engine_reader & config) {

@@ -83,6 +83,31 @@ void output_buffer::add(const char * data, size_t size) {
     }
 }
 
+// the line that counts the bytes a cut hides
+static std::string hidden(size_t n) {
+    return "Long output with " + std::to_string(n) + " bytes hidden from context\n";
+}
+
+// the whole lines at the front of a text that hold n bytes or more, taken
+// off it, all of it when no line ends there: the bytes taken
+static size_t drop_front(std::string & s, size_t n) {
+    const size_t at   = s.find('\n', n - 1);
+    const size_t gone = at == std::string::npos ? s.size() : at + 1;
+    s.erase(0, gone);
+    return gone;
+}
+
+// the whole lines at the back of a text that hold n bytes or more, taken off
+// it: the bytes taken
+static size_t drop_back(std::string & s, size_t n) {
+    const size_t room = s.size() > n ? s.size() - n : 0;
+    const size_t at   = room == 0 ? std::string::npos : s.rfind('\n', room - 1);
+    const size_t keep = at == std::string::npos ? 0 : at + 1;
+    const size_t gone = s.size() - keep;
+    s.resize(keep);
+    return gone;
+}
+
 std::string output_buffer::text() const {
     const std::string last = tail.substr(start) + tail.substr(0, start);
     if (!truncated()) {
@@ -90,13 +115,41 @@ std::string output_buffer::text() const {
     }
     // both cuts fall on line ends when the kept bytes hold one, so no line and
     // no UTF-8 sequence comes out split
-    const size_t      end   = head.rfind('\n');
-    const size_t      begin = last.find('\n');
-    const std::string first = end == std::string::npos ? head + "\n" : head.substr(0, end + 1);
-    const std::string final = begin == std::string::npos ? last : last.substr(begin + 1);
-    const size_t      left  = count - std::min(head.size(), first.size()) - final.size();
-    return output_utf8(first, decode) + "Long output with " + std::to_string(left) + " bytes hidden from context\n" +
-           output_utf8(final, decode);
+    const size_t end   = head.rfind('\n');
+    const size_t begin = last.find('\n');
+    std::string  first =
+        end == std::string::npos ? output_utf8(head, decode) + "\n" : output_utf8(head.substr(0, end + 1), decode);
+    std::string  final       = output_utf8(begin == std::string::npos ? last : last.substr(begin + 1), decode);
+    // the bytes of the output the head and the tail still show
+    size_t       shown_first = end == std::string::npos ? head.size() : end + 1;
+    size_t       shown_final = begin == std::string::npos ? last.size() : last.size() - begin - 1;
+    // the head, the line and the tail fit the budget together: whole lines
+    // go from the larger of the head and the tail, the head on a tie, so the
+    // end of the output, and the line that closes it, stays
+    const size_t budget      = head_max + tail_max;
+    for (;;) {
+        const std::string line = hidden(count - shown_first - shown_final);
+        const size_t      size = first.size() + line.size() + final.size();
+        if (size <= budget || (first.empty() && final.empty())) {
+            return first + line + final;
+        }
+        if (!first.empty() && first.size() >= final.size()) {
+            const size_t gone = drop_back(first, size - budget);
+            shown_first       = first.empty() ? 0 : shown_first - std::min(gone, shown_first);
+        } else {
+            const size_t gone = drop_front(final, size - budget);
+            shown_final       = final.empty() ? 0 : shown_final - std::min(gone, shown_final);
+        }
+    }
+}
+
+std::string output_buffer::closed(const std::string & line) {
+    const char last = count == 0 ? '\n' : tail.empty() ? head.back() : tail[(start + tail.size() - 1) % tail.size()];
+    if (last != '\n') {
+        add("\n", 1);
+    }
+    add(line.data(), line.size());
+    return text();
 }
 
 std::string output_bounded(const std::string & text, size_t budget) {

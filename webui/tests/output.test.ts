@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { Lines, OUTPUT_SHOWN, bounded } from '../src/lib/output.js';
 
 describe('the output of a call', () => {
-	it('reaches the model whole within its budget, else its head and its tail, as the server cuts it', () => {
+	it('reaches the model within its budget, head, hidden bytes and tail, a cut one staying as it is, as the server cuts it', () => {
+		const lines = Array.from(
+			{ length: 20 },
+			(_, i) => `line${String(i + 1).padStart(2, '0')}\n`
+		).join('');
+		const cut = bounded(lines, 120);
 		expect(bounded('one\ntwo\n', 64)).toBe('one\ntwo\n');
-		expect(bounded('one\ntwo\nsix\nten\n', 10)).toBe(
-			'one\nLong output with 8 bytes hidden from context\nten\n'
+		expect(cut).toBe(
+			'line01\nline02\nLong output with 70 bytes hidden from context\nline13\nline14\nline15\nline16\nline17\nline18\nline19\nline20\n'
 		);
-		expect(bounded('config', 2)).toBe('c\nLong output with 4 bytes hidden from context\ng');
-		// a cut inside a character reads as one replacement character
-		expect(bounded('\u00e9\u00e9\u00e9', 3)).toBe(
-			'\uFFFD\nLong output with 3 bytes hidden from context\n\u00e9'
-		);
+		expect(new TextEncoder().encode(cut).length).toBeLessThanOrEqual(120);
+		expect(bounded(cut, 120)).toBe(cut);
 	});
 
 	it('shows its whole lines as they come, up to its bound, then the line that says so', () => {

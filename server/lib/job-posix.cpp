@@ -210,6 +210,7 @@ job_result job_run(const std::string &           line,
         waitpid(pid, &status, 0);
     }
     r.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+    r.kept      = kept;
     r.output    = kept.text();
     r.total     = kept.total();
     r.truncated = kept.truncated();

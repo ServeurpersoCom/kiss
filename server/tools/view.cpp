@@ -145,7 +145,7 @@ static tool_outcome listing(const viewer & v, const std::string & given, ticker 
         kept.add(line.data(), line.size());
     }
     const std::string tail = hidden ? ", " + std::to_string(hidden) + " hidden" : "";
-    return { true, kept.text() + output_counted((long long) sizes.size() - 1, "entry", "entries") + tail };
+    return { true, kept.closed(output_counted((long long) sizes.size() - 1, "entry", "entries") + tail) };
 }
 
 // an image as the result tells it: its type, its size and its bytes
@@ -228,11 +228,11 @@ file(const reader & read, uintmax_t size, const viewer & v, long long first, lon
                             output_counted(total, "line", "lines") };
     }
     if (!ranged) {
-        return { true, kept.text() + output_counted(total, "line", "lines") };
+        return { true, kept.closed(output_counted(total, "line", "lines")) };
     }
     const long long end = last < 0 || last > total ? total : last;
-    return { true, kept.text() + "Lines " + std::to_string(first) + "-" + std::to_string(end) + " of " +
-                       std::to_string(total) };
+    return { true, kept.closed("Lines " + std::to_string(first) + "-" + std::to_string(end) + " of " +
+                               std::to_string(total)) };
 }
 
 static tool_outcome view(const viewer & v, yyjson_val * args, const tool_tick & tick) {

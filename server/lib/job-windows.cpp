@@ -255,6 +255,7 @@ job_result job_run(const std::string &           line,
     DWORD code = 0;
     GetExitCodeProcess(pi.hProcess, &code);
     r.exit_code = (int) code;
+    r.kept      = kept;
     r.output    = kept.text();
     r.total     = kept.total();
     r.truncated = kept.truncated();

@@ -18,8 +18,12 @@ struct output_buffer {
     void add(const char * data, size_t size);
 
     // the head, a line that counts the bytes hidden when there are, and the
-    // tail, as valid UTF-8
+    // tail, as valid UTF-8, the three within the budget
     std::string text() const;
+
+    // the text with a closing line after the output, on a line of its own,
+    // within the budget as the output is
+    std::string closed(const std::string & line);
 
     size_t total() const { return count; }
 
@@ -37,7 +41,8 @@ struct output_buffer {
 };
 
 // a text as a tool returns it within a budget: whole when it fits, else its
-// head, the line that counts the bytes hidden, and its tail
+// head, the line that counts the bytes hidden, and its tail, the three within
+// the budget, so a text cut already comes back as it is
 std::string output_bounded(const std::string & text, size_t budget);
 
 // the line that ends what an output shows while it runs once it shows max
