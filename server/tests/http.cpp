@@ -145,6 +145,22 @@ static void sent(long long s, const std::string & text) {
 #endif
 }
 
+// whether all of text goes out on s, false once s fails
+static bool sent_whole(long long s, const std::string & text) {
+    for (size_t at = 0; at < text.size();) {
+#if defined(_WIN32)
+        const int n = send((SOCKET) s, text.data() + at, (int) (text.size() - at), 0);
+#else
+        const ssize_t n = send((int) s, text.data() + at, text.size() - at, 0);
+#endif
+        if (n <= 0) {
+            return false;
+        }
+        at += (size_t) n;
+    }
+    return true;
+}
+
 // the status line of the answer read on s, empty when none comes
 static std::string answered(long long s) {
     char buf[256] = {};
@@ -502,10 +518,12 @@ int main() {
     // that is never answered while a page opens the stream of the
     // conversations and sends nothing, while another sends without end, while
     // two trickle a frame they never end, a byte every 200 ms, one in the
-    // last fragment of its first message, one once it follows, and while a
-    // proxied server takes the connection and never answers: a socket that
-    // listens and accepts none. Should the process wait on a trickle, the
-    // trickle stops after the bound, so the law breaks and the rest goes on
+    // last fragment of its first message, one once it follows, while two
+    // send empty fragments of a message without end, the same two ways, and
+    // while a proxied server takes the connection and never answers: a
+    // socket that listens and accepts none. Should the process wait on a
+    // page, the page stops sending after the bound, so the law breaks and
+    // the rest goes on
     const std::string upgrade = "GET /conversations/events HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
                                 "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                                 "Sec-WebSocket-Key: AAAAAAAAAAAAAAAAAAAAAA==\r\nSec-WebSocket-Version: 13\r\n\r\n";
@@ -522,21 +540,34 @@ int main() {
     sent(following, upgrade + masked(0x81, headers.size()) + headers);
     law(heard(following).find(" 101 ") != std::string::npos, "a page that trickles a frame follows the conversations");
     sent(following, masked(0x81, trickled));
-    std::atomic<bool>            trickling{ true };
-    std::thread                  trickler([&] {
+    const long long fragmenting_first = connected(port);
+    sent(fragmenting_first, upgrade + masked(0x01, 0));
+    const long long fragmenting = connected(port);
+    sent(fragmenting, upgrade + masked(0x81, headers.size()) + headers);
+    law(heard(fragmenting).find(" 101 ") != std::string::npos,
+        "a page that floods fragments follows the conversations");
+    sent(fragmenting, masked(0x01, 0));
+    std::atomic<bool> trickling{ true };
+    std::thread       trickler([&] {
         for (size_t i = 0; i < trickled && trickling; i++) {
             sent(opening, "x");
             sent(following, "x");
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     });
-    std::atomic<bool>            ended_all{ false };
-    std::thread                  rescue([&] {
-        for (int i = 0; i < 300 && !ended_all; i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        trickling = false;
-    });
+    // one sender a page, so the bytes of a page never wait on the other
+    const auto        flood = [&](long long page) {
+        return std::thread([&, page] {
+            std::string fragments;
+            while (fragments.size() < (1u << 20)) {
+                fragments += masked(0x00, 0);
+            }
+            while (trickling && sent_whole(page, fragments)) {
+            }
+        });
+    };
+    std::thread                  flooder_first = flood(fragmenting_first);
+    std::thread                  flooder       = flood(fragmenting);
     httplib::ws::WebSocketClient silent(events);
     law(silent.connect() && silent.is_open(), "a page opens the stream of the conversations");
     httplib::ws::WebSocketClient chatty(events);
@@ -556,19 +587,30 @@ int main() {
         proxied             = res ? res->status : -1;
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    const auto ending = std::chrono::steady_clock::now();
+    const auto        ending = std::chrono::steady_clock::now();
+    std::atomic<bool> ended_all{ false };
+    std::thread       rescue([&] {
+        for (int i = 0; i < 300 && !ended_all; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        trickling = false;
+    });
     listener_stop();
     listening.join();
     quit_all();
     const bool bounded = std::chrono::steady_clock::now() - ending < std::chrono::seconds(3);
     ended_all          = true;
     law(bounded,
-        "the process ends while pages send nothing, without end or a frame they trickle, and a proxied "
-        "server never answers");
+        "the process ends while pages send nothing, without end, a frame they trickle or fragments without "
+        "end, and a proxied server never answers");
     rescue.join();
     trickler.join();
+    flooder_first.join();
+    flooder.join();
     release(opening);
     release(following);
+    release(fragmenting_first);
+    release(fragmenting);
     chatting = false;
     chatter.join();
     asking.join();
