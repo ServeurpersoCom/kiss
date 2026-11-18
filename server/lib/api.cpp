@@ -122,6 +122,9 @@ void api_stop::stop() {
 }
 
 std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, std::string & path) {
+    if (stop.stopped) {
+        throw api_error(TURN_STOPPED);
+    }
     std::string host;
     remote_split(r.url, host, path);
     const auto client = std::make_shared<httplib::Client>(host);
@@ -131,7 +134,16 @@ std::shared_ptr<httplib::Client> api_client(const remote & r, api_stop & stop, s
     const std::chrono::duration<double> timeout(r.timeout);
     client->set_connection_timeout(timeout);
     client->set_read_timeout(timeout);
-    client->set_interrupt([&stop] { return stop.stopped.load(); });
+    // httplib forgets a stop that comes before its request goes out, so the
+    // client stops itself once the request makes its socket, when the stop
+    // came by then
+    client->set_socket_options([&stop, held = std::weak_ptr<httplib::Client>(client)](socket_t) {
+        if (stop.stopped) {
+            if (const auto self = held.lock()) {
+                self->stop();
+            }
+        }
+    });
     std::lock_guard<std::mutex> lock(stop.mutex);
     stop.clients.erase(std::remove_if(stop.clients.begin(), stop.clients.end(),
                                       [](const std::weak_ptr<httplib::Client> & c) { return c.expired(); }),

@@ -893,8 +893,10 @@ int main() {
     engine_run("set chat model e/m\nno endpoints shy", ENGINE_ADMIN);
 #endif
 
-    // a request whose stop came before it goes out never connects: a socket
-    // that listens is asked for no connection
+    // a stop set before a client is made refuses it, so nothing connects; a
+    // stop that comes once the client is made, before its request goes out,
+    // which httplib forgets, ends the request at once: a socket that listens
+    // is asked for no connection by the first, and never answers the second
     {
         const auto  idle = socket(AF_INET, SOCK_STREAM, 0);
         sockaddr_in at{};
@@ -910,15 +912,26 @@ int main() {
         api_stop early;
         early.stop();
         std::string path;
-        const auto  client = api_client(r, early, path);
-        const auto  res    = client->Get(path);
-        fd_set      ready;
-        timeval     none{ 0, 0 };
+        bool        refused = false;
+        try {
+            api_client(r, early, path);
+        } catch (const api_error & e) {
+            refused = std::string(e.what()) == TURN_STOPPED;
+        }
+        fd_set  ready;
+        timeval none{ 0, 0 };
         FD_ZERO(&ready);
         FD_SET(idle, &ready);
         const bool asked = select((int) idle + 1, &ready, nullptr, nullptr, &none) > 0;
-        law(!res && res.error() == httplib::Error::Canceled && !asked,
-            "a request whose stop came before it goes out never connects");
+        law(refused && !asked, "a stop set before a client is made refuses it, so nothing connects");
+        api_stop   late;
+        const auto client = api_client(r, late, path);
+        late.stop();
+        const auto sending = std::chrono::steady_clock::now();
+        const auto res     = client->Get(path);
+        law(!res && res.error() == httplib::Error::Canceled &&
+                std::chrono::steady_clock::now() - sending < std::chrono::seconds(1),
+            "a stop that comes before the request of its client goes out ends it at once");
 #if defined(_WIN32)
         closesocket(idle);
 #else

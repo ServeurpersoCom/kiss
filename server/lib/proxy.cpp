@@ -186,17 +186,17 @@ void proxy(const httplib::Request & req, httplib::Response & res, const std::str
         res.set_content("no proxy route \"" + route + "\"\n", TEXT_TYPE);
         return;
     }
-    const auto relay = std::make_shared<relay_t>();
-    if (relay->stop.stopped) {
-        stopping(res, *r, route);
-        return;
-    }
+    const auto                       relay = std::make_shared<relay_t>();
     std::string                      base;
     std::shared_ptr<httplib::Client> client;
     try {
         client = api_client(r->server, relay->stop, base);
     } catch (const api_error & e) {
-        refuse(res, *r, route, httplib::StatusCode::FailedDependency_424, e.what());
+        if (relay->stop.stopped) {
+            stopping(res, *r, route);
+        } else {
+            refuse(res, *r, route, httplib::StatusCode::FailedDependency_424, e.what());
+        }
         return;
     }
 

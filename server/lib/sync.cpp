@@ -32,9 +32,10 @@ static const int IDLE_MS = 15000;
 // a page follows the conversations attached, running the lines the agent
 // calls the config tool of the pages with while its stream lasts. One thread
 // reads what the page sends: its first message, then the answers to the pings
-// and its Close; this one waits for the first message, sends the events, and
-// closes the stream once the page leaves, the listener moves or the process
-// ends, which ends the read too
+// and its Close, each read waiting a tick at most, so it ends within a tick
+// once the stream is closed even when the page never answers the Close; this
+// one waits for the first message, sends the events, and closes the stream
+// once the page leaves, the listener moves or the process ends
 void sync_events(const httplib::Request &                                req,
                  httplib::ws::WebSocket &                                ws,
                  const std::function<std::string(const std::string &)> & admit) {
@@ -45,9 +46,13 @@ void sync_events(const httplib::Request &                                req,
     std::string             first;
     bool                    heard = false;
     std::atomic<bool>       gone{ false };
-    std::thread             reader([&] {
+    ws.set_read_timeout(std::chrono::milliseconds(TICK_MS));
+    std::thread reader([&] {
         std::string message;
-        while (ws.read(message) != httplib::ws::Fail) {
+        for (httplib::ws::ReadResult r; (r = ws.read(message)) != httplib::ws::Fail && ws.is_open();) {
+            if (r == httplib::ws::Timeout) {
+                continue;
+            }
             std::lock_guard<std::mutex> lock(mutex);
             if (!heard) {
                 first = message;
@@ -59,7 +64,7 @@ void sync_events(const httplib::Request &                                req,
         gone = true;
         said.notify_all();
     });
-    const auto              open = [&] {
+    const auto  open = [&] {
         return !gone && listener_epoch() == epoch && !quit_ending();
     };
     bool said_first = false;
