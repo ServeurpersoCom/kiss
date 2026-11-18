@@ -1,9 +1,5 @@
-# cpp-httplib: HTTP server and client, the branch live of
-# ServeurpersoCom/cpp-httplib: the master of yhirose/cpp-httplib past 0.66.0,
-# with the commits of its two pull requests to yhirose/cpp-httplib, pending:
-# one deadline on every wait for the reply to a WebSocket close(), and a
-# stop() that ends a connect or a TLS handshake, with set_interrupt(), a stop
-# the caller holds; split by its split.py into httplib.h and httplib.cpp.
+# cpp-httplib: HTTP server and client, the master of yhirose/cpp-httplib at
+# 5a956da, past 0.66.0, split by its split.py into httplib.h and httplib.cpp.
 #
 # The server runs plain HTTP behind a reverse proxy, but the client side talks
 # to whatever endpoint the user configures, and that includes https: a cloud

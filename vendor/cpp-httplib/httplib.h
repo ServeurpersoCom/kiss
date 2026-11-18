@@ -2929,12 +2929,6 @@ public:
   Result send(const Request &req);
 
   void stop();
-  // `interrupted` is polled from the thread of each request, in the waits of
-  // its connection, its TLS handshake and its reads, and before it sends;
-  // it is set before the requests it ends and is safe to call from any
-  // thread. A call already blocked in the system, a send() of a large body
-  // or a TLS read inside a record, ends through stop() alone.
-  void set_interrupt(std::function<bool()> interrupted);
 
   std::string host() const;
   int port() const;
@@ -3029,20 +3023,24 @@ protected:
   //   shutdown_socket
   //   close_socket
   //   disconnect
-  // should ONLY be called when socket_mutex_ is locked, and only when
-  // no other thread is using the socket.
+  // should ONLY be called on socket_ with socket_mutex_ locked, or on a
+  // connection being opened, and only when no other thread is using it.
   virtual void shutdown_ssl(Socket &socket, bool shutdown_gracefully);
   void shutdown_socket(Socket &socket) const;
   void close_socket(Socket &socket);
   void disconnect(bool gracefully);
 
-  // Ends the connection phase. Returns whether stop() canceled it.
-  bool end_connecting();
-
   // Under socket_mutex_: whether the connection kept alive can take another
-  // request. One the peer has closed, or one set up under TLS settings changed
-  // since, is closed instead.
+  // request. One with anything to read, or one set up under TLS settings
+  // changed since, is closed instead.
   bool socket_reusable();
+
+  // Makes socket_ ready for a request, with socket_mutex_ held by guard. A new
+  // connection is opened without the lock, so that stop() can end it.
+  bool
+  prepare_socket(std::unique_lock<std::mutex> &guard,
+                 std::chrono::time_point<std::chrono::steady_clock> start_time,
+                 Response &res, bool &success, Error &error);
 
   // TLS settings apply as a connection is set up, so a change makes the
   // connection kept alive unfit for the next request.
@@ -3069,27 +3067,21 @@ protected:
   // How many send() calls are running on this client, guarded by
   // request_mutex_
   size_t send_depth_ = 0;
+  // Also guarded by request_mutex_
+  size_t socket_tls_settings_version_ = 0;
 
   // These are all protected under socket_mutex
   size_t socket_requests_in_flight_ = 0;
   std::thread::id socket_requests_are_from_thread_ = std::thread::id();
   bool socket_should_be_closed_when_request_is_done_ = false;
-  size_t socket_tls_settings_version_ = 0;
 
-  // Set by stop(). The waits of a connection being opened and the reads of
-  // the request in flight poll it, because a connection being opened holds
-  // socket_mutex_ until it is, and shutting the socket down does not wake a
+  // Set by stop(), cleared as a send() or an open_stream() starts. Its waits
+  // poll it: shutdown() does not reach a connection being opened, nor wake a
   // read on Windows.
   std::atomic<bool> stop_requested_{false};
-  // Set by set_interrupt(), polled wherever stop_requested_ is
-  std::function<bool()> interrupt_;
-  bool interrupted() const;
-  // Phase of the connection send_() or open_stream_() opens holding
-  // socket_mutex_: stop() cancels it from Connecting alone, and the end of
-  // the phase takes the state back to Idle in the same operation that reads
-  // whether it was canceled
-  enum class ConnectState { Idle, Connecting, Canceled };
-  std::atomic<ConnectState> connect_state_{ConnectState::Idle};
+  std::function<bool()> stop_interrupt() const {
+    return [this] { return stop_requested_.load(); };
+  }
 
   std::atomic<size_t> tls_settings_version_{0};
 
@@ -3382,12 +3374,6 @@ public:
   Result send(const Request &req);
 
   void stop();
-  // `interrupted` is polled from the thread of each request, in the waits of
-  // its connection, its TLS handshake and its reads, and before it sends;
-  // it is set before the requests it ends and is safe to call from any
-  // thread. A call already blocked in the system, a send() of a large body
-  // or a TLS read inside a record, ends through stop() alone.
-  void set_interrupt(std::function<bool()> interrupted);
 
   std::string host() const;
   int port() const;
@@ -4776,11 +4762,6 @@ private:
   std::atomic<bool> closed_{false};
   // Set when the peer stopped answering pings, to end a read() waiting on it
   std::atomic<bool> pong_timed_out_{false};
-  // Set by close(): the steady clock time past which no read, its own or
-  // another thread's, waits any longer for the peer's Close reply. 0 until
-  // then.
-  std::atomic<std::chrono::steady_clock::rep> close_deadline_{0};
-  bool close_expired() const;
   // Set once the caller has bounded read() through set_read_timeout(). Until
   // then the timeout in effect is the compile-time default, and elapsing it
   // is a failure that closes the connection, not a Timeout.
