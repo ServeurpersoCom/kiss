@@ -15,6 +15,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -205,6 +206,11 @@ static const char * const LIST = R"({"jsonrpc":"2.0","id":1,"method":"tools/list
 
 int main() {
     laws_of("http_test");
+#if !defined(_WIN32)
+    // a page that sends to a stream the server closed fails the write, not
+    // the laws
+    signal(SIGPIPE, SIG_IGN);
+#endif
     const fs::path root = fs::temp_directory_path() / ("http_test." + std::to_string(std::random_device{}()));
     fs::create_directories(root);
     const int port = laws_factory();
@@ -494,9 +500,43 @@ int main() {
 
     // the process ends within a tick of the streams and the wait for a Close
     // that is never answered while a page opens the stream of the
-    // conversations and sends nothing, while another sends without end, and
-    // while a proxied server takes the connection and never answers: a
-    // socket that listens and accepts none
+    // conversations and sends nothing, while another sends without end, while
+    // two trickle a frame they never end, a byte every 200 ms, one in the
+    // last fragment of its first message, one once it follows, and while a
+    // proxied server takes the connection and never answers: a socket that
+    // listens and accepts none. Should the process wait on a trickle, the
+    // trickle stops after the bound, so the law breaks and the rest goes on
+    const std::string upgrade = "GET /conversations/events HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
+                                "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                                "Sec-WebSocket-Key: AAAAAAAAAAAAAAAAAAAAAA==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+    const size_t trickled = 100;
+    const auto   masked   = [](unsigned char head, size_t length) {
+        std::string out(1, (char) head);
+        out += (char) (0x80 | length);
+        out.append(4, '\0');
+        return out;
+    };
+    const long long opening = connected(port);
+    sent(opening, upgrade + masked(0x01, 5) + headers.substr(0, 5) + masked(0x80, trickled));
+    const long long following = connected(port);
+    sent(following, upgrade + masked(0x81, headers.size()) + headers);
+    law(heard(following).find(" 101 ") != std::string::npos, "a page that trickles a frame follows the conversations");
+    sent(following, masked(0x81, trickled));
+    std::atomic<bool>            trickling{ true };
+    std::thread                  trickler([&] {
+        for (size_t i = 0; i < trickled && trickling; i++) {
+            sent(opening, "x");
+            sent(following, "x");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    });
+    std::atomic<bool>            ended_all{ false };
+    std::thread                  rescue([&] {
+        for (int i = 0; i < 300 && !ended_all; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        trickling = false;
+    });
     httplib::ws::WebSocketClient silent(events);
     law(silent.connect() && silent.is_open(), "a page opens the stream of the conversations");
     httplib::ws::WebSocketClient chatty(events);
@@ -516,12 +556,19 @@ int main() {
         proxied             = res ? res->status : -1;
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    const auto ending = std::chrono::steady_clock::now();
     listener_stop();
     listening.join();
-    const auto ending = std::chrono::steady_clock::now();
     quit_all();
-    law(std::chrono::steady_clock::now() - ending < std::chrono::seconds(3),
-        "the process ends while pages send nothing or without end and a proxied server never answers");
+    const bool bounded = std::chrono::steady_clock::now() - ending < std::chrono::seconds(3);
+    ended_all          = true;
+    law(bounded,
+        "the process ends while pages send nothing, without end or a frame they trickle, and a proxied "
+        "server never answers");
+    rescue.join();
+    trickler.join();
+    release(opening);
+    release(following);
     chatting = false;
     chatter.join();
     asking.join();

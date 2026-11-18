@@ -29,13 +29,18 @@
 static const int TICK_MS = 1000;
 static const int IDLE_MS = 15000;
 
+// how long a read waits once its stream is closed: the least a wait takes,
+// so a frame the page trickles ends at the first byte not there yet
+static const std::chrono::microseconds CLOSED_WAIT{ 1 };
+
 // a page follows the conversations attached, running the lines the agent
 // calls the config tool of the pages with while its stream lasts. One thread
 // reads what the page sends: its first message, then the answers to the pings
-// and its Close, each read waiting a tick at most, so it ends within a tick
-// once the stream is closed even when the page never answers the Close; this
-// one waits for the first message, sends the events, and closes the stream
-// once the page leaves, the listener moves or the process ends
+// and its Close, each read waiting a tick at most, and no more once the
+// stream is closed, so it ends within a tick of the close, whether the page
+// never answers the Close or trickles a frame it never ends; this one waits
+// for the first message, sends the events, and closes the stream once the
+// page leaves, the listener moves or the process ends
 void sync_events(const httplib::Request &                                req,
                  httplib::ws::WebSocket &                                ws,
                  const std::function<std::string(const std::string &)> & admit) {
@@ -67,6 +72,11 @@ void sync_events(const httplib::Request &                                req,
     const auto  open = [&] {
         return !gone && listener_epoch() == epoch && !quit_ending();
     };
+    const auto closing = [&](httplib::ws::CloseStatus status, const std::string & reason) {
+        ws.close(status, reason);
+        ws.set_read_timeout(CLOSED_WAIT);
+        reader.join();
+    };
     bool said_first = false;
     {
         std::unique_lock<std::mutex> lock(mutex);
@@ -78,8 +88,7 @@ void sync_events(const httplib::Request &                                req,
     const std::string why = said_first ? admit(first) : "the page sent no headers";
     if (!why.empty()) {
         log_error("HTTP", "Refused %s: %s", from.c_str(), why.c_str());
-        ws.close(httplib::ws::CloseStatus::PolicyViolation, why);
-        reader.join();
+        closing(httplib::ws::CloseStatus::PolicyViolation, why);
         return;
     }
     library_follower f;
@@ -94,8 +103,7 @@ void sync_events(const httplib::Request &                                req,
         idle = idle >= IDLE_MS ? 0 : idle;
     }
     agent_detach();
-    ws.close();
-    reader.join();
+    closing(httplib::ws::CloseStatus::Normal, "");
     log_info("Sync", "%s leaves", from.c_str());
 }
 
